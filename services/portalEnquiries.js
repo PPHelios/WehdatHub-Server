@@ -112,22 +112,28 @@ async function assign(pool, actor, id, { phone, brokerId }) {
   return { outcome: res.outcome, leadRef: res.lead.ref, keptBroker };
 }
 
-/** Links an enquiry's listing number to one of the agency's units (once; the number belongs to one unit). */
+/**
+ * Links an enquiry's listing number to one of the agency's units, through the normal unit edit (the same version check,
+ * permissions and price rules as any edit). The number belongs to one unit only.
+ */
 async function linkUnit(pool, actor, id, unitCode) {
   if (!Authz.isManager(actor)) return { error: "forbidden" };
   const found = await pool.query("SELECT listing_no FROM portal_enquiries WHERE id = $1 AND agency_id = $2", [id, actor.agency_id]);
   const listingNo = found.rows[0]?.listing_no;
   if (!listingNo) return { error: "no_listing_number" };
   const Store = require("../lib/listingStore");
-  const unit = await Store.findByCode(pool, actor.agency_id, String(unitCode || "").trim());
-  if (!unit) return { error: "unit_not_found" };
+  const listing = await Store.findByCode(pool, actor.agency_id, String(unitCode || "").trim());
+  if (!listing) return { error: "unit_not_found" };
+  if (listing.portal_listing_no === listingNo) return { outcome: "linked", code: listing.code };
   try {
-    await pool.query("UPDATE listings SET portal_listing_no = $3 WHERE id = $1 AND agency_id = $2", [unit.id, actor.agency_id, listingNo]);
+    const r = await Store.applyListingPatch(pool, actor, { listing, patch: { portal_listing_no: listingNo }, expectedVersion: listing.version });
+    if (r.forbidden) return { error: "forbidden" };
+    if (r.conflict) return { error: "unit_changed" };
   } catch (err) {
     if (err.code === "23505") return { error: "already_linked" };
     throw err;
   }
-  return { outcome: "linked", code: unit.code };
+  return { outcome: "linked", code: listing.code };
 }
 
 /** The owner's switch: alerts for the whole agency (managers and the owner). */

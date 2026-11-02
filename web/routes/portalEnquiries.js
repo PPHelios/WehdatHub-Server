@@ -23,6 +23,7 @@ const ERRORS = {
   erased_before: ["الرقم ده اتمسح قبل كده بطلب العميل.", "This number was erased at the client's request."],
   unit_not_found: ["الكود ده مش موجود عندك.", "No unit with that code."],
   already_linked: ["رقم الإعلان ده متربط بوحدة تانية.", "That listing number is already linked to another unit."],
+  unit_changed: ["الوحدة اتعدلت وإنت بتربط. جرب تاني.", "The unit changed while you were linking. Try again."],
   no_listing_number: ["الرابط ده مفيهوش رقم إعلان.", "This link has no listing number."],
   assignee: ["الوسيط ده مش متاح دلوقتي.", "That broker isn't available."],
   assignee_away: ["الوسيط ده في إجازة.", "That broker is away."]
