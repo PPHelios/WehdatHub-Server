@@ -6,6 +6,7 @@ const Q = require("../domain/searchQuery");
 const Vis = require("../lib/visibility");
 const PlaceNames = require("../lib/placeNames");
 const Fx = require("./fx");
+const Switches = require("./aiSwitches");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -72,6 +73,8 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
   const t0 = Date.now();
   const local = Q.fallbackParse(text);
   const reasons = local.meta?.reasons || [];
+  // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).
+  if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
   if (!aiAllowed || (!forceAi && !local.meta?.unsure)) {
     return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons };
   }

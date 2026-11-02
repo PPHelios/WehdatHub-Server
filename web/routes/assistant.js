@@ -7,7 +7,8 @@
 
 const Assistant = require("../../services/assistant");
 const A = require("../../domain/assistant");
-const { isManager } = require("../../lib/authz");
+const { isManager, isAgencyOwner } = require("../../lib/authz");
+const AiBlock = require("../../lib/aiBlock");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -16,7 +17,6 @@ const day = (d) => new Date(d).toISOString().slice(0, 10);
 
 const ERRORS = {
   empty: ["اكتب سؤالك.", "Write your question."],
-  quota: ["المساعد وصل لحد النهارده، جرب بكرة.", "The assistant reached today's limit; try tomorrow."],
   info: ["مش لاقي المشروع أو الوحدة دي.", "That project or unit wasn't found."],
   ai: ["المساعد مش متاح دلوقتي، جرب كمان شوية.", "The assistant is not available right now; try again shortly."]
 };
@@ -45,7 +45,7 @@ function register(web, { pool, page }) {
       body: html`<h1>💬 ${L(lang, "اسأل المساعد", "Ask the assistant")}</h1>
 <p class="muted">${L(lang, "بيرد من بيانات الوكالة بس (المشاريع، الأسعار، البروشور، عملاءك، متابعاتك، الوحدات) ومعاه تاريخ البيانات. لو المعلومة مش عندنا هيقولك كده ومش هيخمّن.", "Answers only from the agency's data (projects, prices, brochures, your clients, follow-ups, units), with the data's date. If we don't have it, it says so and never guesses.")}</p>
 ${saved ? html`<p class="notice ok card" data-info-saved>✅ ${L(lang, `اتضافت المعلومة على ${saved.kind === "unit" ? "الوحدة" : "المشروع"} ${saved.name}. المساعد هيستخدمها من دلوقتي.`, `Added to ${saved.kind === "unit" ? "unit" : "project"} ${saved.name}. The assistant will use it from now on.`)}</p>` : ""}
-${error ? html`<p class="notice bad card" data-assistant-error="${error}">${(ERRORS[error] || ERRORS.ai)[lang === "en" ? 1 : 0]}</p>` : ""}
+${error ? html`<p class="notice bad card" data-assistant-error="${error}">${["quota", "daily", "off"].includes(error) ? AiBlock.text(error, lang, { owner: isAgencyOwner(req.session.broker) }) : (ERRORS[error] || ERRORS.ai)[lang === "en" ? 1 : 0]}</p>` : ""}
 <form method="post" action="/app/ask" class="card stack">
   <label>${L(lang, "سؤالك", "Your question")}
   <textarea name="q" rows="3" maxlength="${A.MAX_QUESTION}" required placeholder="${L(lang, "مثلا: امتى استلام بادية؟ مين من عملائي عايز 3 أوض في زايد؟ ورايا إيه النهارده؟", "e.g. When is Badya's delivery? Which of my clients want 3 bedrooms in Zayed? What's due today?")}">${question}</textarea></label>

@@ -3,7 +3,8 @@
 
 const Credits = require("../../lib/credits");
 const UnitCode = require("../../domain/unitCode");
-const { MANAGER_ROLES } = require("../../lib/authz");
+const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
+const Switches = require("../../services/aiSwitches");
 const Billing = require("../../services/billing");
 const AiCredits = require("../../services/credits");
 const { creditTable } = require("../views/credits");
@@ -102,7 +103,6 @@ function register(web, { pool, page }) {
     const agency = manager ? await Credits.usage(pool, broker.agency_id) : null;
     const own = manager ? (await pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] : null;
     const codePrefix = own ? own.code_prefix || UnitCode.prefixFrom(own.name) : "";
-    const aiPhotos = own?.crm_settings?.ai_photo_order !== false;
     const rates = FxDomain.ratesFrom(own?.crm_settings?.fx);
     const fxCard = manager ? html`<form method="post" action="/app/usage/fx" class="card stack" data-fx-rates>
   <h2>${L(lang, "سعر الدولار واليورو", "Dollar and euro rates")}</h2>
@@ -140,7 +140,7 @@ ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L
   <h2>🤖 ${L(lang, "رصيد الذكاء الاصطناعي (الشهر الحالي)", "AI credits (this month)")}</h2>
   <meter min="0" max="${ai.credits.limit}" value="${Math.min(ai.credits.used, ai.credits.limit)}"></meter>
   <p class="big"><strong>${ai.credits.used}</strong> / ${ai.credits.limit} · ${L(lang, `باقي ${Math.max(0, ai.credits.limit - ai.credits.used)}`, `${Math.max(0, ai.credits.limit - ai.credits.used)} left`)}</p>
-  <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${manager ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : ""}</p>
+  <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${isAgencyOwner(broker) ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : manager ? html` · <span class="muted">${L(lang, "لزيادة الرصيد كلّم مالك الوكالة", "To add credits, ask your agency owner")}</span>` : ""}</p>
   ${creditTable(aiActions, lang)}
 </section>
 ${manager
@@ -159,14 +159,36 @@ ${manager
   <label>${L(lang, "حد أسبوعي لكل وسيط (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
   <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
   <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
-  <label class="row"><input type="checkbox" name="ai_photo_order" value="on"${aiPhotos ? html` checked` : ""} data-ai-photo-order> ${L(lang, "الذكاء الاصطناعي يرتب صور الوحدات ويخفي المستندات", "AI orders unit photos and hides documents")}</label>
-  <p class="muted">${L(lang, "لو قفلته بتوفر رصيد: الصور بتفضل بالترتيب اللي اتبعتت بيه، وتقدر ترتبها بإيدك من تعديل الوحدة.", "Off saves credits: photos keep the order they were sent in, and you can order them by hand when editing a unit.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
+${isAgencyOwner(broker) ? html`<p class="card"><a href="/app/usage/ai" data-ai-switches-link>🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي (تشغيل وإيقاف)", "AI feature switches (on and off)")}</a></p>` : ""}
 <p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>`]
     ], { open: req.query.saved === "1" ? 2 : 0 })
   : mineCard}`
     });
+  });
+
+  // 🎚️ The agency owner's AI feature switches: one per feature, a master switch per tab.
+  web.get("/usage/ai", async (req, res) => {
+    const { broker } = req.session;
+    if (!isAgencyOwner(broker)) return res.status(403).send("Agency owner only");
+    const lang = langOf(req);
+    const sw = await Switches.forAgency(pool, broker.agency_id);
+    return page(req, res, { title: L(lang, "ميزات الذكاء الاصطناعي", "AI features"), nav: "settings", body: html`<h1>${L(lang, "ميزات الذكاء الاصطناعي", "AI features")}</h1>
+<p class="muted">${L(lang, "أي ميزة مقفولة بيختفي زرها ومبتصرفش رصيد. مفتاح التبويب بيقفل كل اللي تحته.", "A feature that is off hides its button and spends no credits. A tab's master switch turns off everything under it.")}</p>
+${req.query.saved === "1" ? html`<p class="ok">${L(lang, "اتحفظ.", "Saved.")}</p>` : ""}
+<form method="post" action="/app/usage/ai" class="stack" data-ai-switches><input type="hidden" name="_csrf" value="${req.session.csrf}">
+${sw.tabs.map((t) => html`<fieldset class="card stack" data-tab="${t.id}"><legend><label class="row"><input type="checkbox" name="tab_${t.id}" value="on"${t.on ? html` checked` : ""}> <b>${L(lang, t.ar, t.en)}</b></label></legend>
+${t.features.map((f) => html`<label class="row"><input type="checkbox" name="f_${f.key}" value="on"${f.on ? html` checked` : ""}> ${L(lang, f.ar, f.en)}</label>`)}</fieldset>`)}
+<button type="submit">${L(lang, "حفظ", "Save")}</button></form>
+<p><a href="/app/usage">${L(lang, "رجوع", "Back")}</a></p>` });
+  });
+
+  web.post("/usage/ai", async (req, res) => {
+    const { broker } = req.session;
+    if (!isAgencyOwner(broker)) return res.status(403).send("Agency owner only");
+    await Switches.save(pool, broker, req.body);
+    return res.redirect(303, "/app/usage/ai?saved=1");
   });
 
   web.post("/usage/fx", async (req, res) => {
@@ -182,9 +204,8 @@ ${manager
     const monthly = parseInt(req.body.monthly, 10);
     // A prefix that isn't 1–4 Latin letters keeps the current one.
     await pool.query(
-      `UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4, code_prefix = COALESCE($5, code_prefix),
-              crm_settings = crm_settings || jsonb_build_object('ai_photo_order', $6::boolean) WHERE id = $1`,
-      [broker.agency_id, Number.isInteger(monthly) && monthly >= 0 && monthly <= 100000 ? monthly : null, optInt(req.body.daily_cap), optInt(req.body.weekly_cap), UnitCode.cleanPrefix(req.body.code_prefix), req.body.ai_photo_order === "on"]
+      `UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4, code_prefix = COALESCE($5, code_prefix) WHERE id = $1`,
+      [broker.agency_id, Number.isInteger(monthly) && monthly >= 0 && monthly <= 100000 ? monthly : null, optInt(req.body.daily_cap), optInt(req.body.weekly_cap), UnitCode.cleanPrefix(req.body.code_prefix)]
     );
     return res.redirect(303, "/app/usage?saved=1");
   });

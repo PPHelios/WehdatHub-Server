@@ -8,6 +8,7 @@
 "use strict";
 
 const AI = require("../lib/ai");
+const AiBlock = require("../lib/aiBlock");
 const A = require("../domain/assistant");
 const Card = require("../domain/leadCard");
 const Describe = require("../domain/describe");
@@ -166,7 +167,7 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     });
     res = A.parseAnswer(r.text, lang);
   } catch (err) {
-    return { error: /QUOTA/.test(String(err.code || err.message)) ? "quota" : "ai" };
+    return { error: AiBlock.kindOf(err) };
   }
 
   await pool.query("INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", [

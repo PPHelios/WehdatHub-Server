@@ -2,6 +2,7 @@
 // "refine and see all" (?f=<filters token> from WhatsApp links) and saved searches.
 "use strict";
 
+const Switches = require("../../services/aiSwitches");
 const Search = require("../../services/search");
 const SearchLog = require("../../services/searchLog");
 const AI = require("../../lib/ai");
@@ -11,6 +12,8 @@ const { formatInterpretation } = require("../../lib/search");
 const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
 const { uploads, VOICE } = require("../uploads");
+const AiBlock = require("../../lib/aiBlock");
+const { isAgencyOwner } = require("../../lib/authz");
 const { html, raw } = require("../html");
 const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
@@ -110,8 +113,8 @@ ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?requ
 }
 
 function register(web, { pool, page }) {
-  // Whether the AI may read this agency's searches (the owner's switch, services/aiSwitches.js, joins here in phase 2).
-  const aiAllowed = (req) => true;
+  // Whether the AI may read this agency's searches (the owner's switch, services/aiSwitches.js).
+  const aiAllowed = (req) => Switches.isOn(pool, req.session.broker.agency_id, "search_ai");
   const searchCtx = (req) => ({ pool, AI, broker: req.session.broker, agency: req.session.agency, lang: langOf(req) });
 
   web.get("/search", async (req, res) => {
@@ -131,7 +134,7 @@ function register(web, { pool, page }) {
     if (q && !req.query.f) {
       const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
       if (!gate.allowed) return page(req, res, { title: L(lang, "بحث", "Search"), nav: "search", body: html`${searchBox(q, lang)}<p class="card notice bad">⏳ ${L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.")}</p>` }, 429);
-      const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req), forceAi, aiAllowed: aiAllowed(req) });
+      const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req), forceAi, aiAllowed: await aiAllowed(req) });
       parse = parsed;
       source = parsed.source;
       const intent = Q.classifyIntent(parsed.parsed);
@@ -180,7 +183,7 @@ function register(web, { pool, page }) {
         logId,
         q: parse ? q : "",
         lang,
-        canAsk: Boolean(parse) && parse.source !== "ai" && aiAllowed(req)
+        canAsk: Boolean(parse) && parse.source !== "ai" && (await aiAllowed(req))
       });
       results = resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId });
       searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
@@ -234,8 +237,8 @@ ${results}`
       if (!text) return res.status(422).json({ error: L(lang, "مسمعناش كويس. جرب تاني.", "Couldn't hear you. Try again.") });
       return res.json({ q: text });
     } catch (err) {
-      const quota = err.code && /QUOTA/.test(err.code);
-      if (quota) return res.status(402).json({ error: L(lang, "رصيد الذكاء الاصطناعي خلص. اضغط المايك تاني عشان صوت التليفون.", "AI credits are used up. Tap the mic again to use the phone's voice."), fallback: true });
+      const why = AiBlock.kindOf(err);
+      if (why !== "ai") return res.status(402).json({ error: `${AiBlock.text(why, lang, { owner: isAgencyOwner(broker) })} ${L(lang, "اضغط المايك تاني عشان صوت التليفون.", "Tap the mic again to use the phone's voice.")}`, fallback: true });
       return res.status(503).json({ error: L(lang, "الذكاء الاصطناعي مش متاح دلوقتي.", "The AI is unavailable right now."), fallback: true });
     }
   });
