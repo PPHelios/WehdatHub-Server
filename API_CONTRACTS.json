@@ -739,6 +739,7 @@
       "unreadCount": ["pool", "broker"],
       "markRead": ["pool", "broker", "id"],
       "agencyLog": ["pool", "manager", "params"],
+      "people": ["pool", "manager"],
       "savePrefs": ["pool", "broker", "params"],
       "savePushSubscription": ["pool", "broker", "sub", "userAgent"],
       "removePushSubscription": ["pool", "broker", "endpoint"],
@@ -764,6 +765,7 @@
       "register": ["web", "params"]
     },
     "services/activityLog.js": {
+      "people": ["pool", "viewer"],
       "KEEP_DAYS": "Number",
       "PAGE": "Number",
       "list": ["pool", "viewer", "params"],
@@ -829,6 +831,8 @@
       "whoHint": ["lead", "lang", "now"]
     },
     "services/leads.js": {
+      "historyFor": ["pool", "actor", "key", "params"],
+      "historyPeople": ["pool", "actor"],
       "MAX_PHONES": "Number",
       "UNDO_MS": "Number",
       "phoneHash": ["e164"],

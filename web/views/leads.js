@@ -108,6 +108,7 @@ function timelineList(rows, lang, { more = false, lead }) {
   return html`<section class="card" id="timeline"><h2>🕓 ${L(lang, "السجل", "Timeline")}</h2>
   <ul class="timeline">${rows.map((e) => html`<li data-event="${e.kind}">${Card.timelineLine(e, lang)}</li>`)}</ul>
   ${more ? html`<a href="${leadPath(lead, `?before=${rows[rows.length - 1].id}#timeline`)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}
+  <a href="${leadPath(lead, "/history")}" data-history-link>${L(lang, "🔎 السجل كله بالفلتر", "🔎 Full history with filters")}</a>
 </section>`;
 }
 

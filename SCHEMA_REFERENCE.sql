@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 CREATE SEQUENCE IF NOT EXISTS public.assistant_questions_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.broker_passkeys_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.broker_team_history_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.credit_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
@@ -1351,6 +1352,15 @@ CREATE TABLE IF NOT EXISTS public.search_aliases (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.broker_team_history (
+  id bigint DEFAULT nextval('broker_team_history_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid NOT NULL,
+  team_lead_id uuid NOT NULL,
+  from_at timestamp with time zone DEFAULT now() NOT NULL,
+  to_at timestamp with time zone
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1359,6 +1369,7 @@ ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
+ALTER TABLE broker_team_history ADD CONSTRAINT broker_team_history_pkey PRIMARY KEY (id);
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_pkey PRIMARY KEY (id);
 ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_pkey PRIMARY KEY (project_id);
@@ -1631,6 +1642,9 @@ ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (age
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE broker_team_history ADD CONSTRAINT broker_team_history_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE broker_team_history ADD CONSTRAINT broker_team_history_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE broker_team_history ADD CONSTRAINT broker_team_history_team_lead_id_fkey FOREIGN KEY (team_lead_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE brokers ADD CONSTRAINT brokers_team_lead_id_fkey FOREIGN KEY (team_lead_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1775,6 +1789,8 @@ CREATE INDEX idx_assistant_questions_agency ON public.assistant_questions USING 
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_broker_passkeys_broker ON public.broker_passkeys USING btree (broker_id);
 CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
+CREATE INDEX broker_team_history_broker ON public.broker_team_history USING btree (broker_id, from_at);
+CREATE INDEX broker_team_history_team ON public.broker_team_history USING btree (team_lead_id, from_at);
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
 CREATE INDEX brokers_team_lead ON public.brokers USING btree (agency_id, team_lead_id) WHERE (team_lead_id IS NOT NULL);

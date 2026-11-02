@@ -140,7 +140,10 @@ async function setTeamLeadRole(pool, manager, brokerId, on) {
   if (!on && from !== "team_lead") return { error: "same" };
   const to = on ? "team_lead" : "broker";
   await pool.query("UPDATE brokers SET role = $2 WHERE id = $1", [brokerId, to]);
-  if (!on) await pool.query("UPDATE brokers SET team_lead_id = NULL WHERE team_lead_id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  if (!on) {
+    await pool.query("UPDATE broker_team_history SET to_at = now() WHERE team_lead_id = $1 AND agency_id = $2 AND to_at IS NULL", [brokerId, manager.agency_id]);
+    await pool.query("UPDATE brokers SET team_lead_id = NULL WHERE team_lead_id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  }
   return { ok: true, broker: rows[0], from, to };
 }
 
@@ -153,6 +156,12 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
   if (teamLeadId) {
     const lead = (await pool.query("SELECT id FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active AND lower(role) = 'team_lead'", [teamLeadId, manager.agency_id])).rows[0];
     if (!lead) return { error: "team_lead_not_found" };
+  }
+  // The team history: the old team ends now and the new one starts now (only when the team really changes).
+  const cur = (await pool.query("SELECT team_lead_id FROM brokers WHERE id = $1", [brokerId])).rows[0]?.team_lead_id || null;
+  if (cur !== (teamLeadId || null)) {
+    await pool.query("UPDATE broker_team_history SET to_at = now() WHERE broker_id = $1 AND to_at IS NULL", [brokerId]);
+    if (teamLeadId) await pool.query("INSERT INTO broker_team_history (agency_id, broker_id, team_lead_id) VALUES ($1, $2, $3)", [manager.agency_id, brokerId, teamLeadId]);
   }
   await pool.query("UPDATE brokers SET team_lead_id = $2 WHERE id = $1", [brokerId, teamLeadId || null]);
   return { ok: true };
