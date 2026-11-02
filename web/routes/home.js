@@ -1,7 +1,7 @@
 // web/routes/home.js — /app/ home of a signed-in broker
 "use strict";
 
-const { html, navFor } = require("../html");
+const { html, raw, navFor } = require("../html");
 const { icon } = require("../icons");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
@@ -38,13 +38,13 @@ function register(web, { pool, page }) {
     ];
     const items = navFor(broker);
     const support = Onboarding.supportUrl(broker, en ? "en" : "ar");
-    const row = (href, ic, label, extra = "") => html`<li><a class="listrow" href="${href}"${extra}>${icon(ic)}<span>${label}</span></a></li>`;
+    const row = (href, ic, label, extra = "", cls = "") => html`<li${cls ? raw(` class="${cls}"`) : ""}><a class="listrow" href="${href}"${extra}>${icon(ic)}<span>${label}</span></a></li>`;
     return page(req, res, {
       title: en ? "More" : "المزيد",
       body: html`<h1>${en ? "More" : "المزيد"}</h1>
 ${groups.map(([g, label]) => {
   const list = items.filter((n) => n.group === g);
-  return list.length ? html`<section class="card list" data-more="${g}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar))}</ul></section>` : "";
+  return list.length ? html`<section class="card list" data-more="${g}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : "";
 })}
 <section class="card list"><ul class="rows">
   <li><a class="listrow" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${icon("globe")}<span>${en ? "عربي" : "English"}</span></a></li>
@@ -57,7 +57,7 @@ ${groups.map(([g, label]) => {
   // The + button: everything a broker adds, one tap each.
   web.get("/add", (req, res) => {
     const en = req.session.broker.preferred_lang === "en";
-    const tile = (href, ic, title, sub) => html`<a class="tile-link" href="${href}">${icon(ic, 28)}<span><b>${title}</b><span class="muted">${sub}</span></span></a>`;
+    const tile = (href, ic, title, sub, cls = "") => html`<a class="tile-link${cls ? " " + cls : ""}" href="${href}">${icon(ic, 28)}<span><b>${title}</b><span class="muted">${sub}</span></span></a>`;
     return page(req, res, {
       title: en ? "Add" : "إضافة",
       body: html`<h1>${en ? "Add" : "إضافة"}</h1>
@@ -65,8 +65,8 @@ ${groups.map(([g, label]) => {
   ${tile("/app/units/new", "mic", en ? "Add a unit" : "إضافة وحدة", en ? "Speak, paste a description, or fill the form" : "سجّل فويس، الصق الوصف، أو املأ الفورم")}
   ${tile("/app/leads/new", "leads", en ? "New lead" : "عميل جديد", en ? "Paste the client's message or type it" : "الصق رسالة العميل أو اكتبها")}
   ${tile("/app/deals/new", "deal", en ? "Record a deal" : "سجّل صفقة", en ? "Unit, client and commission" : "الوحدة والعميل والعمولة")}
-  ${tile("/app/import", "import", en ? "Import units" : "استيراد وحدات", en ? "Excel sheet, group posts or chat export" : "شيت إكسيل، بوستات الجروبات أو تصدير الشات")}
-  ${tile("/app/leads/import", "import", en ? "Import leads" : "استيراد عملاء", en ? "CSV or Excel from Facebook or your sheet" : "ملف من فيسبوك أو شيتك")}
+  ${tile("/app/import", "import", en ? "Import units" : "استيراد وحدات", en ? "Excel sheet, group posts or chat export" : "شيت إكسيل، بوستات الجروبات أو تصدير الشات", "desktop-only")}
+  ${tile("/app/leads/import", "import", en ? "Import leads" : "استيراد عملاء", en ? "CSV or Excel from Facebook or your sheet" : "ملف من فيسبوك أو شيتك", "desktop-only")}
 </div>`
     });
   });

@@ -593,6 +593,8 @@
       "storePhotos": ["broker", "files"]
     },
     "domain/sheetImport.js": {
+      "statusHint": ["cells"],
+      "deliveryCell": ["v"],
       "COLUMNS": "Array",
       "REQUIRED": "Array",
       "columnFor": ["header"],

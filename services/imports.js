@@ -114,6 +114,8 @@ const NOTE = {
   compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
   phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري"),
   dollar: (usd, lang) => (lang === "en" ? `Priced in dollars: saved as $${usd}, not converted` : `السعر بالدولار: اتسجل ${usd}$ من غير تحويل`),
+  dupDb: (code, lang) => (lang === "en" ? `Looks like your existing unit ${code}` : `شكلها نفس وحدتك ${code}`),
+  dupRow: (row, lang) => (lang === "en" ? `Looks like row ${row} in this sheet` : `شكلها نفس الصف ${row} في الشيت`),
   codeMade: (lang) => (lang === "en" ? "No code in the sheet: numbered in the sheet's own pattern" : "مفيش كود في الشيت: اتعمل بنفس نمط أكواد الشيت"),
   codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت")
 };
@@ -165,19 +167,44 @@ async function applyCodePatterns(pool, agencyId, sheet) {
   }
 }
 
+/* Remembered choices: what an agency picked on a past upload (type words, which of several prices, status words) is applied
+   to the next one. Stored in the agency's settings; one button forgets them. */
+const PREF_KEYS = ["types", "price_pick", "status_words"];
+
+async function importPrefs(pool, agencyId) {
+  const { rows } = await pool.query("SELECT crm_settings->'import_prefs' AS p FROM agencies WHERE id = $1", [agencyId]);
+  return rows[0]?.p && typeof rows[0].p === "object" ? rows[0].p : {};
+}
+
+async function savePrefs(pool, agencyId, change) {
+  const cur = await importPrefs(pool, agencyId);
+  const next = { ...cur, ...change, types: { ...(cur.types || {}), ...(change.types || {}) } };
+  for (const k of Object.keys(next)) if (!PREF_KEYS.includes(k)) delete next[k];
+  await pool.query("UPDATE agencies SET crm_settings = jsonb_set(coalesce(crm_settings, '{}'::jsonb), '{import_prefs}', $2::jsonb) WHERE id = $1", [agencyId, JSON.stringify(next)]);
+}
+
+async function forgetPrefs(pool, agencyId) {
+  await pool.query("UPDATE agencies SET crm_settings = coalesce(crm_settings, '{}'::jsonb) - 'import_prefs' WHERE id = $1", [agencyId]);
+}
+
 /**
  * Plans an Excel import against the agency's inventory (nothing is written).
  * @param {Object} sheet - lib/sheets.js readInventorySheet output
  * @returns {Promise<{ items, counts }>}
  */
 async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
-  if (sheet.tabs) await applyCodePatterns(pool, broker.agency_id, sheet);
+  let remembered = null;
+  if (sheet.tabs) {
+    // Earlier choices are only offered on the review page (pre-selected), never applied without a tap.
+    remembered = await importPrefs(pool, broker.agency_id);
+    await applyCodePatterns(pool, broker.agency_id, sheet);
+  }
   // A price in dollars is kept in dollars (saved with its currency, like a unit added by voice or text); search converts it.
   const parsed = sheet.rows.map((r) => {
     const usd = Mixed.dollars(cellText(r, "price_value"));
     const row = SheetImport.rowToDraft(usd ? { ...r.cells, price_value: usd } : r.cells);
     if (usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
-    return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd) };
+    return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd), hint: SheetImport.statusHint(r.cells) };
   });
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];
   const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
@@ -185,6 +212,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   const known = await knownCompounds(pool, broker.agency_id);
   const seen = new Set();
   const items = [];
+  const sheetNew = [];
   // Rows that had text but no known column are shown with their reason, never dropped.
   for (const s of sheet.skipped || []) items.push({ row: s.rowNumber, tab: s.tab || null, sheet_row: s.sheetRow || null, code: null, kind: "invalid", reasons: [lang === "en" ? "No value in a known column" : "مفيش قيمة في عمود معروف"], needs: [], notes: [] });
 
@@ -194,6 +222,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
     if (p.dollar) base.notes.push(NOTE.dollar(p.dollar.usd, lang));
     if (p.codeMade) base.notes.push(NOTE.codeMade(lang));
     if (p.codeOdd) base.notes.push(NOTE.codePattern(lang));
+    if (p.hint) base.status_hint = p.hint;
     if (p.errors.length) {
       items.push({ ...base, kind: "invalid", reasons: p.errors.map((e) => quoted(e, p.cells, lang)), needs: [...new Set(p.errors.map((e) => ERROR_NEEDS[e]).filter(Boolean))] });
       continue;
@@ -244,12 +273,22 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
         continue;
       }
       if (p.status && p.status !== "active") ev.listing.status = p.status;
-      items.push({ ...base, kind: "new", fields: ev.listing, warnings: ev.warnings.map((w) => Rules.warningLine(w, lang)) });
+      const warnings = ev.warnings.map((w) => Rules.warningLine(w, lang));
+      // A likely duplicate: an active unit in the agency, or an earlier row of this sheet (never a block, only a warning).
+      const dup = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
+      if (dup) warnings.push(NOTE.dupDb(dup, lang));
+      else {
+        const twin = sheetNew.find((o) => Dup.sameUnit(ev.listing, o.fields));
+        if (twin) warnings.push(NOTE.dupRow(twin.row, lang));
+      }
+      const item = { ...base, kind: "new", fields: ev.listing, warnings };
+      sheetNew.push(item);
+      items.push(item);
     }
   }
 
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
-  return { items, counts };
+  return remembered ? { items, counts, remembered } : { items, counts };
 }
 
 /** Saves a plan; returns its id. */
@@ -354,6 +393,7 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
   const target = Array.isArray(rows) ? rows.find((r) => r.rowNumber === Number(rowNumber)) : null;
   const at = Array.isArray(items) ? items.findIndex((i) => i.row === Number(rowNumber)) : -1;
   if (!target || at < 0) return false;
+  const oldType = target.cells.property_type;
   for (const [key, v] of Object.entries(cells || {})) {
     if (!EDITABLE.has(key)) continue;
     if (key === "code") {
@@ -364,6 +404,9 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
     if (value) target.cells[key] = value;
     else delete target.cells[key];
   }
+  // A type word the app did not know, fixed by hand in the review, is learned for the next upload.
+  const newType = SheetImport.propertyType(target.cells.property_type);
+  if (typeKey(oldType) && !SheetImport.propertyType(oldType) && newType) await savePrefs(pool, broker.agency_id, { types: { [typeKey(oldType)]: newType } });
   const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang })).items;
   if (item.code && ["new", "changed"].includes(item.kind) && items.some((i) => i.row !== item.row && i.code === item.code && ["new", "changed"].includes(i.kind))) {
     Object.assign(item, { kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
@@ -402,6 +445,15 @@ function batchStats(payload) {
     no_type: (payload.items || []).filter((i) => i.kind === "invalid" && (i.needs || []).includes("listing_type")).length,
     several_prices: rows.filter(hasSeveralPrices).length,
     dollars: rows.filter(isDollars).length,
+    status_hints: payload.defaults?.status_words ? [] : (() => {
+      const by = {};
+      for (const r of rows) {
+        const h = SheetImport.statusHint(r.cells);
+        if (h) by[h] = (by[h] || 0) + 1;
+      }
+      return Object.entries(by).map(([status, count]) => ({ status, count }));
+    })(),
+    remembered: payload.remembered || {},
     unknown_types: unknownTypes(rows)
   };
 }
@@ -445,7 +497,31 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
       }
     }
   }
+  if (action === "status_words" && ["yes", "no"].includes(value)) {
+    // Asked once: yes sets rented or sold units to sold and closed ones to archived; the answer is remembered.
+    defaults.status_words = value;
+    await savePrefs(pool, broker.agency_id, { status_words: value === "yes" });
+    if (value === "yes") {
+      for (const r of rows) {
+        const hint = SheetImport.statusHint(r.cells);
+        if (hint) {
+          r.cells.status = hint;
+          touched++;
+        }
+      }
+    }
+    if (!touched) {
+      await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, defaults })]);
+      return { touched: 0 };
+    }
+  } else if (action === "forget_prefs") {
+    await forgetPrefs(pool, broker.agency_id);
+    await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, remembered: {} })]);
+    return { touched: 0 };
+  }
   if (!touched) return { touched: 0 };
+  if (action === "price_pick") await savePrefs(pool, broker.agency_id, { price_pick: value });
+  if (action === "type_map") await savePrefs(pool, broker.agency_id, { types: { [typeKey(from)]: value } });
   const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang });
   await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, rows, defaults })]);
   return { touched };

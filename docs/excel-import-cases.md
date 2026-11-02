@@ -32,13 +32,12 @@ Written from the NCH "RENT - All compounds" workbook (29 tabs, 3,751 rows, 26 vi
 | A required column empty on every row | No price column anywhere | The whole upload is refused before anything is saved | The empty columns by name |
 | More rows than the limit | Over 5,000 unit rows | Refused with the limit | Message |
 | A large workbook | 3.9 MB, 30 tabs | Read in the browser, tab by tab; the server gets only the cells | A progress line per tab |
-| Number formats and dates | Delivery dates stored as date numbers | Not handled yet | Shown as numbers, flagged only if they break a rule |
-| Status words in a notes column | `rented`, `available`, `moghlk` | Not handled yet: kept in the notes | In the unit's notes |
-| Same unit under two codes, or in the sheet and the app with another code | | Not handled yet | Nothing |
+| Delivery stored as an Excel date | `45567` | **Auto-fixed**: read as month and year (10/2024); `10/2026`-style text was already read | Nothing |
+| Status words in the notes | `rented`, `sold`, `مباع`, `not available` | **Batch, asked every upload**: rented or sold units are saved as sold and closed ones as archived only after a yes; last time's answer is shown | A question with the counts, then a note that the choice was applied |
+| Same unit under two codes (in the sheet, or already in the agency) | Same compound, rooms, area and price under another code | **Warned**, never blocked (the shared duplicate rule) | A warning naming the existing unit or the earlier row |
+| Choices made on an earlier upload | A type word (picked in a batch or fixed by hand in the review), the price rule, the status answer | **Learned and saved on every upload** per agency and offered on the next one as a pre-selected suggestion; nothing is applied without a tap | The last answer shown beside the question, with a button to forget them |
 
-## What to add next, in this order
+## What is still not handled
 
-1. Read status words (rented, sold, not available) into the unit status after a one-time confirmation.
-2. Treat date numbers and `10/2026`-style delivery cells properly.
-3. Warn about a likely duplicate unit (same compound, address, area and price under another code), as the group import already does.
-4. Remember a mapping the person chose (column names, type words, rent or sale) per agency, so the next upload from the same agency needs no choices.
+1. Remembering the sheet's own column names for the next upload (the choices above are remembered, the column matching is not).
+2. Euro prices (flagged; dollars are saved as dollars).

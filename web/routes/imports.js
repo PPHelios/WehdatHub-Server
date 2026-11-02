@@ -116,7 +116,7 @@ function excelPlanPage(imp, lang, query = {}) {
 
   const stats = !applied && sheetRows ? Imports.batchStats(imp.payload) : null;
   const batch =
-    stats && (stats.no_type || stats.several_prices || stats.dollars || stats.unknown_types.length)
+    stats && (stats.no_type || stats.several_prices || stats.dollars || stats.unknown_types.length || stats.status_hints.length || Object.keys(stats.remembered).length)
       ? html`<section class="card stack" data-batch>
   <h2>🧰 ${L(lang, "تعديل جماعي", "Fix many rows at once")}</h2>
   ${stats.no_type
@@ -127,15 +127,26 @@ function excelPlanPage(imp, lang, query = {}) {
   ${stats.several_prices
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="price_pick"><input type="hidden" name="action" value="price_pick">
     <p>${L(lang, `${stats.several_prices} صف فيهم أكتر من سعر في الخانة (طويل ومدة قصيرة ويومي).`, `${stats.several_prices} rows list several prices in one cell (long term, short term, daily).`)}</p>
-    <div class="row"><button name="value" value="long" class="secondary">${L(lang, "خد السعر الطويل أو الشهري", "Use the long-term or monthly price")}</button><button name="value" value="first" class="secondary">${L(lang, "خد أول سعر", "Use the first price")}</button></div>
+    <div class="row"><button name="value" value="long" class="${stats.remembered.price_pick === "long" ? "" : "secondary"}"${stats.remembered.price_pick === "long" ? raw(' data-remembered="price_pick"') : ""}>${L(lang, "خد السعر الطويل أو الشهري", "Use the long-term or monthly price")}</button><button name="value" value="first" class="${stats.remembered.price_pick === "first" ? "" : "secondary"}"${stats.remembered.price_pick === "first" ? raw(' data-remembered="price_pick"') : ""}>${L(lang, "خد أول سعر", "Use the first price")}</button></div>
     <p class="muted">${L(lang, "السعر اليومي مبيتاخدش أبداً، والنص الأصلي بيتحفظ في الملاحظات.", "A daily price is never used; the original text is kept in the notes.")}</p></form>`
     : ""}
   ${stats.unknown_types.length
     ? html`<div class="stack" data-batch-form="type_map"><p>${L(lang, "أنواع مش معروفة. اختار نوع لكل كلمة مرة واحدة وتتطبق على كل الصفوف:", "Types the app does not know. Pick a type for each word once and it applies to every row:")}</p>
     ${stats.unknown_types.map((u) => html`<form method="post" action="/app/import/${imp.id}/batch" class="row" data-type-word="${u.value}"><input type="hidden" name="action" value="type_map"><input type="hidden" name="from" value="${u.value}">
       <strong>${u.value}</strong> <span class="muted">×${u.count}</span>
-      <select name="value" aria-label="${u.value}">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}">${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select>
+      <select name="value" aria-label="${u.value}">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}"${(stats.remembered.types || {})[u.value] === k ? raw(" selected data-remembered") : ""}>${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select>
       <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`)}</div>`
+    : ""}
+  ${stats.status_hints.length
+    ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="status_words"><input type="hidden" name="action" value="status_words">
+    <p>${L(lang, `ملاحظات ${stats.status_hints.reduce((n, h) => n + h.count, 0)} صف بتقول إن الوحدة اتأجرت أو اتباعت أو مش متاحة (${stats.status_hints.map((h) => `${h.count} ${h.status === "sold" ? "اتأجرت/اتباعت" : "مش متاحة"}`).join("، ")}). نسجلهم بالحالة دي؟`, `${stats.status_hints.reduce((n, h) => n + h.count, 0)} rows say in their notes the unit is rented, sold or not available (${stats.status_hints.map((h) => `${h.count} ${h.status === "sold" ? "rented or sold" : "not available"}`).join(", ")}). Save them with that status?`)}</p>
+    <div class="row"><button name="value" value="yes" class="secondary">${L(lang, "أيوه، سجلهم بالحالة", "Yes, save them with that status")}</button><button name="value" value="no" class="secondary">${L(lang, "لا، سيبهم متاحين", "No, leave them available")}</button></div>
+    <p class="muted"${stats.remembered.status_words !== undefined ? raw(' data-remembered="status"') : ""}>${stats.remembered.status_words !== undefined ? L(lang, `المرة اللي فاتت اخترت: ${stats.remembered.status_words ? "أيوه" : "لا"}. بنسألك كل مرة.`, `Last time you chose: ${stats.remembered.status_words ? "yes" : "no"}. We still ask each time.`) : L(lang, "إجابتك بتتحفظ كاقتراح للمرة الجاية.", "Your answer is kept as a suggestion for the next upload.")}</p></form>`
+    : ""}
+  ${Object.keys(stats.remembered).length
+    ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-prefs-used><input type="hidden" name="action" value="forget_prefs">
+    <p class="muted">${L(lang, "اختياراتك القديمة ظاهرة كاقتراحات متحددة مسبقاً. مفيش حاجة بتتطبق من غير ما تدوس.", "Your earlier choices appear as pre-selected suggestions. Nothing is applied until you press a button.")}</p>
+    <button class="secondary">${L(lang, "انسَ اختياراتي المحفوظة", "Forget my saved choices")}</button></form>`
     : ""}
   ${stats.dollars
     ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار. بيتسجلوا بالدولار من غير تحويل، والبحث بيحولهم بسعر الوكالة.`, `${stats.dollars} rows are priced in dollars. They are saved in dollars, not converted; search converts them at the agency rate.`)}</p>`
