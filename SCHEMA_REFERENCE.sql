@@ -1337,6 +1337,20 @@ CREATE TABLE IF NOT EXISTS public.search_reports (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.search_aliases (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  term text NOT NULL,
+  target text NOT NULL,
+  kind text NOT NULL,
+  status text DEFAULT 'pending'::text NOT NULL,
+  source text DEFAULT 'ai'::text NOT NULL,
+  agreed integer DEFAULT 1 NOT NULL,
+  example text,
+  decided_by text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1398,6 +1412,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_pkey PRIMARY KEY (id);
 ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_pkey PRIMARY KEY (id);
 ALTER TABLE search_log ADD CONSTRAINT search_log_pkey PRIMARY KEY (id);
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_pkey PRIMARY KEY (id);
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_pkey PRIMARY KEY (kind, key);
@@ -1430,6 +1445,7 @@ ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
 ALTER TABLE place_names ADD CONSTRAINT place_names_name_key_key UNIQUE (name_key);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
+ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_term_target_key UNIQUE (term, target);
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_search_log_id_broker_id_key UNIQUE (search_log_id, broker_id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp >= 0));
@@ -1590,6 +1606,9 @@ ALTER TABLE projects ADD CONSTRAINT projects_delivery_quarter_check CHECK (((del
 ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
+ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_kind_check CHECK ((kind = ANY (ARRAY['place'::text, 'type'::text, 'feature'::text])));
+ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'ai'::text, 'manual'::text])));
+ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_status_check CHECK ((status = ANY (ARRAY['open'::text, 'fixed'::text, 'dismissed'::text])));
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
@@ -1858,6 +1877,7 @@ CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING bt
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
 CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
+CREATE INDEX search_aliases_status ON public.search_aliases USING btree (status, agreed DESC);
 CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id, created_at DESC);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);

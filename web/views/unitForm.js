@@ -41,8 +41,8 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <h2>✨ ${L(lang, "املأ من وصف أو فويس", "Fill from a description or a voice note")}</h2>
     <label>${L(lang, "الوصف (زي ما بتبعته للبوت)", "Description (as you would send it to the bot)")}<textarea name="describe" rows="3"></textarea></label>
     <div class="row">
-      <button type="button" class="secondary" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
-      <button type="button" class="secondary" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
+      <button type="button" class="secondary" data-ai="unit_fill" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
+      <button type="button" class="secondary" data-ai="voice_unit_add" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
       <span class="spinner" aria-hidden="true"></span>
     </div>
   </section>

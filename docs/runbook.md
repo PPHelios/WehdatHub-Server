@@ -51,6 +51,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
+| `SEARCH_SHADOW_AI` | no | off | `true` makes the AI read every search the quick reader answered alone, quietly after the answer, for the nightly check and word learning (POC). It uses no agency credits. |
+| `SEARCH_SHADOW_DAILY_MAX` | no | `300` | Most quiet AI reads per day (the POC budget). |
 | `SUPPORT_WHATSAPP` / `SUPPORT_TELEGRAM` | no | off | The owner's WhatsApp number (digits, with country code) and/or Telegram username. When set, every signed-in page footer shows "Talk to a person" (WhatsApp first, else Telegram). |
 | `OWNER_BROKER_IDS` | no | empty | Broker ids (comma-separated UUIDs) of the product owner. Only they see the app tracking dashboard at `/app/owner` (weekly active agencies and brokers, units/leads/deals, AI cost per agency, errors). Everyone else gets a 404 there. |
 

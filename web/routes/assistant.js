@@ -49,7 +49,7 @@ ${error ? html`<p class="notice bad card" data-assistant-error="${error}">${["qu
 <form method="post" action="/app/ask" class="card stack">
   <label>${L(lang, "سؤالك", "Your question")}
   <textarea name="q" rows="3" maxlength="${A.MAX_QUESTION}" required placeholder="${L(lang, "مثلا: امتى استلام بادية؟ مين من عملائي عايز 3 أوض في زايد؟ ورايا إيه النهارده؟", "e.g. When is Badya's delivery? Which of my clients want 3 bedrooms in Zayed? What's due today?")}">${question}</textarea></label>
-  <button type="submit">${L(lang, "اسأل", "Ask")}</button>
+  <button type="submit" data-ai="ask">${L(lang, "اسأل", "Ask")}</button>
 </form>
 ${out ? answerCard(out, question, lang) : ""}
 ${missed

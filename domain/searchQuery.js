@@ -380,6 +380,18 @@ function takeUnapplied(hay, unapplied) {
 const MAYBE_LISTING = / (?:عندي|معايا|عندنا|سعرها|سعره|مطلوب فيها|صاحبها|المالك|i have|my unit|for my client) /;
 
 /** Local parser used when the AI is unavailable. Deterministic and bilingual. */
+// Approved aliases from the database (services/searchVocab.js): a word brokers say → a word the dictionaries know.
+let ALIASES = [];
+function setAliases(list = []) {
+  ALIASES = (list || [])
+    .map((a) => ({ re: new RegExp(` ${String(normalizeSearch(a.term)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} `, "g"), to: ` ${normalizeSearch(a.target)} ` }))
+    .filter((a) => a.to.trim());
+}
+function applyAliases(hay) {
+  for (const a of ALIASES) hay = hay.replace(a.re, a.to);
+  return hay;
+}
+
 function fallbackParse(text) {
   const raw = String(text || "").trim();
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
@@ -406,6 +418,7 @@ function fallbackParse(text) {
   // guessed: they are taken out and reported, so the broker sees what was NOT applied.
   const unapplied = [];
   hay = takeUnapplied(hay, unapplied);
+  hay = applyAliases(hay);
 
   // Places first (they can contain type-like words, e.g. "town").
   const placeScan = Places.findPlaces(hay);
@@ -749,6 +762,7 @@ module.exports = {
   normalizeCode,
   normalizeAiSearch,
   fallbackParse,
+  setAliases,
   hasAnyFilter,
   classifyIntent,
   ensureFilters,

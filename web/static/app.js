@@ -1,6 +1,26 @@
 // WehdatHub web app client: CSRF header for htmx, offline banner, service worker (scope /app/).
 (function () {
   "use strict";
+  // Features the agency owner switched off (body[data-ai-off]): their buttons are grayed out with a hint below.
+  function grayOutAi(root) {
+    var off = (document.body.getAttribute("data-ai-off") || "").split(",");
+    if (!off[0]) return;
+    var hint = document.body.getAttribute("data-ai-off-hint") || "";
+    (root || document).querySelectorAll("[data-ai]").forEach(function (el) {
+      if (off.indexOf(el.getAttribute("data-ai")) < 0 || el.hasAttribute("data-ai-off")) return;
+      el.setAttribute("data-ai-off", "");
+      el.setAttribute("aria-disabled", "true");
+      if (el.tagName === "BUTTON") el.disabled = true;
+      if (el.tagName === "A") el.removeAttribute("href");
+      el.classList.add("ai-off");
+      var note = document.createElement("small");
+      note.className = "muted ai-off-hint";
+      note.textContent = hint;
+      el.insertAdjacentElement("afterend", note);
+    });
+  }
+  document.addEventListener("DOMContentLoaded", function () { grayOutAi(document); });
+  document.addEventListener("htmx:afterSwap", function (e) { grayOutAi(e.target || document); });
   var meta = document.querySelector('meta[name="csrf-token"]');
   document.addEventListener("htmx:configRequest", function (e) {
     if (meta) e.detail.headers["X-CSRF-Token"] = meta.content;

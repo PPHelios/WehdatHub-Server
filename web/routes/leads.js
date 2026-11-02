@@ -403,7 +403,7 @@ ${await ownerLine(lead, broker, lang)}
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليه VIP", "Make VIP")}</button>${lead.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
-  <form method="post" action="${path}/draft" class="row">${hidden}<button type="submit" class="secondary">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button>${tip(templatesFor(clientLangOf(lead, lang)).draft, lang)}</form>
+  <form method="post" action="${path}/draft" class="row">${hidden}<button type="submit" class="secondary" data-ai="follow_up">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button>${tip(templatesFor(clientLangOf(lead, lang)).draft, lang)}</form>
   <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">${icon("deal", 20)} ${L(lang, "سجل صفقة", "Record deal")}</a></div>
 ${draft
   ? html`<section class="card notice ok" id="draft" data-follow-up-draft>
