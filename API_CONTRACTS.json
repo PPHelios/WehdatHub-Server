@@ -633,6 +633,9 @@
       "loadImport": ["pool", "broker", "id"],
       "applyExcel": ["pool", "broker", "id", "params"],
       "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
+      "batchExcel": ["pool", "broker", "id", "params", "params"],
+      "batchStats": ["payload"],
+      "TYPE_KEYS": "Array",
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
       "waitForGroupImport": ["id"],
@@ -1956,6 +1959,25 @@
       "setTicked": ["pool", "importId", "agencyId", "seqs", "ticked"],
       "getRow": ["pool", "importId", "agencyId", "seq"],
       "tickedRows": ["pool", "importId", "agencyId"]
+    },
+    "lib/sheetGrid.js": {
+      "buildSheet": ["tabs", "params"],
+      "typeFromName": ["name"],
+      "findHeader": ["rows"],
+      "alignByContent": ["rows", "columns", "taken"],
+      "profile": ["values"],
+      "MAX_TOTAL_ROWS": "Number",
+      "MAX_TABS": "Number"
+    },
+    "domain/sheetMixed.js": {
+      "areas": ["raw"],
+      "rooms": ["raw"],
+      "priceText": ["raw"],
+      "priceIn": ["raw"],
+      "pickPrice": ["raw", "rule"],
+      "dollars": ["raw"],
+      "readText": ["raw"],
+      "FOREIGN": "Object"
     }
   },
   "invariant_variable_names": {
