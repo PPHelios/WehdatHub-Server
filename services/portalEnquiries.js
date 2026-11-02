@@ -1,7 +1,7 @@
 // services/portalEnquiries.js — Portal enquiries (Bayut, Dubizzle, Nawy). A manager or the owner forwards the portal's
 // "new enquiry" message; it is kept with its name and link, and managers and the owner are told. Only managers see it.
 // Adding the phone and a broker turns it into a lead through services/leads.js captureLead (the phone is the key:
-// an existing lead is merged, its broker stays). The owner's switch turns the alerts off for the whole agency.
+// an existing lead is merged, its broker stays). The owner can mute the alerts for himself only.
 "use strict";
 
 const Authz = require("../lib/authz");
@@ -19,11 +19,6 @@ async function unitFor(db, agencyId, listingNo) {
   if (!listingNo) return null;
   const r = await db.query(`SELECT id, code FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND portal_listing_no = $2 LIMIT 1`, [agencyId, listingNo]);
   return r.rows[0] || null;
-}
-
-async function alertsOn(db, agencyId) {
-  const r = await db.query("SELECT portal_alerts FROM agencies WHERE id = $1", [agencyId]);
-  return Boolean(r.rows[0]?.portal_alerts);
 }
 
 /**
@@ -48,17 +43,16 @@ async function capture(pool, actor, text, { now = new Date() } = {}) {
     [actor.agency_id, parsed.portal, parsed.name, parsed.link, parsed.listingNo, actor.id, now.toISOString()]
   );
   const enquiry = ins.rows[0];
-  if (await alertsOn(pool, actor.agency_id)) {
-    for (const m of await Notifications.managersOf(pool, actor.agency_id)) {
-      await Notifications.notifyBroker(pool, m, {
-        kind: "manager_alert",
-        dedupeKey: `portal:${enquiry.id}:${m.id}`,
-        title: m.preferred_lang === "en" ? `📩 New ${parsed.portal} enquiry` : `📩 استفسار جديد من ${parsed.portal}`,
-        body: parsed.name || "",
-        url: "/app/portal-enquiries",
-        now
-      });
-    }
+  for (const m of await Notifications.managersOf(pool, actor.agency_id)) {
+    if (isMuted(m)) continue;
+    await Notifications.notifyBroker(pool, m, {
+      kind: "manager_alert",
+      dedupeKey: `portal:${enquiry.id}:${m.id}`,
+      title: m.preferred_lang === "en" ? `📩 New ${parsed.portal} enquiry` : `📩 استفسار جديد من ${parsed.portal}`,
+      body: parsed.name || "",
+      url: "/app/portal-enquiries",
+      now
+    });
   }
   const unit = await unitFor(pool, actor.agency_id, parsed.listingNo);
   return { outcome: "created", enquiry, unit };
@@ -136,11 +130,19 @@ async function linkUnit(pool, actor, id, unitCode) {
   return { outcome: "linked", code: listing.code };
 }
 
-/** The owner's switch: alerts for the whole agency (managers and the owner). */
+/** Whether this person has muted portal enquiry alerts for themselves (only the agency owner can, and only for himself). */
+function isMuted(person) {
+  return Authz.isAgencyOwner(person) && Boolean(person?.notify_prefs?.portal_muted);
+}
+
+/** The owner's own mute: stops the owner's alerts only. Managers still hear, and no enquiry is deleted. */
 async function setAlerts(pool, actor, on) {
   if (!Authz.isAgencyOwner(actor)) return { error: "forbidden" };
-  await pool.query("UPDATE agencies SET portal_alerts = $2 WHERE id = $1", [actor.agency_id, Boolean(on)]);
+  await pool.query(
+    "UPDATE brokers SET notify_prefs = jsonb_set(COALESCE(notify_prefs, '{}'::jsonb), '{portal_muted}', $2::jsonb) WHERE id = $1 AND agency_id = $3",
+    [actor.id, JSON.stringify(!on), actor.agency_id]
+  );
   return { outcome: "saved", on: Boolean(on) };
 }
 
-module.exports = { capture, list, assign, linkUnit, setAlerts, unitFor };
+module.exports = { capture, list, assign, linkUnit, setAlerts, isMuted, unitFor };

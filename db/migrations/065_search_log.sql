@@ -1,4 +1,4 @@
--- 063: every search is kept for the POC so errors can be spotted and reported: the words as typed or spoken (phone
+-- 065: every search is kept for the POC so errors can be spotted and reported: the words as typed or spoken (phone
 -- numbers hidden), what the local parser read, what the AI read (when it was asked), the filters actually used and the
 -- units returned. A broker can report a search as wrong; the report keeps both readings for review.
 CREATE TABLE IF NOT EXISTS search_log (
@@ -38,5 +38,3 @@ CREATE INDEX IF NOT EXISTS search_reports_open ON search_reports (created_at) WH
 
 ALTER TABLE search_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_reports ENABLE ROW LEVEL SECURITY;
--- 062 created lead_requests without row-level security; every table in public has it.
-ALTER TABLE lead_requests ENABLE ROW LEVEL SECURITY;

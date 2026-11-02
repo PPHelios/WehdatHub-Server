@@ -126,35 +126,48 @@ function briefMessage(broker, data) {
 /* Manager evening digest (6.2)                                            */
 /* ---------------------------------------------------------------------- */
 
-/** Today's activity across the agency, per broker. */
-async function digestData(pool, agencyId, now) {
+/**
+ * Today's activity across the agency, per broker. With teamLeadId, only that team lead's brokers (a team digest).
+ */
+async function digestData(pool, agencyId, now, teamLeadId = null) {
   const since = Stages.cairoDayAt(now, 0, 0).toISOString();
+  const team = teamLeadId
+    ? (await pool.query("SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $2", [agencyId, teamLeadId])).rows.map((r) => r.id)
+    : null;
+  // Adds "AND col = ANY(team)" for a team digest; the agency digest has no filter.
+  const within = (col, args) => (team ? ` AND ${col} = ANY($${args.push(team)}::uuid[])` : "");
+  const la = [agencyId, since];
   const leads = await pool.query(
     `SELECT assigned_broker_id AS broker_id, source, count(*)::int AS n FROM leads
-      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2 GROUP BY assigned_broker_id, source`,
-    [agencyId, since]
+      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2${within("assigned_broker_id", la)} GROUP BY assigned_broker_id, source`,
+    la
   );
+  const ua = [agencyId, new Date(now.getTime() - 24 * 3600 * 1000).toISOString()];
   const untouched = await pool.query(
     `SELECT count(*)::int AS n, count(*) FILTER (WHERE created_at < $2)::int AS old FROM leads
-      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND stage = 'new' AND last_contact_at IS NULL`,
-    [agencyId, new Date(now.getTime() - 24 * 3600 * 1000).toISOString()]
+      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND stage = 'new' AND last_contact_at IS NULL${within("assigned_broker_id", ua)}`,
+    ua
   );
+  const fa = [agencyId];
   const flagged = await pool.query(
-    `SELECT count(*)::int AS n, min(r.created_at) AS oldest FROM lead_requests r JOIN leads ON leads.id = r.lead_id WHERE ${Vis.leads("leads")} AND r.agency_id = $1 AND r.handled_at IS NULL`,
-    [agencyId]
+    `SELECT count(*)::int AS n, min(r.created_at) AS oldest FROM lead_requests r JOIN leads ON leads.id = r.lead_id WHERE ${Vis.leads("leads")} AND r.agency_id = $1 AND r.handled_at IS NULL${within("leads.assigned_broker_id", fa)}`,
+    fa
   );
+  const ea = [agencyId, since];
   const events = await pool.query(
     `SELECT broker_id, kind, data->>'to' AS to_stage, count(*)::int AS n FROM lead_events
-      WHERE agency_id = $1 AND created_at >= $2 AND undone_at IS NULL AND kind IN ('stage', 'contacted')
+      WHERE agency_id = $1 AND created_at >= $2 AND undone_at IS NULL AND kind IN ('stage', 'contacted')${within("broker_id", ea)}
       GROUP BY broker_id, kind, data->>'to'`,
-    [agencyId, since]
+    ea
   );
+  const da = [agencyId, since];
   const deals = await pool.query(
     `SELECT closing_broker_id AS broker_id, count(*)::int AS n, coalesce(sum(commission_total), 0)::bigint AS commission FROM deals
-      WHERE agency_id = $1 AND created_at >= $2 AND status <> 'cancelled' GROUP BY closing_broker_id`,
-    [agencyId, since]
+      WHERE agency_id = $1 AND created_at >= $2 AND status <> 'cancelled'${within("closing_broker_id", da)} GROUP BY closing_broker_id`,
+    da
   );
-  const brokers = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId]);
+  const ba = [agencyId];
+  const brokers = await pool.query(`SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active${within("id", ba)} ORDER BY name`, ba);
   const per = new Map(brokers.rows.map((b) => [b.id, { name: b.name, leads: 0, contacted: 0, moves: 0, deals: 0 }]));
   const row = (id) => per.get(id) || null;
   const sources = new Map();
@@ -194,6 +207,7 @@ async function digestData(pool, agencyId, now) {
     stageMoves,
     deals: dealCount,
     commission,
+    team: Boolean(team),
     brokers: [...per.values()].filter((b) => b.leads || b.contacted || b.moves || b.deals)
   };
 }
@@ -231,7 +245,7 @@ function digestMessage(manager, d) {
     if (d.brokers.length > 10) lines.push(more(manager, d.brokers.length - 10));
   }
   return {
-    title: L(manager, "🌙 ملخص اليوم للوكالة", "🌙 Today at the agency"),
+    title: d.team ? L(manager, "🌙 ملخص فريقك النهارده", "🌙 Today in your team") : L(manager, "🌙 ملخص اليوم للوكالة", "🌙 Today at the agency"),
     body: lines.join("\n"),
     url: "/app/dashboard?days=7",
     buttons: null
@@ -277,13 +291,28 @@ async function sendDigests(pool, { now = new Date(), agencyId = null } = {}) {
       ORDER BY agency_id`,
     [key, MANAGER_ROLES, agencyId]
   );
+  // Team leads get the same digest for their own team (their brokers only), built once per team lead.
+  const { rows: teamLeads } = await pool.query(
+    `SELECT ${BROKER_COLS} FROM brokers b WHERE is_active AND lower(role) = 'team_lead' AND ($2::uuid IS NULL OR agency_id = $2)
+        AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.broker_id = b.id AND n.dedupe_key = $1)
+      ORDER BY agency_id`,
+    [key, agencyId]
+  );
   const byAgency = new Map();
+  const byTeam = new Map();
   let sent = 0;
   for (const m of managers) {
     if (!byAgency.has(m.agency_id)) byAgency.set(m.agency_id, await digestData(pool, m.agency_id, now));
     const msg = digestMessage(m, byAgency.get(m.agency_id));
     if (!msg) continue;
     const r = await Notifications.notifyBroker(pool, m, { kind: "daily_digest", dedupeKey: key, ...msg, now });
+    if (!r.duplicate) sent++;
+  }
+  for (const t of teamLeads) {
+    if (!byTeam.has(t.id)) byTeam.set(t.id, await digestData(pool, t.agency_id, now, t.id));
+    const msg = digestMessage(t, byTeam.get(t.id));
+    if (!msg) continue;
+    const r = await Notifications.notifyBroker(pool, t, { kind: "daily_digest", dedupeKey: key, ...msg, now });
     if (!r.duplicate) sent++;
   }
   return { sent, skipped: false };

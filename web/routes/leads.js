@@ -42,6 +42,9 @@ const PAGE = 20;
 /** The ⓘ beside a WhatsApp send: the message with {placeholders} for what it fills in (in the client's language). */
 const tip = (text, lang) => html`<details class="tip"><summary aria-label="${L(lang, "شكل الرسالة", "What the message looks like")}">ⓘ</summary><p>${text}</p></details>`;
 const clientLangOf = (lead, lang) => (lead.lang === "en" || lead.lang === "ar" ? lead.lang : lang);
+// The time picker's hours (Cairo) and a safe datetime-local value from a query string.
+const PICK_HOURS = [9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21];
+const validPicked = (v) => (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(v || "")) ? Stages.fromCairoLocal(v) : null);
 const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step", "private"];
 const upload = uploads([VOICE]);
 
@@ -55,10 +58,11 @@ const VIEWING_STATUS = {
 };
 
 /** The lead's viewing: its status and the client's answer, calendar links, and the form that sends a (new) one. */
-function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
+function viewingSection({ lead, viewing: v, unit, path, hidden, lang, pickedAt = null }) {
   const open = v && Viewings.OPEN.includes(v.status);
   const entry = open ? Viewings.calendarEntry(v, { lang, forBroker: true, leadLabel: `${Card.refLabel(lead.ref)} · ${Card.displayName(lead, lang)}` }) : null;
-  const at = open && v.status === "reschedule" && v.client_proposed_at ? v.client_proposed_at : open ? v.starts_at : lead.follow_up_kind === "viewing" && lead.follow_up_status === "open" ? lead.next_follow_up_at : null;
+  const at = pickedAt ? new Date(pickedAt) : open && v.status === "reschedule" && v.client_proposed_at ? v.client_proposed_at : open ? v.starts_at : lead.follow_up_kind === "viewing" && lead.follow_up_status === "open" ? lead.next_follow_up_at : null;
+  const msgLang = clientLangOf(lead, lang);
   return html`<section class="card stack" id="viewing"><h2>🏠 ${L(lang, "المعاينة", "Viewing")}</h2>
   ${v
     ? html`<div data-viewing-status="${v.status}">
@@ -71,7 +75,9 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
     : html`<p class="muted">${L(lang, "حدد ميعاد ووحدة ومكان، وهيتفتح واتساب على شات العميل برسالة فيها لينك يأكد منه أو يختار ميعاد تاني.", "Set a time, unit and place; WhatsApp opens on the client's chat with a link to confirm or pick another time.")}</p>`}
   <form method="post" action="${path}/viewing" class="grid">${hidden}
     <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : Stages.nextHourLocal()}"></label>
-    <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
+    <a class="btn secondary small" href="${path}/viewing/pick">🗓️ ${L(lang, "اختار الميعاد من الجدول", "Pick the time from the calendar")}</a>
+    <label>${L(lang, "كود الوحدة (اختياري)", "Unit code (optional)")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
+    <label>${L(lang, "لغة الرسالة للعميل", "Language of the message to the client")}<select name="msg_lang"><option value="ar"${msgLang === "ar" ? html` selected` : ""}>العربية</option><option value="en"${msgLang === "en" ? html` selected` : ""}>English</option></select></label>
     <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || unit?.mapsUrl || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
     ${unit?.mapsUrl ? "" : html`<p class="muted small">${L(lang, "اختياري: ابعت للعميل مكان المقابلة.", "Optional: send the client the meeting point.")} <button type="button" class="link" data-my-location data-fail="${L(lang, "مقدرناش نجيب مكانك.", "Couldn't get your location.")}" hidden>${L(lang, "استخدم مكاني دلوقتي", "Use where I am now")}</button></p>`}
     <div class="row"><button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>${tip(templatesFor(clientLangOf(lead, lang)).viewing, lang)}</div>
@@ -431,7 +437,7 @@ ${draft
   ${lead.follow_up_status === "open" ? html`<form method="post" action="${path}/follow-up/done">${hidden}<button type="submit" class="secondary">✔️ ${L(lang, "المتابعة خلصت", "Follow-up done")}</button></form>
   <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
-${viewingSection({ lead, viewing, unit, path, hidden, lang })}
+${viewingSection({ lead, viewing, unit, path, hidden, lang, pickedAt: validPicked(req.query.at) })}
   </div>
   <div class="tab-panel" data-tab="lt-req">
 ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
@@ -614,7 +620,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
       const code = String(req.body.unit || "").trim();
       const listing = code ? await Store.findByCode(pool, actor(req).agency_id, code) : null;
       if (code && !listing) return { error: "unit_not_found" };
-      const r = await Viewings.schedule(pool, actor(req), lead.id, { at: Stages.fromCairoLocal(req.body.at), listing, place: req.body.place, version, lang: langOf(req) });
+      const msgLang = req.body.msg_lang === "en" ? "en" : req.body.msg_lang === "ar" ? "ar" : langOf(req);
+      const r = await Viewings.schedule(pool, actor(req), lead.id, { at: Stages.fromCairoLocal(req.body.at), listing, place: req.body.place, version, lang: msgLang });
       // WhatsApp opens on the client's chat with the message and the confirm link ready.
       return r.ok ? { ...r, redirect: r.wa || `${V.leadPath(r.lead || lead)}?done=viewing#viewing` } : r;
     },
@@ -630,6 +637,26 @@ ${V.bottomBar(lead, lang, broker.name)}`
     res.set("Content-Disposition", 'attachment; filename="viewing.ics"');
     return res.send(Viewings.ics(v, entry));
   });
+  // The time picker: the next week's days and hours (Cairo). A tap goes back to the lead's viewing form with that time.
+  web.get("/leads/:ref/viewing/pick", async (req, res, next) => {
+    const lead = await loadOr404(req, next);
+    if (!lead) return;
+    const lang = langOf(req);
+    const path = V.leadPath(lead);
+    const days = [];
+    const start = Stages.fromCairoLocal(Stages.toCairoLocal(new Date()).slice(0, 10) + "T00:00");
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(start.getTime() + d * 86400000 + 12 * 3600000);
+      const key = Stages.toCairoLocal(day).slice(0, 10);
+      days.push(html`<section class="card" data-day="${key}"><h2>${new Date(day).toLocaleDateString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", weekday: "long", day: "numeric", month: "short" })}</h2><div class="row">${PICK_HOURS.map((h) => html`<a class="btn secondary small" href="${path}?at=${key}T${String(h).padStart(2, "0")}:00#viewing">${String(h).padStart(2, "0")}:00</a>`)}</div></section>`);
+    }
+    return page(req, res, {
+      title: L(lang, "اختار ميعاد المعاينة", "Pick the viewing time"),
+      nav: "leads",
+      body: html`<div class="row between"><h1>🗓️ ${L(lang, "اختار الميعاد", "Pick the time")}</h1><a class="btn secondary small" href="${path}#viewing">${L(lang, "رجوع", "Back")}</a></div><p class="muted small">${L(lang, "بتوقيت القاهرة. الضغطة بترجعك للمعاينة بالميعاد ده، وتقدر تعدّله.", "Cairo time. A tap takes you back to the viewing with that time; you can still change it.")}</p>${days}`
+    });
+  });
+
   write("follow-up/done", (req, lead, version) => Leads.completeFollowUp(pool, actor(req), lead.id, { version }), "follow_up_done");
   write("follow-up/postpone", (req, lead, version) => Leads.postponeFollowUp(pool, actor(req), lead.id, { days: 1, version }), "follow_up");
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");

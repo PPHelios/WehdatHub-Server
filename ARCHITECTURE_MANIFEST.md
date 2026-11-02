@@ -74,14 +74,19 @@
   | `054_private_portfolio.sql` | The agency owner's private portfolio: `is_private` on `listings` and `leads`, hidden from everyone but the agency owner by `lib/visibility.js`. |
   | `055_needs_manager.sql` | "Needs manager": `leads.flagged_at/flag_note/flagged_by` and the `flag` / `flag_handled` timeline events. |
   | `056_unit_owners.sql` | Unit owner profiles: `unit_owners` (merged by phone per agency, notes, flag), `listings.owner_id`, `unit_owner_events` (history). |
-  | `061_portal_enquiries.sql` | Portal enquiries (Bayut, Dubizzle, Nawy): `portal_enquiries` (name, link, listing number, status; a phone only once added, then the lead), `listings.portal_listing_no` (unique per agency), `agencies.portal_alerts` (the owner's switch). |
+  | `061_portal_enquiries.sql` | Portal enquiries (Bayut, Dubizzle, Nawy): `portal_enquiries` (name, link, listing number, status; a phone only once added, then the lead), `listings.portal_listing_no` (unique per agency), the owner's mute is in `brokers.notify_prefs`. |
+  | `062_lead_requests.sql` | "Ask a manager" requests as their own rows (`lead_requests`): one open per broker per lead, sent to managers or the agency owner (`to_role`), handled with a reply; the lead's flag columns from 055 are no longer written. |
+  | `063_team_lead.sql` | Team Lead: role `team_lead` sees and reassigns the leads of the brokers under them (`brokers.team_lead_id`, one team per broker). |
+  | `064_portal_owner_mute.sql` | Drops `agencies.portal_alerts`: the owner's portal alerts mute is for himself only (`brokers.notify_prefs.portal_muted`). |
   | `057_first_user_owner.sql` | The first user of an agency is its agency owner; older agencies without an owner get their earliest admin promoted. |
   | `058_place_names.sql` | New English compound names waiting for the CRM owner's Arabic name (`place_names`, pending or approved). |
   | `060_import_rows.sql` | Import review rows (`import_rows`): one row per sheet or post in a plan, with its kind (new, changed, unchanged, invalid, forbidden, duplicate), the ticked state and the reasons; the review pages read a tab at a time from here. Cascades with the plan. |
   | `059_owner_private.sql` | Owner profiles get a private flag (`unit_owners.is_private`); only the agency owner sets it, and a private profile is hidden from managers and brokers. |
   | `061_owner_private_default.sql` | Owner profiles are visible to the team by default (the flag defaults to false). Existing rows keep their value. |
-  | `062_lead_requests.sql` | "Ask a manager" requests as their own rows (`lead_requests`): one open per broker per lead, to the managers or the agency owner, with an optional reply. |
-  | `063_search_log.sql` | The POC search log: `search_log` (every search: words with phone numbers hidden, the local reading, the AI reading when asked, the filters used, the units returned, the nightly check) and `search_reports` ("Wrong search?" reports). Also turns row-level security on for `lead_requests`. |
+  | `062_lead_requests.sql` | "Ask for help" requests (`lead_requests`): one open request per broker per lead, addressed to managers or to the owner (`to_role`), with a note, handled time, handler and reply. Existing flags from 055 are copied in as manager requests. The lead's stage does not change. |
+  | `063_team_lead.sql` | Team Lead: role `team_lead` (added to the role check) and `brokers.team_lead_id`. A team lead sees the leads of brokers in their team and reassigns within it or sends back to the managers. |
+  | `064_lead_requests_rls.sql` | Row-level security on `lead_requests`. |
+  | `065_search_log.sql` | The POC search log: `search_log` (every search: words with phone numbers hidden, the local reading, the AI reading when asked, the filters used, the units returned, the nightly check) and `search_reports` ("Wrong search?" reports). |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

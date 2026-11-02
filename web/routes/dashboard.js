@@ -71,7 +71,7 @@ function leaseEnds(rows, lang) {
 
 function agencyPage(d, lang) {
   const kpi = (label, value, attr) => html`<div class="kpi" data-kpi="${attr}"><span class="muted small">${label}</span><strong>${value}</strong></div>`;
-  const q = d.brokerId ? `&broker=${d.brokerId}` : "";
+  const q = d.brokerId ? `&broker=${d.brokerId}` : d.teamLeadId ? `&team=${d.teamLeadId}` : "";
   const todo = [
     ["uncontacted", d.uncontacted, L(lang, "عملاء جداد محدش كلمهم", "New leads nobody called"), "/app/leads?tab=new"],
     ["overdue", d.overdue, L(lang, "متابعات متأخرة", "Overdue follow-ups"), "/app/leads?tab=overdue"],
@@ -87,6 +87,7 @@ function agencyPage(d, lang) {
   )}</nav>
   <input type="hidden" name="days" value="${d.days}">
   <select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select>
+  ${d.teamLeads.length ? html`<select name="team" data-autosubmit aria-label="${L(lang, "فريق تيم ليد", "Team lead's team")}"><option value="">${L(lang, "كل الوكالة", "Whole agency")}</option>${d.teamLeads.map((t) => html`<option value="${t.id}"${t.id === d.teamLeadId ? html` selected` : ""}>${L(lang, `فريق ${t.name}`, `${t.name}'s team`)}</option>`)}</select>` : ""}
   <noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript>
 </form>
 <div class="kpis">
@@ -516,7 +517,7 @@ function healthSections(d, lang, usd) {
 function register(web, { pool, page }) {
   web.get("/dashboard", async (req, res) => {
     const lang = langOf(req);
-    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null });
+    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null, teamLeadId: String(req.query.team || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
     return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });

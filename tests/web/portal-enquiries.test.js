@@ -67,14 +67,17 @@ test("an enquiry for a number that already has a lead merges into it and the lea
   expect((await h.query("SELECT merged, status FROM portal_enquiries WHERE id = $1", [enquiry.id]))[0]).toMatchObject({ merged: true, status: "assigned" });
 });
 
-test("the owner's switch turns the alerts off for the agency; only the owner can change it; the page is for managers only", async () => {
+test("the owner's mute is for himself only: managers still hear; only the owner can change it; the page is for managers only", async () => {
   const admin = await row("admin");
   await h.seedBroker("owner"); // the agency owner is seeded on demand (keeps the Office plan's seats free)
   const owner = await row("owner");
   expect(await Enq.setAlerts(h.pool, admin, false)).toMatchObject({ error: "forbidden" });
   expect(await Enq.setAlerts(h.pool, owner, false)).toMatchObject({ outcome: "saved", on: false });
   await Enq.capture(h.pool, admin, sample("Silent"));
-  expect((await h.query("SELECT count(*)::int AS n FROM notifications WHERE dedupe_key LIKE 'portal:%'"))[0].n).toBe(0);
+  // The owner hears nothing; a manager still does, and no enquiry is deleted.
+  expect((await h.query("SELECT count(*)::int AS n FROM notifications WHERE dedupe_key LIKE 'portal:%' AND broker_id = $1", [h.BROKERS.owner.id]))[0].n).toBe(0);
+  expect((await h.query("SELECT count(*)::int AS n FROM notifications WHERE dedupe_key LIKE 'portal:%' AND broker_id = $1", [h.BROKERS.admin.id]))[0].n).toBeGreaterThan(0);
+  expect((await h.query("SELECT count(*)::int AS n FROM portal_enquiries"))[0].n).toBe(1);
 
   await h.seedBroker("manager");
   const { agent: brokerAgent } = await signIn(h, "broker");
@@ -83,6 +86,6 @@ test("the owner's switch turns the alerts off for the agency; only the owner can
   const page = await agent.get("/app/portal-enquiries");
   expect(page.status).toBe(200);
   expect(page.text).toMatch(/Silent/);
-  expect(page.text).not.toMatch(/alerts for managers and the owner/i);
+  expect(page.text).not.toMatch(/Enquiry alerts for me/); // the mute is the owner's own: managers don't see it
   expect((await agent.post("/app/portal-enquiries/alerts").set("X-CSRF-Token", csrf).type("form").send("on=1")).status).toBe(403);
 });
