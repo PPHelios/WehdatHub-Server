@@ -53,7 +53,7 @@ describe("Turn context and telemetry", () => {
     });
     // fake-ai records the call; the real gateway reads ctx.broker for telemetry
     const spy = jest.spyOn(h.AI, "generateWithCascade");
-    await h.text("broker", "شقة في التجمع");
+    await h.text("broker", "شقة 5000 في التجمع"); // a number left over: the local reader is unsure, the AI is asked
     const ctx = spy.mock.calls[0][0].ctx;
     expect(ctx.broker.agency_id).toBe(h.AGENCY_A);
     expect(ctx.agency.id).toBe(h.AGENCY_A);

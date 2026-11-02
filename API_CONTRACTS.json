@@ -114,6 +114,7 @@
       "normalizeKeywords": ["list", "max"],
       "normalizeTerm": ["t"],
       "handleSearchMessage": ["broker", "text", "ctx", "params"],
+      "handleButton": ["broker", "id", "ctx"],
       "handleMore": ["broker", "ctx"]
     },
     "lib/listing.js": {
@@ -1121,7 +1122,7 @@
       "cairoDay": ["now"],
       "briefData": ["pool", "broker", "now"],
       "briefMessage": ["broker", "data"],
-      "digestData": ["pool", "agencyId", "now"],
+      "digestData": ["pool", "agencyId", "now", "teamLeadId"],
       "digestMessage": ["manager", "d"],
       "sendBriefs": ["pool", "params"],
       "sendDigests": ["pool", "params"],
@@ -2029,6 +2030,13 @@
       "dollars": ["raw"],
       "readText": ["raw"],
       "FOREIGN": "Object"
+    },
+    "services/searchLog.js": {
+      "cleanText": ["text"],
+      "record": ["pool", "params"],
+      "report": ["pool", "broker", "logId", "note"],
+      "mine": ["pool", "broker", "logId"],
+      "isId": ["v"]
     }
   },
   "invariant_variable_names": {

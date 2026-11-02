@@ -31,7 +31,7 @@ test("a search result hides the owner and offers an ask button; asking from ther
   const before = (await s.agent.get(path)).text;
   expect(before).toContain("data-ask-details");
   expect(before).not.toContain("Mr Secret");
-  const f = before.match(/name="back" value="([^"]+)"/)[1];
+  const f = before.match(/name="back" value="([^"]+)"/)[1].replace(/&amp;/g, "&"); // the browser sends it unescaped
   const ask = await s.agent.post("/app/units/HP-1/access").type("form").send({ _csrf: s.csrf, back: f });
   expect(ask.status).toBe(303);
   expect(ask.headers.location).toBe(f.replace(/&amp;/g, "&"));
