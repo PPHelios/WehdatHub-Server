@@ -79,6 +79,17 @@ const positive = (v) => {
   return n !== null && n > 0 ? n : null;
 };
 
+const CURRENCY = /(\$|usd|€|eur\b|dollar|دولار|يورو)/i;
+
+/** Columns a sheet must fill for any row to be usable; a tab with one of these empty across every row is refused. */
+const REQUIRED = ["code", "price_value", "area_value"];
+
+/** Required columns with no value on any row (rows: [{ cells }]). A tab with no rows reports nothing. */
+function emptyRequired(rows = []) {
+  if (!rows.length) return [];
+  return REQUIRED.filter((k) => !rows.some((r) => r.cells && !isEmpty(r.cells[k])));
+}
+
 const TYPE_LOOKUP = new Map(
   Object.entries({ ...TYPE_TERMS, villa: [...TYPE_TERMS.villa, "standalone villa"] }).flatMap(([key, words]) => words.map((w) => [normalizeSearch(w), key]))
 );
@@ -143,6 +154,11 @@ function rowToDraft(input = {}) {
   if (has("market")) draft.market = market(cells.market);
   for (const k of ["price_value", "down_payment_value", "remaining_amount", "installment_value"]) {
     if (has(k)) {
+      // A price in dollars or euros is not guessed at: the row is held back until someone fixes the cell.
+      if (CURRENCY.test(String(cells[k]))) {
+        if (k === "price_value") errors.push("currency");
+        continue;
+      }
       draft[k] = money(cells[k]);
       if (draft[k] === null && k === "price_value") errors.push(k);
     }
@@ -190,4 +206,4 @@ function rowToDraft(input = {}) {
   return { code, status: has("status") ? status(cells.status) : null, draft, errors };
 }
 
-module.exports = { COLUMNS, columnFor, rowToDraft, money, propertyType, finishing };
+module.exports = { COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };

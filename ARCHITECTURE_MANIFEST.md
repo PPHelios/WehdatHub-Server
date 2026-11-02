@@ -76,6 +76,7 @@
   | `056_unit_owners.sql` | Unit owner profiles: `unit_owners` (merged by phone per agency, notes, flag), `listings.owner_id`, `unit_owner_events` (history). |
   | `057_first_user_owner.sql` | The first user of an agency is its agency owner; older agencies without an owner get their earliest admin promoted. |
   | `058_place_names.sql` | New English compound names waiting for the CRM owner's Arabic name (`place_names`, pending or approved). |
+  | `060_import_rows.sql` | Import review rows (`import_rows`): one row per sheet or post in a plan, with its kind (new, changed, unchanged, invalid, forbidden, duplicate), the ticked state and the reasons; the review pages read a tab at a time from here. Cascades with the plan. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

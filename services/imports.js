@@ -90,7 +90,29 @@ function composeRow(existing, draft, lang) {
 }
 
 const reasonOf = (b, lang) => (lang === "en" ? b.label_en : b.label_ar);
-const ERROR_LABELS = { code: ["كود غير صالح", "Invalid code"], property_type: ["نوع غير معروف", "Unknown type"], price_value: ["سعر غير صحيح", "Invalid price"], area_value: ["مساحة غير صحيحة", "Invalid area"] };
+const ERROR_LABELS = {
+  code: ["كود غير صالح", "Invalid code"],
+  property_type: ["نوع غير معروف", "Unknown type"],
+  price_value: ["سعر غير صحيح", "Invalid price"],
+  currency: ["السعر بعملة غير الجنيه (لازم جنيه مصري)", "Price not in EGP (must be Egyptian pounds)"],
+  area_value: ["مساحة غير صحيحة", "Invalid area"]
+};
+const NOTE = {
+  code: (raw, to, lang) => (lang === "en" ? `Code written as ${to} (was "${raw}")` : `الكود اتكتب ${to} (كان "${raw}")`),
+  compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
+  phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري")
+};
+const EGY_PHONE = /^(\+?20|0)?1[0-9]{9}$/;
+// "UPtown cairo" and "UPtown" are the same compound: the city word at the end is not part of the name.
+const compoundKey = (v) => normalizeSearch(v).replace(/\s+(cairo|new cairo|القاهره|القاهرة|مصر|egypt)$/, "").trim();
+
+/** Known compounds of the agency by key → the spelling already used. */
+async function knownCompounds(pool, agencyId) {
+  const { rows } = await pool.query("SELECT compound, COUNT(*) AS n FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND compound IS NOT NULL GROUP BY compound ORDER BY n DESC", [agencyId]);
+  const map = new Map();
+  for (const r of rows) if (!map.has(compoundKey(r.compound))) map.set(compoundKey(r.compound), r.compound);
+  return map;
+}
 
 /**
  * Plans an Excel import against the agency's inventory (nothing is written).
@@ -98,20 +120,34 @@ const ERROR_LABELS = { code: ["كود غير صالح", "Invalid code"], propert
  * @returns {Promise<{ items, counts }>}
  */
 async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
-  const parsed = sheet.rows.map((r) => ({ rowNumber: r.rowNumber, ...SheetImport.rowToDraft(r.cells) }));
+  const parsed = sheet.rows.map((r) => ({ rowNumber: r.rowNumber, ...SheetImport.rowToDraft(r.cells), cells: r.cells }));
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];
   const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
   const byCode = new Map(found.map((l) => [l.code_norm, l]));
+  const known = await knownCompounds(pool, broker.agency_id);
   const seen = new Set();
   const items = [];
+  // Rows that had text but no known column are shown with their reason, never dropped.
+  for (const s of sheet.skipped || []) items.push({ row: s.rowNumber, code: null, kind: "invalid", reasons: [lang === "en" ? "No value in a known column" : "مفيش قيمة في عمود معروف"] });
 
   for (const p of parsed) {
     const code = normalizeCode(p.code);
-    const base = { row: p.rowNumber, code: code || null };
+    const base = { row: p.rowNumber, code: code || null, notes: [] };
     if (p.errors.length) {
       items.push({ ...base, kind: "invalid", reasons: p.errors.map((e) => pick(ERROR_LABELS[e], lang) || e) });
       continue;
     }
+    const rawCode = p.cells.code === undefined || p.cells.code === null ? "" : String(p.cells.code).trim();
+    if (code && rawCode && rawCode !== code) base.notes.push(NOTE.code(rawCode, code, lang));
+    if (p.draft.compound) {
+      const canon = known.get(compoundKey(p.draft.compound));
+      if (canon && canon !== p.draft.compound) {
+        base.notes.push(NOTE.compound(p.draft.compound, canon, lang));
+        p.draft.compound = canon;
+      }
+    }
+    const phone = p.draft.details?.owner_phone;
+    if (phone && !EGY_PHONE.test(phone.replace(/[\s-]/g, ""))) base.notes.push(NOTE.phone(lang));
     if (code && seen.has(code)) {
       items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"] });
       continue;

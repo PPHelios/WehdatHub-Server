@@ -594,11 +594,14 @@
     },
     "domain/sheetImport.js": {
       "COLUMNS": "Array",
+      "REQUIRED": "Array",
       "columnFor": ["header"],
       "rowToDraft": ["input"],
+      "emptyRequired": ["rows"],
       "money": ["v"],
       "propertyType": ["v"],
-      "finishing": ["v"]
+      "finishing": ["v"],
+      "CURRENCY": "Object"
     },
     "domain/chatExport.js": {
       "DEFAULT_DAYS": "Number",
@@ -1942,6 +1945,17 @@
       "notOlder": ["since"],
       "parseWithAttachments": ["text"],
       "looksLikeListing": ["text"]
+    },
+    "lib/importRows.js": {
+      "TABS": "Array",
+      "KINDS": "Array",
+      "PAGE": "Number",
+      "replaceRows": ["pool", "importId", "agencyId", "rows"],
+      "counts": ["pool", "importId", "agencyId"],
+      "page": ["pool", "importId", "agencyId", "tab", "params"],
+      "setTicked": ["pool", "importId", "agencyId", "seqs", "ticked"],
+      "getRow": ["pool", "importId", "agencyId", "seq"],
+      "tickedRows": ["pool", "importId", "agencyId"]
     }
   },
   "invariant_variable_names": {
