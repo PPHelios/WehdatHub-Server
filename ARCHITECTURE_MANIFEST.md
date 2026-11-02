@@ -83,6 +83,9 @@
   | `060_import_rows.sql` | Import review rows (`import_rows`): one row per sheet or post in a plan, with its kind (new, changed, unchanged, invalid, forbidden, duplicate), the ticked state and the reasons; the review pages read a tab at a time from here. Cascades with the plan. |
   | `059_owner_private.sql` | Owner profiles get a private flag (`unit_owners.is_private`); only the agency owner sets it, and a private profile is hidden from managers and brokers. |
   | `061_owner_private_default.sql` | Owner profiles are visible to the team by default (the flag defaults to false). Existing rows keep their value. |
+  | `062_lead_requests.sql` | "Ask for help" requests (`lead_requests`): one open request per broker per lead, addressed to managers or to the owner (`to_role`), with a note, handled time, handler and reply. Existing flags from 055 are copied in as manager requests. The lead's stage does not change. |
+  | `063_team_lead.sql` | Team Lead: role `team_lead` (added to the role check) and `brokers.team_lead_id`. A team lead sees the leads of brokers in their team and reassigns within it or sends back to the managers. |
+  | `064_lead_requests_rls.sql` | Row-level security on `lead_requests`. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
