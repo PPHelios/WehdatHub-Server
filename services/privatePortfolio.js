@@ -5,10 +5,10 @@
 const { isAgencyOwner } = require("../lib/authz");
 const { logOperation } = require("../lib/db");
 
-const TABLES = { unit: "listings", lead: "leads" };
+const TABLES = { unit: "listings", lead: "leads", owner: "unit_owners" };
 
 /**
- * Marks one unit or lead of the owner's agency private (or public again).
+ * Marks one unit, lead or owner profile of the owner's agency private (or public again).
  * @returns {Promise<{ ok: true, private: boolean } | { error: 'forbidden' | 'kind' | 'not_found' }>}
  */
 async function setPrivate(pool, owner, kind, id, value) {

@@ -258,6 +258,7 @@
     "lib/visibility.js": {
       "units": ["alias"],
       "leads": ["alias"],
+      "owners": ["alias"],
       "allUnits": [],
       "allLeads": [],
       "run": ["viewer", "fn"],
