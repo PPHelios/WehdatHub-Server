@@ -1292,6 +1292,19 @@ CREATE TABLE IF NOT EXISTS public.portal_enquiries (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.lead_requests (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  lead_id uuid NOT NULL,
+  broker_id uuid,
+  to_role text DEFAULT 'manager'::text NOT NULL,
+  note text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  handled_at timestamp with time zone,
+  handled_by uuid,
+  reply text
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1324,6 +1337,7 @@ ALTER TABLE lead_events ADD CONSTRAINT lead_events_pkey PRIMARY KEY (id);
 ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_pkey PRIMARY KEY (id);
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_pkey PRIMARY KEY (id);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_pkey PRIMARY KEY (id);
+ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_pkey PRIMARY KEY (id);
 ALTER TABLE leads ADD CONSTRAINT leads_pkey PRIMARY KEY (id);
 ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
 ALTER TABLE listing_drafts ADD CONSTRAINT listing_drafts_pkey PRIMARY KEY (broker_id);
@@ -1467,6 +1481,7 @@ ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_name_check CHECK (((length(
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_quiet_days_check CHECK (((quiet_days >= 1) AND (quiet_days <= 60)));
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_status_check CHECK ((status = ANY (ARRAY['new'::text, 'alerted'::text, 'sent_to_client'::text, 'dismissed'::text])));
+ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_to_role_check CHECK ((to_role = ANY (ARRAY['manager'::text, 'owner'::text])));
 ALTER TABLE leads ADD CONSTRAINT leads_check CHECK (((stage <> 'lost'::text) OR (lost_reason IS NOT NULL)));
 ALTER TABLE leads ADD CONSTRAINT leads_check1 CHECK ((phone_e164 = phones[1]));
 ALTER TABLE leads ADD CONSTRAINT leads_follow_up_kind_check CHECK ((follow_up_kind = ANY (ARRAY['call'::text, 'viewing'::text])));
@@ -1601,6 +1616,10 @@ ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_agency_id_fkey FOREIGN KEY 
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_fkey FOREIGN KEY (search_id) REFERENCES saved_searches(id) ON DELETE CASCADE;
+ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_handled_by_fkey FOREIGN KEY (handled_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE leads ADD CONSTRAINT leads_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE leads ADD CONSTRAINT leads_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -1721,6 +1740,8 @@ CREATE INDEX lead_intake_log_intake_idx ON public.lead_intake_log USING btree (i
 CREATE INDEX lead_intakes_agency_idx ON public.lead_intakes USING btree (agency_id);
 CREATE INDEX idx_lead_matches_lead ON public.lead_matches USING btree (lead_id, created_at DESC);
 CREATE INDEX idx_lead_matches_listing ON public.lead_matches USING btree (agency_id, listing_id);
+CREATE UNIQUE INDEX lead_requests_one_open ON public.lead_requests USING btree (lead_id, broker_id) WHERE (handled_at IS NULL);
+CREATE INDEX lead_requests_open ON public.lead_requests USING btree (agency_id, to_role, created_at) WHERE (handled_at IS NULL);
 CREATE INDEX idx_leads_assigned ON public.leads USING btree (agency_id, assigned_broker_id, last_activity_at DESC);
 CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at) WHERE (follow_up_status = 'open'::text);
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);

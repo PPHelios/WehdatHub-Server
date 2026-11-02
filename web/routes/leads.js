@@ -161,15 +161,17 @@ ${manager
     return owner ? html`<p class="muted" data-lead-owner>🏠 ${L(lang, "هو كمان مالك وحدات", "Also a unit owner")}: <a href="/app/owners/${owner.id}">${owner.name || ""}</a> (${owner.units.length})</p>` : "";
   };
   const flagButton = (n, lang) => (n === null ? "" : html`<a class="btn secondary small" href="/app/leads/needs-action" data-flag-count="${n}">🙋 ${n}<span class="sr-only"> ${L(lang, "محتاجين مدير", "Needs my action")}</span></a>`);
-  const flagBox = (lead, broker, manager, lang, csrf, path) =>
-    lead.flagged_at
-      ? html`<section class="card notice" data-flag><p>🙋 <b>${L(lang, "محتاج مدير", "Needs manager")}</b> · ${lead.flag_note}</p>${manager
-          ? html`<form method="post" action="${path}/flag/handle" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "رد (اختياري)", "Reply (optional)")} <input name="reply" maxlength="500"></label><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark handled")}</button></form>`
-          : ""}</section>`
-      : canEditLead(broker, lead)
-        ? html`<details class="card"><summary>🙋 ${L(lang, "محتاج مدير", "Needs manager")}</summary><form method="post" action="${path}/flag" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "محتاج إيه؟", "What do you need?")} <textarea name="text" rows="2" maxlength="1000" required></textarea></label><button type="submit" class="secondary">${L(lang, "ابعت للمدير", "Tell the manager")}</button></form></details>`
-        : "";
-
+  // The lead's open requests (one per broker). Anyone who can see them sees them; "Mark done" only for those addressed to them.
+  const flagBox = (lead, broker, requests, lang, csrf, path) => {
+    const hasMine = requests.some((r) => r.mine);
+    const canHandle = requests.some((r) => !r.mine);
+    const who = (r) => `${r.broker_name || ""} · ${r.to_role === "owner" ? L(lang, "للمالك", "to the owner") : L(lang, "للمدير", "to a manager")}`;
+    return html`${requests.length ? html`<section class="card notice" data-flag><p>🙋 <b>${L(lang, "محتاج مساعدة", "Needs help")}</b></p><ul class="stack">${requests.map((r) => html`<li data-request="${r.id}"><p>${r.note} <span class="muted small">· ${who(r)} · ${V.when(r.created_at, lang)}</span></p></li>`)}</ul>${canHandle
+      ? html`<form method="post" action="${path}/flag/handle" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "رد (اختياري)", "Reply (optional)")} <input name="reply" maxlength="500"></label><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark done")}</button></form>`
+      : ""}</section>` : ""}${hasMine || !canEditLead(broker, lead)
+      ? ""
+      : html`<details class="card"><summary>🙋 ${L(lang, "اطلب مساعدة", "Ask for help")}</summary><form method="post" action="${path}/flag" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "اطلب من", "Ask")} <select name="to"><option value="manager">${L(lang, "المدير", "A manager")}</option><option value="owner">${L(lang, "المالك", "The owner")}</option></select></label><label>${L(lang, "محتاج إيه؟", "What do you need?")} <textarea name="text" rows="2" maxlength="1000" required></textarea></label><button type="submit" class="secondary">${L(lang, "ابعت", "Send")}</button></form></details>`}`;
+  };
   // Managers: the leads brokers flagged, oldest first.
   web.get("/leads/needs-action", async (req, res, next) => {
     const { broker } = req.session;
@@ -181,7 +183,7 @@ ${manager
       nav: "leads",
       body: html`<h1>🙋 ${L(lang, "محتاجين مدير", "Needs my action")} (${rows.length})</h1>
 ${rows.length
-  ? html`<ul class="stack" data-flags>${rows.map((r) => html`<li class="card" data-lead="${Card.refLabel(r.ref)}"><p><b>${Card.displayName(r, lang)}</b> <span class="chip" dir="ltr">${Card.refLabel(r.ref)}</span></p><p>${r.flag_note}</p><p class="muted small">${r.flagged_by_name || ""} · ${V.when(r.flagged_at, lang)}</p><div class="row"><a class="btn secondary" href="${V.leadPath(r)}">${L(lang, "افتح العميل", "Open lead")}</a></div><form method="post" action="${V.leadPath(r)}/flag/handle" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${r.version}"><input name="reply" maxlength="500" placeholder="${L(lang, "رد (اختياري)", "Reply (optional)")}"><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark handled")}</button></form></li>`)}</ul>`
+  ? html`<ul class="stack" data-flags>${rows.map((r) => html`<li class="card" data-lead="${Card.refLabel(r.ref)}"><p><b>${Card.displayName(r, lang)}</b> <span class="chip" dir="ltr">${Card.refLabel(r.ref)}</span></p><p>${r.request_note}</p><p class="muted small">${r.flagged_by_name || ""} · ${r.to_role === "owner" ? L(lang, "للمالك", "to the owner") : L(lang, "للمدير", "to a manager")} · ${V.when(r.requested_at, lang)}</p><div class="row"><a class="btn secondary" href="${V.leadPath(r)}">${L(lang, "افتح العميل", "Open lead")}</a></div><form method="post" action="${V.leadPath(r)}/flag/handle" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${r.version}"><input name="reply" maxlength="500" placeholder="${L(lang, "رد (اختياري)", "Reply (optional)")}"><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark handled")}</button></form></li>`)}</ul>`
   : html`<p class="muted">${L(lang, "مفيش حاجة مستنياك.", "Nothing is waiting on you.")}</p>`}`
     });
   });
@@ -389,7 +391,7 @@ ${rows.length
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
 <form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة الوسيط", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة الوسيط", "Now: the broker's language")}</span>`}</form>
-${flagBox(lead, broker, manager, lang, req.session.csrf, path)}
+${flagBox(lead, broker, await Leads.openRequestsOn(pool, broker, lead.id), lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button>${lead.is_private ? html`<span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
@@ -408,8 +410,6 @@ ${draft
   <form method="post" action="${path}/stage" class="stack">${hidden}
     <div class="pills" role="radiogroup" aria-label="${L(lang, "المرحلة", "Stage")}">${Stages.STAGES.map((s) => html`<label class="pill"><input type="radio" name="stage" value="${s}"${s === lead.stage ? html` checked` : ""}><span>${Stages.stageLabel(s, lang)}</span></label>`)}</div>
     <label class="lost-reason">${L(lang, "سبب الضياع", "Why lost")}<input name="lost_reason" maxlength="200" placeholder="${L(lang, "سبب الضياع (لو ضاع)", "Why lost (if lost)")}" value="${lead.lost_reason || ""}"></label>
-    ${lead.flagged_at || !canEditLead(broker, lead) ? "" : html`<label class="row"><input type="checkbox" name="needs_manager" value="1"> 🙋 ${L(lang, "محتاج مدير", "Needs manager")}</label>
-    <label>${L(lang, "محتاج إيه من المدير؟", "What do you need from the manager?")}<input name="flag_text" maxlength="1000"></label>`}
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form>
 </section>
@@ -584,17 +584,12 @@ ${V.bottomBar(lead, lang, broker.name)}`
   }
 
   const actor = (req) => req.session.broker;
-  write("flag", (req, lead, version) => Leads.flagForManager(pool, actor(req), lead.id, req.body.text, { version }), "flag");
+  write("flag", (req, lead, version) => Leads.flagForManager(pool, actor(req), lead.id, req.body.text, { to: req.body.to === "owner" ? "owner" : "manager", version }), "flag");
   write("flag/handle", (req, lead, version) => Leads.handleFlag(pool, actor(req), lead.id, req.body.reply, { version }), "flag_handled");
   write(
     "stage",
     async (req, lead, version) => {
-      const r = await Leads.setStage(pool, actor(req), lead.id, { stage: req.body.stage, lostReason: req.body.lost_reason, version });
-      // "Needs a manager" rides on the same save; the flag is its own step on the timeline.
-      if ((r.ok || r.unchanged) && req.body.needs_manager === "1" && !lead.flagged_at) {
-        return Leads.flagForManager(pool, actor(req), lead.id, req.body.flag_text || L(langOf(req), "محتاج مدير يساعد", "Needs a manager's help"));
-      }
-      return r;
+      return Leads.setStage(pool, actor(req), lead.id, { stage: req.body.stage, lostReason: req.body.lost_reason, version });
     },
     "stage"
   );

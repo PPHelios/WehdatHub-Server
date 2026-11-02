@@ -71,18 +71,25 @@ test("the voice update understands 'need the manager' and the confirmed update f
   expect(Update.summaryLines(u, { name: "أحمد", ref: 1 }, "en")).toContain("Tell the manager");
 });
 
-test("the web stage form can also flag the lead for a manager, once", async () => {
+test("the web lead page asks a manager or the owner in its own form; the stage form does not raise a request", async () => {
   await h.seedBroker("manager");
   const brokerRow = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
   await Leads.captureLead(h.pool, brokerRow, { phones: "01012345678", name: "Sara Flag" });
   const s = await signIn(h, "broker");
-  const r = await s.agent.post("/app/leads/L-0001/stage").set("X-CSRF-Token", s.csrf).type("form").send({ stage: "interested", needs_manager: "1", flag_text: "Wants a discount" });
+  const page = (await s.agent.get("/app/leads/L-0001")).text;
+  expect(page).toContain('name="to"');
+  expect(page).not.toContain('name="needs_manager"');
+
+  const r = await s.agent.post("/app/leads/L-0001/stage").set("X-CSRF-Token", s.csrf).type("form").send({ stage: "interested" });
   expect(r.status).toBe(303);
-  const [lead] = await h.query("SELECT stage, flagged_at, flag_note FROM leads");
+  expect(await h.query("SELECT 1 FROM lead_requests")).toEqual([]);
+
+  const f = await s.agent.post("/app/leads/L-0001/flag").set("X-CSRF-Token", s.csrf).type("form").send({ to: "owner", text: "Wants a discount" });
+  expect(f.status).toBe(303);
+  const [req] = await h.query("SELECT to_role, note, handled_at FROM lead_requests");
+  expect(req).toMatchObject({ to_role: "owner", note: "Wants a discount", handled_at: null });
+  const [lead] = await h.query("SELECT stage FROM leads");
   expect(lead.stage).toBe("interested");
-  expect(lead.flagged_at).not.toBeNull();
-  expect(lead.flag_note).toBe("Wants a discount");
-  expect((await s.agent.get("/app/leads/L-0001")).text).not.toContain('name="needs_manager"');
 });
 
 test("the first user of a new agency is its agency owner", async () => {

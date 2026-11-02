@@ -432,24 +432,37 @@ async function addNote(pool, actor, key, text, { version = null, now = new Date(
   return mutate(pool, actor, key, { kind: "note", version, now }, () => ({ fields: {}, data: { text: note } }));
 }
 
+/** Who may receive a request: every manager, or the agency owner only. */
+const REQUEST_ROLES = { manager: ["admin", "owner", "manager"], owner: ["owner"] };
+
 /**
- * A broker who may work the lead asks a manager for help: one open flag per lead, with a note. Every active manager except
- * the flagger is alerted (nobody at all for a private lead). Returns { ok, lead } | { error }.
+ * A broker asks managers (or the owner) for help on a lead. One open request per broker per lead. Returns { ok, lead,
+ * requestId } | { error }. The request does not change the lead's stage.
  */
-async function flagForManager(pool, actor, key, text, { version = null, now = new Date() } = {}) {
+async function flagForManager(pool, actor, key, text, { to = "manager", version = null, now = new Date() } = {}) {
   const note = String(text ?? "").trim();
   if (!note) return { error: "flag_empty" };
   if (note.length > NOTE_MAX) return { error: "note_too_long" };
-  const r = await mutate(pool, actor, key, { kind: "flag", version, now }, (lead) =>
-    lead.flagged_at ? { error: "already_flagged" } : { fields: { flagged_at: now.toISOString(), flag_note: note, flagged_by: actor.id }, data: { text: note } }
+  if (!REQUEST_ROLES[to]) return { error: "request_recipient" };
+  const found = await loadLead(pool, actor.agency_id, key);
+  if (!found) return { error: "not_found" };
+  if (!Authz.canEditLead(actor, found)) return { error: "forbidden" };
+  const open = await pool.query("SELECT 1 FROM lead_requests WHERE lead_id = $1 AND broker_id = $2 AND handled_at IS NULL", [found.id, actor.id]);
+  if (open.rows.length) return { error: "already_flagged" };
+  const r = await mutate(pool, actor, key, { kind: "flag", version, now }, () => ({ fields: {}, data: { text: note, to } }));
+  if (!r.ok) return r;
+  const { rows } = await pool.query(
+    "INSERT INTO lead_requests (agency_id, lead_id, broker_id, to_role, note, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    [actor.agency_id, r.lead.id, actor.id, to, note, now.toISOString()]
   );
-  if (r.ok && !r.lead.is_private) {
-    for (const m of await Notifications.managersOf(pool, actor.agency_id)) {
+  r.requestId = rows[0].id;
+  if (!r.lead.is_private) {
+    for (const m of await Notifications.brokersWithRoles(pool, actor.agency_id, REQUEST_ROLES[to])) {
       if (m.id === actor.id) continue;
       await Notifications.notifyBroker(pool, m, {
         kind: "manager_alert",
-        dedupeKey: `flag:${r.lead.id}:${now.getTime()}`,
-        title: L(m, `🙋 ${actor.name} محتاج مدير: ${Card.displayName(r.lead, m.preferred_lang)}`, `🙋 ${actor.name} needs a manager: ${Card.displayName(r.lead, m.preferred_lang)}`),
+        dedupeKey: `flag:${rows[0].id}:${m.id}`,
+        title: L(m, `🙋 ${actor.name} محتاج ${to === "owner" ? "المالك" : "مدير"}: ${Card.displayName(r.lead, m.preferred_lang)}`, `🙋 ${actor.name} needs ${to === "owner" ? "the owner" : "a manager"}: ${Card.displayName(r.lead, m.preferred_lang)}`),
         body: `${Card.refLabel(r.lead.ref)} · ${note.slice(0, 140)}`,
         url: leadUrl(r.lead),
         leadId: r.lead.id,
@@ -460,19 +473,31 @@ async function flagForManager(pool, actor, key, text, { version = null, now = ne
   return r;
 }
 
-/** A manager marks the open flag handled, with an optional reply; the broker who flagged is told. */
+/**
+ * Whoever may handle a request marks the lead's open requests done, with an optional reply (one reply for all of them).
+ * Only requests addressed to the actor's role are closed; each broker who asked is told. Returns { ok, lead, closed } | { error }.
+ */
 async function handleFlag(pool, actor, key, reply, { version = null, now = new Date() } = {}) {
   const text = String(reply ?? "").trim().slice(0, NOTE_MAX);
-  const r = await mutate(pool, actor, key, { kind: "flag_handled", version, manage: true, now }, (lead) =>
-    lead.flagged_at ? { fields: { flagged_at: null, flag_note: null, flagged_by: null }, data: { reply: text || null, flagged_by: lead.flagged_by } } : { unchanged: true }
-  );
-  if (r.ok && r.lead.is_private !== true) {
-    const flaggedBy = (await pool.query("SELECT id, agency_id, preferred_lang FROM brokers WHERE id = (SELECT (data->>'flagged_by')::uuid FROM lead_events WHERE id = $1)", [r.eventId])).rows[0];
-    if (flaggedBy && flaggedBy.id !== actor.id) {
-      await Notifications.notifyBroker(pool, flaggedBy, {
+  const roles = Authz.isAgencyOwner(actor) ? ["manager", "owner"] : Authz.canManageLeads(actor) ? ["manager"] : null;
+  if (!roles) return { error: "forbidden" };
+  const found = await loadLead(pool, actor.agency_id, key);
+  if (!found) return { error: "not_found" };
+  const pending = (await pool.query("SELECT id, broker_id FROM lead_requests WHERE lead_id = $1 AND handled_at IS NULL AND to_role = ANY($2::text[])", [found.id, roles])).rows;
+  if (!pending.length) return { unchanged: true };
+  const r = await mutate(pool, actor, key, { kind: "flag_handled", version, manage: true, now }, () => ({ fields: {}, data: { reply: text || null, requests: pending.map((p) => p.id) } }));
+  if (!r.ok) return r;
+  await pool.query("UPDATE lead_requests SET handled_at = $2, handled_by = $3, reply = $4 WHERE id = ANY($1::uuid[]) AND handled_at IS NULL", [pending.map((p) => p.id), now.toISOString(), actor.id, text || null]);
+  r.closed = pending.length;
+  if (!r.lead.is_private) {
+    for (const askedBy of new Set(pending.map((p) => p.broker_id).filter(Boolean))) {
+      if (askedBy === actor.id) continue;
+      const b = (await pool.query("SELECT id, agency_id, preferred_lang FROM brokers WHERE id = $1", [askedBy])).rows[0];
+      if (!b) continue;
+      await Notifications.notifyBroker(pool, b, {
         kind: "manager_alert",
-        dedupeKey: `flag_done:${r.eventId}`,
-        title: L(flaggedBy, `✅ ${actor.name} خلّص طلبك: ${Card.displayName(r.lead, flaggedBy.preferred_lang)}`, `✅ ${actor.name} handled your request: ${Card.displayName(r.lead, flaggedBy.preferred_lang)}`),
+        dedupeKey: `flag_done:${r.eventId}:${askedBy}`,
+        title: L(b, `✅ ${actor.name} خلّص طلبك: ${Card.displayName(r.lead, b.preferred_lang)}`, `✅ ${actor.name} handled your request: ${Card.displayName(r.lead, b.preferred_lang)}`),
         body: text,
         url: leadUrl(r.lead),
         leadId: r.lead.id,
@@ -483,21 +508,45 @@ async function handleFlag(pool, actor, key, reply, { version = null, now = new D
   return r;
 }
 
-/** Managers: open flags, oldest first (name, ref, note, who flagged). */
+/** Open requests this actor may handle, oldest first (name, ref, note, who asked, to whom). Null for a broker. */
 async function openFlags(pool, actor) {
   if (!Authz.canManageLeads(actor)) return null;
+  const roles = Authz.isAgencyOwner(actor) ? ["manager", "owner"] : ["manager"];
   const { rows } = await pool.query(
-    `SELECT ${LEAD_COLS}, f.name AS flagged_by_name ${FROM_LEADS} LEFT JOIN brokers f ON f.id = l.flagged_by
-      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.flagged_at IS NOT NULL ORDER BY l.flagged_at, l.ref`,
-    [actor.agency_id]
+    `SELECT ${LEAD_COLS}, r.id AS request_id, r.note AS request_note, r.to_role, r.created_at AS requested_at, f.name AS flagged_by_name
+       FROM lead_requests r JOIN leads l ON l.id = r.lead_id LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id
+       LEFT JOIN brokers f ON f.id = r.broker_id
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND r.handled_at IS NULL AND r.to_role = ANY($2::text[])
+      ORDER BY r.created_at, l.ref`,
+    [actor.agency_id, roles]
   );
   return rows;
 }
 
-/** How many open flags wait on the managers (null for a broker: they have no such list). */
+/**
+ * The open requests on one lead that the actor may see (a broker sees only their own; managers see all). Each row:
+ * { id, note, to_role, broker_id, broker_name, created_at, mine }. Empty for a lead the actor may not see.
+ */
+async function openRequestsOn(pool, actor, leadId) {
+  const { rows } = await pool.query(
+    `SELECT r.id, r.note, r.to_role, r.broker_id, f.name AS broker_name, r.created_at
+       FROM lead_requests r LEFT JOIN brokers f ON f.id = r.broker_id
+      WHERE r.lead_id = $1 AND r.agency_id = $2 AND r.handled_at IS NULL ORDER BY r.created_at`,
+    [leadId, actor.agency_id]
+  );
+  return rows
+    .map((r) => ({ ...r, mine: r.broker_id === actor.id }))
+    .filter((r) => r.mine || (r.to_role === "manager" && Authz.canManageLeads(actor)) || (r.to_role === "owner" && Authz.isAgencyOwner(actor)));
+}
+
+/** How many open requests wait on this actor (null for a broker: they have no such list). */
 async function flagCount(pool, actor) {
   if (!Authz.canManageLeads(actor)) return null;
-  const { rows } = await pool.query("SELECT count(*)::int AS n FROM leads l WHERE " + Vis.leads("l") + " AND l.agency_id = $1 AND l.flagged_at IS NOT NULL", [actor.agency_id]);
+  const roles = Authz.isAgencyOwner(actor) ? ["manager", "owner"] : ["manager"];
+  const { rows } = await pool.query(
+    "SELECT count(*)::int AS n FROM lead_requests r JOIN leads l ON l.id = r.lead_id WHERE " + Vis.leads("l") + " AND l.agency_id = $1 AND r.handled_at IS NULL AND r.to_role = ANY($2::text[])",
+    [actor.agency_id, roles]
+  );
   return rows[0].n;
 }
 
@@ -779,6 +828,7 @@ module.exports = {
   handleFlag,
   openFlags,
   flagCount,
+  openRequestsOn,
   markContacted,
   setFollowUp,
   completeFollowUp,
