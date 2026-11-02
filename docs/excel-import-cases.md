@@ -11,16 +11,18 @@ Written from the NCH "RENT - All compounds" workbook (29 tabs, 3,751 rows, 26 vi
 | Many tabs, one per compound | 26 tabs | Auto-fixed: all tabs are read in the browser; the tab name is the compound when the sheet has no compound column | Tab chips with their counts; filter by tab |
 | Hidden or empty tabs | `Sheet103` | Skipped, listed | Listed as skipped |
 | Sale or rent only in the file or tab name | `RENT - All compounds.xlsx` | Auto-fixed from the name; if neither says it, **batch** (all rent / all sale) | A button with the count |
-| Facts together in one cell | `2 Bedrooms (1 master) / 3 Bathrooms`; `land 600 m / built up 244 m` | Auto-fixed: rooms, built-up area, land area read; the original text is kept in the notes | Nothing unless the row is wrong |
+| Rows that did not import | Any flagged row | **Download**: an Excel file with the sheet's own header words and values (edits included), tab and sheet row, and one new last column, Reason. Import the good rows first; fix the file and upload it again | A download link on the review page |
+| Facts together in one cell | `2 Bedrooms (1 master) / 3 Bathrooms`; `3BR/2BA`; `3 غرف نوم و 2 حمام`; `land 600 m / built up 244 m` | Auto-fixed: rooms, built-up area, land area read; the original text is kept in the notes | Nothing unless the row is wrong |
 | Facts inside the description | `fully finished / kitchen / ACs` | Auto-fixed: finishing and features read with the app's vocabulary, only when the sheet has no column for them | Shown on the unit line |
 | Price with words around it | `60k negotiable`, `25k/2month insurance` | Auto-fixed: the amount is the price, the words go to the notes | Nothing |
 | Several prices in one cell | `long 90k / short 100k / day 6k` | **Batch**: use the long-term or monthly price, or the first; a daily price is never used | A button with the count |
-| Prices in dollars | `3000$` | **Batch**: one rate for all of them; the original is kept in the notes | A rate box with the count |
+| Prices in dollars | `3000$` | **Auto-fixed** at the agency's central rate (set by an owner or manager in Settings, read at upload). With no rate set the rows are flagged and one button converts them once it is set; the original is kept in the notes | A line with the rate, or a link to Settings |
 | A word where the price should be | `wait price`, `rented`, `after eid` | Flagged, with what the cell says | Reason `Invalid price: «wait price»` and the edit form |
 | Phone number forms | `1069985171`, `+20 100…`, `1001222400/ 1275615557` | Auto-fixed: 0 added, first number is the owner's, the others go to the notes | A note only when the number is not an Egyptian mobile |
 | Code written with spaces, case or `#` | `MVICr 128`, `vr1` | Auto-fixed (codes are normalised everywhere) | Nothing, no flag |
 | A code used twice in the sheet | `NH-9` twice | Flagged on the second row | Reason and the edit form on the code |
-| No code | Rows without a code | A code is generated when the unit is created | `(auto)` in the code column |
+| No code | Rows without a code | If the tab's own codes follow a pattern (`NH-9`, `VR12`; three or more, a clear majority) the next number in that pattern is used, past the agency's highest with the same letters; otherwise the app makes a code when the unit is created | A note on the row; `(auto)` without a pattern |
+| A code that breaks the tab's pattern | `XX99` among `VR-1…` | Kept as written | A note, not an error |
 | Type with a typo | `apatment`, `penthous`, `twon house` | Auto-fixed | Nothing |
 | Type word the app does not know | `triplex`, `sky loft`, `mazonette` | **Batch** per word: pick a type once | A row per word with its count |
 | Type column holds something else | `hyde park` in the type column | Flagged | Reason and the edit form |

@@ -32,14 +32,17 @@ const WORD_NUM = { غرفة: 1, غرفه: 1, غرفتين: 2, غرفتان: 2 };
 function rooms(raw) {
   const s = clean(raw).toLowerCase();
   const out = {};
-  const bed = /(\d{1,2})\s*(?:master\s+)?(?:be\w{2,6}|beds?|br\b|غرف\w*)/.exec(s);
+  const BED = "(?:master\\s+)?(?:be\\w{2,6}|beds?|br\\b|bdr?s?\\b|غرف\\w*|اوض\\w*|أوض\\w*|نوم)";
+  const BATH = "(?:bath\\w*|bth\\w*|ba\\b|wc\\b|toilets?|حمام\\w*|دورات? مياه|دورة مياه)";
+  const bed = new RegExp(`(?:bedrooms?|beds?|br|غرف(?:ة|ه)?|اوض(?:ة|ه)?)\\s*[:=]\\s*(\\d{1,2})`).exec(s) || new RegExp(`(\\d{1,2})\\s*${BED}`).exec(s);
   if (bed) out.bedrooms = Number(bed[1]);
   else {
-    const w = /(غرفتين|غرفتان)/.exec(s);
-    if (w) out.bedrooms = WORD_NUM[w[1]];
+    const w = /(غرفتين|غرفتان|اوضتين|أوضتين)/.exec(s);
+    if (w) out.bedrooms = 2;
   }
-  const bath = /(\d{1,2})\s*(?:bath\w*|bth\w*|حمام\w*|دورات? مياه)/.exec(s);
+  const bath = new RegExp(`(?:bathrooms?|baths?|ba|حمام(?:ات)?)\\s*[:=]\\s*(\\d{1,2})`).exec(s) || new RegExp(`(\\d{1,2})\\s*${BATH}`).exec(s);
   if (bath) out.bathrooms = Number(bath[1]);
+  else if (/(حمامين)/.test(s)) out.bathrooms = 2;
   if (out.bedrooms > 20) delete out.bedrooms;
   if (out.bathrooms > 20) delete out.bathrooms;
   return out;

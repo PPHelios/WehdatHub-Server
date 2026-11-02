@@ -1962,6 +1962,8 @@
     },
     "lib/sheetGrid.js": {
       "buildSheet": ["tabs", "params"],
+      "codePattern": ["codes"],
+      "codeParts": ["code"],
       "typeFromName": ["name"],
       "findHeader": ["rows"],
       "alignByContent": ["rows", "columns", "taken"],
@@ -1978,6 +1980,9 @@
       "dollars": ["raw"],
       "readText": ["raw"],
       "FOREIGN": "Object"
+    },
+    "lib/importFailed.js": {
+      "failedRowsWorkbook": ["payload", "params"]
     }
   },
   "invariant_variable_names": {

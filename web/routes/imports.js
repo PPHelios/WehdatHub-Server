@@ -6,6 +6,7 @@ const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const SheetGrid = require("../../lib/sheetGrid");
+const FailedRows = require("../../lib/importFailed");
 const { logOperation } = require("../../lib/db");
 const { isManager } = require("../../lib/authz");
 const Imports = require("../../services/imports");
@@ -137,10 +138,12 @@ function excelPlanPage(imp, lang, query = {}) {
       <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`)}</div>`
     : ""}
   ${stats.dollars
-    ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="usd_rate"><input type="hidden" name="action" value="usd_rate">
-    <p>${L(lang, `${stats.dollars} صف بالدولار.`, `${stats.dollars} rows are priced in dollars.`)}</p>
-    <label>${L(lang, "سعر الدولار بالجنيه", "Pounds per dollar")}<input name="value" inputmode="decimal" placeholder="50" required></label>
-    <button class="secondary">${L(lang, "حوّل بالسعر ده", "Convert at this rate")}</button></form>`
+    ? stats.usd_rate
+      ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار اتحولوا بسعر الوكالة (${stats.usd_rate} جنيه للدولار).`, `${stats.dollars} rows priced in dollars were converted at the agency rate (${stats.usd_rate} EGP per dollar).`)}</p>`
+      : html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="usd_rate"><input type="hidden" name="action" value="usd_rate">
+    <p>${L(lang, `${stats.dollars} صف بالدولار ومفيش سعر دولار للوكالة.`, `${stats.dollars} rows are priced in dollars and the agency has no dollar rate yet.`)}</p>
+    <p class="muted"><a href="/app/usage?tab=settings" target="_blank" rel="noopener">${L(lang, "حدد سعر الدولار من الإعدادات", "Set the dollar rate in Settings")}</a> ${L(lang, "وبعدين دوس:", "then press:")}</p>
+    <button class="secondary">${L(lang, "حوّل بسعر الوكالة", "Convert at the agency rate")}</button></form>`
     : ""}
 </section>`
       : "";
@@ -180,7 +183,8 @@ ${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
 ${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${where(i)} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير", "Same as in the app, nothing to change")}${notesOf(i)}</li>`)}</ul>`)}
 ${pager}
-${applied ? "" : html`<div class="row"><button type="submit">✅ ${L(lang, paged ? "طبّق المختار في الصفحة دي" : "طبّق المختار", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
+${(counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-failed-download><a class="secondary button" href="/app/import/${imp.id}/failed.xlsx" download>⬇️ ${L(lang, `نزّل الصفوف اللي مش هتتسجل (${(counts.invalid || 0) + (counts.forbidden || 0)}) إكسيل بعمود السبب`, `Download the rows that will not import (${(counts.invalid || 0) + (counts.forbidden || 0)}) as Excel, with a Reason column`)}</a></p>` : ""}
+  ${applied ? "" : html`<div class="row"><button type="submit">✅ ${L(lang, paged ? "طبّق المختار في الصفحة دي" : "طبّق المختار", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
 </form>
 ${editForms}`;
 }
@@ -437,6 +441,16 @@ ${tabs("import_tab", [
     });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group", posts: found.posts.length, skipped: found.skipped, duplicates: found.duplicates } });
     return res.redirect(303, `/app/import/${id}`);
+  });
+
+  // The rows this import did not take, as an Excel file: the sheet's values as they are plus a "Reason" column.
+  web.get("/import/:id/failed.xlsx", managersOnly, async (req, res, next) => {
+    const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
+    if (!imp || imp.kind !== "excel") return next();
+    const { buffer } = await FailedRows.failedRowsWorkbook(imp.payload, { lang: langOf(req) });
+    return res
+      .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="not-imported-rows.xlsx"', "Cache-Control": "no-store" })
+      .send(buffer);
   });
 
   web.get("/import/:id", async (req, res, next) => {

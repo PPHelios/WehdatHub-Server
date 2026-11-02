@@ -121,3 +121,23 @@ describe("one cell, several facts", () => {
     expect(Mixed.dollars("1000$ \\ 50k")).toBeNull();
   });
 });
+
+describe("code pattern and room words", () => {
+  const SheetGrid = require("../../lib/sheetGrid");
+  const Mixed = require("../../domain/sheetMixed");
+
+  test("a pattern needs three coded rows with a clear majority", () => {
+    expect(SheetGrid.codePattern(["NH-1", "NH-2", "NH-9"])).toMatchObject({ prefix: "NH", sep: "-", max: 9, width: 0 });
+    expect(SheetGrid.codePattern(["vr01", "VR02", "VR10"])).toMatchObject({ prefix: "VR", sep: "", width: 2, max: 10 });
+    expect(SheetGrid.codePattern(["NH-1", "NH-2"])).toBeNull();
+    expect(SheetGrid.codePattern(["A1", "B2", "C3", "A4"])).toBeNull();
+  });
+
+  test("bedrooms and bathrooms in short, labelled, Arabic and mixed forms", () => {
+    expect(Mixed.rooms("3BR/2BA")).toEqual({ bedrooms: 3, bathrooms: 2 });
+    expect(Mixed.rooms("bedrooms: 4 bathrooms: 3")).toEqual({ bedrooms: 4, bathrooms: 3 });
+    expect(Mixed.rooms("3 غرف نوم و 2 حمام")).toEqual({ bedrooms: 3, bathrooms: 2 });
+    expect(Mixed.rooms("2 Bedrooms (1 master) / 3 Bathrooms")).toEqual({ bedrooms: 2, bathrooms: 3 });
+    expect(Mixed.areas("ارض 600 م مباني 244 م")).toEqual({ area_value: 244, land_area: 600 });
+  });
+});

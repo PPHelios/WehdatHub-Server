@@ -82,31 +82,117 @@ describe("one change for many rows", () => {
     expect([(await unit("VR1")).listing_type, (await unit("VR2")).listing_type]).toEqual(["sale", "rent"]);
   });
 
-  test("several prices in one cell and prices in dollars: one rule or one rate for all of them, the original text is kept", async () => {
+  test("several prices in one cell: one rule for all of them, the original text is kept", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const data = [unitRow(1, "VR", "long 90k / short 100k / day 6k"), unitRow(2, "VR", "2000$"), unitRow(3, "VR", "60k negotiable")];
+    const data = [unitRow(1, "VR", "long 90k / short 100k / day 6k"), unitRow(2, "VR", "60k negotiable")];
     const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", data)] });
     let page = await agent.get(r.body.url);
     expect(page.text).toMatch(/data-batch-form="price_pick"/);
-    expect(page.text).toMatch(/data-batch-form="usd_rate"/);
     await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "price_pick", value: "long" });
-    await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate", value: "50" });
     page = await agent.get(r.body.url);
     expect(page.text).not.toMatch(/data-kind="invalid"/);
-    await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2", "3"] });
+    await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });
     expect(Number((await unit("VR1")).price_value)).toBe(90000);
-    expect(Number((await unit("VR2")).price_value)).toBe(100000);
-    expect((await unit("VR2")).details.notes).toContain("2000$");
-    expect(Number((await unit("VR3")).price_value)).toBe(60000);
+    expect((await unit("VR1")).details.notes).toContain("long 90k");
+    expect(Number((await unit("VR2")).price_value)).toBe(60000);
   });
 
-  test("a batch that fits no row changes nothing; a bad rate is ignored", async () => {
+  test("dollar prices use the agency's central rate: set in Settings, applied at upload, or picked up later with one button", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", rows(2, "VR"))] });
-    const a = await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate", value: "50" });
-    expect(a.headers.location).toMatch(/\?batch=0$/);
-    const b = await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate", value: "abc" });
-    expect(b.headers.location).toMatch(/\?batch=0$/);
+    const data = [unitRow(1, "VR", "2000$"), unitRow(2, "VR", "25k")];
+    // No rate yet: the row is held back with the batch button.
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", data)] });
+    let page = await agent.get(a.body.url);
+    expect(page.text).toMatch(/data-kind="invalid"/);
+    expect(page.text).toMatch(/data-batch-form="usd_rate"/);
+    expect(page.text).toMatch(/\/app\/usage\?tab=settings/);
+    // Without a rate the button does nothing.
+    const none = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
+    expect(none.headers.location).toMatch(/\?batch=0$/);
+    // The manager sets the rate; the button now converts at it.
+    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "50" });
+    const b = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
+    expect(b.headers.location).toMatch(/\?batch=1$/);
+    page = await agent.get(a.body.url);
+    expect(page.text).not.toMatch(/data-kind="invalid"/);
+    expect(page.text).toMatch(/data-usd-info/);
+    await agent.post(`${a.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });
+    expect(Number((await unit("VR1")).price_value)).toBe(100000);
+    expect((await unit("VR1")).details.notes).toContain("2000$");
+    // A later upload converts at once, and a later change of the rate does not touch the plan that was made.
+    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "60" });
+    const c = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [unitRow(1, "MI", "1000$")])] });
+    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "70" });
+    await agent.post(`${c.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1"] });
+    expect(Number((await unit("MI1")).price_value)).toBe(60000);
+  });
+
+  test("a bad rate is ignored; an empty one clears it", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const rate = async () => (await h.query("SELECT crm_settings->>'usd_rate' AS r FROM agencies WHERE id = (SELECT agency_id FROM brokers WHERE role = 'manager' LIMIT 1)"))[0].r;
+    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "50" });
+    expect(await rate()).toBe("50");
+    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "abc" });
+    expect(await rate()).toBe("50");
+    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "" });
+    expect(await rate()).toBeNull();
+  });
+});
+
+describe("the rows that did not import come back as an Excel file", () => {
+  test("original values untouched, tab and sheet row, one new Reason column; the good rows import first", async () => {
+    const ExcelJS = require("exceljs");
+    const { agent, csrf } = await signIn(h, "manager");
+    const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [unitRow(1, "VR"), unitRow(2, "VR", "wait price"), unitRow(3, "VR")])] });
+    const page = await agent.get(r.body.url);
+    expect(page.text).toMatch(/data-failed-download/);
+    await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "3"] });
+    expect(await unit("VR1")).toBeTruthy();
+    const f = await agent.get(`${r.body.url}/failed.xlsx`).buffer(true).parse((res, cb) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => cb(null, Buffer.concat(chunks)));
+    });
+    expect(f.status).toBe(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(f.body);
+    const ws = wb.worksheets[0];
+    const head = ws.getRow(1).values.slice(1);
+    expect(head[head.length - 1]).toMatch(/Reason|السبب/);
+    expect(head).toContain("price"); // the sheet's own header word
+    expect(ws.rowCount).toBe(2);
+    const row = ws.getRow(2).values.slice(1);
+    expect(row).toContain("wait price"); // the cell as it was
+    expect(row[0]).toBe("Villette");
+    expect(String(row[row.length - 1])).toMatch(/wait price/);
+  });
+});
+
+describe("the sheet's own code pattern", () => {
+  const withCode = (row, code) => [...row.slice(0, -1), code];
+  const coded = (i, code) => withCode(unitRow(i, "ZZ"), code);
+
+  test("a row without a code gets the next number in the tab's pattern, past the agency's own highest; odd codes are noted", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [coded(1, "VR-1"), coded(2, "VR-2"), coded(3, "VR-3"), coded(4, ""), coded(5, "XX99")])] });
+    const pageA = await agent.get(a.body.url);
+    expect(pageA.text).toMatch(/(numbered in the sheet's own pattern|اتعمل بنفس نمط)/);
+    expect(pageA.text).toMatch(/(does not follow the sheet's pattern|مش على نمط)/);
+    await agent.post(`${a.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2", "3", "4", "5"] });
+    expect(await unit("VR-4")).toBeTruthy();
+    // The next sheet stops at VR-3 but the agency already has VR-4: the new code is VR-5, never an existing unit.
+    const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [coded(1, "VR-1"), coded(2, "VR-2"), coded(3, "VR-3"), coded(6, "")])] });
+    await agent.get(b.body.url);
+    await agent.post(`${b.body.url}/apply`).type("form").send({ _csrf: csrf, all: "1" });
+    expect(await unit("VR-5")).toBeTruthy();
+    expect((await h.query("SELECT count(*)::int AS n FROM listings WHERE code_norm = 'VR-4'"))[0].n).toBe(1);
+  });
+
+  test("no clear pattern: no code is made up", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [coded(1, "A1"), coded(2, "ZZ-7"), coded(3, "Q4"), coded(4, "")])] });
+    const page = await agent.get(a.body.url);
+    expect(page.text).not.toMatch(/(numbered in the sheet's own pattern|اتعمل بنفس نمط)/);
   });
 });
 

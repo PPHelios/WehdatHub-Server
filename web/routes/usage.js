@@ -101,6 +101,8 @@ function register(web, { pool, page }) {
     const own = manager ? (await pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] : null;
     const codePrefix = own ? own.code_prefix || UnitCode.prefixFrom(own.name) : "";
     const aiPhotos = own?.crm_settings?.ai_photo_order !== false;
+    const usdRate = own?.crm_settings?.usd_rate ?? "";
+    const usdRateAt = own?.crm_settings?.usd_rate_at ? String(own.crm_settings.usd_rate_at).slice(0, 10) : "";
     const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
     const mineCard = html`<section class="card">
   <h2>${L(lang, "رسايلي", "My messages")}</h2>
@@ -149,12 +151,14 @@ ${manager
   <label>${L(lang, "حد أسبوعي لكل وسيط (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
   <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
   <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
+  <label>${L(lang, "سعر الدولار بالجنيه (للأسعار بالدولار في الإكسيل)", "Pounds per dollar (for dollar prices in Excel imports)")} <input name="usd_rate" inputmode="decimal" dir="ltr" value="${usdRate}" placeholder="50" data-usd-rate></label>
+  <p class="muted">${usdRateAt ? L(lang, `آخر تحديث ${usdRateAt}. بيتطبق وقت رفع الملف والوحدات القديمة مبتتغيرش.`, `Last set ${usdRateAt}. It applies when a file is uploaded; existing units do not change.`) : L(lang, "بيتطبق وقت رفع الملف. فاضي = الأسعار بالدولار بتتعلّم للمراجعة.", "Applied when a file is uploaded. Empty = dollar prices are flagged for review.")}</p>
   <label class="row"><input type="checkbox" name="ai_photo_order" value="on"${aiPhotos ? html` checked` : ""} data-ai-photo-order> ${L(lang, "الذكاء الاصطناعي يرتب صور الوحدات ويخفي المستندات", "AI orders unit photos and hides documents")}</label>
   <p class="muted">${L(lang, "لو قفلته بتوفر رصيد: الصور بتفضل بالترتيب اللي اتبعتت بيه، وتقدر ترتبها بإيدك من تعديل الوحدة.", "Off saves credits: photos keep the order they were sent in, and you can order them by hand when editing a unit.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
 <p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>`]
-    ], { open: req.query.saved === "1" ? 2 : 0 })
+    ], { open: req.query.saved === "1" || req.query.tab === "settings" ? 2 : 0 })
   : mineCard}`
     });
   });
@@ -163,6 +167,17 @@ ${manager
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).send("Managers only");
     const monthly = parseInt(req.body.monthly, 10);
+    // The central dollar rate: a number between 2 and 1000, or empty to clear it; anything else keeps the current one.
+    const rateText = String(req.body.usd_rate ?? "").replace(/,/g, "").trim();
+    const rateSent = req.body.usd_rate !== undefined;
+    const rate = rateText === "" ? null : Number(rateText);
+    const rateOk = rateText === "" || (rate >= 2 && rate <= 1000);
+    if (rateSent && rateOk) {
+      await pool.query(
+        "UPDATE agencies SET crm_settings = CASE WHEN $2::numeric IS NULL THEN crm_settings - 'usd_rate' - 'usd_rate_at' ELSE crm_settings || jsonb_build_object('usd_rate', $2::numeric, 'usd_rate_at', NOW()) END WHERE id = $1",
+        [broker.agency_id, rate]
+      );
+    }
     // A prefix that isn't 1–4 Latin letters keeps the current one.
     await pool.query(
       `UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4, code_prefix = COALESCE($5, code_prefix),
