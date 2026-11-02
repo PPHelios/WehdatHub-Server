@@ -20,8 +20,10 @@ afterAll(closeHarness);
 
 const to = (who, replies) => replies.filter((r) => r.to === h.BROKERS[who].phone);
 const ids = (r) => (r.buttons || []).map((b) => b.id).concat((r.sections || []).flatMap((s) => s.rows.map((x) => x.id)));
+// A lead card is followed by its own "Add update" prompt (one button); the card is the message under test.
+const ADD_UPDATE_PROMPT = /^📝 (تحديث للعميل|Add an update)[?؟]$/;
 const one = (who, replies) => {
-  const mine = to(who, replies);
+  const mine = to(who, replies).filter((m) => !ADD_UPDATE_PROMPT.test(m.text || ""));
   expect(mine).toHaveLength(1);
   return mine[0];
 };
