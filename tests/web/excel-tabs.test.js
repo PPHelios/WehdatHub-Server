@@ -97,34 +97,18 @@ describe("one change for many rows", () => {
     expect(Number((await unit("VR2")).price_value)).toBe(60000);
   });
 
-  test("dollar prices use the agency's central rate: set in Settings, applied at upload, or picked up later with one button", async () => {
+  test("a dollar price is saved in dollars with its currency, not converted", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const data = [unitRow(1, "VR", "2000$"), unitRow(2, "VR", "25k")];
-    // No rate yet: the row is held back with the batch button.
-    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", data)] });
-    let page = await agent.get(a.body.url);
-    expect(page.text).toMatch(/data-kind="invalid"/);
-    expect(page.text).toMatch(/data-batch-form="usd_rate"/);
-    expect(page.text).toMatch(/\/app\/usage"/);
-    // Without a rate the button does nothing.
-    const none = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
-    expect(none.headers.location).toMatch(/\?batch=0$/);
-    // The manager sets the rate; the button now converts at it.
-    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "50" });
-    const b = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
-    expect(b.headers.location).toMatch(/\?batch=1$/);
-    page = await agent.get(a.body.url);
+    const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [unitRow(1, "VR", "2000$"), unitRow(2, "VR", "25k")])] });
+    const page = await agent.get(r.body.url);
     expect(page.text).not.toMatch(/data-kind="invalid"/);
     expect(page.text).toMatch(/data-usd-info/);
-    await agent.post(`${a.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });
-    expect(Number((await unit("VR1")).price_value)).toBe(100000);
-    expect((await unit("VR1")).details.notes).toContain("2000$");
-    // A later upload converts at once, and a later change of the rate does not touch the plan that was made.
-    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "60" });
-    const c = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [unitRow(1, "MI", "1000$")])] });
-    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "70" });
-    await agent.post(`${c.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1"] });
-    expect(Number((await unit("MI1")).price_value)).toBe(60000);
+    await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });
+    const usd = await unit("VR1");
+    expect(Number(usd.price_value)).toBe(2000);
+    expect(usd.details.currency).toBe("USD");
+    expect(Number((await unit("VR2")).price_value)).toBe(25000);
+    expect((await unit("VR2")).details.currency ?? null).toBeNull();
   });
 });
 

@@ -14,7 +14,6 @@ const Features = require("../domain/features");
 const Delivery = require("../domain/delivery");
 const SheetImport = require("../domain/sheetImport");
 const Mixed = require("../domain/sheetMixed");
-const Fx = require("../domain/fx");
 const SheetGrid = require("../lib/sheetGrid");
 const Dup = require("../domain/unitDuplicate");
 const { normalizeCode } = require("../domain/searchQuery");
@@ -114,16 +113,10 @@ const ERROR_LABELS = {
 const NOTE = {
   compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
   phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري"),
-  dollar: (usd, rate, lang) => (lang === "en" ? `Price was $${usd}; converted at ${rate} EGP per dollar` : `السعر كان ${usd}$ واتحول بسعر ${rate} جنيه للدولار`),
+  dollar: (usd, lang) => (lang === "en" ? `Priced in dollars: saved as $${usd}, not converted` : `السعر بالدولار: اتسجل ${usd}$ من غير تحويل`),
   codeMade: (lang) => (lang === "en" ? "No code in the sheet: numbered in the sheet's own pattern" : "مفيش كود في الشيت: اتعمل بنفس نمط أكواد الشيت"),
   codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت")
 };
-
-/** The agency's central dollar rate (EGP per dollar, set by an owner or manager under Usage); null when none is set. */
-async function agencyUsdRate(pool, agencyId) {
-  const { rows } = await pool.query("SELECT crm_settings->'fx' AS fx FROM agencies WHERE id = $1", [agencyId]);
-  return Fx.ratesFrom(rows[0]?.fx).USD;
-}
 const EGY_PHONE = /^(\+?20|0)?1[0-9]{9}$/;
 // "UPtown cairo" and "UPtown" are the same compound: the city word at the end is not part of the name.
 const compoundKey = (v) => normalizeSearch(v).replace(/\s+(cairo|new cairo|القاهره|القاهرة|مصر|egypt)$/, "").trim();
@@ -177,16 +170,14 @@ async function applyCodePatterns(pool, agencyId, sheet) {
  * @param {Object} sheet - lib/sheets.js readInventorySheet output
  * @returns {Promise<{ items, counts }>}
  */
-async function planExcel(pool, broker, sheet, { lang = "ar", usdRate } = {}) {
-  // The dollar rate is the agency's central one, read once at upload and kept with the plan (later edits reuse it).
-  const rate = usdRate === undefined ? await agencyUsdRate(pool, broker.agency_id) : usdRate;
+async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   if (sheet.tabs) await applyCodePatterns(pool, broker.agency_id, sheet);
+  // A price in dollars is kept in dollars (saved with its currency, like a unit added by voice or text); search converts it.
   const parsed = sheet.rows.map((r) => {
-    const usd = rate ? Mixed.dollars(cellText(r, "price_value")) : null;
-    const cells = usd
-      ? { ...r.cells, price_value: Math.round(usd * rate), notes: [r.cells.notes, `${lang === "en" ? "Price in the sheet" : "السعر في الشيت"}: ${r.cells.price_value}`].filter(Boolean).join(" · ") }
-      : r.cells;
-    return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...SheetImport.rowToDraft(cells), cells: r.cells, dollar: usd ? { usd, rate } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd) };
+    const usd = Mixed.dollars(cellText(r, "price_value"));
+    const row = SheetImport.rowToDraft(usd ? { ...r.cells, price_value: usd } : r.cells);
+    if (usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
+    return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd) };
   });
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];
   const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
@@ -200,7 +191,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", usdRate } = {}) {
   for (const p of parsed) {
     const code = normalizeCode(p.code);
     const base = { row: p.rowNumber, tab: p.tab, sheet_row: p.sheetRow, code: code || null, notes: [] };
-    if (p.dollar) base.notes.push(NOTE.dollar(p.dollar.usd, p.dollar.rate, lang));
+    if (p.dollar) base.notes.push(NOTE.dollar(p.dollar.usd, lang));
     if (p.codeMade) base.notes.push(NOTE.codeMade(lang));
     if (p.codeOdd) base.notes.push(NOTE.codePattern(lang));
     if (p.errors.length) {
@@ -258,7 +249,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", usdRate } = {}) {
   }
 
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
-  return { items, counts, usd_rate: rate };
+  return { items, counts };
 }
 
 /** Saves a plan; returns its id. */
@@ -373,7 +364,7 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
     if (value) target.cells[key] = value;
     else delete target.cells[key];
   }
-  const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang, usdRate: imp.payload.usd_rate ?? null })).items;
+  const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang })).items;
   if (item.code && ["new", "changed"].includes(item.kind) && items.some((i) => i.row !== item.row && i.code === item.code && ["new", "changed"].includes(i.kind))) {
     Object.assign(item, { kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
   }
@@ -411,7 +402,6 @@ function batchStats(payload) {
     no_type: (payload.items || []).filter((i) => i.kind === "invalid" && (i.needs || []).includes("listing_type")).length,
     several_prices: rows.filter(hasSeveralPrices).length,
     dollars: rows.filter(isDollars).length,
-    usd_rate: payload.usd_rate ?? null,
     unknown_types: unknownTypes(rows)
   };
 }
@@ -430,7 +420,6 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
     r.cells.notes = [r.cells.notes, `${lang === "en" ? "Price in the sheet" : "السعر في الشيت"}: ${text}`].filter(Boolean).join(" · ");
   };
   let touched = 0;
-  let usdRate = imp.payload.usd_rate ?? null;
   if (action === "listing_type" && ["rent", "sale"].includes(value)) {
     for (const r of rows) {
       if (scope === "all" || !cellText(r, "listing_type").trim()) {
@@ -455,14 +444,9 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
         touched++;
       }
     }
-  } else if (action === "usd_rate") {
-    // Reads the agency's central rate again (set in Settings after the upload) and plans the dollar rows with it.
-    usdRate = await agencyUsdRate(pool, broker.agency_id);
-    if (!usdRate) return { touched: 0, no_rate: true };
-    touched = rows.filter(isDollars).length;
   }
   if (!touched) return { touched: 0 };
-  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang, usdRate });
+  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang });
   await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, rows, defaults })]);
   return { touched };
 }

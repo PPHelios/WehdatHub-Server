@@ -75,7 +75,7 @@ describe("Excel fixes in the review", () => {
     expect(page.text).not.toMatch(/data-notes=/);
   });
 
-  test("a dollar price and a text-only row each show their reason; an owner phone that is not Egyptian is flagged", async () => {
+  test("a euro price and a text-only row each show their reason; an owner phone that is not Egyptian is flagged", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const head = [...HEAD, "تليفون المالك"];
     const r = await upload(
@@ -83,7 +83,7 @@ describe("Excel fixes in the review", () => {
       csrf,
       await workbook([
         head,
-        ["NH-5", "Hyde Park", "شقة", "بيع", "$150,000", 110, 2, ""],
+        ["NH-5", "Hyde Park", "شقة", "بيع", "€150,000", 110, 2, ""],
         ["NH-6", "Hyde Park", "شقة", "بيع", "6 مليون", 110, 2, "12345"],
         ["", "", "", "", "", "", "", ""]
       ])

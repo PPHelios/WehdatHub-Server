@@ -138,12 +138,7 @@ function excelPlanPage(imp, lang, query = {}) {
       <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`)}</div>`
     : ""}
   ${stats.dollars
-    ? stats.usd_rate
-      ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار اتحولوا بسعر الوكالة (${stats.usd_rate} جنيه للدولار).`, `${stats.dollars} rows priced in dollars were converted at the agency rate (${stats.usd_rate} EGP per dollar).`)}</p>`
-      : html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="usd_rate"><input type="hidden" name="action" value="usd_rate">
-    <p>${L(lang, `${stats.dollars} صف بالدولار ومفيش سعر دولار للوكالة.`, `${stats.dollars} rows are priced in dollars and the agency has no dollar rate yet.`)}</p>
-    <p class="muted"><a href="/app/usage" target="_blank" rel="noopener">${L(lang, "حدد سعر الدولار من الإعدادات", "Set the dollar rate in Settings")}</a> ${L(lang, "وبعدين دوس:", "then press:")}</p>
-    <button class="secondary">${L(lang, "حوّل بسعر الوكالة", "Convert at the agency rate")}</button></form>`
+    ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار. بيتسجلوا بالدولار من غير تحويل، والبحث بيحولهم بسعر الوكالة.`, `${stats.dollars} rows are priced in dollars. They are saved in dollars, not converted; search converts them at the agency rate.`)}</p>`
     : ""}
 </section>`
       : "";
