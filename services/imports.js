@@ -404,12 +404,12 @@ async function undoPreview(pool, agencyId, imp) {
   const restore = [];
   const skipped = [];
   for (const m of log.made) {
-    const { rows } = await pool.query("SELECT version, status FROM listings WHERE id = $1 AND agency_id = $2", [m.id, agencyId]);
+    const { rows } = await pool.query("SELECT version, status FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [m.id, agencyId]);
     if (rows[0] && Number(rows[0].version) === Number(m.version) && rows[0].status !== "archived") archive.push(m);
     else skipped.push(m.code);
   }
   for (const c of log.changed) {
-    const { rows } = await pool.query("SELECT version FROM listings WHERE code_norm = $1 AND agency_id = $2", [normalizeCode(c.code), agencyId]);
+    const { rows } = await pool.query("SELECT version FROM listings WHERE " + Vis.units("listings") + " AND code_norm = $1 AND agency_id = $2", [normalizeCode(c.code), agencyId]);
     if (rows[0] && Number(rows[0].version) === Number(c.version)) restore.push(c);
     else skipped.push(c.code);
   }
