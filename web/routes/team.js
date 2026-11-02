@@ -142,12 +142,21 @@ function cairoDay(d) {
 }
 
 /** The agency owner moves a broker to manager or a manager back to broker. */
+// Team lead: a manager or the owner makes a broker a team lead, or takes the role back, and puts brokers under a team lead.
+function teamLeadForm(b, lang, teamLeads) {
+  if (b.role === "team_lead") return html`<form method="post" action="/app/team/${b.id}/team-role" data-confirm="${L(lang, "متأكد؟ الفريق اللي تحته هيتشال منه.", "Sure? The team under them is cleared.")}"><input type="hidden" name="on" value="0"><button type="submit" class="secondary">${L(lang, "⬇️ شيل دور قايد الفريق", "⬇️ Remove team lead role")}</button></form>`;
+  if (b.role !== "broker") return "";
+  const current = b.team_lead_id || "";
+  const options = teamLeads.map((t) => html`<option value="${t.id}"${t.id === current ? html` selected` : ""}>${t.name}</option>`);
+  return html`<form method="post" action="/app/team/${b.id}/team" class="row"><label>${L(lang, "الفريق", "Team")} <select name="team_lead_id"><option value="">${L(lang, "من غير فريق", "No team")}</option>${options}</select></label><button type="submit" class="secondary">${L(lang, "احفظ الفريق", "Save team")}</button></form><form method="post" action="/app/team/${b.id}/team-role"><input type="hidden" name="on" value="1"><button type="submit" class="secondary">${L(lang, "⭐ خليه قايد فريق", "⭐ Make team lead")}</button></form>`;
+}
+
 function roleForm(b, lang) {
   const to = b.role === "manager" ? "broker" : "manager";
   return html`<form method="post" action="/app/team/${b.id}/role" data-confirm="${L(lang, "متأكد؟ الدور هيتغير فورًا.", "Sure? The role changes right away.")}"><input type="hidden" name="role" value="${to}"><button type="submit" class="secondary">${to === "manager" ? L(lang, "⬆️ خليه مدير", "⬆️ Make manager") : L(lang, "⬇️ خليه بروكر", "⬇️ Make broker")}</button></form>`;
 }
 
-function memberCard(b, lang, speed, today, now, viewer = null) {
+function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
   return html`<li class="member" data-broker="${b.id}" data-active="${b.is_active ? "1" : "0"}">
   <div class="m-head"><b>${b.name}</b> <span class="chip">${b.role}</span>${b.is_active ? "" : html` <span class="muted">(${L(lang, "موقوف", "deactivated")}${b.deactivated_at ? ` ${when(b.deactivated_at)}` : ""})</span>`}${Rules.awayNow(b, now) ? html` <span class="badge" data-away>🌴 ${L(lang, `إجازة لحد ${cairoDay(b.away_until)}`, `away until ${cairoDay(b.away_until)}`)}</span>` : ""}</div>
   <dl class="m-facts">
@@ -158,6 +167,7 @@ function memberCard(b, lang, speed, today, now, viewer = null) {
   <div class="row m-actions">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
   ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/invite"><input type="hidden" name="name" value="${b.name}"><input type="hidden" name="phone" value="${b.phone_number}"><input type="hidden" name="role" value="${["broker", "manager"].includes(b.role) ? b.role : "broker"}"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Bring back")}</button></form>`}</div>
   ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager"].includes(b.role) ? roleForm(b, lang) : ""}
+  ${b.is_active && b.id !== viewer?.id && MANAGER_ROLES.includes(String(viewer?.role || "").toLowerCase()) ? teamLeadForm(b, lang, teamLeads) : ""}
   ${memberTools(b, lang, today)}
 </li>`;
 }
@@ -180,7 +190,7 @@ ${tabs("team_tab", [
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>
 </details>
-<ul class="members">${team.map((b) => memberCard(b, lang, speed, today, now, viewer))}</ul>
+<ul class="members">${team.map((b) => memberCard(b, lang, speed, today, now, viewer, team.filter((t) => t.role === "team_lead" && t.is_active)))}</ul>
 <p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الحسابات مش بتتمسح؛ الموقوفين في الآخر، والأقدم في الآخر خالص.", "Deactivating signs them out at once and returns their leads to the managers. Accounts are never deleted; former brokers are listed last, the longest gone at the very end.")}</p>
 <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>`],
   [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}`]
@@ -215,6 +225,23 @@ function register(web, { pool, page }) {
   });
 
   // Owner only: move a broker to manager, or a manager back to broker. Logged for the agency.
+  web.post("/team/:id/team-role", async (req, res) => {
+    const lang = langOf(req);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
+    const r = await Team.setTeamLeadRole(pool, req.session.broker, req.params.id, req.body.on === "1");
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    logOperation(pool, { agency_id: req.session.broker.agency_id, broker_id: req.session.broker.id, operation_type: "team_lead_role", metadata: { broker_id: r.broker.id, from: r.from, to: r.to } });
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} بقى ${r.to === "team_lead" ? "قايد فريق" : "بروكر"}.`, `${r.broker.name} is now ${r.to === "team_lead" ? "a team lead" : "a broker"}.`)}</p>` });
+  });
+
+  web.post("/team/:id/team", async (req, res) => {
+    const lang = langOf(req);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
+    const r = await Team.setTeam(pool, req.session.broker, req.params.id, /^[0-9a-f-]{36}$/i.test(String(req.body.team_lead_id || "")) ? req.body.team_lead_id : null);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, "الفريق اتحفظ.", "Team saved.")}</p>` });
+  });
+
   web.post("/team/:id/role", async (req, res) => {
     const lang = langOf(req);
     const owner = req.session.broker;

@@ -125,4 +125,37 @@ async function changeRole(pool, owner, brokerId, newRole) {
   return { ok: true, broker: rows[0], from, to: newRole };
 }
 
-module.exports = { INVITE_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText, changeRole };
+/**
+ * A manager or the owner makes a broker a team lead, or takes the role back. Taking it back clears the team under them.
+ * Returns { ok, broker, to } | { error }.
+ */
+async function setTeamLeadRole(pool, manager, brokerId, on) {
+  if (!MANAGER_ROLES.includes(String(manager.role || "").toLowerCase())) return { error: "forbidden" };
+  if (brokerId === manager.id) return { error: "self" };
+  const { rows } = await pool.query("SELECT id, name, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  if (!rows[0]) return { error: "not_found" };
+  const from = String(rows[0].role || "").toLowerCase();
+  if (TOP_ROLES.includes(from)) return { error: "rank" };
+  if (on && from === "team_lead") return { error: "same" };
+  if (!on && from !== "team_lead") return { error: "same" };
+  const to = on ? "team_lead" : "broker";
+  await pool.query("UPDATE brokers SET role = $2 WHERE id = $1", [brokerId, to]);
+  if (!on) await pool.query("UPDATE brokers SET team_lead_id = NULL WHERE team_lead_id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  return { ok: true, broker: rows[0], from, to };
+}
+
+/** A manager puts a broker in a team (under a team lead), or takes them out (teamLeadId null). Returns { ok } | { error }. */
+async function setTeam(pool, manager, brokerId, teamLeadId) {
+  if (!MANAGER_ROLES.includes(String(manager.role || "").toLowerCase())) return { error: "forbidden" };
+  const { rows } = await pool.query("SELECT id, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  if (!rows[0]) return { error: "not_found" };
+  if (String(rows[0].role || "").toLowerCase() === "team_lead" && teamLeadId) return { error: "team_lead_nested" };
+  if (teamLeadId) {
+    const lead = (await pool.query("SELECT id FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active AND lower(role) = 'team_lead'", [teamLeadId, manager.agency_id])).rows[0];
+    if (!lead) return { error: "team_lead_not_found" };
+  }
+  await pool.query("UPDATE brokers SET team_lead_id = $2 WHERE id = $1", [brokerId, teamLeadId || null]);
+  return { ok: true };
+}
+
+module.exports = { INVITE_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText, changeRole, setTeamLeadRole, setTeam };
