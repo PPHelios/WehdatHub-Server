@@ -40,40 +40,14 @@ const friday = () => {
 };
 const UPDATE = (over = {}) => ({ lead_name: "أحمد", contacted: true, stage: "viewing", lost_reason: null, follow_up: { date: friday().date, time: "17:00", kind: "viewing", unit_code: "VIL-08" }, note: "عايز دور أرضي", ...over });
 
-test("a voice note updates the CRM after Confirm: contacted, viewing, a Friday 17:00 viewing with the unit, a note; Undo reverts all", async () => {
-  const unit = await h.insertListing({ code: "VIL-08", property_type: "villa" });
+test("a voice note never updates the CRM: no update call, nothing written", async () => {
   const ahmed = await lead("broker", "01012345678", "أحمد سمير");
-  await lead("broker", "01112345678", "Sara");
-  h.AI.respond((c) => (c.operation === "transcribe" ? "كلمت احمد، عايز يعاين VIL-08 الجمعة الجاية الساعة ٥، وعايز دور أرضي" : c.operation === "lead_update" ? UPDATE() : null));
+  h.AI.respond((c) => (c.operation === "transcribe" ? "كلمت احمد، عايز يعاين VIL-08 الجمعة الجاية الساعة ٥" : c.operation === "lead_update" ? UPDATE() : null));
 
-  const ask = one("broker", await h.voice("broker"));
-  expect(aiCalls("lead_update")).toBe(1);
-  expect(ask.text).toContain("أحمد سمير · L-0001");
-  expect(ask.text).toMatch(/📞/);
-  expect(ask.text).toMatch(/🏠 معاينة .* · VIL-08/);
-  expect(ask.text).toContain("📝 عايز دور أرضي");
-  expect(ids(ask).map((x) => x.split(":")[1])).toEqual(["uok", "uedit", "no"]);
-  // Nothing written yet.
+  await h.voice("broker");
+  expect(aiCalls("lead_update")).toBe(0);
   expect(await events(ahmed.id)).toEqual([]);
   expect((await fresh(ahmed.id)).stage).toBe("new");
-
-  // The prompt carries today's Cairo date and the text inside the fence.
-  const prompt = JSON.stringify(h.AI.calls.find((c) => c.operation === "lead_update").contents);
-  expect(prompt).toContain(`Today in Cairo is`);
-  expect(prompt).toContain("عايز يعاين VIL-08");
-
-  const done = one("broker", await h.tap("broker", ids(ask)[0]));
-  expect(done.text).toMatch(/^✅ اتسجل/);
-  const l = await fresh(ahmed.id);
-  expect(l).toMatchObject({ stage: "viewing", follow_up_kind: "viewing", follow_up_listing_id: unit.id, follow_up_status: "open" });
-  expect(new Date(l.next_follow_up_at).toISOString()).toBe(friday().at.toISOString());
-  expect(l.last_contact_at).toBeTruthy();
-  expect(await events(ahmed.id)).toEqual(["contacted", "stage", "follow_up_set", "note"]);
-
-  const undo = ids(done).find((x) => x.startsWith("ld:undoset:"));
-  expect(one("broker", await h.tap("broker", undo)).text).toMatch(/↩️/);
-  const back = await fresh(ahmed.id);
-  expect(back).toMatchObject({ stage: "new", follow_up_status: null, last_contact_at: null });
 });
 
 test("a typed update with an L- reference works the same; Cancel writes nothing", async () => {
