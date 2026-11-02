@@ -46,6 +46,8 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
   app.use(
     express.json({
       limit: config.bodyLimit,
+      // The Excel grid (every tab, read in the browser) is bigger than a webhook ever is: its own route reads it with its own limit.
+      type: (req) => req.path !== "/app/import/excel/grid" && Boolean(require("type-is")(req, "application/json")),
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }

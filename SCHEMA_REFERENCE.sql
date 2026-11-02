@@ -1246,6 +1246,33 @@ CREATE TABLE IF NOT EXISTS public.unit_owner_events (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.place_names (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  name_key text NOT NULL,
+  name_en text NOT NULL,
+  name_ar text,
+  status text DEFAULT 'pending'::text NOT NULL,
+  times_seen integer DEFAULT 1 NOT NULL,
+  example text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  decided_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.import_rows (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  import_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  seq integer NOT NULL,
+  source text NOT NULL,
+  code text,
+  kind text NOT NULL,
+  ticked boolean DEFAULT false NOT NULL,
+  data jsonb DEFAULT '{}'::jsonb NOT NULL,
+  photos jsonb DEFAULT '[]'::jsonb NOT NULL,
+  reasons jsonb DEFAULT '[]'::jsonb NOT NULL,
+  state text DEFAULT 'pending'::text NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1271,6 +1298,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pkey PRIMARY KEY (id);
 ALTER TABLE developers ADD CONSTRAINT developers_pkey PRIMARY KEY (id);
 ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
+ALTER TABLE import_rows ADD CONSTRAINT import_rows_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_pkey PRIMARY KEY (id);
@@ -1288,6 +1316,7 @@ ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KEY (challenge);
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
+ALTER TABLE place_names ADD CONSTRAINT place_names_pkey PRIMARY KEY (id);
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id);
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_pkey PRIMARY KEY (fingerprint);
 ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_pkey PRIMARY KEY (id);
@@ -1321,6 +1350,7 @@ ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_numb
 ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_key UNIQUE (deal_id);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_idem_key_key UNIQUE (agency_id, idem_key);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref);
+ALTER TABLE import_rows ADD CONSTRAINT import_rows_import_id_seq_key UNIQUE (import_id, seq);
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_token_hash_key UNIQUE (token_hash);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_listing_id_key UNIQUE (search_id, listing_id);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_id, phone_e164);
@@ -1329,6 +1359,7 @@ ALTER TABLE leases ADD CONSTRAINT leases_listing_id_key UNIQUE (listing_id);
 ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key UNIQUE (broker_id, dedupe_key);
 ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
+ALTER TABLE place_names ADD CONSTRAINT place_names_name_key_key UNIQUE (name_key);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
 ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
@@ -1407,6 +1438,9 @@ ALTER TABLE developers ADD CONSTRAINT developers_name_check CHECK (((length(btri
 ALTER TABLE developers ADD CONSTRAINT developers_name_en_check CHECK (((name_en IS NULL) OR (length(name_en) <= 120)));
 ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
+ALTER TABLE import_rows ADD CONSTRAINT import_rows_kind_check CHECK ((kind = ANY (ARRAY['new'::text, 'changed'::text, 'unchanged'::text, 'invalid'::text, 'forbidden'::text, 'duplicate_code'::text, 'duplicate_unit'::text, 'photos_only'::text])));
+ALTER TABLE import_rows ADD CONSTRAINT import_rows_source_check CHECK ((source = ANY (ARRAY['excel'::text, 'post'::text, 'chat'::text])));
+ALTER TABLE import_rows ADD CONSTRAINT import_rows_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'done'::text, 'failed'::text, 'conflict'::text])));
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text, 'flag'::text, 'flag_handled'::text])));
 ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_outcome_check CHECK ((outcome = ANY (ARRAY['created'::text, 'merged'::text, 'colleague'::text, 'repeat'::text, 'erased_before'::text, 'invalid'::text, 'test'::text, 'error'::text])));
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_name_check CHECK (((length(name) >= 1) AND (length(name) <= 60)));
@@ -1449,6 +1483,7 @@ ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text)
 ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text, 'credit_bundle'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
+ALTER TABLE place_names ADD CONSTRAINT place_names_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text])));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pct_check CHECK ((((pct >= ('-50'::integer)::numeric) AND (pct <= (100)::numeric)) AND (pct <> (0)::numeric)));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'applied'::text, 'cancelled'::text])));
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_fingerprint_check CHECK ((length(fingerprint) <= 120));
@@ -1525,6 +1560,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_listing_id_fkey FOREIGN KEY (listing_id) 
 ALTER TABLE developers ADD CONSTRAINT developers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE error_events ADD CONSTRAINT error_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE error_events ADD CONSTRAINT error_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE import_rows ADD CONSTRAINT import_rows_import_id_fkey FOREIGN KEY (import_id) REFERENCES web_imports(id) ON DELETE CASCADE;
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_erased_by_broker_id_fkey FOREIGN KEY (erased_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1643,6 +1679,8 @@ CREATE INDEX demo_requests_created_idx ON public.demo_requests USING btree (crea
 CREATE UNIQUE INDEX uq_developers_agency_name ON public.developers USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX error_events_fingerprint ON public.error_events USING btree (fingerprint, created_at DESC);
 CREATE INDEX error_events_recent ON public.error_events USING btree (created_at DESC);
+CREATE INDEX import_rows_agency_idx ON public.import_rows USING btree (agency_id);
+CREATE INDEX import_rows_tab_idx ON public.import_rows USING btree (import_id, kind, seq);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
 CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree (status, received_at);
 CREATE INDEX idx_lead_events_lead ON public.lead_events USING btree (lead_id, created_at DESC, id DESC);
@@ -1705,6 +1743,7 @@ CREATE INDEX idx_passkey_challenges_expiry ON public.passkey_challenges USING bt
 CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
+CREATE INDEX place_names_status ON public.place_names USING btree (status, times_seen DESC);
 CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effective_on) WHERE (status = 'scheduled'::text);
 CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);
 CREATE INDEX idx_price_sheets_project ON public.price_sheets USING btree (project_id, created_at DESC);

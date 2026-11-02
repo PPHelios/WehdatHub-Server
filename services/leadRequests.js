@@ -6,6 +6,7 @@
 
 const Leads = require("./leads");
 const Search = require("./search");
+const Fx = require("./fx");
 const Authz = require("../lib/authz");
 const Card = require("../domain/leadCard");
 const Phone = require("../domain/phone");
@@ -30,7 +31,8 @@ async function listRequests(pool, actor, lead) {
 
 /** Units that fit the filters now (the strict search, same SQL as search). → { total, ids, rows (first 5) } */
 async function currentMatches(pool, agencyId, filters, { limit = RECORDED } = {}) {
-  const { sql, params } = Search.buildSearchQuery(agencyId, { filters }, { limit });
+  const fx = await Fx.loadRates(pool, agencyId);
+  const { sql, params } = Search.buildSearchQuery(agencyId, { filters }, { limit, fx });
   const { rows } = await pool.query(sql, params);
   return { total: rows.length ? Number(rows[0].total_count) : 0, ids: rows.map((r) => r.id), rows: rows.slice(0, SHOWN) };
 }
@@ -117,10 +119,11 @@ async function whoWants(pool, actor, listing) {
       ORDER BY l.last_activity_at DESC`,
     [actor.agency_id]
   );
+  const fx = await Fx.loadRates(pool, actor.agency_id);
   const fits = new Map();
   for (const r of rows) {
     if (fits.has(r.id)) continue;
-    const { sql, params } = Search.buildSearchQuery(actor.agency_id, { filters: SearchLink.sanitizeFilters(r.filters) }, { onlyIds: [listing.id], limit: 1 });
+    const { sql, params } = Search.buildSearchQuery(actor.agency_id, { filters: SearchLink.sanitizeFilters(r.filters) }, { onlyIds: [listing.id], limit: 1, fx });
     if ((await pool.query(sql, params)).rows.length) fits.set(r.id, r);
   }
   const all = [...fits.values()];

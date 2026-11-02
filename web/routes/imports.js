@@ -1,14 +1,18 @@
 // web/routes/imports.js — Excel diff import, group import (forwarded posts / chat export) and bulk edit
 "use strict";
 
+const express = require("express");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
+const SheetGrid = require("../../lib/sheetGrid");
+const FailedRows = require("../../lib/importFailed");
 const { logOperation } = require("../../lib/db");
 const { isManager } = require("../../lib/authz");
 const Imports = require("../../services/imports");
 const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
+const SheetImport = require("../../domain/sheetImport");
 const Chat = require("../../domain/chatExport");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
@@ -22,6 +26,7 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const SHEET = { name: "sheet", maxCount: 1, accept: /^application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|octet-stream|zip)$/ };
 const CHAT = { name: "chat", maxCount: 1, accept: /^(text\/plain|application\/(zip|x-zip-compressed|octet-stream))$/ };
 const uploadSheet = uploads([SHEET], { maxMb: 5 });
+const BIG_SERVER_SHEET = 1.5 * 1024 * 1024; // larger workbooks are read in the browser, never loaded whole on the server
 const uploadChat = uploads([CHAT], { maxMb: 10, fieldSizeKb: 512 });
 for (const re of [/^\/import\/excel$/, /^\/import\/group$/]) Session.allowMultipart(re);
 
@@ -45,41 +50,141 @@ const KIND_LABEL = {
   forbidden: ["🔒 مش من حقك تعدلها", "🔒 Not yours to change"]
 };
 
-function excelPlanPage(imp, lang) {
-  const { items, counts, rows: sheetRows, columns } = imp.payload;
+const PAGE_SIZE = 50;
+const PAGED_FROM = 200; // plans with more rows than this are shown one kind and one page at a time
+const KIND_ORDER = ["invalid", "new", "changed", "unchanged", "forbidden"];
+const CELL_LABEL = {
+  listing_type: ["بيع / إيجار", "Sale or rent"],
+  compound: ["الكمبوند", "Compound"],
+  bedrooms: ["الغرف", "Bedrooms"],
+  price_value: ["السعر", "Price"],
+  area_value: ["المساحة", "Area"],
+  property_type: ["النوع", "Type"],
+  code: ["الكود", "Code"],
+  details_text: ["تفاصيل", "Details"],
+  address: ["العنوان", "Address"],
+  owner_name: ["المالك", "Owner"],
+  owner_phone: ["تليفون المالك", "Owner phone"],
+  notes: ["ملاحظات", "Notes"],
+  description: ["الوصف", "Description"],
+  land_area: ["مساحة الأرض", "Land area"],
+  down_payment_value: ["المقدم", "Down payment"]
+};
+
+function excelPlanPage(imp, lang, query = {}) {
+  const { items, counts, rows: sheetRows, columns, tabs: tabInfos, defaults } = imp.payload;
   const applied = imp.status !== "ready";
-  const section = (kind, body) => {
-    const rows = items.filter((i) => i.kind === kind);
+  const paged = items.length > PAGED_FROM;
+  const kinds = KIND_ORDER.filter((k) => counts[k]);
+  const kind = paged ? (kinds.includes(query.kind) ? query.kind : counts.invalid ? "invalid" : kinds[0]) : null;
+  const tab = paged && query.tab ? String(query.tab) : null;
+  const shown = paged ? items.filter((i) => i.kind === kind && (!tab || i.tab === tab)) : items;
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const page = Math.min(pages, Math.max(1, Number(query.page) || 1));
+  const slice = paged ? shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : items;
+  const href = (o) => `/app/import/${imp.id}?${new URLSearchParams(Object.entries({ kind, tab, page: 1, ...o }).filter(([, v]) => v !== null && v !== undefined)).toString()}`;
+  const where = (i) => (i.tab ? `${i.tab} · ${L(lang, "صف", "row")} ${i.sheet_row}` : `${L(lang, "صف", "Row")} ${i.row}`);
+  const section = (k, body) => {
+    const rows = slice.filter((i) => i.kind === k);
     if (!rows.length) return "";
-    return html`<section class="card" data-kind="${kind}"><h2>${L(lang, KIND_LABEL[kind][0], KIND_LABEL[kind][1])} (${rows.length})</h2>${body(rows)}</section>`;
+    return html`<section class="card" data-kind="${k}"><h2>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} (${paged ? shown.length : rows.length})</h2>${body(rows)}</section>`;
   };
+  const notesOf = (i) => (i.notes?.length ? html`<div class="warn muted" data-notes="${i.row}">${i.notes.join(" · ")}</div>` : "");
   // Editing is per row: a small form outside the apply form (forms cannot nest), its inputs joined by the form attribute.
   const canEdit = !applied && Array.isArray(sheetRows) && Array.isArray(columns) && columns.length > 0;
-  const rowCells = (n) => sheetRows?.find((r) => r.rowNumber === n)?.cells || {};
-  const editor = (i) =>
-    canEdit
-      ? html`<details class="edit-row"><summary>✏️ ${L(lang, "تعديل", "Edit")}</summary>
-  <div class="stack">${columns.map((k) => html`<label>${(Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}<input form="edit-${i.row}" name="c_${k}" value="${rowCells(i.row)[k] ?? ""}" maxlength="600"></label>`)}
-  <button type="submit" form="edit-${i.row}" class="secondary">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button></div></details>`
-      : "";
+  const cellsOf = new Map((sheetRows || []).filter((r) => slice.some((i) => i.row === r.rowNumber)).map((r) => [r.rowNumber, r.cells]));
+  const labelOf = (k) => (CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
+  const field = (i, k) => {
+    const v = cellsOf.get(i.row)?.[k] ?? "";
+    if (k === "listing_type") {
+      return html`<label>${labelOf(k)}<select form="edit-${i.row}" name="c_${k}"><option value=""></option><option value="rent"${v === "rent" ? raw(" selected") : ""}>${L(lang, "إيجار", "Rent")}</option><option value="sale"${v === "sale" ? raw(" selected") : ""}>${L(lang, "بيع", "Sale")}</option></select></label>`;
+    }
+    return html`<label>${labelOf(k)}<input form="edit-${i.row}" name="c_${k}" value="${v}" maxlength="600"></label>`;
+  };
+  const editor = (i) => {
+    if (!canEdit) return "";
+    const fields = [...new Set([...(i.needs || []), ...columns])];
+    // What the row is missing comes first and the form opens on it; the other columns follow.
+    return html`<details class="edit-row"${i.kind === "invalid" ? raw(" open") : ""}><summary>✏️ ${L(lang, "تعديل", "Edit")}</summary>
+  <div class="stack">${fields.map((k) => field(i, k))}
+  <button type="submit" form="edit-${i.row}" class="secondary">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button></div></details>`;
+  };
   const editForms = canEdit
-    ? items.filter((i) => ["new", "changed", "invalid"].includes(i.kind)).map((i) => html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}"></form>`)
+    ? slice.filter((i) => ["new", "changed", "invalid"].includes(i.kind)).map((i) => html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}"></form>`)
     : "";
   const box = (i, on = true) => (applied ? "" : html`<input type="checkbox" name="rows" value="${i.row}"${on ? raw(" checked") : ""}>`);
+
+  const stats = !applied && sheetRows ? Imports.batchStats(imp.payload) : null;
+  const batch =
+    stats && (stats.no_type || stats.several_prices || stats.dollars || stats.unknown_types.length)
+      ? html`<section class="card stack" data-batch>
+  <h2>🧰 ${L(lang, "تعديل جماعي", "Fix many rows at once")}</h2>
+  ${stats.no_type
+    ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="listing_type"><input type="hidden" name="action" value="listing_type">
+    <p>${L(lang, `${stats.no_type} صف من غير بيع أو إيجار.`, `${stats.no_type} rows have no sale or rent.`)}${defaults?.file_type ? html` <span class="muted">${L(lang, "الملف اسمه بيقول", "The file name says")} ${defaults.file_type === "rent" ? L(lang, "إيجار", "rent") : L(lang, "بيع", "sale")}.</span>` : ""}</p>
+    <div class="row"><button name="value" value="rent" class="secondary">${L(lang, "كلهم إيجار", "All rent")}</button><button name="value" value="sale" class="secondary">${L(lang, "كلهم بيع", "All sale")}</button></div></form>`
+    : ""}
+  ${stats.several_prices
+    ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="price_pick"><input type="hidden" name="action" value="price_pick">
+    <p>${L(lang, `${stats.several_prices} صف فيهم أكتر من سعر في الخانة (طويل ومدة قصيرة ويومي).`, `${stats.several_prices} rows list several prices in one cell (long term, short term, daily).`)}</p>
+    <div class="row"><button name="value" value="long" class="secondary">${L(lang, "خد السعر الطويل أو الشهري", "Use the long-term or monthly price")}</button><button name="value" value="first" class="secondary">${L(lang, "خد أول سعر", "Use the first price")}</button></div>
+    <p class="muted">${L(lang, "السعر اليومي مبيتاخدش أبداً، والنص الأصلي بيتحفظ في الملاحظات.", "A daily price is never used; the original text is kept in the notes.")}</p></form>`
+    : ""}
+  ${stats.unknown_types.length
+    ? html`<div class="stack" data-batch-form="type_map"><p>${L(lang, "أنواع مش معروفة. اختار نوع لكل كلمة مرة واحدة وتتطبق على كل الصفوف:", "Types the app does not know. Pick a type for each word once and it applies to every row:")}</p>
+    ${stats.unknown_types.map((u) => html`<form method="post" action="/app/import/${imp.id}/batch" class="row" data-type-word="${u.value}"><input type="hidden" name="action" value="type_map"><input type="hidden" name="from" value="${u.value}">
+      <strong>${u.value}</strong> <span class="muted">×${u.count}</span>
+      <select name="value" aria-label="${u.value}">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}">${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select>
+      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`)}</div>`
+    : ""}
+  ${stats.dollars
+    ? stats.usd_rate
+      ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار اتحولوا بسعر الوكالة (${stats.usd_rate} جنيه للدولار).`, `${stats.dollars} rows priced in dollars were converted at the agency rate (${stats.usd_rate} EGP per dollar).`)}</p>`
+      : html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="usd_rate"><input type="hidden" name="action" value="usd_rate">
+    <p>${L(lang, `${stats.dollars} صف بالدولار ومفيش سعر دولار للوكالة.`, `${stats.dollars} rows are priced in dollars and the agency has no dollar rate yet.`)}</p>
+    <p class="muted"><a href="/app/usage" target="_blank" rel="noopener">${L(lang, "حدد سعر الدولار من الإعدادات", "Set the dollar rate in Settings")}</a> ${L(lang, "وبعدين دوس:", "then press:")}</p>
+    <button class="secondary">${L(lang, "حوّل بسعر الوكالة", "Convert at the agency rate")}</button></form>`
+    : ""}
+</section>`
+      : "";
+
+  const kindNav = paged
+    ? html`<nav class="row" data-kind-nav aria-label="${L(lang, "الأنواع", "Kinds")}">${kinds.map((k) => html`<a class="chip${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-current="page"') : ""}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} ${paged && k === kind && tab ? shown.length : counts[k]}</a>`)}</nav>`
+    : "";
+  const tabsNav =
+    paged && Array.isArray(tabInfos) && tabInfos.length > 1
+      ? (() => {
+          const per = new Map();
+          for (const i of items) if (i.tab) per.set(i.tab, { n: (per.get(i.tab)?.n || 0) + 1, bad: (per.get(i.tab)?.bad || 0) + (i.kind === "invalid" ? 1 : 0) });
+          return html`<details class="card" data-tabs${tab ? raw(" open") : ""}><summary>📑 ${L(lang, `${tabInfos.filter((t) => t.rows).length} تاب في الملف`, `${tabInfos.filter((t) => t.rows).length} tabs in the file`)}${tab ? html` · <strong>${tab}</strong>` : ""}</summary>
+  <p class="row"><a class="chip${tab ? "" : " on"}" href="${href({ tab: null })}">${L(lang, "الكل", "All")}</a>${[...per.entries()].map(([name, c]) => html`<a class="chip${tab === name ? " on" : ""}" href="${href({ tab: name })}" data-tab-link>${name} ${c.n}${c.bad ? html` <span class="warn">⛔${c.bad}</span>` : ""}</a>`)}</p></details>`;
+        })()
+      : "";
+  const pager =
+    paged && pages > 1
+      ? html`<nav class="row" data-pager>${page > 1 ? html`<a class="chip" href="${href({ page: page - 1 })}" rel="prev">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${page} / ${pages}</span>${page < pages ? html`<a class="chip" href="${href({ page: page + 1 })}" rel="next">${L(lang, "التالي", "Next")}</a>` : ""}</nav>`
+      : "";
+  const ready = (counts.new || 0) + (counts.changed || 0);
+
   return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
-<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>
+${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
 ${imp.result ? resultCard(imp.result, lang) : ""}
+${query.batch ? html`<p class="card notice" role="status" data-batch-done>${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
+${batch}
+${kindNav}${tabsNav}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 ${section("new", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${editor(i)}</li>`)}</ul>`)}
+${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
-${section("unchanged", (rows) => html`<p class="muted">${rows.map((i) => i.code).join("، ")}</p>`)}
-${applied ? "" : html`<button type="submit">✅ ${L(lang, "طبّق المختار", "Apply the selected rows")}</button>`}
+${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${where(i)} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير", "Same as in the app, nothing to change")}${notesOf(i)}</li>`)}</ul>`)}
+${pager}
+${(counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-failed-download><a class="secondary button" href="/app/import/${imp.id}/failed.xlsx" download>⬇️ ${L(lang, `نزّل الصفوف اللي مش هتتسجل (${(counts.invalid || 0) + (counts.forbidden || 0)}) إكسيل بعمود السبب`, `Download the rows that will not import (${(counts.invalid || 0) + (counts.forbidden || 0)}) as Excel, with a Reason column`)}</a></p>` : ""}
+  ${applied ? "" : html`<div class="row"><button type="submit">✅ ${L(lang, paged ? "طبّق المختار في الصفحة دي" : "طبّق المختار", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
 </form>
 ${editForms}`;
 }
@@ -161,12 +266,15 @@ function register(web, { pool, page, assets }) {
     const err = (n) => (notice && tab === n ? notice : "");
     return html`<h1>${L(lang, "استيراد", "Import")}</h1>
 ${tabs("import_tab", [
-  [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack">
+  [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-grid-url="/app/import/excel/grid">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>📊 ${L(lang, "شيت إكسيل (مقارنة بالمخزون)", "Excel sheet (compared with your inventory)")}</h2>
   <p class="muted">${L(lang, "هنوريك الجديد والمتغير قبل أي حفظ. ينفع شيت التصدير من البوت أو", "You see what is new and what changed before anything is saved. The bot's export works, or")} <a href="/app/import/template.xlsx">${L(lang, "النموذج ده", "this template")}</a>.</p>
   <input type="file" name="sheet" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+  <p class="muted">${L(lang, "كل التابات بتتقري في المتصفح، والتاب اسمه بيبقى الكمبوند لو مفيش عمود كمبوند.", "Every tab is read in your browser; a tab's name is the compound when the sheet has no compound column.")}</p>
+  <p data-xi-status class="card notice" role="status" hidden></p>
   <button type="submit">${L(lang, "قارن", "Compare")}</button>
+  <script src="${assets.url("zipread.js")}"></script><script src="${assets.url("xlsxread.js")}"></script><script src="${assets.url("ximport.js")}"></script>
 </form>`],
   [html`<span class="ti">💬</span>${L(lang, "بوستات جروبات", "Group posts")}`, html`${err(1)}<form method="post" action="/app/import/group" enctype="multipart/form-data" class="card stack">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
@@ -237,6 +345,9 @@ ${tabs("import_tab", [
     if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.sheet || [])[0];
     let sheet;
+    if (file?.buffer && file.buffer.length > BIG_SERVER_SHEET) {
+      return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="big">⚠️ ${L(lang, "الملف كبير. افتحه من متصفح حديث (كروم أو سفاري) عشان يتقري في المتصفح بدل السيرفر.", "The file is large. Open this page in a current browser (Chrome or Safari) so the file is read in the browser, not on the server.")}</p>` }), 422);
+    }
     try {
       sheet = await Sheets.readInventorySheet(file?.buffer);
     } catch (err) {
@@ -249,10 +360,63 @@ ${tabs("import_tab", [
       if (!msg) throw err;
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⚠️ ${msg}</p>` }), 422);
     }
+    const missing = SheetImport.emptyRequired(sheet.rows);
+    if (missing.length) {
+      const name = { code: L(lang, "الكود", "Code"), price_value: L(lang, "السعر", "Price"), area_value: L(lang, "المساحة", "Area") };
+      const list = missing.map((k) => name[k] || k).join("، ");
+      return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="empty-column">⚠️ ${L(lang, `العمود ده فاضي في كل الصفوف: ${list}. ملفش اتحفظ حاجة. ضيف القيم وارفع تاني.`, `These columns are empty on every row: ${list}. Nothing was saved. Fill them in and upload again.`)}</p>` }), 422);
+    }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
-    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped }, { filename: String(file.originalname || "").slice(0, 120) });
+    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped, skipped: sheet.skipped || [] }, { filename: String(file.originalname || "").slice(0, 120) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "excel", rows: sheet.rows.length, counts: plan.counts } });
     return res.redirect(303, `/app/import/${id}`);
+  });
+
+  /**
+   * The browser read the workbook (every tab) and sends only the cells: validated here, mapped tab by tab, planned like an upload.
+   * Body: { filename, tabs: [{ name, rows: [{ n, v: [value | null] }] }] }.
+   */
+  web.post("/import/excel/grid", managersOnly, express.json({ limit: "6mb" }), async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const say = (status, message, extra = {}) => res.status(status).json({ message, ...extra });
+    const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
+    if (!gate.allowed) return say(429, L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    const tabsIn = Array.isArray(req.body?.tabs) ? req.body.tabs : null;
+    if (!tabsIn || !tabsIn.length || tabsIn.length > SheetGrid.MAX_TABS) return say(422, L(lang, "الملف مفيهوش تابات صالحة.", "The file has no usable tabs."));
+    let rawRows = 0;
+    const tabs = [];
+    for (const t of tabsIn) {
+      const rows = [];
+      for (const r of Array.isArray(t?.rows) ? t.rows : []) {
+        if (!Array.isArray(r?.v) || !Number.isInteger(r.n) || r.n < 1) continue;
+        if (++rawRows > 30000) return say(422, L(lang, "الملف كبير أوي.", "The file is too large."));
+        rows.push({ n: r.n, v: r.v.slice(0, 80).map((c) => (typeof c === "number" && Number.isFinite(c) ? c : typeof c === "string" ? c.slice(0, 2000) : null)) });
+      }
+      tabs.push({ name: String(t?.name ?? "").slice(0, 80), rows });
+    }
+    let sheet;
+    try {
+      sheet = SheetGrid.buildSheet(tabs, { filename: String(req.body?.filename || "").slice(0, 120) });
+    } catch (err) {
+      const msg = {
+        NO_HEADER: L(lang, "مش لاقيين صف العناوين ولا أعمدة نعرفها (الكود، الكمبوند، السعر، المساحة…).", "No header row or recognisable columns found (code, compound, price, area, …)."),
+        NO_TABS: L(lang, "الملف مفيهوش تابات صالحة.", "The file has no usable tabs."),
+        TOO_MANY_TABS: L(lang, `أكتر من ${SheetGrid.MAX_TABS} تاب.`, `More than ${SheetGrid.MAX_TABS} tabs.`),
+        TOO_MANY_ROWS: L(lang, `أكتر من ${SheetGrid.MAX_TOTAL_ROWS} صف.`, `More than ${SheetGrid.MAX_TOTAL_ROWS} rows.`)
+      }[err.code];
+      if (!msg) throw err;
+      return say(422, msg);
+    }
+    const missing = SheetImport.emptyRequired(sheet.rows);
+    if (missing.length) {
+      const name = { code: L(lang, "الكود", "Code"), price_value: L(lang, "السعر", "Price"), area_value: L(lang, "المساحة", "Area") };
+      return say(422, L(lang, `العمود ده فاضي في كل الصفوف: ${missing.map((k) => name[k] || k).join("، ")}. ملفش اتحفظ حاجة.`, `These columns are empty on every row: ${missing.map((k) => name[k] || k).join(", ")}. Nothing was saved.`), { empty: missing });
+    }
+    const plan = await Imports.planExcel(pool, broker, sheet, { lang });
+    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped, skipped: sheet.skipped, tabs: sheet.tabs, defaults: sheet.defaults }, { filename: String(req.body?.filename || "").slice(0, 120) });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "excel", rows: sheet.rows.length, tabs: sheet.tabs.length, counts: plan.counts } });
+    return res.json({ url: `/app/import/${id}` });
   });
 
   web.post("/import/group", managersOnly, uploadChat, async (req, res) => {
@@ -279,12 +443,22 @@ ${tabs("import_tab", [
     return res.redirect(303, `/app/import/${id}`);
   });
 
+  // The rows this import did not take, as an Excel file: the sheet's values as they are plus a "Reason" column.
+  web.get("/import/:id/failed.xlsx", managersOnly, async (req, res, next) => {
+    const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
+    if (!imp || imp.kind !== "excel") return next();
+    const { buffer } = await FailedRows.failedRowsWorkbook(imp.payload, { lang: langOf(req) });
+    return res
+      .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="not-imported-rows.xlsx"', "Cache-Control": "no-store" })
+      .send(buffer);
+  });
+
   web.get("/import/:id", async (req, res, next) => {
     const lang = langOf(req);
     const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
     if (!imp) return next();
     if (imp.kind === "leads") return res.redirect(303, `/app/leads/import/${imp.id}`);
-    return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang) : groupPage(imp, lang));
+    return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang, req.query || {}) : groupPage(imp, lang));
   });
 
   // Edit one row of a ready plan: the whole sheet is planned again with the changed cells (same rules as an upload).
@@ -297,12 +471,20 @@ ${tabs("import_tab", [
     return res.redirect(303, `/app/import/${req.params.id}`);
   });
 
+  // One decision for many rows (rent for the sheet, which price to read, a dollar rate): the sheet is planned again.
+  web.post("/import/:id/batch", managersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const out = await Imports.batchExcel(pool, req.session.broker, req.params.id, { action: String(req.body.action || ""), value: String(req.body.value || ""), scope: req.body.scope === "all" ? "all" : "missing", from: String(req.body.from || "").slice(0, 80) }, { lang });
+    if (!out) return next();
+    return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}`);
+  });
+
   web.post("/import/:id/apply", managersOnly, async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
     const imp = await Imports.loadImport(pool, broker, req.params.id);
     if (!imp || imp.kind === "leads") return next();
-    const rows = [].concat(req.body.rows || []);
+    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => ["new", "changed"].includes(i.kind)).map((i) => i.row) : [].concat(req.body.rows || []);
     const result =
       imp.kind === "excel"
         ? await Imports.applyExcel(pool, broker, imp.id, { rows, lang })

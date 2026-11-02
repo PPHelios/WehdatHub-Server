@@ -32,12 +32,16 @@ const UnitPrivacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
 const UnitOwners = require("../../services/unitOwners");
 const V = require("../views/leads");
+const { templatesFor } = require("../../domain/clientMessageTemplates");
 const { refineForm } = require("../views/searchForm");
 const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const PAGE = 20;
+/** The ⓘ beside a WhatsApp send: the message with {placeholders} for what it fills in (in the client's language). */
+const tip = (text, lang) => html`<details class="tip"><summary aria-label="${L(lang, "شكل الرسالة", "What the message looks like")}">ⓘ</summary><p>${text}</p></details>`;
+const clientLangOf = (lead, lang) => (lead.lang === "en" || lead.lang === "ar" ? lead.lang : lang);
 const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step", "private"];
 const upload = uploads([VOICE]);
 
@@ -70,7 +74,7 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
     <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
     <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || unit?.mapsUrl || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
     ${unit?.mapsUrl ? "" : html`<p class="muted small">${L(lang, "اختياري: ابعت للعميل مكان المقابلة.", "Optional: send the client the meeting point.")} <button type="button" class="link" data-my-location data-fail="${L(lang, "مقدرناش نجيب مكانك.", "Couldn't get your location.")}" hidden>${L(lang, "استخدم مكاني دلوقتي", "Use where I am now")}</button></p>`}
-    <button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>
+    <div class="row"><button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>${tip(templatesFor(clientLangOf(lead, lang)).viewing, lang)}</div>
   </form>
 </section>`;
 }
@@ -384,12 +388,13 @@ ${rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
+<form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة الوسيط", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة الوسيط", "Now: the broker's language")}</span>`}</form>
 ${flagBox(lead, broker, manager, lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button>${lead.is_private ? html`<span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
-  <form method="post" action="${path}/draft">${hidden}<button type="submit" class="secondary">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button></form>
+  <form method="post" action="${path}/draft" class="row">${hidden}<button type="submit" class="secondary">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button>${tip(templatesFor(clientLangOf(lead, lang)).draft, lang)}</form>
   <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">${icon("deal", 20)} ${L(lang, "سجل صفقة", "Record deal")}</a></div>
 ${draft
   ? html`<section class="card notice ok" id="draft" data-follow-up-draft>
@@ -437,7 +442,7 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
   <form method="post" action="${path}/requests/delete" class="inline">${hidden}<input type="hidden" name="request" value="${r.id}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Remove")}</button></form>
   ${r.matches.rows.length
     ? html`<ul>${r.matches.rows.slice(0, 3).map(
-        (u) => html`<li data-match="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a> <form method="post" action="${path}/send" class="inline" target="_blank">${hidden}<input type="hidden" name="code" value="${u.code}"><button type="submit" class="link">💬 ${L(lang, "ابعت للعميل", "Send to client")}</button></form></li>`
+        (u) => html`<li data-match="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a> <form method="post" action="${path}/send" class="inline" target="_blank">${hidden}<input type="hidden" name="code" value="${u.code}"><button type="submit" class="link">💬 ${L(lang, "ابعت للعميل", "Send to client")}</button></form> ${tip(templatesFor(clientLangOf(lead, lang)).unit, lang)}</li>`
       )}</ul>`
     : ""}</li>`
       )}</ul>`
@@ -528,6 +533,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       request: L(lang, "🔎 الطلب اتحفظ؛ هتتبلغ بالوحدات الجديدة اللي تناسبه.", "🔎 Request saved; you'll hear about new units that fit."),
       request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed."),
       flag: L(lang, "🙋 المدير اتبلّغ.", "🙋 The manager has been told."),
+      lang: L(lang, "🌐 لغة الرسائل للعميل اتحفظت.", "🌐 Client message language saved."),
       flag_handled: L(lang, "✅ اتعلّم إنه اتعالج.", "✅ Marked as handled."),
       viewing: L(lang, "✅ المعاينة اتحفظت. الرقم ده أرضي، ابعت اللينك بنفسك.", "✅ Viewing saved. This number is a landline; send the link yourself.")
     };
@@ -681,7 +687,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
     const lead = await loadOr404(req, next);
     if (!lead) return;
     const lang = langOf(req);
-    const out = await FollowUpDrafts.draft(pool, actor(req), lead.id, { lang });
+    const out = await FollowUpDrafts.draft(pool, actor(req), lead.id, { lang: clientLangOf(lead, lang) });
     if (out.error) return leadPage(req, res, lead, { status: out.error === "quota" ? 429 : 503, notice: `⚠️ ${L(lang, "مقدرتش أكتب الرسالة دلوقتي، جرب كمان شوية.", "Couldn't draft the message right now; try again shortly.")}` });
     return leadPage(req, res, out.lead, { draft: out });
   });
@@ -696,6 +702,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
     if (r.error === "forbidden") return res.status(403).send(L(langOf(req), "مش مسموح.", "Not allowed."));
     return leadPage(req, res, lead, { status: 422, notice: `⚠️ ${L(langOf(req), "الوحدة دي مش متاحة.", "This unit isn't available.")}` });
   });
+  write("lang", (req, lead, version) => Leads.setLang(pool, actor(req), lead.id, req.body.lang, { version }), "lang");
   write("requests", (req, lead) => LeadRequests.saveRequest(pool, actor(req), lead.id, SearchLink.filtersFromForm(req.body)), "request");
   write("requests/delete", (req, lead) => LeadRequests.removeRequest(pool, actor(req), lead.id, req.body.request), "request_removed");
   write(

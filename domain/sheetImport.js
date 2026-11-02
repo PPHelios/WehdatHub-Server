@@ -4,6 +4,7 @@
 "use strict";
 
 const Features = require("./features");
+const Mixed = require("./sheetMixed");
 const Delivery = require("./delivery");
 const { TYPE_TERMS } = require("./vocabulary");
 const { normalizeSearch } = require("./searchText");
@@ -12,9 +13,12 @@ const { normalizeSearch } = require("./searchText");
 const COLUMNS = [
   ["code", /^(code|unit code|unit id|ref|كود|الكود|كود الوحده|الكود الداخلي)$/],
   ["owner_phone", /(owner phone|owner mobile|تليفون المالك|رقم المالك|موبايل المالك)/],
-  ["owner_name", /^(owner|owner name|المالك|اسم المالك)$/],
+  ["owner_phone", /^(number|phone|phone number|mobile|tel|telephone|رقم التليفون|رقم الموبايل|تليفون|موبايل)$/],
+  ["owner_name", /^(owner|owner name|name|المالك|اسم المالك|الاسم|اسم)$/],
   ["unit_no", /^(unit no|unit number|unit num|apartment no|رقم الوحده|رقم الوحدة|رقم الشقه|رقم الشقة)$/],
-  ["address", /^(address|full address|العنوان بالكامل|العنوان التفصيلي|العنوان بالتفصيل)$/],
+  ["address", /^(address|full address|location|unit location|العنوان بالكامل|العنوان التفصيلي|العنوان بالتفصيل|الموقع)$/],
+  ["details_text", /^(details|detail|تفاصيل|التفاصيل)$/],
+  ["land_area", /^(land|land area|مساحه الارض|مساحه ارض|الارض)$/],
   ["summary_en", /^summary/],
   ["description", /(description|الوصف|وصف)/],
   ["title", /^(title|العنوان)$/],
@@ -38,15 +42,29 @@ const COLUMNS = [
   ["features", /(amenities|features|extras|المميزات|مميزات)/],
   ["district", /(district|city|area name|المنطقه|الحي|المدينه)/],
   ["status", /^(status|الحاله)$/],
-  ["notes", /(notes|ملاحظات)/]
+  ["notes", /(notes|feedback|ملاحظات|فيدباك)/]
 ];
+
+// A header with a typo ("descibation", "deatils") is still the column it was meant to be.
+const FUZZY = [["description", "description"], ["details", "details_text"], ["bedrooms", "bedrooms"], ["bathrooms", "bathrooms"], ["location", "address"], ["compound", "compound"], ["price", "price_value"], ["phone", "owner_phone"], ["feedback", "notes"]];
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function fuzzyColumn(h) {
+  if (!/^[a-z]{5,14}$/.test(h)) return null;
+  for (const [word, key] of FUZZY) if (Math.abs(word.length - h.length) <= 2 && editDistance(word, h) <= (word.length >= 10 ? 3 : word.length >= 7 ? 2 : 1)) return key;
+  return null;
+}
 
 /** Header text → field key (or null). */
 function columnFor(header) {
   const h = normalizeSearch(header);
   if (!h) return null;
   for (const [key, re] of COLUMNS) if (re.test(h)) return key;
-  return null;
+  return fuzzyColumn(h);
 }
 
 const EMPTY = new Set(["", "-", "—", "n/a", "na", "null", "none", "لا يوجد"]);
@@ -79,14 +97,31 @@ const positive = (v) => {
   return n !== null && n > 0 ? n : null;
 };
 
+const CURRENCY = /(\$|usd|€|eur\b|dollar|دولار|يورو)/i;
+
+/** Columns a sheet must fill for any row to be usable; a tab with one of these empty across every row is refused. */
+const REQUIRED = ["code", "price_value", "area_value"];
+
+/** Required columns with no value on any row (rows: [{ cells }]). A tab with no rows reports nothing. */
+function emptyRequired(rows = []) {
+  if (!rows.length) return [];
+  return REQUIRED.filter((k) => !rows.some((r) => r.cells && !isEmpty(r.cells[k])));
+}
+
 const TYPE_LOOKUP = new Map(
   Object.entries({ ...TYPE_TERMS, villa: [...TYPE_TERMS.villa, "standalone villa"] }).flatMap(([key, words]) => words.map((w) => [normalizeSearch(w), key]))
 );
+const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twinhouse"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"]];
 function propertyType(v) {
   const t = normalizeSearch(v);
   if (!t) return null;
   if (TYPE_LOOKUP.has(t)) return TYPE_LOOKUP.get(t);
   for (const [w, key] of TYPE_LOOKUP) if (w.length >= 4 && t.includes(w)) return key;
+  // A typo ("apatment", "penthous", "twon house") is still the type it was meant to be.
+  const first = t.split(/[\s,/]+/).filter(Boolean);
+  for (const word of [first[0], first.slice(0, 2).join("")].filter((x) => x && /^[a-z]{6,12}$/.test(x))) {
+    for (const [w, key] of TYPE_WORDS) if (editDistance(w, word) <= (w.length >= 8 ? 2 : 1)) return key;
+  }
   return null;
 }
 
@@ -119,17 +154,75 @@ const frequency = (v) => {
   return t ? FREQ.find(([, re]) => re.test(t))?.[0] || null : null;
 };
 
+/** "1001222400/ 1275615557", "+20 100 123 4567", "971551040978-" → { first, more } with Egyptian mobiles in their 01… form. */
+function phones(v) {
+  const list = String(digits(v))
+    .split(/[\/\\,;،|\n]+|\s{2,}|\s+-\s+/)
+    .map((x) => x.replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/\+/g, ""))
+    .filter((x) => x.length >= 8)
+    .map((x) => (/^20(1\d{9})$/.test(x) ? "0" + x.slice(2) : /^1\d{9}$/.test(x) ? "0" + x : x));
+  return { first: list[0] || null, more: list.slice(1) };
+}
+
+const LONG_TEXT = ["description", "details_text", "notes", "summary_en", "title"];
+
+/**
+ * Cells that hold several facts: the price with words around it, the area with land and built-up together, and the
+ * free texts that state rooms, areas or a price. Only fields the row leaves empty are filled; a stated cell wins.
+ * @returns {{ cells: Object, derived: string[], errors: string[] }}
+ */
+function expand(input) {
+  const cells = { ...input };
+  const derived = [];
+  const errors = [];
+  const extra = [];
+  const blank = (k) => !(k in cells) || isEmpty(cells[k]);
+  const put = (k, v) => {
+    if (v !== undefined && v !== null && blank(k)) {
+      cells[k] = v;
+      derived.push(k);
+    }
+  };
+
+  if (!blank("price_value") && !CURRENCY.test(String(cells.price_value)) && money(cells.price_value) === null) {
+    const p = Mixed.priceText(cells.price_value);
+    if (p?.ambiguous) errors.push("price_value");
+    else if (p?.price_value) {
+      extra.push(String(cells.price_value).trim());
+      cells.price_value = p.price_value;
+    }
+  }
+  if (!blank("area_value") && typeof cells.area_value === "string" && /[a-zA-Z\u0600-\u06FF]/.test(cells.area_value)) {
+    const a = Mixed.areas(cells.area_value);
+    if (a.area_value || a.land_area) {
+      if (a.land_area) extra.push(String(cells.area_value).trim());
+      if (a.area_value) cells.area_value = a.area_value;
+      else delete cells.area_value;
+      if (a.land_area) put("land_area", a.land_area);
+    }
+  }
+  for (const k of LONG_TEXT) {
+    if (blank(k)) continue;
+    const r = Mixed.readText(cells[k]);
+    for (const f of ["bedrooms", "bathrooms", "area_value", "land_area", "price_value"]) put(f, r[f]);
+  }
+  if (!blank("details_text")) extra.unshift(String(cells.details_text).trim());
+  if (extra.length) cells.notes = [cells.notes, ...extra].filter((x) => !isEmpty(x)).map(String).join(" · ");
+  return { cells, derived, errors };
+}
+
 /**
  * One sheet row → { code, status, draft } where draft has the normalizeExtraction shape with only the
  * stated fields; errors lists what could not be read.
  * @param {Object} cells - field key → raw cell value
  */
 function rowToDraft(input = {}) {
-  const cells = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, unquote(v)]));
+  const expanded = expand(Object.fromEntries(Object.entries(input).map(([k, v]) => [k, unquote(v)])));
+  const cells = expanded.cells;
   const draft = { details: {} };
-  const errors = [];
+  const errors = [...expanded.errors];
   const has = (k) => k in cells && !isEmpty(cells[k]);
-  const code = has("code") ? digits(String(cells.code)).trim().toUpperCase().replace(/^#/, "") : null;
+  const code = has("code") ? digits(String(cells.code)).replace(/\s+/g, "").toUpperCase().replace(/^#/, "") : null;
   if (code && !/^[A-Z0-9][A-Z0-9_\-./]{1,29}$/.test(code)) errors.push("code");
 
   if (has("compound")) draft.compound = text(cells.compound, 120);
@@ -143,6 +236,11 @@ function rowToDraft(input = {}) {
   if (has("market")) draft.market = market(cells.market);
   for (const k of ["price_value", "down_payment_value", "remaining_amount", "installment_value"]) {
     if (has(k)) {
+      // A price in dollars or euros is not guessed at: the row is held back until someone fixes the cell.
+      if (CURRENCY.test(String(cells[k]))) {
+        if (k === "price_value") errors.push("currency");
+        continue;
+      }
       draft[k] = money(cells[k]);
       if (draft[k] === null && k === "price_value") errors.push(k);
     }
@@ -178,16 +276,34 @@ function rowToDraft(input = {}) {
     draft.feature_keys = keys;
     draft.features_other = other;
   }
+  // A description that states the finishing or features ("fully finished / kitchen / ACs") is read with the app's own
+  // vocabulary, but only when the sheet has no column for them; a stated column always wins.
+  if (has("description") && !has("features") && !has("orientation")) {
+    const { keys } = Features.classifyFeatures(String(cells.description).split(/[•,،\/|\\\n;+]+/).map((x) => x.trim()).filter(Boolean));
+    if (keys.length) draft.feature_keys = keys;
+  }
+  if (has("description") && !has("finishing") && /(finish|lux|تشطيب|لوكس)/i.test(String(cells.description))) {
+    const f = finishing(cells.description);
+    if (f) draft.finishing = f;
+  }
   if (has("description")) draft.details.clean_summary = text(cells.description, 600);
   if (has("summary_en")) draft.details.summary_en = text(cells.summary_en, 600);
   if (has("owner_name")) draft.details.owner_name = text(cells.owner_name, 120);
   if (has("unit_no")) draft.details.unit_no = text(cells.unit_no, 40);
   if (has("address")) draft.details.address = text(cells.address, 200);
-  if (has("owner_phone")) draft.details.owner_phone = text(digits(cells.owner_phone), 40);
-  if (has("notes")) draft.details.notes = text(cells.notes, 1000);
+  if (has("owner_phone")) {
+    const ph = phones(cells.owner_phone);
+    draft.details.owner_phone = ph.first ? text(ph.first, 40) : text(digits(cells.owner_phone), 40);
+    if (ph.more.length) draft.details.notes = [draft.details.notes, `${ph.more.join(" / ")}`].filter(Boolean).join(" · ");
+  }
+  if (has("land_area")) {
+    const land = positive(cells.land_area);
+    if (land) draft.details.land_area = land;
+  }
+  if (has("notes")) draft.details.notes = [text(cells.notes, 1000), draft.details.notes].filter(Boolean).join(" · ") || null;
   for (const k of Object.keys(draft)) if (draft[k] === null || draft[k] === undefined) delete draft[k];
   for (const k of Object.keys(draft.details)) if (draft.details[k] === null) delete draft.details[k];
-  return { code, status: has("status") ? status(cells.status) : null, draft, errors };
+  return { code, status: has("status") ? status(cells.status) : null, draft, errors: [...new Set(errors)], derived: expanded.derived };
 }
 
-module.exports = { COLUMNS, columnFor, rowToDraft, money, propertyType, finishing };
+module.exports = { COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };

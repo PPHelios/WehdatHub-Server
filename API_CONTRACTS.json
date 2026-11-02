@@ -594,11 +594,14 @@
     },
     "domain/sheetImport.js": {
       "COLUMNS": "Array",
+      "REQUIRED": "Array",
       "columnFor": ["header"],
       "rowToDraft": ["input"],
+      "emptyRequired": ["rows"],
       "money": ["v"],
       "propertyType": ["v"],
-      "finishing": ["v"]
+      "finishing": ["v"],
+      "CURRENCY": "Object"
     },
     "domain/chatExport.js": {
       "DEFAULT_DAYS": "Number",
@@ -630,6 +633,9 @@
       "loadImport": ["pool", "broker", "id"],
       "applyExcel": ["pool", "broker", "id", "params"],
       "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
+      "batchExcel": ["pool", "broker", "id", "params", "params"],
+      "batchStats": ["payload"],
+      "TYPE_KEYS": "Array",
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
       "waitForGroupImport": ["id"],
@@ -828,6 +834,7 @@
       "completeFollowUp": ["pool", "actor", "key", "params"],
       "postponeFollowUp": ["pool", "actor", "key", "params"],
       "applyUpdate": ["pool", "actor", "key", "u", "params"],
+      "setLang": ["pool", "actor", "key", "lang", "params"],
       "undoMany": ["pool", "actor", "eventIds", "params"],
       "recordDeal": ["client", "actor", "leadId", "params", "now"],
       "undo": ["pool", "actor", "eventId", "params"],
@@ -1002,6 +1009,18 @@
       "retentionSweep": ["pool", "params"],
       "purgeInboundPayloads": ["pool", "params"],
       "privacyJob": []
+    },
+    "lib/placeNames.js": {
+      "noteUnknown": ["pool", "name", "params"],
+      "widenSearchTerms": ["pool", "terms"],
+      "pending": ["pool"],
+      "approve": ["pool", "id", "nameAr"],
+      "approved": ["pool"]
+    },
+    "domain/placeNames.js": {
+      "nameKey": ["name"],
+      "isNewEnglishName": ["name"],
+      "widenTerms": ["terms", "approved"]
     },
     "domain/unitCode.js": {
       "TYPE_LETTER": "Object",
@@ -1243,6 +1262,7 @@
       "OPEN": "Array",
       "whenLabel": ["at", "lang"],
       "unitLabel": ["listing", "lang"],
+      "clientMessage": ["params"],
       "latestFor": ["db", "agencyId", "leadId"],
       "schedule": ["pool", "actor", "leadKey", "params"],
       "byToken": ["db", "token"],
@@ -1930,6 +1950,60 @@
       "notOlder": ["since"],
       "parseWithAttachments": ["text"],
       "looksLikeListing": ["text"]
+    },
+    "lib/importRows.js": {
+      "TABS": "Array",
+      "KINDS": "Array",
+      "PAGE": "Number",
+      "replaceRows": ["pool", "importId", "agencyId", "rows"],
+      "counts": ["pool", "importId", "agencyId"],
+      "page": ["pool", "importId", "agencyId", "tab", "params"],
+      "setTicked": ["pool", "importId", "agencyId", "seqs", "ticked"],
+      "getRow": ["pool", "importId", "agencyId", "seq"],
+      "tickedRows": ["pool", "importId", "agencyId"]
+    },
+    "domain/clientMessageTemplates.js": {
+      "templatesFor": ["lang"]
+    },
+    "domain/fx.js": {
+      "CURRENCIES": "Array",
+      "MIN_RATE": "Number",
+      "MAX_RATE": "Number",
+      "parseRate": ["raw"],
+      "ratesFrom": ["stored"],
+      "toEgp": ["amount", "currency", "rates"],
+      "currencyOfText": ["raw"],
+      "CURRENCY_WORDS": "Object",
+      "missing": ["currencies", "rates"]
+    },
+    "services/fx.js": {
+      "loadRates": ["db", "agencyId"],
+      "missingRates": ["db", "agencyId", "rates"],
+      "saveRates": ["db", "broker", "input"]
+    },
+    "lib/importFailed.js": {
+      "failedRowsWorkbook": ["payload", "params"]
+    },
+    "lib/sheetGrid.js": {
+      "buildSheet": ["tabs", "params"],
+      "codePattern": ["codes"],
+      "codeParts": ["code"],
+      "typeFromName": ["name"],
+      "findHeader": ["rows"],
+      "alignByContent": ["rows", "columns", "taken"],
+      "profile": ["values"],
+      "MAX_TOTAL_ROWS": "Number",
+      "MAX_TABS": "Number"
+    },
+    "domain/sheetMixed.js": {
+      "areas": ["raw"],
+      "rooms": ["raw"],
+      "priceText": ["raw"],
+      "priceIn": ["raw"],
+      "pickPrice": ["raw", "rule"],
+      "dollars": ["raw"],
+      "readText": ["raw"],
+      "FOREIGN": "Object"
     }
   },
   "invariant_variable_names": {
