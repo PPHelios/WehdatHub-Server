@@ -125,7 +125,7 @@ describe("Draft vs search collision (COL-01)", () => {
     await h.text("broker", "اضافة");
     h.AI.respond(() => ({ intent: "search", filters: {}, locations: [], location_terms: [] }));
     const legacy = `cancel_and_search:${Buffer.from("شقة في الرحاب").toString("base64")}`;
-    await h.tap("broker", legacy);
-    expect(JSON.stringify(h.AI.calls[0].contents)).toContain("شقة في الرحاب");
+    const out = textOf(await h.tap("broker", legacy));
+    expect(out).toMatch(/الرحاب|Rehab/); // the old button's words were searched
   });
 });

@@ -236,7 +236,11 @@ const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
  * "مليون ونص" → "1.5 مليون", "الفين" → "2 الف", and a bare "مليون" after a filler ("بسعر مليون") → "1 مليون".
  */
 function speakNumbers(hay) {
+  const mil = (a, b) => ` ${Number((Number(a) + Number(b) / 1000).toFixed(3))} مليون `;
   let h = hay
+    .replace(/ (?:المليون|الملايين) /g, " مليون ")
+    .replace(/ (\d+(?:\.\d+)?) مليون و ?(\d+) الف /g, (_, a, b) => mil(a, b))
+    .replace(/ مليون و ?(\d+) الف /g, (_, b) => mil(1, b))
     .replace(/ (?:نص|نصف) مليون /g, " 0.5 مليون ")
     .replace(/ ربع مليون /g, " 0.25 مليون ")
     .replace(/ (?:تلت|ثلث) مليون /g, " 0.33 مليون ")
@@ -325,6 +329,56 @@ function fuzzyTypes(hay, found) {
   return out;
 }
 
+const NEG_FIRST = new Set(["بدون", "without", "except", "بلا"]);
+const NEG_KEEP = new Set(["تشطيب", "فرش"]); // "بدون تشطيب" is core-and-shell, "بدون فرش" is unfurnished: real filters
+const FLOOR_WORDS = new Set(["الدور", "دور", "floor"]);
+
+/**
+ * Pulls negations and unsupported phrases out of the normalized text.
+ * "بدون مصعد", "من غير جراج وحديقة", "مش في الدور الاول", "الدور الاخير", "last floor", "قانون جديد" → unapplied list.
+ */
+function takeUnapplied(hay, unapplied) {
+  const t = hay.trim().split(/\s+/).filter(Boolean);
+  const out = [];
+  for (let i = 0; i < t.length; i++) {
+    let start = -1;
+    if (NEG_FIRST.has(t[i])) start = i + 1;
+    else if (t[i] === "من" && t[i + 1] === "غير") start = i + 2;
+    else if (t[i] === "مش" && (t[i + 1] === "في" || t[i + 1] === "فى")) start = i + 2;
+    const w = start >= 0 ? t[start] : undefined;
+    if (w !== undefined && !/^\d/.test(w) && !NEG_KEEP.has(w)) {
+      const taken = [w];
+      let j = start + 1;
+      if (FLOOR_WORDS.has(w) && t[j] !== undefined) taken.push(t[j++]);
+      // "بدون مصعد وجراج" / "بدون مصعد و جراج": the whole list is negated.
+      while (t[j] !== undefined && (t[j] === "و" || (t[j].length > 2 && t[j].startsWith("و")))) {
+        taken.push(t[j]);
+        if (t[j] === "و" && t[j + 1] !== undefined) taken.push(t[++j]);
+        j++;
+      }
+      unapplied.push(t.slice(i, start).concat(taken).join(" "));
+      i = j - 1;
+      continue;
+    }
+    out.push(t[i]);
+  }
+  let h = ` ${out.join(" ")} `;
+  for (const re of [
+    / (?:ب|بال)?(?:الدور الاخير|اخر دور|الدور الاخر|top floor|last floor) /,
+    / (?:قانون جديد|قانون قديم|ايجار قديم|ايجار جديد|new rent law|old rent law) /
+  ]) {
+    const m = h.match(re);
+    if (m) {
+      unapplied.push(m[0].trim());
+      h = h.replace(re, " ");
+    }
+  }
+  return h;
+}
+
+/** The sentence is long or odd enough that a person should not trust the local reading alone (words as typed). */
+const MAYBE_LISTING = / (?:عندي|معايا|عندنا|سعرها|سعره|مطلوب فيها|صاحبها|المالك|i have|my unit|for my client) /;
+
 /** Local parser used when the AI is unavailable. Deterministic and bilingual. */
 function fallbackParse(text) {
   const raw = String(text || "").trim();
@@ -334,7 +388,7 @@ function fallbackParse(text) {
   f.currency = Fx.currencyOfText(raw);
 
   if (SMALL_TALK.includes(hay.trim())) {
-    return { intent: "other", transcript: raw.slice(0, 500), language: /[a-z]/i.test(raw) && !/[؀-ۿ]/.test(raw) ? "en" : "ar", filters: canonical(f) };
+    return { intent: "other", transcript: raw.slice(0, 500), language: /[a-z]/i.test(raw) && !/[؀-ۿ]/.test(raw) ? "en" : "ar", filters: canonical(f), meta: { unsure: false, reasons: [], leftover: [], leftover_numbers: [], unapplied: [] } };
   }
 
   // A unit code written like NH-V12 (initials, a hyphen, an optional letter, a number).
@@ -345,11 +399,20 @@ function fallbackParse(text) {
   }
 
   hay = hay.replace(/(\d)([a-zء-ي])/g, "$1 $2");
+  // "ب٥ مليون" / "ب 5 مليون": the attached "ب" (at / for) before a number is dropped.
+  hay = hay.replace(/ ب ?(?=\d)/g, " ");
+
+  // Things the filters cannot say ("without a lift", "not on the first floor", "last floor", the new rent law) are not
+  // guessed: they are taken out and reported, so the broker sees what was NOT applied.
+  const unapplied = [];
+  hay = takeUnapplied(hay, unapplied);
 
   // Places first (they can contain type-like words, e.g. "town").
   const placeScan = Places.findPlaces(hay);
   f.places = placeScan.places;
   hay = speakNumbers(` ${placeScan.rest} `);
+  // "و2 حمام": the "and" glued to a number is dropped (the money rules above already used it).
+  hay = hay.replace(/ و(?=\d)/g, " ");
 
   // "بجنينة" / "بغرفة مربية" / "بتراس": the attached "ب" (with) is dropped before a feature word.
   hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن)/g, " $1");
@@ -413,12 +476,13 @@ function fallbackParse(text) {
       hay = c.hay;
     }
   }
-  c = consume(hay, new RegExp(` (?:مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment) (?:حدود |تحت |اقل من |under |max )?${MONEY} `));
+  const CAP = "(?:حدود |تحت |اقل من |under |max |مش (?:عايز )?(?:اكتر|اكثر) من |بحد اقصي |حد اقصي |اقصي |لحد )?";
+  c = consume(hay, new RegExp(` و?(?:مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment) ${CAP}${MONEY} `));
   if (c.m) {
     f.max_down_payment = money(c.m[1], c.m[2]);
     hay = c.hay;
   }
-  c = consume(hay, new RegExp(` و?(?:قسط شهري|قسط|monthly installment|installment) (?:حدود |تحت |اقل من |under |max )?${MONEY} `));
+  c = consume(hay, new RegExp(` و?(?:قسط شهري|قسط|monthly installment|installment) ${CAP}${MONEY} `));
   if (c.m) {
     f.max_installment = money(c.m[1], c.m[2]);
     f.payment_installments = true;
@@ -478,6 +542,15 @@ function fallbackParse(text) {
     if (n !== null) hay = c.hay;
   }
 
+  // "بحد اقصى 8000" / "تحت 15000": a bare number of four digits or more after a limit word is the price ceiling (rent).
+  if (f.price_max === null) {
+    c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget) (\d{4,9}) /);
+    if (c.m) {
+      f.price_max = Number(c.m[1]);
+      hay = c.hay;
+    }
+  }
+
   // Finishing, furnishing and floor.
   const FIN = [
     [/ (?:الترا سوبر لوكس|ultra super lux|الترا لوكس|ultra lux) /, "ultra_super_lux"],
@@ -506,7 +579,10 @@ function fallbackParse(text) {
   }
   hay = c.hay;
   if (!f.furnishing && f.features.includes("furnished")) f.furnishing = "furnished";
-  const ORD = { الاول: 1, الاولي: 1, التاني: 2, الثاني: 2, التالت: 3, الثالث: 3, الرابع: 4, الخامس: 5, السادس: 6, السابع: 7, الثامن: 8, التاسع: 9, العاشر: 10 };
+  const ORD = {
+    الاول: 1, الاولي: 1, اول: 1, التاني: 2, الثاني: 2, تاني: 2, ثاني: 2, التالت: 3, الثالث: 3, تالت: 3, ثالث: 3, الرابع: 4, رابع: 4,
+    الخامس: 5, خامس: 5, السادس: 6, سادس: 6, السابع: 7, سابع: 7, الثامن: 8, تامن: 8, ثامن: 8, التاسع: 9, تاسع: 9, العاشر: 10, عاشر: 10
+  };
   c = consume(hay, / (?:ب|بال)?(?:الدور|دور|floor) (\d{1,2}|[ء-ي]+) /);
   if (c.m) {
     const fl = /^\d+$/.test(c.m[1]) ? Number(c.m[1]) : ORD[c.m[1]] ?? null;
@@ -587,13 +663,26 @@ function fallbackParse(text) {
     .split(" ")
     .filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d+$/.test(w));
   if (!f.places.length && leftovers.length) f.place_terms = [leftovers.join(" ")];
+  // Numbers nobody used ("5000", "8"): the local reading cannot say what they are.
+  const leftNumbers = hay.split(" ").filter((w) => /^\d+(?:\.\d+)?$/.test(w));
 
   const filters = canonical(f);
+  const intent = hasAnyFilter({ filters }) ? "search" : "other";
+  const reasons = [];
+  if (intent === "other" && !unapplied.length) reasons.push("no_filter");
+  // Only words nobody knows ("ازيك"): a name, a greeting or a place the AI may know. Not a search to run on a guess.
+  if (filters.place_terms.length && !hasAnyFilter({ filters: { ...filters, place_terms: [] } })) reasons.push("only_unknown_words");
+  if (leftNumbers.length) reasons.push("numbers_left");
+  if (leftovers.length >= 3) reasons.push("many_words_left");
+  if (raw.split(/\s+/).length > 14) reasons.push("long");
+  if (MAYBE_LISTING.test(` ${normalizeSearch(raw)} `)) reasons.push("maybe_listing");
   return {
-    intent: hasAnyFilter({ filters }) ? "search" : "other",
+    intent,
     transcript: raw.slice(0, 500),
     language: /[؀-ۿ]/.test(raw) ? "ar" : "en",
-    filters
+    filters,
+    // What the local reader did and did not understand: shown to the broker and used to decide whether to ask the AI.
+    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied }
   };
 }
 
