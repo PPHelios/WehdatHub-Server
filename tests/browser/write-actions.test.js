@@ -71,6 +71,8 @@ async function open(pg, path) {
 test("a broker marks a lead as Needs manager with a note; the manager sees it and handles it with a reply", async () => {
   const broker = await signIn("broker");
   await open(broker, `/app/leads/${lead.ref}`);
+  // Centre the stage choice first: a sticky bar at the bottom of the phone screen can cover it otherwise.
+  await broker.locator("input[name=stage][value=viewing]").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await broker.locator("input[name=stage][value=viewing]").check({ force: true });
   await broker.locator("label:has(input[name=needs_manager])").click();
   expect(await broker.locator("input[name=needs_manager]").isChecked()).toBe(true);
