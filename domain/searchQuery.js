@@ -3,6 +3,8 @@
 // units come back in the same order. Places and features become keys; free text is normalized.
 "use strict";
 
+const Fx = require("./fx");
+
 const Features = require("./features");
 const Places = require("./places");
 const { TYPE_TERMS } = require("./vocabulary");
@@ -326,8 +328,10 @@ function fuzzyTypes(hay, found) {
 /** Local parser used when the AI is unavailable. Deterministic and bilingual. */
 function fallbackParse(text) {
   const raw = String(text || "").trim();
-  let hay = ` ${normalizeSearch(raw)} `;
+  let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
   const f = emptyFilters();
+  // A dollar or euro budget keeps its currency; the amount is converted only at search time (domain/fx.js).
+  f.currency = Fx.currencyOfText(raw);
 
   if (SMALL_TALK.includes(hay.trim())) {
     return { intent: "other", transcript: raw.slice(0, 500), language: /[a-z]/i.test(raw) && !/[؀-ۿ]/.test(raw) ? "en" : "ar", filters: canonical(f) };
@@ -440,6 +444,14 @@ function fallbackParse(text) {
     const v = spokenAmount(c.m[1]);
     if (v !== null) f.price_max = parseMoneyWords(String(v), "م");
     hay = c.hay;
+  }
+  // A dollar or euro budget with no unit word ("تحت 1000 دولار", "under 1000 dollars"): the number is the amount.
+  if (f.currency && f.price_max === null) {
+    c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to) (\d+(?:\.\d+)?)(?! (?:مليون|million|m|الف|ألف|k|thousand|م) ) /);
+    if (c.m) {
+      f.price_max = Math.round(Number(c.m[1]));
+      hay = c.hay;
+    }
   }
 
   // Area: "150 متر" / "150 m2" is a minimum (150 or more); "من 120 ل 150 متر" is a range.
