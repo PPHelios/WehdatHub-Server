@@ -1122,7 +1122,7 @@
       "cairoDay": ["now"],
       "briefData": ["pool", "broker", "now"],
       "briefMessage": ["broker", "data"],
-      "digestData": ["pool", "agencyId", "now"],
+      "digestData": ["pool", "agencyId", "now", "teamLeadId"],
       "digestMessage": ["manager", "d"],
       "sendBriefs": ["pool", "params"],
       "sendDigests": ["pool", "params"],
@@ -1295,6 +1295,7 @@
       "assign": ["pool", "actor", "id", "params"],
       "linkUnit": ["pool", "actor", "id", "unitCode"],
       "setAlerts": ["pool", "actor", "on"],
+      "isMuted": ["person"],
       "unitFor": ["db", "agencyId", "listingNo"]
     },
     "services/leadSources.js": {

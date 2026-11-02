@@ -296,8 +296,7 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   referred_by uuid,
   referral_rewarded_at timestamp with time zone,
   referral_credit_months smallint DEFAULT 0 NOT NULL,
-  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL,
-  portal_alerts boolean DEFAULT true NOT NULL
+  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (

@@ -1,6 +1,6 @@
 // web/routes/portalEnquiries.js — "Portal enquiries" (/app/portal-enquiries): managers and the owner. Each enquiry from
 // Bayut, Dubizzle or Nawy: link to the unit (once per listing number), add the phone, assign a broker (becomes a lead).
-// The owner's switch turns the alerts off for the whole agency. Brokers never see this page.
+// The owner can mute the alerts for himself only; managers always hear. Brokers never see this page.
 "use strict";
 
 const Authz = require("../../lib/authz");
@@ -57,7 +57,7 @@ function enquiriesPage({ rows, brokers, lang, owner, alertsOn, notice }) {
   return html`${notice || ""}
 <h1>📩 ${L(lang, "استفسارات البوابات", "Portal enquiries")}</h1>
 <p class="muted">${L(lang, "استفسارات Bayut وDubizzle وNawy. الاسم والرابط بس. لما تضيف الرقم وتحوّل للوسيط، الاستفسار بيبقى عميل.", "Enquiries from Bayut, Dubizzle and Nawy: name and link only. Add the phone and assign a broker, and it becomes a lead.")}</p>
-${owner ? html`<form method="post" action="/app/portal-enquiries/alerts" class="card stack"><label><input type="checkbox" name="on" value="1" ${alertsOn ? "checked" : ""}> ${L(lang, "تنبيهات الاستفسارات للمديرين والمالك", "Alerts for managers and the owner")}</label><button type="submit">${L(lang, "حفظ", "Save")}</button></form>` : ""}
+${owner ? html`<form method="post" action="/app/portal-enquiries/alerts" class="card stack"><label><input type="checkbox" name="on" value="1" ${alertsOn ? "checked" : ""}> ${L(lang, "تنبيهات الاستفسارات ليا (إنت المالك بس)", "Enquiry alerts for me (the owner only)")}</label><button type="submit">${L(lang, "حفظ", "Save")}</button></form>` : ""}
 ${rows.length
   ? html`<div class="scroll card"><table><thead><tr><th>${L(lang, "التاريخ", "Date")}</th><th>${L(lang, "البوابة", "Portal")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "الرابط", "Link")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "الرقم والوسيط", "Phone and broker")}</th></tr></thead>
     <tbody>${rows.map((e) => enquiryRow(e, brokers, lang))}</tbody></table></div>`
@@ -69,12 +69,13 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const actor = req.session.broker;
     if (!Authz.isManager(actor)) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const [rows, brokers, alerts] = await Promise.all([
+    const [rows, brokers, me] = await Promise.all([
       Enquiries.list(pool, actor),
       pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [actor.agency_id]).then((r) => r.rows),
-      pool.query("SELECT portal_alerts FROM agencies WHERE id = $1", [actor.agency_id]).then((r) => Boolean(r.rows[0]?.portal_alerts))
+      pool.query("SELECT notify_prefs FROM brokers WHERE id = $1", [actor.id]).then((r) => r.rows[0] || {})
     ]);
-    const body = enquiriesPage({ rows, brokers, lang, owner: Authz.isAgencyOwner(actor), alertsOn: alerts, ...extra });
+    const alertsOn = !Enquiries.isMuted({ ...actor, notify_prefs: me.notify_prefs });
+    const body = enquiriesPage({ rows, brokers, lang, owner: Authz.isAgencyOwner(actor), alertsOn, ...extra });
     return page(req, res, { title: L(lang, "استفسارات البوابات", "Portal enquiries"), body }, status);
   };
   const notice = (lang, key, ok = true) => html`<p class="card notice ${ok ? "ok" : "bad"}" role="status">${L(lang, NOTICES[key][0], NOTICES[key][1])}</p>`;
