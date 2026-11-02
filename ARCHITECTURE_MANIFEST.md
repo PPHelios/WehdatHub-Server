@@ -74,7 +74,10 @@
   | `054_private_portfolio.sql` | The agency owner's private portfolio: `is_private` on `listings` and `leads`, hidden from everyone but the agency owner by `lib/visibility.js`. |
   | `055_needs_manager.sql` | "Needs manager": `leads.flagged_at/flag_note/flagged_by` and the `flag` / `flag_handled` timeline events. |
   | `056_unit_owners.sql` | Unit owner profiles: `unit_owners` (merged by phone per agency, notes, flag), `listings.owner_id`, `unit_owner_events` (history). |
-  | `061_portal_enquiries.sql` | Portal enquiries (Bayut, Dubizzle, Nawy): `portal_enquiries` (name, link, listing number, status; a phone only once added, then the lead), `listings.portal_listing_no` (unique per agency), `agencies.portal_alerts` (the owner's switch). |
+  | `061_portal_enquiries.sql` | Portal enquiries (Bayut, Dubizzle, Nawy): `portal_enquiries` (name, link, listing number, status; a phone only once added, then the lead), `listings.portal_listing_no` (unique per agency), the owner's mute is in `brokers.notify_prefs`. |
+  | `062_lead_requests.sql` | "Ask a manager" requests as their own rows (`lead_requests`): one open per broker per lead, sent to managers or the agency owner (`to_role`), handled with a reply; the lead's flag columns from 055 are no longer written. |
+  | `063_team_lead.sql` | Team Lead: role `team_lead` sees and reassigns the leads of the brokers under them (`brokers.team_lead_id`, one team per broker). |
+  | `064_portal_owner_mute.sql` | Drops `agencies.portal_alerts`: the owner's portal alerts mute is for himself only (`brokers.notify_prefs.portal_muted`). |
   | `057_first_user_owner.sql` | The first user of an agency is its agency owner; older agencies without an owner get their earliest admin promoted. |
   | `058_place_names.sql` | New English compound names waiting for the CRM owner's Arabic name (`place_names`, pending or approved). |
   | `060_import_rows.sql` | Import review rows (`import_rows`): one row per sheet or post in a plan, with its kind (new, changed, unchanged, invalid, forbidden, duplicate), the ticked state and the reasons; the review pages read a tab at a time from here. Cascades with the plan. |
