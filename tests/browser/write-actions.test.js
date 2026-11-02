@@ -68,21 +68,19 @@ async function open(pg, path) {
   await pg.goto(base + path, { waitUntil: "networkidle" });
 }
 
-test("a broker marks a lead as Needs manager with a note; the manager sees it and handles it with a reply", async () => {
+test("a broker asks a manager for help on a lead; the manager sees it and handles it with a reply", async () => {
   const broker = await signIn("broker");
   await open(broker, `/app/leads/${lead.ref}`);
-  // Centre the stage choice first: a sticky bar at the bottom of the phone screen can cover it otherwise.
-  await broker.locator("input[name=stage][value=viewing]").evaluate((el) => el.scrollIntoView({ block: "center" }));
-  await broker.locator("input[name=stage][value=viewing]").check({ force: true });
-  await broker.locator("label:has(input[name=needs_manager])").click();
-  expect(await broker.locator("input[name=needs_manager]").isChecked()).toBe(true);
-  await broker.locator("input[name=flag_text]").fill("Client wants a price below the list");
-  await broker.locator("#stage button[type=submit]").click();
+  await broker.locator("summary", { hasText: /Ask for help|اطلب مساعدة/ }).click();
+  await broker.locator("form[action$='/flag'] textarea[name=text]").fill("Client wants a price below the list");
+  await broker.locator("form[action$='/flag'] button[type=submit]").click();
   await broker.waitForLoadState("networkidle");
 
-  const flagged = await h.query("SELECT flagged_at, flag_note FROM leads WHERE id = $1", [lead.id]);
-  expect(flagged[0].flagged_at).not.toBeNull();
-  expect(flagged[0].flag_note).toMatch(/price below/);
+  const asked = await h.query("SELECT note, to_role, handled_at FROM lead_requests WHERE lead_id = $1", [lead.id]);
+  expect(asked).toHaveLength(1);
+  expect(asked[0].note).toMatch(/price below/);
+  expect(asked[0].to_role).toBe("manager");
+  expect(asked[0].handled_at).toBeNull();
 
   const manager = await signIn("admin");
   await open(manager, "/app/leads/needs-action");
@@ -91,8 +89,9 @@ test("a broker marks a lead as Needs manager with a note; the manager sees it an
   await manager.locator(`form[action$="/flag/handle"] button[type=submit]`).click();
   await manager.waitForLoadState("networkidle");
 
-  const after = await h.query("SELECT flagged_at FROM leads WHERE id = $1", [lead.id]);
-  expect(after[0].flagged_at).toBeNull();
+  const after = await h.query("SELECT handled_at, reply FROM lead_requests WHERE lead_id = $1", [lead.id]);
+  expect(after[0].handled_at).not.toBeNull();
+  expect(after[0].reply).toMatch(/5% less/);
 });
 
 test("a broker asks for secret details on a searched unit; the manager allows it and the broker can see them", async () => {
