@@ -34,6 +34,12 @@ const downPct = (v) => {
   const n = num(v);
   return n !== null && n >= 0 && n <= 100 ? n : null;
 };
+/**
+ * One number is a minimum (3 bedrooms = 3 or more), and one budget is a ceiling. The AI sometimes returns the same
+ * number as both ends; a real range has two different ends, so an equal pair is collapsed here.
+ */
+const singleCountMax = (lo, hi) => (lo !== null && hi !== null && lo === hi ? null : hi);
+const singleBudgetFloor = (lo, hi) => (lo !== null && hi !== null && lo === hi ? null : lo);
 /** Years of a payment plan: a whole number from 1 to 30, else null. */
 const planYears = (v) => {
   const n = num(v);
@@ -169,18 +175,18 @@ function normalizeAiSearch(raw) {
     places,
     place_terms: terms,
     currency: ["EGP", "USD", "EUR"].includes(f.currency) ? f.currency : null,
-    price_min: pos(f.price_min),
+    price_min: singleBudgetFloor(pos(f.price_min), pos(f.price_max)),
     price_max: pos(f.price_max),
     area_min: pos(f.area_min),
-    area_max: pos(f.area_max),
+    area_max: singleCountMax(pos(f.area_min), pos(f.area_max)),
     bedrooms_min: nonNegInt(f.bedrooms_min),
-    bedrooms_max: nonNegInt(f.bedrooms_max),
+    bedrooms_max: singleCountMax(nonNegInt(f.bedrooms_min), nonNegInt(f.bedrooms_max)),
     bathrooms_min: nonNegInt(f.bathrooms_min),
     floor_min: num(f.floor_min) !== null ? Math.round(num(f.floor_min)) : null,
     floor_max: num(f.floor_max) !== null ? Math.round(num(f.floor_max)) : null,
     finishing: (Array.isArray(f.finishing) ? f.finishing : f.finishing ? [f.finishing] : []).map((x) => String(x).toLowerCase()),
     furnishing: ["furnished", "semi_furnished", "unfurnished"].includes(f.furnishing) ? f.furnishing : null,
-    delivery_ready: delivery.ready === true ? true : null,
+    delivery_ready: delivery.ready === true ? true : delivery.off_plan === true ? false : null,
     delivery_by_year: num(delivery.by_year) && num(delivery.by_year) >= 2000 ? Math.round(num(delivery.by_year)) : null,
     payment_cash: payment.cash === true ? true : null,
     payment_installments: payment.installments === true ? true : null,
@@ -209,14 +215,45 @@ const STOP = new Set(
     "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
     "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
+    "حتي", "لحد", "اقل", "تحت", "حدود", "بحدود", "فوق", "اكتر", "اكثر", "up", "under", "budget", "متكرر", "متكرره", "typical",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
-    "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
+    "compound", "please", "any",
+    // Spoken fillers and polite words (Egyptian Arabic): they carry no filter.
+    "ممكن", "تدورلي", "تدور", "ادورلي", "بلاش", "اللي", "يا", "باشا", "بيه", "ريس", "هندسه", "استاذ", "اخي", "تمام", "طيب",
+    "بسعر", "سعر", "ميزانيه", "ميزانيتي", "بميزانيه", "بادجت", "جنيه", "جنية", "جنيها", "الشهر", "شهريا", "شهري", "وصاله", "صاله",
+    "مساحتها", "مساحه", "الاقل", "كومباوند", "كومبوند", "كمبوند", "كمبوندات", "كومباوندات", "قريبه", "ابغي", "ابي", "عندكم", "عندكو", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
   ].map(normalizeSearch)
 );
 
 const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
   .flatMap(([type, words]) => words.map((w) => ({ type, term: normalizeSearch(w) })))
   .sort((a, b) => b.term.length - a.term.length);
+
+/**
+ * Egyptian spoken amounts as digits, so the money rules can read them: "مليونين" → "2 مليون", "نص مليون" → "0.5 مليون",
+ * "مليون ونص" → "1.5 مليون", "الفين" → "2 الف", and a bare "مليون" after a filler ("بسعر مليون") → "1 مليون".
+ */
+function speakNumbers(hay) {
+  let h = hay
+    .replace(/ (?:نص|نصف) مليون /g, " 0.5 مليون ")
+    .replace(/ ربع مليون /g, " 0.25 مليون ")
+    .replace(/ (?:تلت|ثلث) مليون /g, " 0.33 مليون ")
+    .replace(/ (مليونين|مليونان) /g, " 2 مليون ")
+    .replace(/ (الفين|الفان) /g, " 2 الف ")
+    .replace(/ (?:الاف|تلاف) /g, " الف ")
+    .replace(/ (\d+) مليون ونص /g, (_, d) => ` ${Number(d) + 0.5} مليون `)
+    .replace(/ (\d+) مليون وربع /g, (_, d) => ` ${Number(d) + 0.25} مليون `)
+    .replace(/ مليون ونص /g, " 1.5 مليون ")
+    .replace(/ مليون وربع /g, " 1.25 مليون ");
+  // A bare "مليون" / "الف" with no number before it means one.
+  const t = h.trim().split(/\s+/);
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] !== "مليون" && t[i] !== "million") continue;
+    const prev = t[i - 1];
+    if (prev === undefined || !(/^\d+(\.\d+)?$/.test(prev) || Object.prototype.hasOwnProperty.call(AR_NUMBER_WORDS, prev))) t[i] = `1 ${t[i]}`;
+  }
+  return ` ${t.join(" ")} `;
+}
 
 const AR_NUMBER_WORDS = {
   واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلت: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5,
@@ -308,7 +345,18 @@ function fallbackParse(text) {
   // Places first (they can contain type-like words, e.g. "town").
   const placeScan = Places.findPlaces(hay);
   f.places = placeScan.places;
-  hay = ` ${placeScan.rest} `;
+  hay = speakNumbers(` ${placeScan.rest} `);
+
+  // "بجنينة" / "بغرفة مربية" / "بتراس": the attached "ب" (with) is dropped before a feature word.
+  hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن)/g, " $1");
+  // English words written in Arabic letters.
+  hay = hay
+    .replace(/ (ابارتمنت|ابارتمنتس|أبارتمنت|ابرتمنت) /g, " شقه ")
+    .replace(/ (بيدروم|بيدرومز|بيدرومات|بدرومات) /g, " غرف ")
+    .replace(/ (فولي|فلي|فوللي) (فينشد|فنشد|فينيشد|فينيش) /g, " تشطيب كامل ")
+    .replace(/ (فيرنشد|فرنشد|فيرنيشد|فرنيشد) /g, " مفروشه ")
+    .replace(/ (هاي لوكس|هاى لوكس|high lux) /g, " سوبر لوكس ")
+    .replace(/ (اوف بلان|off plan|offplan|under construction) /g, " تحت الانشاء ");
 
   // Features (dictionary only).
   f.features = Features.matchFeatureKeys(hay);
@@ -331,19 +379,20 @@ function fallbackParse(text) {
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
   c = consume(hay, / و?(غرفتين|اوضتين) /);
-  if (c.m) f.bedrooms_min = f.bedrooms_max = 2;
+  // A plain count is a minimum: "2 bedroom" means 2 or more (same for bathrooms and area).
+  if (c.m) f.bedrooms_min = 2;
   hay = c.hay;
   c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
   if (c.m && n(c.m[1]) !== null) {
-    f.bedrooms_min = f.bedrooms_max = n(c.m[1]);
+    f.bedrooms_min = n(c.m[1]);
     hay = c.hay;
   }
   c = consume(hay, / (حمامين) /);
   if (c.m) f.bathrooms_min = 2;
   hay = c.hay;
-  c = consume(hay, / (\d+) (حمام|حمامات|bath|baths|bathroom|bathrooms) /);
-  if (c.m) {
-    f.bathrooms_min = Number(c.m[1]);
+  c = consume(hay, / (\d+|[ء-ي]+) (حمام|حمامات|bath|baths|bathroom|bathrooms) /);
+  if (c.m && n(c.m[1]) !== null) {
+    f.bathrooms_min = n(c.m[1]);
     hay = c.hay;
   }
 
@@ -393,7 +442,7 @@ function fallbackParse(text) {
     hay = c.hay;
   }
 
-  // Area: "150 متر" / "150 m2" / "150 sqm" is a band of +-10%; "من 120 ل 150 متر" is the exact range.
+  // Area: "150 متر" / "150 m2" is a minimum (150 or more); "من 120 ل 150 متر" is a range.
   c = consume(hay, / (?:من |from )?(\d{2,4}) (?:ل|الي|to|-) (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
   if (c.m) {
     f.area_min = Number(c.m[1]);
@@ -402,9 +451,7 @@ function fallbackParse(text) {
   } else {
     c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
     if (c.m) {
-      const a = Number(c.m[1]);
-      f.area_min = Math.round(a * 0.9);
-      f.area_max = Math.round(a * 1.1);
+      f.area_min = Number(c.m[1]);
       hay = c.hay;
     }
   }
@@ -456,6 +503,12 @@ function fallbackParse(text) {
       hay = c.hay;
     }
   }
+  // "متكرر" / "typical": any floor above ground.
+  c = consume(hay, / (متكرر|متكرره|متكررة|typical|typical floor) /);
+  if (c.m && f.floor_min === null) {
+    f.floor_min = 1;
+    hay = c.hay;
+  }
   c = consume(hay, / (?:ب|بال)?(?:الدور الارضي|دور ارضي|ground floor) /);
   if (c.m) {
     f.floor_min = f.floor_max = 0;
@@ -465,6 +518,9 @@ function fallbackParse(text) {
   // Delivery.
   c = consume(hay, / (استلام فوري|فوري|جاهز|ready to move|ready|immediate) /);
   if (c.m) f.delivery_ready = true;
+  hay = c.hay;
+  c = consume(hay, / (?:تحت الانشاء|لسه بتتبني|قيد الانشاء) /);
+  if (c.m) f.delivery_ready = false;
   hay = c.hay;
   c = consume(hay, / (?:تسليم|استلام|delivery|by) (20[2-4]\d) /);
   if (c.m) {
@@ -476,7 +532,7 @@ function fallbackParse(text) {
   c = consume(hay, / (كاش|cash) /);
   if (c.m) f.payment_cash = true;
   hay = c.hay;
-  c = consume(hay, / (?:ب|بال)?(تقسيط|اقساط|قسط|installments|installment) /);
+  c = consume(hay, / و?(?:ب|بال)?(تقسيط|اقساط|قسط|installments|installment) /);
   if (c.m) f.payment_installments = true;
   hay = c.hay;
 
@@ -545,7 +601,7 @@ function hasAnyFilter(parsed) {
       f.furnishing ||
       [f.price_min, f.price_max, f.area_min, f.area_max, f.bedrooms_min, f.bedrooms_max, f.bathrooms_min, f.floor_min, f.floor_max,
         f.max_down_payment, f.max_installment, f.delivery_by_year].some((v) => v !== null && v !== undefined) ||
-      f.delivery_ready ||
+      f.delivery_ready !== null && f.delivery_ready !== undefined ||
       f.payment_cash ||
       f.payment_installments ||
       (f.payment_years !== null && f.payment_years !== undefined) ||
@@ -570,7 +626,24 @@ function ensureFilters(parsed) {
   return normalizeAiSearch({ filters: f, locations: parsed?.locations || [] }).filters;
 }
 
+// Haytham (2026-11-01): a budget is a price ceiling. A monthly installment cap is kept only when the
+// message itself says installment (EN) or قسط / أقساط / تقسيط (AR). The AI reading can drop that word;
+// without it the number moves to the price ceiling (when no price was given).
+const INSTALLMENT_WORD = /installment|instalment|قسط|اقساط|تقسيط/;
+function enforceInstallmentWords(parsed, text) {
+  const said = INSTALLMENT_WORD.test(normalizeSearch(String(text || "")));
+  const f = parsed?.filters;
+  if (!f || said) return parsed;
+  if (f.max_installment !== null && f.max_installment !== undefined) {
+    if (f.price_max === null || f.price_max === undefined) f.price_max = f.max_installment;
+    f.max_installment = null;
+  }
+  f.payment_installments = null;
+  return parsed;
+}
+
 module.exports = {
+  enforceInstallmentWords,
   emptyFilters,
   normalizeCode,
   normalizeAiSearch,
