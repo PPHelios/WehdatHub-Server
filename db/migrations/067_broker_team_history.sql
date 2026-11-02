@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS broker_team_history (
   from_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   to_at        TIMESTAMPTZ
 );
+ALTER TABLE broker_team_history ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS broker_team_history_broker ON broker_team_history (broker_id, from_at);
 CREATE INDEX IF NOT EXISTS broker_team_history_team ON broker_team_history (team_lead_id, from_at);
 INSERT INTO broker_team_history (agency_id, broker_id, team_lead_id, from_at)

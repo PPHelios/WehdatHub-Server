@@ -855,7 +855,7 @@ async function historyFor(pool, actor, key, { from = null, to = null, brokerId =
   let lead = await getLead(pool, actor, key);
   if (!lead && teamLead) {
     const { rows } = await pool.query(
-      `SELECT l.* FROM leads l WHERE l.agency_id = $1 AND ${k.sql}
+      `SELECT l.* FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql}
           AND EXISTS (SELECT 1 FROM lead_events e WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND ${teamEventSql("$3")}) LIMIT 1`,
       [actor.agency_id, k.value, actor.id]
     );
