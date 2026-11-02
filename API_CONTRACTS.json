@@ -776,6 +776,7 @@
       "listFor": ["pool", "viewer", "params"],
       "history": ["pool", "viewer", "ownerId", "params"],
       "edit": ["pool", "actor", "ownerId", "params"],
+      "canEditOwner": ["pool", "viewer", "ownerId"],
       "remove": ["pool", "actor", "ownerId"],
       "reassign": ["pool", "actor", "listing", "to"],
       "leadFor": ["pool", "viewer", "owner"],

@@ -3,8 +3,10 @@
 // is made or found whenever a unit is saved with an owner phone. Who sees a profile:
 //   - the agency owner: all;
 //   - a manager: every profile except those whose units are all private (a private unit's owner is hidden from managers too);
-//   - a broker: the owners of their own active, non-private units.
+//   - a broker: the owners of units they may see the secret details of (their own, the agency opened them to all, or a
+//     manager approved a request in the last 30 days).
 // Managers edit notes and the flag, delete a profile, and move a unit to another owner (a profile, a lead or a new person).
+// A broker edits an owner while one of their active units belongs to that owner.
 "use strict";
 
 const Phone = require("../domain/phone");
@@ -57,9 +59,32 @@ async function syncFromListing(db, broker, listing) {
   return owner;
 }
 
-/** On top of Vis.units: a broker sees only their own active units on an owner's page; managers see them all. */
-function brokerOnly(viewer, alias = "u") {
-  return isManager(viewer) ? "" : ` AND ${alias}.broker_id = '${String(viewer.id).replace(/[^0-9a-f-]/gi, "")}'::uuid AND ${alias}.status = 'active'`;
+/** Whether the agency lets every broker see secret details (the same switch unitPrivacy reads). */
+async function scopeIsAll(pool, agencyId) {
+  const { rows } = await pool.query("SELECT crm_settings->>'secret_details' AS s FROM agencies WHERE id = $1", [agencyId]);
+  return rows[0]?.s === "all";
+}
+
+/**
+ * On top of Vis.units: a broker sees an owner's unit only when they may see that unit's secret details: their own active unit,
+ * every unit when the agency opened secret details to all brokers, or a unit a manager approved for them in the last 30 days.
+ * Managers see every unit.
+ */
+function brokerSees(viewer, scopeAll, alias = "u") {
+  if (isManager(viewer)) return "";
+  if (scopeAll) return "";
+  const me = String(viewer.id).replace(/[^0-9a-f-]/gi, "");
+  return ` AND ((${alias}.broker_id = '${me}'::uuid AND ${alias}.status = 'active') OR EXISTS (SELECT 1 FROM unit_access_requests r WHERE r.listing_id = ${alias}.id AND r.broker_id = '${me}'::uuid AND r.status = 'approved' AND r.decided_at > now() - make_interval(days => 30)))`;
+}
+
+/** Managers edit any owner; a broker edits an owner while one of their active units belongs to that owner. */
+async function canEditOwner(pool, viewer, ownerId) {
+  if (isManager(viewer)) return true;
+  const { rows } = await pool.query(
+    `SELECT 1 FROM listings WHERE owner_id = $1 AND agency_id = $2 AND broker_id = $3 AND status = 'active' AND ${Vis.units("listings")} LIMIT 1`,
+    [ownerId, viewer.agency_id, viewer.id]
+  );
+  return rows.length > 0;
 }
 
 /** May this person see this profile? Returns the profile with its visible units, or null. */
@@ -67,15 +92,16 @@ async function getFor(pool, viewer, ownerId) {
   if (!/^[0-9a-f-]{36}$/i.test(String(ownerId))) return null;
   const { rows } = await pool.query(`SELECT * FROM unit_owners WHERE id = $1 AND agency_id = $2 AND ${Vis.owners("unit_owners")}`, [ownerId, viewer.agency_id]);
   if (!rows[0]) return null;
+  const scopeAll = await scopeIsAll(pool, viewer.agency_id);
   const { rows: units } = await pool.query(
     `SELECT u.id, u.code, u.status, u.listing_type, u.property_type, u.compound, u.price_value, u.broker_id, u.is_private
-       FROM listings u WHERE u.owner_id = $1 AND u.agency_id = $2 AND ${Vis.units("u")}${brokerOnly(viewer)} ORDER BY u.created_at DESC`,
+       FROM listings u WHERE u.owner_id = $1 AND u.agency_id = $2 AND ${Vis.units("u")}${brokerSees(viewer, scopeAll)} ORDER BY u.created_at DESC`,
     [ownerId, viewer.agency_id]
   );
   const total = (await pool.query("SELECT count(*)::int AS n FROM listings WHERE " + Vis.allUnits() + " AND owner_id = $1 AND agency_id = $2", [ownerId, viewer.agency_id])).rows[0].n;
   // Hidden when none of its units is visible to this viewer; a manager still sees a profile that has no units at all.
   if (!units.length && !(isManager(viewer) && total === 0)) return null;
-  return { ...rows[0], units };
+  return { ...rows[0], units, canEdit: await canEditOwner(pool, viewer, ownerId) };
 }
 
 /** Pages of profiles this person may see, newest first. */
@@ -83,12 +109,13 @@ async function listFor(pool, viewer, { q = "", limit = 50, offset = 0, onlyPriva
   const term = String(q || "").trim();
   const digits = Phone.normalizePhone(term);
   const privateOnly = onlyPrivate && isAgencyOwner(viewer) ? " AND o.is_private" : "";
+  const scopeAll = await scopeIsAll(pool, viewer.agency_id);
   const { rows } = await pool.query(
-    `SELECT o.*, (SELECT count(*)::int FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerOnly(viewer)}) AS unit_count
+    `SELECT o.*, (SELECT count(*)::int FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerSees(viewer, scopeAll)}) AS unit_count
        FROM unit_owners o
       WHERE o.agency_id = $1 AND ${Vis.owners("o")}${privateOnly}
         AND (CASE WHEN $2::text = '' THEN true ELSE (o.name ILIKE '%' || $2 || '%' OR ($3::text IS NOT NULL AND o.phones @> ARRAY[$3]::text[])) END)
-        AND ((SELECT count(*) FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerOnly(viewer)}) > 0
+        AND ((SELECT count(*) FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerSees(viewer, scopeAll)}) > 0
              ${isManager(viewer) ? `OR NOT EXISTS (SELECT 1 FROM listings u WHERE ${Vis.allUnits()} AND u.owner_id = o.id AND u.agency_id = o.agency_id)` : ""})
       ORDER BY o.created_at DESC LIMIT $4 OFFSET $5`,
     [viewer.agency_id, term.replace(/[%_\\]/g, (c) => `\\${c}`), digits, limit + 1, offset]
@@ -98,7 +125,6 @@ async function listFor(pool, viewer, { q = "", limit = 50, offset = 0, onlyPriva
 
 /** The owner's history, newest first. */
 async function history(pool, viewer, ownerId, { limit = 50 } = {}) {
-  if (!isManager(viewer)) return [];
   const { rows } = await pool.query(
     `SELECT e.kind, e.data, e.created_at, b.name AS broker_name FROM unit_owner_events e LEFT JOIN brokers b ON b.id = e.broker_id
       WHERE e.owner_id = $1 AND e.agency_id = $2 ORDER BY e.created_at DESC, e.id DESC LIMIT $3`,
@@ -109,7 +135,7 @@ async function history(pool, viewer, ownerId, { limit = 50 } = {}) {
 
 /** Managers edit the name, notes and flag. */
 async function edit(pool, actor, ownerId, { name, notes, flag }) {
-  if (!isManager(actor)) return { error: "forbidden" };
+  if (!(await canEditOwner(pool, actor, ownerId))) return { error: "forbidden" };
   const before = (await pool.query("SELECT * FROM unit_owners WHERE id = $1 AND agency_id = $2", [ownerId, actor.agency_id])).rows[0];
   if (!before) return { error: "not_found" };
   if (!(await getFor(pool, actor, ownerId))) return { error: "not_found" };
@@ -185,4 +211,4 @@ async function forLead(pool, viewer, lead) {
   return rows[0] ? getFor(pool, viewer, rows[0].id) : null;
 }
 
-module.exports = { findByPhone, findOrCreate, syncFromListing, getFor, listFor, history, edit, remove, reassign, leadFor, forLead };
+module.exports = { findByPhone, findOrCreate, syncFromListing, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead };

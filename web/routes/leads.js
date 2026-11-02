@@ -227,7 +227,7 @@ ${rows.length
       return `/app/leads${s ? `?${s}` : ""}`;
     };
     const tabLabel = (t) =>
-      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "🔒 الخاصة", "🔒 Private") : Stages.stageLabel(t, lang);
+      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "⭐ VIP", "⭐ VIP") : Stages.stageLabel(t, lang);
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
@@ -400,7 +400,7 @@ ${V.leadHeader(lead, lang)}
 <form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة الوسيط", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة الوسيط", "Now: the broker's language")}</span>`}</form>
 ${flagBox(lead, broker, await Leads.openRequestsOn(pool, broker, lead.id), lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
-${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button>${lead.is_private ? html`<span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</form>` : ""}
+${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليه VIP", "Make VIP")}</button>${lead.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
   <form method="post" action="${path}/draft" class="row">${hidden}<button type="submit" class="secondary">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button>${tip(templatesFor(clientLangOf(lead, lang)).draft, lang)}</form>

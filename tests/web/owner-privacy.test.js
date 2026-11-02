@@ -61,3 +61,26 @@ test("a job (no viewer) never sees a private owner profile", async () => {
   const jobSees = await Vis.run(null, async () => (await h.pool.query(`SELECT name FROM unit_owners o WHERE ${Vis.owners("o")} ORDER BY name`)).rows.map((r) => r.name));
   expect(jobSees).toEqual(["Public Owner"]);
 });
+
+test("a broker sees and edits an owner through their own unit; without one, or an approval, the owner is hidden", async () => {
+  const post = (s, path, body) => s.agent.post(path).set("X-CSRF-Token", s.csrf).type("form").send(body);
+  const broker = await signIn(h, "broker");
+  expect((await broker.agent.get(`/app/owners/${publicId}`)).status).toBe(200);
+  expect((await post(broker, `/app/owners/${publicId}`, { name: "Renamed by broker", notes: "called", flag: "" })).status).toBe(303);
+  expect((await h.query("SELECT name FROM unit_owners WHERE id = $1", [publicId]))[0].name).toBe("Renamed by broker");
+
+  // An owner whose only unit belongs to another broker: hidden and not editable until a manager approves a request.
+  await h.insertListing({ code: "OTHER-1", broker_id: h.BROKERS.owner.id });
+  await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Other Owner', ARRAY['201033333333'], false)", [h.AGENCY_A]);
+  const otherId = (await h.query("SELECT id FROM unit_owners WHERE name = 'Other Owner'"))[0].id;
+  await h.query("UPDATE listings SET owner_id = $1 WHERE code = 'OTHER-1'", [otherId]);
+  expect((await broker.agent.get(`/app/owners/${otherId}`)).status).toBe(404);
+  expect((await post(broker, `/app/owners/${otherId}`, { name: "Nope", notes: "", flag: "" })).status).toBe(403);
+  const listing = (await h.query("SELECT id FROM listings WHERE code = 'OTHER-1'"))[0];
+  await h.query(
+    "INSERT INTO unit_access_requests (agency_id, listing_id, broker_id, status, decided_at) VALUES ($1, $2, $3, 'approved', now())",
+    [h.AGENCY_A, listing.id, h.BROKERS.broker.id]
+  );
+  expect((await broker.agent.get(`/app/owners/${otherId}`)).status).toBe(200);
+  expect((await post(broker, `/app/owners/${otherId}`, { name: "Still no", notes: "", flag: "" })).status).toBe(403);
+});
