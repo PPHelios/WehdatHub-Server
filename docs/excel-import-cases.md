@@ -35,6 +35,7 @@ Written from the NCH "RENT - All compounds" workbook (29 tabs, 3,751 rows, 26 vi
 | Delivery stored as an Excel date | `45567` | **Auto-fixed**: read as month and year (10/2024); `10/2026`-style text was already read | Nothing |
 | Status words in the notes | `rented`, `sold`, `مباع`, `not available` | **Batch, asked every upload**: rented or sold units are saved as sold and closed ones as archived only after a yes; last time's answer is shown | A question with the counts, then a note that the choice was applied |
 | Same unit under two codes (in the sheet, or already in the agency) | Same compound, rooms, area and price under another code | **Warned**, never blocked (the shared duplicate rule) | A warning naming the existing unit or the earlier row |
+| Wrong import, or a change to undo | Any applied import | **Undo for the last applied import only**, after a confirm page that lists what will happen: units it added are archived (never deleted); units it changed get their earlier values back; units changed since are left alone and listed | An Undo link on the result, then the confirm page |
 | Choices made on an earlier upload | A type word (picked in a batch or fixed by hand in the review), the price rule, the status answer | **Learned and saved on every upload** per agency and offered on the next one as a pre-selected suggestion; nothing is applied without a tap | The last answer shown beside the question, with a button to forget them |
 
 ## What is still not handled

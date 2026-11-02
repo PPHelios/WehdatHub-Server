@@ -210,9 +210,10 @@ describe("API Contract, Database Schema & Variable Naming Guardians", () => {
 
     const targetMap = contracts?.libraries || fallbackExpectedExports;
 
+    const { WORKER_ENTRIES } = require("../scripts/api-contracts");
     Object.entries(targetMap).forEach(([relPath, expected]) => {
       const fullPath = path.join(root, relPath);
-      if (!fs.existsSync(fullPath)) return;
+      if (!fs.existsSync(fullPath) || WORKER_ENTRIES.has(relPath)) return; // worker entries export nothing and must not run here
       const mod = require(fullPath);
 
       if (Array.isArray(expected)) {

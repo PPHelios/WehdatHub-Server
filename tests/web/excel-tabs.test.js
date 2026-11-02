@@ -260,6 +260,8 @@ describe("a big file is shown a kind and a page at a time", () => {
     const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", good), tab("Mivida", bad)] });
     const first = await agent.get(r.body.url);
     expect(first.text).toMatch(/data-kind-nav/);
+    expect(first.text).toMatch(/role="tablist"/);
+    expect(first.text).toMatch(/class="kind-tab on"/);
     expect(first.text).toMatch(/data-kind="invalid"/); // problems first
     expect(first.text).not.toMatch(/data-kind="new"/);
     expect((first.text.match(/data-tab-link/g) || []).length).toBe(2);

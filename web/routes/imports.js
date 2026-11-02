@@ -155,8 +155,9 @@ function excelPlanPage(imp, lang, query = {}) {
 </section>`
       : "";
 
+  // Kinds as tabs across the top of a long list: one kind at a time, always in view while scrolling.
   const kindNav = paged
-    ? html`<nav class="row" data-kind-nav aria-label="${L(lang, "الأنواع", "Kinds")}">${kinds.map((k) => html`<a class="chip${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-current="page"') : ""}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} ${paged && k === kind && tab ? shown.length : counts[k]}</a>`)}</nav>`
+    ? html`<nav class="kind-tabs" role="tablist" aria-label="${L(lang, "الأنواع", "Kinds")}" data-kind-nav>${kinds.map((k) => html`<a role="tab" class="kind-tab${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-selected="true" aria-current="page"') : raw(' aria-selected="false"')}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}<span class="kind-count">${paged && k === kind && tab ? shown.length : counts[k]}</span></a>`)}</nav>`
     : "";
   const tabsNav =
     paged && Array.isArray(tabInfos) && tabInfos.length > 1
@@ -175,7 +176,7 @@ function excelPlanPage(imp, lang, query = {}) {
 
   return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 ${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
-${imp.result ? resultCard(imp.result, lang) : ""}
+${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
 ${query.batch ? html`<p class="card notice" role="status" data-batch-done>${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
 ${kindNav}${tabsNav}
@@ -196,10 +197,12 @@ ${(counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-fai
 ${editForms}`;
 }
 
-function resultCard(r, lang) {
+function resultCard(r, lang, undoId = null) {
   const line = (label, list) => (list && list.length ? html`<li>${label}: ${list.length} <span class="muted">${list.join("، ")}</span></li>` : "");
   return html`<div class="card notice" data-result>
   <h2>✅ ${L(lang, "اتطبق", "Applied")}</h2>
+  ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتأرشفت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are archived; changed units are back to their earlier values.")}</p>` : ""}
+  ${undoId && !r.undone ? html`<p><a class="secondary button" href="/app/import/${undoId}/undo" data-undo-link>↩️ ${L(lang, "تراجع عن الاستيراد ده", "Undo this import")}</a></p>` : ""}
   <ul>
     ${line(L(lang, "اتضافت", "Created"), r.created)}
     ${line(L(lang, "اتعدلت", "Updated"), r.updated)}
@@ -240,7 +243,7 @@ function groupPage(imp, lang) {
   }
   const applied = imp.status !== "ready";
   return html`<div id="group-status"><h1>📥 ${L(lang, "استيراد من الجروب", "Group import")}</h1>
-${imp.result ? resultCard(imp.result, lang) : ""}
+${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 <ol class="results">${posts.map((p, i) => {
     const r = results[i];
@@ -460,11 +463,42 @@ ${tabs("import_tab", [
       .send(buffer);
   });
 
+  // Undo the last applied import: a confirm page with what will happen, then one press to do it.
+  web.get("/import/:id/undo", managersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const imp = await Imports.loadImport(pool, broker, req.params.id);
+    if (!imp || !(await Imports.canUndo(pool, broker, imp))) return next();
+    const plan = await Imports.undoPreview(pool, broker.agency_id, imp);
+    const names = (list) => list.map((x) => x.code).join("، ");
+    return importPage(req, res, html`<section class="card stack" data-undo-confirm>
+  <h1>${L(lang, "تراجع عن الاستيراد ده؟", "Undo this import?")}</h1>
+  <p>${L(lang, "ده آخر استيراد اتطبق. التراجع ليه بس.", "This is the last import applied. Only this one can be undone.")}</p>
+  <ul>
+    ${plan.archive.length ? html`<li data-undo-archive>${L(lang, `هنأرشف ${plan.archive.length} وحدة اتضافت: `, `Archive ${plan.archive.length} units it added: `)}<span class="muted">${names(plan.archive)}</span></li>` : ""}
+    ${plan.restore.length ? html`<li data-undo-restore>${L(lang, `هرجّع ${plan.restore.length} وحدة اتعدلت لقيمها القديمة: `, `Put back the earlier values of ${plan.restore.length} units it changed: `)}<span class="muted">${names(plan.restore)}</span></li>` : ""}
+    ${plan.skipped.length ? html`<li data-undo-skipped>${L(lang, `${plan.skipped.length} وحدة متتلمسش: اتعدلت بعد الاستيراد أو اتشالت. مش هتتغير: `, `${plan.skipped.length} units are left alone: changed or removed since the import. They will not change: `)}<span class="muted">${plan.skipped.join("، ")}</span></li>` : ""}
+  </ul>
+  <p class="muted">${L(lang, "الوحدات المؤرشفة مش بتتمسح وتقدر ترجعها من الوحدات.", "Archived units are not deleted; you can restore them from Units.")}</p>
+  <form method="post" action="/app/import/${imp.id}/undo" class="row">
+    <button type="submit" data-undo-confirm-button>${L(lang, "أيوه، تراجع", "Yes, undo")}</button>
+    <a class="secondary button" href="/app/import/${imp.id}">${L(lang, "لا، ارجع", "No, go back")}</a>
+  </form>
+</section>`);
+  });
+
+  web.post("/import/:id/undo", managersOnly, async (req, res, next) => {
+    const out = await Imports.undoExcel(pool, req.session.broker, req.params.id);
+    if (!out) return next();
+    return res.redirect(303, `/app/import/${req.params.id}?undone=1`);
+  });
+
   web.get("/import/:id", async (req, res, next) => {
     const lang = langOf(req);
     const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
     if (!imp) return next();
     if (imp.kind === "leads") return res.redirect(303, `/app/leads/import/${imp.id}`);
+    imp.canUndo = isManager(req.session.broker) ? await Imports.canUndo(pool, req.session.broker, imp) : false;
     return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang, req.query || {}) : groupPage(imp, lang));
   });
 

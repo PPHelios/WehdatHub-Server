@@ -59,8 +59,13 @@ function typeName(v) {
   return typeof v === "string" ? "String" : typeof v === "number" ? "Number" : typeof v === "boolean" ? "Boolean" : typeof v;
 }
 
+// Worker-thread entry points run their own code when loaded (they listen on parentPort) and export nothing,
+// so they are listed with an empty contract and never required here.
+const WORKER_ENTRIES = new Set(["lib/flyerWorker.js"]);
+
 /** The contract entry of one module: export name → parameter names (functions) or a type name. */
 function describeModule(relPath) {
+  if (WORKER_ENTRIES.has(relPath)) return {};
   const mod = require(path.join(ROOT, relPath));
   const out = {};
   for (const [k, v] of Object.entries(mod)) {
@@ -97,4 +102,5 @@ if (require.main === module) {
   console.log("API_CONTRACTS.json updated.");
 }
 
-module.exports = { paramNames, describeModule, build, format, FILE };
+module.exports = {
+  WORKER_ENTRIES, paramNames, describeModule, build, format, FILE };

@@ -255,6 +255,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
       }
       const patch = Edits.diffPatch(existing, ev.listing);
       if (p.status && p.status !== existing.status) patch.status = p.status;
+      const before = Object.fromEntries(Object.keys(patch).map((k) => [k, existing[k] === undefined ? null : existing[k]]));
       const changes = describeChanges(existing, patch, lang);
       items.push({
         ...base,
@@ -265,6 +266,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
         listing_id: existing.id,
         version: existing.version,
         patch,
+        before,
         changes
       });
     } else {
@@ -356,12 +358,15 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
   const imp = await claim(pool, broker, id, "excel");
   if (!imp) return null;
   const wanted = new Set(rows.map(Number));
-  const result = { created: [], updated: [], conflicts: [], failed: [] };
+  const result = { created: [], updated: [], conflicts: [], failed: [], undo: { made: [], changed: [] } };
   for (const item of imp.payload.items) {
     if (!wanted.has(item.row)) continue;
     if (item.kind === "new") {
       const res = await insertOne(pool, broker, item.fields, item.code, lang);
-      if (res.listing) result.created.push(res.listing.code);
+      if (res.listing) {
+        result.created.push(res.listing.code);
+        result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
+      }
       else if (res.limit) {
         result.limit = res.limit;
         break;
@@ -369,12 +374,82 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
       else result.conflicts.push(res.code);
     } else if (item.kind === "changed") {
       const res = await patchOne(pool, broker, item.code, item.patch, item.version);
-      if (res.outcome === "updated") result.updated.push(item.code);
+      if (res.outcome === "updated") {
+        result.updated.push(item.code);
+        result.undo.changed.push({ code: item.code, before: item.before || {}, version: res.listing.version });
+      }
       else (res.outcome === "conflict" ? result.conflicts : result.failed).push(item.code);
     }
   }
   await pool.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
   return result;
+}
+
+/* Undo: only the agency's last applied Excel import. Units it added are archived (never deleted); units it changed get the
+   values they had before. A unit edited since the import is skipped and listed, never overwritten. */
+
+/** The agency's last applied Excel import that was not undone yet; null when there is none. */
+async function lastApplied(pool, agencyId) {
+  const { rows } = await pool.query(
+    "SELECT * FROM web_imports WHERE agency_id = $1 AND kind = 'excel' AND status = 'applied' AND result IS NOT NULL ORDER BY applied_at DESC LIMIT 1",
+    [agencyId]
+  );
+  const imp = rows[0] || null;
+  return imp && imp.result?.undo && !imp.result.undone ? imp : null;
+}
+
+/** What undoing this import would do, without changing anything. */
+async function undoPreview(pool, agencyId, imp) {
+  const log = imp.result?.undo || { made: [], changed: [] };
+  const archive = [];
+  const restore = [];
+  const skipped = [];
+  for (const m of log.made) {
+    const { rows } = await pool.query("SELECT version, status FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [m.id, agencyId]);
+    if (rows[0] && Number(rows[0].version) === Number(m.version) && rows[0].status !== "archived") archive.push(m);
+    else skipped.push(m.code);
+  }
+  for (const c of log.changed) {
+    const { rows } = await pool.query("SELECT version FROM listings WHERE " + Vis.units("listings") + " AND code_norm = $1 AND agency_id = $2", [normalizeCode(c.code), agencyId]);
+    if (rows[0] && Number(rows[0].version) === Number(c.version)) restore.push(c);
+    else skipped.push(c.code);
+  }
+  return { archive, restore, skipped };
+}
+
+/** Whether this broker may undo this import now (the last applied one, not yet undone). */
+async function canUndo(pool, broker, imp) {
+  if (!imp || imp.kind !== "excel" || imp.status !== "applied") return false;
+  const last = await lastApplied(pool, broker.agency_id);
+  return Boolean(last && last.id === imp.id);
+}
+
+/** Undoes the last applied Excel import. Claims it first, so a double press does nothing the second time. */
+async function undoExcel(pool, broker, id) {
+  const imp = await loadImport(pool, broker, id);
+  if (!(await canUndo(pool, broker, imp))) return null;
+  const { rows: claimed } = await pool.query(
+    "UPDATE web_imports SET result = jsonb_set(result, '{undone}', $3::jsonb) WHERE id = $1 AND agency_id = $2 AND status = 'applied' AND NOT (result ? 'undone') RETURNING id",
+    [id, broker.agency_id, JSON.stringify({ at: new Date().toISOString(), by: broker.id })]
+  );
+  if (!claimed[0]) return null;
+  const plan = await undoPreview(pool, broker.agency_id, imp);
+  const out = { archived: [], restored: [], skipped: [...plan.skipped] };
+  for (const m of plan.archive) {
+    const { rowCount } = await pool.query(
+      "UPDATE listings SET status = 'archived', version = version + 1 WHERE id = $1 AND agency_id = $2 AND version = $3",
+      [m.id, broker.agency_id, m.version]
+    );
+    if (rowCount) out.archived.push(m.code);
+    else out.skipped.push(m.code);
+  }
+  for (const c of plan.restore) {
+    const res = await patchOne(pool, broker, c.code, c.before, c.version);
+    if (res.outcome === "updated") out.restored.push(c.code);
+    else out.skipped.push(c.code);
+  }
+  await pool.query("UPDATE web_imports SET result = jsonb_set(result, '{undone}', $2::jsonb) WHERE id = $1", [id, JSON.stringify({ at: new Date().toISOString(), by: broker.id, archived: out.archived, restored: out.restored, skipped: out.skipped })]);
+  return out;
 }
 
 const MAX_CELL = 600;
@@ -656,6 +731,9 @@ module.exports = {
   editExcelRow,
   batchExcel,
   batchStats,
+  canUndo,
+  undoPreview,
+  undoExcel,
   TYPE_KEYS,
   findDuplicate,
   startGroupImport,
