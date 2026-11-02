@@ -66,11 +66,13 @@ describe("Excel fixes in the review", () => {
     expect(await unit("UP-2")).toBeUndefined();
   });
 
-  test("a code written in lower case is shown as the code it becomes", async () => {
+  test("a code written in lower case or with a space is normalised, not flagged", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const r = await upload(agent, csrf, await workbook([HEAD, ["hp-7", "Hyde Park", "شقة", "بيع", "6 مليون", 110, 2]]));
+    const r = await upload(agent, csrf, await workbook([HEAD, ["hp 7", "Hyde Park", "شقة", "بيع", "6 مليون", 110, 2]]));
     const page = await agent.get(r.headers.location);
-    expect(page.text).toMatch(/data-notes="2"[^>]*>الكود اتكتب HP-7/);
+    expect(page.text).toMatch(/data-kind="new"[\s\S]*HP7/);
+    expect(page.text).not.toMatch(/data-kind="invalid"/);
+    expect(page.text).not.toMatch(/data-notes=/);
   });
 
   test("a dollar price and a text-only row each show their reason; an owner phone that is not Egyptian is flagged", async () => {

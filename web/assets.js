@@ -27,6 +27,9 @@ const FILES = {
   "chatparse.js": path.join(__dirname, "..", "domain", "chatParse.js"),
   "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
   "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
+  // Excel import: the workbook is read in the browser, tab by tab.
+  "xlsxread.js": path.join(STATIC_DIR, "xlsxread.js"),
+  "ximport.js": path.join(STATIC_DIR, "ximport.js"),
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
   // Cairo, self-hosted (CSP font-src 'self'): regular and bold; 600 renders with the bold face.
   "fonts/cairo-400.woff2": path.join(STATIC_DIR, "fonts", "cairo-400.woff2"),

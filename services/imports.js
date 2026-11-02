@@ -13,6 +13,9 @@ const Describe = require("../domain/describe");
 const Features = require("../domain/features");
 const Delivery = require("../domain/delivery");
 const SheetImport = require("../domain/sheetImport");
+const Mixed = require("../domain/sheetMixed");
+const Fx = require("../domain/fx");
+const SheetGrid = require("../lib/sheetGrid");
 const Dup = require("../domain/unitDuplicate");
 const { normalizeCode } = require("../domain/searchQuery");
 const { normalizeSearch } = require("../domain/searchText");
@@ -90,6 +93,17 @@ function composeRow(existing, draft, lang) {
 }
 
 const reasonOf = (b, lang) => (lang === "en" ? b.label_en : b.label_ar);
+// The sheet cell that fixes each thing the rules ask for, so the edit form offers exactly what is missing.
+const NEEDS = { listing_type: "listing_type", property_type: "property_type", location: "compound", area_value: "area_value", bua: "area_value", bedrooms: "bedrooms", monthly_rent: "price_value", price_value: "price_value", resale_two_of_three: "price_value", installments_question: "down_payment_value", primary_plan: "price_value" };
+const needsOf = (blockers) => [...new Set(blockers.map((b) => NEEDS[b.field]).filter(Boolean))];
+const ERROR_CELL = { code: "code", property_type: "property_type", price_value: "price_value", area_value: "area_value" };
+/** The reason for an unreadable cell, with what the cell says ("Invalid price: wait price"). */
+function quoted(e, cells, lang) {
+  const label = pick(ERROR_LABELS[e], lang) || e;
+  const v = cells[ERROR_CELL[e]];
+  return v === undefined || v === null || String(v).trim() === "" ? label : `${label}: «${String(v).replace(/\s+/g, " ").trim().slice(0, 40)}»`;
+}
+const ERROR_NEEDS = { code: "code", property_type: "property_type", price_value: "price_value", currency: "price_value", area_value: "area_value" };
 const ERROR_LABELS = {
   code: ["كود غير صالح", "Invalid code"],
   property_type: ["نوع غير معروف", "Unknown type"],
@@ -98,10 +112,18 @@ const ERROR_LABELS = {
   area_value: ["مساحة غير صحيحة", "Invalid area"]
 };
 const NOTE = {
-  code: (raw, to, lang) => (lang === "en" ? `Code written as ${to} (was "${raw}")` : `الكود اتكتب ${to} (كان "${raw}")`),
   compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
-  phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري")
+  phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري"),
+  dollar: (usd, rate, lang) => (lang === "en" ? `Price was $${usd}; converted at ${rate} EGP per dollar` : `السعر كان ${usd}$ واتحول بسعر ${rate} جنيه للدولار`),
+  codeMade: (lang) => (lang === "en" ? "No code in the sheet: numbered in the sheet's own pattern" : "مفيش كود في الشيت: اتعمل بنفس نمط أكواد الشيت"),
+  codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت")
 };
+
+/** The agency's central dollar rate (EGP per dollar, set by an owner or manager under Usage); null when none is set. */
+async function agencyUsdRate(pool, agencyId) {
+  const { rows } = await pool.query("SELECT crm_settings->'fx' AS fx FROM agencies WHERE id = $1", [agencyId]);
+  return Fx.ratesFrom(rows[0]?.fx).USD;
+}
 const EGY_PHONE = /^(\+?20|0)?1[0-9]{9}$/;
 // "UPtown cairo" and "UPtown" are the same compound: the city word at the end is not part of the name.
 const compoundKey = (v) => normalizeSearch(v).replace(/\s+(cairo|new cairo|القاهره|القاهرة|مصر|egypt)$/, "").trim();
@@ -115,12 +137,57 @@ async function knownCompounds(pool, agencyId) {
 }
 
 /**
+ * Rows with no code in a tab whose own codes follow a pattern ("NH-9", "VR12") get the next number in that pattern, past
+ * the sheet's highest and the agency's highest with the same letters, so a made-up code never lands on an existing unit.
+ * Codes in that tab that break the pattern are marked. The marks stay on the stored rows, so later edits keep them.
+ */
+async function applyCodePatterns(pool, agencyId, sheet) {
+  const next = new Map(); // prefix → last number used
+  for (const t of sheet.tabs || []) {
+    const pat = t.code_pattern;
+    if (!pat) continue;
+    const rows = sheet.rows.filter((r) => r.tab === t.name);
+    const key = pat.prefix;
+    if (!next.has(key)) {
+      const { rows: have } = await pool.query("SELECT code_norm FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm LIKE $2", [agencyId, key + "%"]);
+      const top = have.reduce((m, h) => {
+        const x = new RegExp("^" + key + "[-_ ]?(\\d+)$", "i").exec(h.code_norm || "");
+        return x ? Math.max(m, Number(x[1])) : m;
+      }, 0);
+      next.set(key, Math.max(top, 0));
+    }
+    next.set(key, Math.max(next.get(key), pat.max));
+    for (const r of rows) {
+      const code = String(r.cells.code ?? "").trim();
+      if (code) {
+        const m = SheetGrid.codeParts(code);
+        if (!m || m[1].toUpperCase() !== key) r.code_odd = true;
+        continue;
+      }
+      const n = next.get(key) + 1;
+      next.set(key, n);
+      r.cells.code = `${key}${pat.sep}${pat.width ? String(n).padStart(pat.width, "0") : n}`;
+      r.code_made = true;
+    }
+  }
+}
+
+/**
  * Plans an Excel import against the agency's inventory (nothing is written).
  * @param {Object} sheet - lib/sheets.js readInventorySheet output
  * @returns {Promise<{ items, counts }>}
  */
-async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
-  const parsed = sheet.rows.map((r) => ({ rowNumber: r.rowNumber, ...SheetImport.rowToDraft(r.cells), cells: r.cells }));
+async function planExcel(pool, broker, sheet, { lang = "ar", usdRate } = {}) {
+  // The dollar rate is the agency's central one, read once at upload and kept with the plan (later edits reuse it).
+  const rate = usdRate === undefined ? await agencyUsdRate(pool, broker.agency_id) : usdRate;
+  if (sheet.tabs) await applyCodePatterns(pool, broker.agency_id, sheet);
+  const parsed = sheet.rows.map((r) => {
+    const usd = rate ? Mixed.dollars(cellText(r, "price_value")) : null;
+    const cells = usd
+      ? { ...r.cells, price_value: Math.round(usd * rate), notes: [r.cells.notes, `${lang === "en" ? "Price in the sheet" : "السعر في الشيت"}: ${r.cells.price_value}`].filter(Boolean).join(" · ") }
+      : r.cells;
+    return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...SheetImport.rowToDraft(cells), cells: r.cells, dollar: usd ? { usd, rate } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd) };
+  });
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];
   const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
   const byCode = new Map(found.map((l) => [l.code_norm, l]));
@@ -128,17 +195,18 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   const seen = new Set();
   const items = [];
   // Rows that had text but no known column are shown with their reason, never dropped.
-  for (const s of sheet.skipped || []) items.push({ row: s.rowNumber, code: null, kind: "invalid", reasons: [lang === "en" ? "No value in a known column" : "مفيش قيمة في عمود معروف"] });
+  for (const s of sheet.skipped || []) items.push({ row: s.rowNumber, tab: s.tab || null, sheet_row: s.sheetRow || null, code: null, kind: "invalid", reasons: [lang === "en" ? "No value in a known column" : "مفيش قيمة في عمود معروف"], needs: [], notes: [] });
 
   for (const p of parsed) {
     const code = normalizeCode(p.code);
-    const base = { row: p.rowNumber, code: code || null, notes: [] };
+    const base = { row: p.rowNumber, tab: p.tab, sheet_row: p.sheetRow, code: code || null, notes: [] };
+    if (p.dollar) base.notes.push(NOTE.dollar(p.dollar.usd, p.dollar.rate, lang));
+    if (p.codeMade) base.notes.push(NOTE.codeMade(lang));
+    if (p.codeOdd) base.notes.push(NOTE.codePattern(lang));
     if (p.errors.length) {
-      items.push({ ...base, kind: "invalid", reasons: p.errors.map((e) => pick(ERROR_LABELS[e], lang) || e) });
+      items.push({ ...base, kind: "invalid", reasons: p.errors.map((e) => quoted(e, p.cells, lang)), needs: [...new Set(p.errors.map((e) => ERROR_NEEDS[e]).filter(Boolean))] });
       continue;
     }
-    const rawCode = p.cells.code === undefined || p.cells.code === null ? "" : String(p.cells.code).trim();
-    if (code && rawCode && rawCode !== code) base.notes.push(NOTE.code(rawCode, code, lang));
     if (p.draft.compound) {
       const canon = known.get(compoundKey(p.draft.compound));
       if (canon && canon !== p.draft.compound) {
@@ -149,7 +217,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
     const phone = p.draft.details?.owner_phone;
     if (phone && !EGY_PHONE.test(phone.replace(/[\s-]/g, ""))) base.notes.push(NOTE.phone(lang));
     if (code && seen.has(code)) {
-      items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"] });
+      items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
       continue;
     }
     if (code) seen.add(code);
@@ -161,7 +229,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
       }
       const ev = Rules.evaluate(composeRow(existing, dropEchoes(existing, p.draft), lang), { lang });
       if (!ev.ok) {
-        items.push({ ...base, code: existing.code, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)) });
+        items.push({ ...base, code: existing.code, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)), needs: needsOf(ev.blockers) });
         continue;
       }
       const patch = Edits.diffPatch(existing, ev.listing);
@@ -181,7 +249,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
     } else {
       const ev = Rules.evaluate(composeRow(null, p.draft, lang), { lang });
       if (!ev.ok) {
-        items.push({ ...base, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)) });
+        items.push({ ...base, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)), needs: needsOf(ev.blockers) });
         continue;
       }
       if (p.status && p.status !== "active") ev.listing.status = p.status;
@@ -190,7 +258,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   }
 
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
-  return { items, counts };
+  return { items, counts, usd_rate: rate };
 }
 
 /** Saves a plan; returns its id. */
@@ -279,23 +347,124 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
 }
 
 const MAX_CELL = 600;
+const EDITABLE = new Set(SheetImport.COLUMNS.map(([k]) => k));
+const countKinds = (items) => items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
 
 /**
- * Edits one row of a ready Excel plan and plans the whole sheet again from the edited cells, so the row goes through
- * the same parsing and rules as an upload. Only the sheet's own columns can be edited.
+ * Edits one row of a ready Excel plan and plans just that row again from the edited cells, so it goes through the same
+ * parsing and rules as an upload. Any known column can be edited (a missing "sale or rent" included).
  * @param {Object} cells - field key → new text
  * @returns {Promise<boolean>} false when the plan is not ready, expired, has no stored sheet or the row is unknown
  */
 async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } = {}) {
   const imp = await loadImport(pool, broker, id);
   if (!imp || imp.kind !== "excel" || imp.status !== "ready" || new Date(imp.expires_at) <= new Date()) return false;
-  const { rows, columns } = imp.payload;
+  const { rows, items } = imp.payload;
   const target = Array.isArray(rows) ? rows.find((r) => r.rowNumber === Number(rowNumber)) : null;
-  if (!target) return false;
-  for (const key of columns || []) if (key in cells) target.cells[key] = String(cells[key] ?? "").slice(0, MAX_CELL).trim();
-  const plan = await planExcel(pool, broker, { rows }, { lang });
-  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...plan, rows, columns })]);
+  const at = Array.isArray(items) ? items.findIndex((i) => i.row === Number(rowNumber)) : -1;
+  if (!target || at < 0) return false;
+  for (const [key, v] of Object.entries(cells || {})) {
+    if (!EDITABLE.has(key)) continue;
+    if (key === "code") {
+      delete target.code_made;
+      delete target.code_odd;
+    }
+    const value = String(v ?? "").slice(0, MAX_CELL).trim();
+    if (value) target.cells[key] = value;
+    else delete target.cells[key];
+  }
+  const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang, usdRate: imp.payload.usd_rate ?? null })).items;
+  if (item.code && ["new", "changed"].includes(item.kind) && items.some((i) => i.row !== item.row && i.code === item.code && ["new", "changed"].includes(i.kind))) {
+    Object.assign(item, { kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
+  }
+  items[at] = item;
+  const columns = [...new Set([...(imp.payload.columns || []), ...Object.keys(target.cells)])];
+  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, items, counts: countKinds(items), columns })]);
   return true;
+}
+
+/* Batch changes: one decision for every row it fits (rent for the whole sheet, how to read several prices, a dollar rate). */
+
+const cellText = (r, k) => (r.cells[k] === undefined || r.cells[k] === null ? "" : String(r.cells[k]));
+const hasSeveralPrices = (r) => {
+  const t = cellText(r, "price_value");
+  return Boolean(t) && !Mixed.FOREIGN.test(t) && SheetImport.money(t) === null && Mixed.priceText(t)?.ambiguous === true;
+};
+const isDollars = (r) => Mixed.dollars(cellText(r, "price_value")) !== null;
+
+const typeKey = (v) => String(v ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+/** The type words the sheet uses that the app does not know, most used first: [{ value, count }]. */
+function unknownTypes(rows) {
+  const seen = new Map();
+  for (const r of rows) {
+    const v = typeKey(r.cells.property_type);
+    if (v && !SheetImport.propertyType(v)) seen.set(v, (seen.get(v) || 0) + 1);
+  }
+  return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([value, count]) => ({ value, count }));
+}
+const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "twinhouse", "office", "shop", "clinic", "commercial", "land"];
+
+/** How many rows each batch action would touch, for the review page. */
+function batchStats(payload) {
+  const rows = payload.rows || [];
+  return {
+    no_type: (payload.items || []).filter((i) => i.kind === "invalid" && (i.needs || []).includes("listing_type")).length,
+    several_prices: rows.filter(hasSeveralPrices).length,
+    dollars: rows.filter(isDollars).length,
+    usd_rate: payload.usd_rate ?? null,
+    unknown_types: unknownTypes(rows)
+  };
+}
+
+/**
+ * Applies one batch change to a ready Excel plan's cells and plans the sheet again.
+ * @param {{ action: "listing_type"|"price_pick"|"type_map", value: string, scope?: "missing"|"all" }} change
+ * @returns {Promise<{ touched: number } | null>} null when the plan is not ready or expired
+ */
+async function batchExcel(pool, broker, id, { action, value, scope = "missing", from = "" }, { lang = "ar" } = {}) {
+  const imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel" || imp.status !== "ready" || new Date(imp.expires_at) <= new Date()) return null;
+  const rows = Array.isArray(imp.payload.rows) ? imp.payload.rows : [];
+  const defaults = { ...(imp.payload.defaults || {}) };
+  const original = (r, text) => {
+    r.cells.notes = [r.cells.notes, `${lang === "en" ? "Price in the sheet" : "السعر في الشيت"}: ${text}`].filter(Boolean).join(" · ");
+  };
+  let touched = 0;
+  let usdRate = imp.payload.usd_rate ?? null;
+  if (action === "listing_type" && ["rent", "sale"].includes(value)) {
+    for (const r of rows) {
+      if (scope === "all" || !cellText(r, "listing_type").trim()) {
+        r.cells.listing_type = value;
+        touched++;
+      }
+    }
+    defaults.listing_type = value;
+  } else if (action === "price_pick" && ["long", "first"].includes(value)) {
+    for (const r of rows) {
+      if (!hasSeveralPrices(r)) continue;
+      const v = Mixed.pickPrice(cellText(r, "price_value"), value);
+      if (!v) continue;
+      original(r, cellText(r, "price_value"));
+      r.cells.price_value = v;
+      touched++;
+    }
+  } else if (action === "type_map" && TYPE_KEYS.includes(value) && typeKey(from)) {
+    for (const r of rows) {
+      if (typeKey(r.cells.property_type) === typeKey(from) && !SheetImport.propertyType(r.cells.property_type)) {
+        r.cells.property_type = value;
+        touched++;
+      }
+    }
+  } else if (action === "usd_rate") {
+    // Reads the agency's central rate again (set in Settings after the upload) and plans the dollar rows with it.
+    usdRate = await agencyUsdRate(pool, broker.agency_id);
+    if (!usdRate) return { touched: 0, no_rate: true };
+    touched = rows.filter(isDollars).length;
+  }
+  if (!touched) return { touched: 0 };
+  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang, usdRate });
+  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, rows, defaults })]);
+  return { touched };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -423,6 +592,9 @@ module.exports = {
   loadImport,
   applyExcel,
   editExcelRow,
+  batchExcel,
+  batchStats,
+  TYPE_KEYS,
   findDuplicate,
   startGroupImport,
   waitForGroupImport,
