@@ -104,6 +104,8 @@ async function handleInteractive(broker, message, ctx) {
   if (await DealsWA.handleButton(broker, replyId, ctx)) return "done";
   // Catalogue quick-update buttons (cu:*): managers only, each reloads the update (lib/catalogueBot.js).
   if (await CatalogueBot.handleButton(broker, replyId, ctx)) return "done";
+  // Search feedback buttons (sx:*): report a wrong search, or read it again with the AI (lib/search.js).
+  if (S && S.handleButton && (await S.handleButton(broker, replyId, ctx))) return "done";
 
   // 2. DISCARD DRAFT (DRAFT_CANCEL / draft_cancel)
   if (replyId === "DRAFT_CANCEL" || replyId === "draft_cancel") {

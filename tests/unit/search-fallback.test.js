@@ -60,6 +60,16 @@ const CASES = [
   { q: "شقة قسط سنتين", want: { property_types: ["apartment"], payment_years: 2, place_terms: [] } },
   { q: "apartment installments 8 years", want: { property_types: ["apartment"], payment_installments: true, payment_years: 8, place_terms: [] } },
   { q: "شقة قسط ٨ سنوات في التجمع", want: { property_types: ["apartment"], payment_years: 8, place_terms: [] } },
+  // Egyptian broker phrasing (POC review, 2026-11): attached "ب", "the million and a half", thousands after millions.
+  { q: "شقة ب٥ مليون", want: { property_types: ["apartment"], price_max: 5000000 } },
+  { q: "عايز شقة قريبة من الجامعة الامريكية ب٥ مليون وقسط ٨ سنين", want: { property_types: ["apartment"], price_max: 5000000, payment_years: 8 } },
+  { q: "شقة تحت المليون ونص", want: { property_types: ["apartment"], price_max: 1500000 } },
+  { q: "شقه ب ٣ مليون و٣٠٠ الف", want: { property_types: ["apartment"], price_max: 3300000 } },
+  { q: "شقة 3 غرف مش اكتر من 6 مليون ومقدم مش اكتر من 600 الف", want: { property_types: ["apartment"], price_max: 6000000, price_min: null, max_down_payment: 600000 } },
+  { q: "ستوديو في الرحاب للايجار بحد اقصى 8000", want: { listing_type: "rent", property_types: ["studio"], price_max: 8000 } },
+  { q: "شقة في مدينتي دور تالت", want: { property_types: ["apartment"], floor_min: 3, floor_max: 3 } },
+  { q: "شقة ٣ غرف و٢ حمام", want: { property_types: ["apartment"], bedrooms_min: 3, bathrooms_min: 2 } },
+  { q: "شقة ٢٠٠ متر رووف", want: { property_types: ["apartment"], area_min: 200, features: ["roof"] } },
   { q: "hi", want: { intent: "other" } },
   { q: "مرحبا", want: { intent: "other" } }
 ];

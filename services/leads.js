@@ -22,8 +22,8 @@ const NOTE_MAX = 1000;
 const PAGE = 20;
 const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until";
-const LEAD_COLS = "l.*, a.name AS assignee_name";
+const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until, team_lead_id";
+const LEAD_COLS = "l.*, a.name AS assignee_name, a.team_lead_id AS assignee_team_lead_id";
 const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id"; // vis:exempt: every use adds Vis.leads("l") to its WHERE
 
 // The fields each reversible event changes; undo puts them back.
@@ -91,7 +91,7 @@ async function loadLead(db, agencyId, key, { forUpdate = false } = {}) {
   const k = keyClause(key);
   if (!k) return null;
   const { rows } = await db.query(
-    forUpdate ? `SELECT l.* FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql} FOR UPDATE` : `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql}`,
+    forUpdate ? `SELECT l.*, (SELECT a.team_lead_id FROM brokers a WHERE a.id = l.assigned_broker_id AND a.agency_id = l.agency_id) AS assignee_team_lead_id FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql} FOR UPDATE` : `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql}`,
     [agencyId, k.value]
   );
   return rows[0] || null;
@@ -292,7 +292,37 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
  * @param {Function} change - lead → { fields, data } | { error } | { unchanged: true }
  * @returns {Promise<{ ok, lead, eventId } | { error } | { conflict, lead } | { unchanged, lead }>}
  */
+// Changes a team lead hears about (on the lead's assignee's team).
+const TEAM_NOTICE_KINDS = ["note", "stage", "contacted", "follow_up_set", "follow_up_done", "flag", "flag_handled"];
+
+/** Tells the team lead of the lead's assignee about an update or a status change (not to the one who made it). */
+async function tellTeamLead(pool, actor, lead, kind, eventId, now) {
+  if (!lead.assigned_broker_id) return;
+  const { rows } = await pool.query(
+    "SELECT t.id, t.agency_id, t.name, t.role, t.is_active, t.preferred_lang, t.notify_prefs FROM brokers b JOIN brokers t ON t.id = b.team_lead_id WHERE b.id = $1 AND t.is_active",
+    [lead.assigned_broker_id]
+  );
+  const tl = rows[0];
+  if (!tl || tl.id === actor.id) return;
+  const what = { note: L(tl, "تحديث", "update"), stage: L(tl, "تغيير مرحلة", "stage change"), contacted: L(tl, "اتكلّم", "contacted"), follow_up_set: L(tl, "متابعة", "follow-up"), follow_up_done: L(tl, "متابعة خلصت", "follow-up done"), flag: L(tl, "طلب مساعدة", "request"), flag_handled: L(tl, "طلب اتعالج", "request done") }[kind] || kind;
+  await Notifications.notifyBroker(pool, tl, {
+    kind: "manager_alert",
+    dedupeKey: `team:${eventId}:${tl.id}`,
+    title: L(tl, `🧑‍💼 ${actor.name}: ${what} · ${Card.displayName(lead, tl.preferred_lang)}`, `🧑‍💼 ${actor.name}: ${what} · ${Card.displayName(lead, tl.preferred_lang)}`),
+    body: Card.refLabel(lead.ref),
+    url: leadUrl(lead),
+    leadId: lead.id,
+    now
+  });
+}
+
 async function mutate(pool, actor, key, { kind, version = null, manage = false, now = new Date() }, change) {
+  const out = await mutateInTransaction(pool, actor, key, { kind, version, manage, now }, change);
+  if (out.ok && TEAM_NOTICE_KINDS.includes(kind) && !out.lead.is_private) await tellTeamLead(pool, actor, out.lead, kind, out.eventId, now);
+  return out;
+}
+
+async function mutateInTransaction(pool, actor, key, { kind, version = null, manage = false, now = new Date() }, change) {
   return withTransaction(pool, async (client) => {
     const lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
@@ -393,8 +423,12 @@ async function assignLead(pool, actor, key, toBrokerId, { version = null, now = 
     if (!target || !target.is_active) return { error: "assignee" };
     if (Rules.awayNow(target, now)) return { error: "assignee_away" };
   }
+  // Managers may reassign anything; a team lead only within their team, or back to the managers (no one).
+  const found = await loadLead(pool, actor.agency_id, key);
+  if (!found) return { error: "not_found" };
+  if (!Authz.canReassignLead(actor, found, target ? target.team_lead_id : null, target ? target.id : null)) return { error: "forbidden" };
   const deadline = target && target.id !== actor.id ? await LeadRules.deadlineFor(pool, actor.agency_id, now) : null;
-  const r = await mutate(pool, actor, key, { kind: "assigned", version, manage: true, now }, (lead) =>
+  const r = await mutate(pool, actor, key, { kind: "assigned", version, manage: false, now }, (lead) =>
     lead.assigned_broker_id === (target?.id || null)
       ? { unchanged: true }
       : {
@@ -605,6 +639,15 @@ async function postponeFollowUp(pool, actor, key, { days = 1, version = null, no
  * Reverts a reversible event within 10 minutes, if every later change was undone too (else a conflict).
  * @returns {Promise<{ ok, lead } | { error: "not_found"|"forbidden"|"not_undoable"|"undo_expired"|"already_undone" } | { conflict, lead }>}
  */
+/** A team lead's own reassignment: undoable when the assignee it restores is in their team, or nobody. */
+async function teamLeadMayUndoAssign(client, actor, ev) {
+  if (!Authz.isTeamLead(actor) || ev.broker_id !== actor.id) return false;
+  const prevId = ev.data?.prev?.assigned_broker_id || null;
+  if (!prevId || prevId === actor.id) return true;
+  const { rows } = await client.query("SELECT team_lead_id FROM brokers WHERE id = $1 AND agency_id = $2", [prevId, actor.agency_id]);
+  return rows[0]?.team_lead_id === actor.id;
+}
+
 async function undo(pool, actor, eventId, { now = new Date() } = {}) {
   if (!/^\d+$/.test(String(eventId))) return { error: "not_found" };
   return withTransaction(pool, async (client) => {
@@ -613,8 +656,10 @@ async function undo(pool, actor, eventId, { now = new Date() } = {}) {
     if (!ev) return { error: "not_found" };
     const lead = await loadLead(client, actor.agency_id, ev.lead_id, { forUpdate: true });
     if (!lead) return { error: "not_found" };
-    const managerOnly = ev.kind === "assigned";
-    if (managerOnly ? !Authz.canManageLeads(actor) : !Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    if (ev.kind === "assigned") {
+      // A team lead may cancel their own reassignment when the assignee it restores is in their team (or nobody).
+      if (!Authz.canManageLeads(actor) && !(await teamLeadMayUndoAssign(client, actor, ev))) return { error: "forbidden" };
+    } else if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
     if (!(ev.kind in REVERSIBLE)) return { error: "not_undoable" };
     if (ev.undone_at) return { error: "already_undone" };
     if (ev.broker_id !== actor.id && !Authz.isManager(actor)) return { error: "forbidden" };
@@ -700,7 +745,11 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
     args.push(v);
     where.push(sql.replace("?", `$${args.length}`));
   };
-  if (!Authz.isManager(actor)) add("l.assigned_broker_id = ?", actor.id);
+  if (Authz.isTeamLead(actor)) {
+    // A team lead's list: their own leads and the leads of brokers in their team.
+    args.push(actor.id);
+    where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);
+  } else if (!Authz.isManager(actor)) add("l.assigned_broker_id = ?", actor.id);
   else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
   else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
   if (f.stage && Stages.STAGES.includes(f.stage)) add("l.stage = ?", f.stage);

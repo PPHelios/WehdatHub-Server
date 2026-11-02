@@ -68,21 +68,20 @@ async function open(pg, path) {
   await pg.goto(base + path, { waitUntil: "networkidle" });
 }
 
-test("a broker marks a lead as Needs manager with a note; the manager sees it and handles it with a reply", async () => {
+test("a broker asks a manager about a lead with a note; the manager sees it and marks it done with a reply", async () => {
   const broker = await signIn("broker");
   await open(broker, `/app/leads/${lead.ref}`);
-  // Centre the stage choice first: a sticky bar at the bottom of the phone screen can cover it otherwise.
-  await broker.locator("input[name=stage][value=viewing]").evaluate((el) => el.scrollIntoView({ block: "center" }));
-  await broker.locator("input[name=stage][value=viewing]").check({ force: true });
-  await broker.locator("label:has(input[name=needs_manager])").click();
-  expect(await broker.locator("input[name=needs_manager]").isChecked()).toBe(true);
-  await broker.locator("input[name=flag_text]").fill("Client wants a price below the list");
-  await broker.locator("#stage button[type=submit]").click();
+  // The request has its own form under the lead page, separate from the stage form.
+  await broker.locator("details:has(select[name=to])").evaluate((el) => el.setAttribute("open", ""));
+  await broker.locator("select[name=to]").selectOption("manager");
+  await broker.locator("form[action$='/flag'] textarea[name=text]").fill("Client wants a price below the list");
+  await broker.locator("form[action$='/flag'] button[type=submit]").click();
   await broker.waitForLoadState("networkidle");
 
-  const flagged = await h.query("SELECT flagged_at, flag_note FROM leads WHERE id = $1", [lead.id]);
-  expect(flagged[0].flagged_at).not.toBeNull();
-  expect(flagged[0].flag_note).toMatch(/price below/);
+  const requests = await h.query("SELECT to_role, note, handled_at FROM lead_requests WHERE lead_id = $1", [lead.id]);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ to_role: "manager", handled_at: null });
+  expect(requests[0].note).toMatch(/price below/);
 
   const manager = await signIn("admin");
   await open(manager, "/app/leads/needs-action");
@@ -91,8 +90,9 @@ test("a broker marks a lead as Needs manager with a note; the manager sees it an
   await manager.locator(`form[action$="/flag/handle"] button[type=submit]`).click();
   await manager.waitForLoadState("networkidle");
 
-  const after = await h.query("SELECT flagged_at FROM leads WHERE id = $1", [lead.id]);
-  expect(after[0].flagged_at).toBeNull();
+  const after = await h.query("SELECT reply, handled_at FROM lead_requests WHERE lead_id = $1", [lead.id]);
+  expect(after[0].handled_at).not.toBeNull();
+  expect(after[0].reply).toBe("Offer 5% less, client agreed");
 });
 
 test("a broker asks for secret details on a searched unit; the manager allows it and the broker can see them", async () => {

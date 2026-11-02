@@ -6,9 +6,10 @@
 
 const crypto = require("crypto");
 const AI = require("../lib/ai");
+const AiBlock = require("../lib/aiBlock");
 const Store = require("../lib/listingStore");
 const Financials = require("../lib/financials");
-const { isManager } = require("../lib/authz");
+const { isManager, isAgencyOwner } = require("../lib/authz");
 const U = require("../domain/catalogueUpdate");
 const Stages = require("../domain/leadStages");
 const Commission = require("../domain/commission");
@@ -23,6 +24,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const isId = (v) => UUID_RE.test(String(v || ""));
 const cairoDay = (now) => Stages.toCairoLocal(now).slice(0, 10);
 const bad = (error, extra = {}) => ({ error, ...extra });
+/** "quota" | "daily" | "off" when the AI did not run for that reason, else null. */
+const blocked = (err) => {
+  const k = AiBlock.kindOf(err);
+  return k === "ai" ? null : k;
+};
 
 /** A voice note → its words (counted as a voice note against the allowance). */
 async function transcribe(voice, ctx) {
@@ -96,7 +102,7 @@ async function interpret(pool, actor, { text = "", voice = null, channel = "web"
   try {
     if (!words && voice) words = await transcribe(voice, ctx);
   } catch (err) {
-    return bad(/QUOTA/.test(err.code || "") ? "quota" : "not_understood");
+    return bad(blocked(err) || "not_understood", { owner: isAgencyOwner(actor) });
   }
   words = words.slice(0, MAX_INPUT);
   if (!words) return bad("empty");
@@ -106,7 +112,7 @@ async function interpret(pool, actor, { text = "", voice = null, channel = "web"
   try {
     said = await read(words, { projects, today, lang, ctx });
   } catch (err) {
-    return bad(/QUOTA/.test(err.code || "") ? "quota" : "not_understood", { input: words });
+    return bad(blocked(err) || "not_understood", { input: words, owner: isAgencyOwner(actor) });
   }
   if (!said) return bad("not_understood", { input: words });
 
@@ -389,7 +395,11 @@ function errorText(out, lang = "ar") {
     case "empty":
       return L(lang, "اكتب أو سجّل التحديث الأول.", "Type or record the update first.");
     case "quota":
-      return L(lang, "⛔ حد الذكاء الاصطناعي خلص (حد اليوم أو رصيد الباقة).", "⛔ The AI limit was reached (today's limit or your plan's allowance).");
+    case "daily":
+    case "off":
+      return AiBlock.text(out.error, lang, { owner: Boolean(out.owner) });
+    case "rate":
+      return L(lang, "⏳ طلبات كتير في دقيقة. استنى شوية.", "⏳ Too many requests in a minute. Wait a moment.");
     case "no_project":
       return L(lang, "🏗️ مش عارفين أنهي مشروع. اكتب اسم المشروع زي ما هو في الكتالوج.", "🏗️ Which project? Write its name as it is in the catalogue.");
     case "no_units":

@@ -6,6 +6,7 @@ const Q = require("../domain/searchQuery");
 const Vis = require("../lib/visibility");
 const PlaceNames = require("../lib/placeNames");
 const Fx = require("./fx");
+const Switches = require("./aiSwitches");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -53,7 +54,8 @@ RULES:
 - Units are searched by their English text for now, so a compound or area said in Arabic must come back in its English spelling (e.g. "ازاد" → "Azad").
 - "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
 - "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).
-- بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".`;
+- بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".
+- Exclusions are NEVER filters: what follows "بدون" / "من غير" / "مش في" / "without" / "not" is left out completely ("شقة بدون مصعد" → apartment only, no elevator feature). "الدور الاخير" / "last floor" and "قانون جديد" / "new rent law" are also left out.`;
 
 function featureListForPrompt() {
   const Features = require("../domain/features");
@@ -61,11 +63,21 @@ function featureListForPrompt() {
 }
 
 /**
- * Parses a request through the AI gateway, falling back to the local parser on any failure.
- * @returns {Promise<{ parsed, source: "ai"|"fallback", modelUsed, usage, ms }>}
+ * Reads a request. The local parser goes first: when it is sure (every word and number used), its answer is the answer
+ * and no AI call (no credit) is made. When it is unsure, or the broker asks for it (forceAi), the AI reads the request;
+ * if the AI fails or is switched off, the local answer stands.
+ * @returns {Promise<{ parsed, source: "parser"|"ai"|"fallback", modelUsed, usage, ms, local, ai, reasons }>}
+ *   source "fallback" = the parser was unsure, the AI could not answer. local / ai keep both readings for the search log.
  */
-async function parseRequest(AI, { text = "", ctx = {} } = {}) {
+async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true } = {}) {
   const t0 = Date.now();
+  const local = Q.fallbackParse(text);
+  const reasons = local.meta?.reasons || [];
+  // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).
+  if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
+  if (!aiAllowed || (!forceAi && !local.meta?.unsure)) {
+    return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons };
+  }
   try {
     const res = await AI.generateWithCascade({
       contents: [
@@ -81,10 +93,12 @@ async function parseRequest(AI, { text = "", ctx = {} } = {}) {
     const raw = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
     const parsed = Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text);
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
-    return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0 };
+    // Phrases the filters cannot say are the parser's to report; the AI reading carries them over.
+    parsed.meta = { ...(local.meta || {}), unsure: false };
+    return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0, local, ai: parsed, reasons };
   } catch (err) {
     console.warn("AI search parsing failed, using the local parser:", err.message);
-    return { parsed: Q.fallbackParse(text), source: "fallback", modelUsed: "fallback_regex", usage: {}, ms: Date.now() - t0 };
+    return { parsed: local, source: "fallback", modelUsed: "fallback_regex", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, aiError: err.code || "ai" };
   }
 }
 
@@ -291,10 +305,10 @@ async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE) {
  * The whole search for one request: parse → intent guard → run.
  * @returns {Promise<{ status: "results"|"none"|"small_talk"|"listing", parsed, source, rows, ids, total, relaxed, timings }>}
  */
-async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE }) {
-  const parse = await parseRequest(AI, { text, ctx });
+async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true }) {
+  const parse = await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
   const intent = Q.classifyIntent(parse.parsed);
-  const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage };
+  const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons };
   if (intent !== "search") return { ...base, status: intent, rows: [], ids: [], total: 0, relaxed: false, timings: { parseMs: parse.ms, dbMs: 0 } };
   const res = await runSearch(pool, agencyId, parse.parsed, { pageSize });
   return { ...base, ...res, status: res.rows.length ? "results" : "none", timings: { parseMs: parse.ms, dbMs: res.dbMs } };

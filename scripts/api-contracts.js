@@ -102,4 +102,5 @@ if (require.main === module) {
   console.log("API_CONTRACTS.json updated.");
 }
 
-module.exports = { paramNames, describeModule, build, format, FILE };
+module.exports = {
+  WORKER_ENTRIES, paramNames, describeModule, build, format, FILE };

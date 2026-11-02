@@ -9,6 +9,7 @@ const SheetGrid = require("../../lib/sheetGrid");
 const FailedRows = require("../../lib/importFailed");
 const { logOperation } = require("../../lib/db");
 const { isManager } = require("../../lib/authz");
+const AiBlock = require("../../lib/aiBlock");
 const Imports = require("../../services/imports");
 const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
@@ -255,7 +256,7 @@ ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
   ${r?.duplicate ? html`<p class="warn">⚠️ ${L(lang, "شكلها نفس الوحدة", "Looks like the same unit as")} <a href="/app/units/${encodeURIComponent(r.duplicate)}">${r.duplicate}</a></p>` : ""}
   ${twin ? html`<p class="warn">⚠️ ${L(lang, `شكلها نفس الوحدة في بوست ${r.same_as + 1}`, `Looks like the same unit as post ${r.same_as + 1}`)}</p>` : ""}
   ${r && !r.ok && !r.error ? html`<p class="bad">⛔ ${r.blockers.join("، ")}</p>` : ""}
-  ${r?.error ? html`<p class="bad">❌ ${r.error === "quota" ? L(lang, "حد الذكاء الاصطناعي خلص (حد اليوم أو رصيد الباقة)", "AI limit reached (today's limit or the plan's allowance)") : L(lang, "تعذرت قراءته", "Could not be read")}</p>` : ""}
+  ${r?.error ? html`<p class="bad">❌ ${["quota", "daily", "off"].includes(r.error) ? AiBlock.text(r.error, lang) : L(lang, "تعذرت قراءته", "Could not be read")}</p>` : ""}
 </li>`;
   })}</ol>
 ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار", "Add the selected units")}</button>`}

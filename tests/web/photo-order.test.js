@@ -63,36 +63,23 @@ test("the edit form saves the dragged order; AI curation then leaves it alone", 
   expect(AI.calls.filter((x) => x.operation === "vision_curation")).toHaveLength(0);
 });
 
-test("managers switch AI photo ordering off on My usage; curation is skipped", async () => {
+test("the agency owner switches AI photo ordering off on the AI features page; curation is skipped", async () => {
   const l = await unitWithPhotos(2);
-  const { agent, csrf } = await signIn(h, "admin");
-  expect((await agent.get("/app/usage")).text).toMatch(/data-ai-photo-order/);
-  const r = await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", code_prefix: "AA" });
-  expect(r.status).toBe(303);
+  await h.seedBroker("owner");
+  const { agent, csrf } = await signIn(h, "owner");
+  expect((await agent.get("/app/usage/ai")).text).toMatch(/name="f_photo_order"/);
+  const off = { _csrf: csrf, tab_documents: "on", f_doc_reads: "on" };
+  expect((await agent.post("/app/usage/ai").type("form").send(off)).status).toBe(303);
   expect((await h.query("SELECT crm_settings FROM agencies WHERE id = $1", [l.agency_id]))[0].crm_settings.ai_photo_order).toBe(false);
-  expect((await agent.get("/app/usage")).text).not.toMatch(/name="ai_photo_order" value="on" checked/);
   const out = await ensureListingImagesCurated(l.id, { pool: h.pool });
   expect(out.map((i) => i.url)).toEqual(["https://img.test/0.jpg", "https://img.test/1.jpg"]);
   expect(AI.calls.filter((x) => x.operation === "vision_curation")).toHaveLength(0);
-  await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", ai_photo_order: "on" });
+  await agent.post("/app/usage/ai").type("form").send({ ...off, f_photo_order: "on" });
   expect((await h.query("SELECT crm_settings FROM agencies WHERE id = $1", [l.agency_id]))[0].crm_settings.ai_photo_order).toBe(true);
 });
 
-test("add form: ticking 'I ordered them myself' stores the photos as a manual order that AI curation skips", async () => {
-  const sharp = require("sharp");
-  const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#888" } }).png().toBuffer();
+test("managers and brokers cannot open or save the AI features page", async () => {
   const { agent, csrf } = await signIn(h, "admin");
-  const page = await agent.get("/app/units/new?lang=en");
-  expect(page.text).toContain("saves AI credits");
-  let r = agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("photo_manual", "on");
-  for (const [k, v] of Object.entries(FIELDS)) r = r.field(k, v);
-  r = r.attach("photos", png, { filename: "a.png", contentType: "image/png" }).attach("photos", png, { filename: "b.png", contentType: "image/png" });
-  const res = await r;
-  expect(res.status).toBe(303);
-  const code = decodeURIComponent(res.headers.location.match(/units\/([^?]+)/)[1]);
-  const [unit] = await h.query("SELECT id, details FROM listings WHERE code = $1", [code]);
-  expect(unit.details.photo_order).toBe("manual");
-  const out = await ensureListingImagesCurated(unit.id, { pool: h.pool });
-  expect(out).toHaveLength(2);
-  expect(AI.calls.filter((x) => x.operation === "vision_curation")).toHaveLength(0);
+  expect((await agent.get("/app/usage/ai")).status).toBe(403);
+  expect((await agent.post("/app/usage/ai").type("form").send({ _csrf: csrf })).status).toBe(403);
 });

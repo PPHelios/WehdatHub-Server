@@ -5,6 +5,7 @@
 
 const L = require("../../lib/listing");
 const AI = require("../../lib/ai");
+const AiBlock = require("../../lib/aiBlock");
 const Store = require("../../lib/listingStore");
 const Edits = require("../../lib/edits");
 const Authz = require("../../lib/authz");
@@ -132,13 +133,13 @@ function register(web, { pool, page }) {
       );
     } catch (err) {
       console.warn("Web extraction failed:", err.message);
-      const quota = err.code && /QUOTA/.test(err.code);
+      const why = AiBlock.kindOf(err);
       return res.type("html").send(
         String(unitForm({
           ...view,
           values: Form.formFromUnit({ ...base, code: form.code }),
-          error: quota
-            ? L10n(lang, "⛔ رصيد الذكاء الاصطناعي خلص. املأ البيانات يدوياً هنا من غير رصيد، أو اطلب رصيد زيادة من صفحة الباقة.", "⛔ Your AI credits are used up. Fill the fields by hand here (no credits needed) or ask for more on the Plan page.")
+          error: why !== "ai"
+            ? `${AiBlock.text(why, lang, { owner: Authz.isAgencyOwner(broker) })} ${L10n(lang, "املأ البيانات يدوياً هنا، من غير رصيد.", "Fill the fields by hand here, no credits needed.")}`
             : L10n(lang, "❌ تعذر قراءة الوصف حالياً. املأ البيانات يدوياً أو حاول تاني.", "❌ Could not read the description right now. Fill the fields by hand or try again.")
         }))
       );

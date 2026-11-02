@@ -296,8 +296,7 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   referred_by uuid,
   referral_rewarded_at timestamp with time zone,
   referral_credit_months smallint DEFAULT 0 NOT NULL,
-  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL,
-  portal_alerts boolean DEFAULT true NOT NULL
+  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -324,7 +323,8 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   quiet_line boolean DEFAULT true NOT NULL,
   target_deals smallint,
   target_commission bigint,
-  onboarding jsonb DEFAULT '{}'::jsonb NOT NULL
+  onboarding jsonb DEFAULT '{}'::jsonb NOT NULL,
+  team_lead_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1306,6 +1306,37 @@ CREATE TABLE IF NOT EXISTS public.lead_requests (
   reply text
 );
 
+CREATE TABLE IF NOT EXISTS public.search_log (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid,
+  channel text NOT NULL,
+  query_text text NOT NULL,
+  source text NOT NULL,
+  reasons text[] DEFAULT '{}'::text[] NOT NULL,
+  local_filters jsonb,
+  ai_filters jsonb,
+  used_filters jsonb,
+  unapplied text[] DEFAULT '{}'::text[] NOT NULL,
+  leftover text[] DEFAULT '{}'::text[] NOT NULL,
+  total integer DEFAULT 0 NOT NULL,
+  relaxed boolean DEFAULT false NOT NULL,
+  result_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+  rerun_of uuid,
+  audit jsonb,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.search_reports (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  search_log_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid,
+  note text,
+  status text DEFAULT 'open'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1367,6 +1398,8 @@ ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_pkey PRIMARY KEY (id);
 ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+ALTER TABLE search_log ADD CONSTRAINT search_log_pkey PRIMARY KEY (id);
+ALTER TABLE search_reports ADD CONSTRAINT search_reports_pkey PRIMARY KEY (id);
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_pkey PRIMARY KEY (kind, key);
 ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
@@ -1397,6 +1430,7 @@ ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
 ALTER TABLE place_names ADD CONSTRAINT place_names_name_key_key UNIQUE (name_key);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
+ALTER TABLE search_reports ADD CONSTRAINT search_reports_search_log_id_broker_id_key UNIQUE (search_log_id, broker_id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp >= 0));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric));
@@ -1414,7 +1448,7 @@ ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check CHECK (((length(credential_id) >= 16) AND (length(credential_id) <= 1400)));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_draft_style_check CHECK (((draft_style IS NULL) OR (length(draft_style) <= 600)));
-ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
+ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text, 'team_lead'::text])));
 ALTER TABLE brokers ADD CONSTRAINT brokers_target_commission_check CHECK (((target_commission IS NULL) OR (target_commission > 0)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_target_deals_check CHECK (((target_deals IS NULL) OR ((target_deals >= 1) AND (target_deals <= 1000))));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
@@ -1556,6 +1590,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_delivery_quarter_check CHECK (((del
 ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
+ALTER TABLE search_reports ADD CONSTRAINT search_reports_status_check CHECK ((status = ANY (ARRAY['open'::text, 'fixed'::text, 'dismissed'::text])));
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
@@ -1578,6 +1613,7 @@ ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (bro
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE brokers ADD CONSTRAINT brokers_team_lead_id_fkey FOREIGN KEY (team_lead_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
@@ -1683,6 +1719,12 @@ ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_broker_id_fkey 
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+ALTER TABLE search_log ADD CONSTRAINT search_log_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE search_log ADD CONSTRAINT search_log_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE search_log ADD CONSTRAINT search_log_rerun_of_fkey FOREIGN KEY (rerun_of) REFERENCES search_log(id) ON DELETE SET NULL;
+ALTER TABLE search_reports ADD CONSTRAINT search_reports_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE search_reports ADD CONSTRAINT search_reports_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE search_reports ADD CONSTRAINT search_reports_search_log_id_fkey FOREIGN KEY (search_log_id) REFERENCES search_log(id) ON DELETE CASCADE;
 ALTER TABLE share_links ADD CONSTRAINT share_links_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE share_links ADD CONSTRAINT share_links_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE share_links ADD CONSTRAINT share_links_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
@@ -1716,6 +1758,7 @@ CREATE INDEX idx_broker_passkeys_broker ON public.broker_passkeys USING btree (b
 CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
+CREATE INDEX brokers_team_lead ON public.brokers USING btree (agency_id, team_lead_id) WHERE (team_lead_id IS NOT NULL);
 CREATE UNIQUE INDEX brokers_telegram_user_uidx ON public.brokers USING btree (telegram_user_id) WHERE (telegram_user_id IS NOT NULL);
 CREATE INDEX idx_catalogue_updates_agency ON public.catalogue_updates USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_commissions_agency_status ON public.commissions USING btree (agency_id, status);
@@ -1815,6 +1858,9 @@ CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING bt
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
 CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
+CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id, created_at DESC);
+CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
+CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
 CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);

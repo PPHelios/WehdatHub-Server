@@ -27,7 +27,7 @@ const FEATURES = [
   { key: "basement", ar: "بدروم", en: "Basement", group: "layout", syn: ["بدروم", "بيزمنت", "basement"] },
   { key: "duplex_layout", ar: "دورين", en: "Two levels", group: "layout", syn: ["دورين", "two levels", "two floors"] },
 
-  { key: "roof", ar: "روف", en: "Roof", group: "outdoor", syn: ["روف", "سطح", "roof", "rooftop", "roof terrace"] },
+  { key: "roof", ar: "روف", en: "Roof", group: "outdoor", syn: ["روف", "رووف", "سطح", "roof", "rooftop", "roof terrace"] },
   { key: "private_garden", ar: "جنينة خاصة", en: "Private garden", group: "outdoor", syn: ["جنينه", "جنينة", "حديقه خاصه", "حديقة خاصة", "حديقه", "حديقة", "جاردن", "private garden", "garden"] },
   { key: "terrace", ar: "تراس", en: "Terrace", group: "outdoor", syn: ["تراس", "terrace", "بلكونه كبيره"] },
   { key: "balcony", ar: "بلكونة", en: "Balcony", group: "outdoor", syn: ["بلكونه", "بلكونة", "balcony"] },

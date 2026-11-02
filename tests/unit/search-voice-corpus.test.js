@@ -80,8 +80,6 @@ const CASES = [
 
 // Places and data the system does not know yet: these must be left as soft words, never turned into other filters.
 const SOFT = [
-  ["شقة في اخر دور", "اخر دور"],
-  ["شقة للبيع بدون عمولة", "بدون عموله"],
   ["شقة اوفر ٣٠٠ الف", "اوفر"]
 ];
 
@@ -112,4 +110,17 @@ describe("voice search corpus", () => {
       expect(Q.fallbackParse(q).filters.place_terms.join(" ")).toContain(word);
     });
   }
+});
+
+// Phrases the filters cannot say are reported as "not applied" (shown to the broker), never guessed into a filter.
+describe("voice search corpus: phrases the filters cannot say", () => {
+  test.each([
+    ["شقة في اخر دور", "اخر دور"],
+    ["شقة للبيع بدون عمولة", "بدون عموله"]
+  ])("%s", (q, phrase) => {
+    const r = Q.fallbackParse(q);
+    expect(r.meta.unapplied.join(" ")).toContain(phrase);
+    expect(r.filters.floor_min).toBeNull();
+    expect(r.filters.place_terms).toEqual([]);
+  });
 });

@@ -7,6 +7,7 @@ const L = require("../lib/listing");
 const Store = require("../lib/listingStore");
 const Edits = require("../lib/edits");
 const Authz = require("../lib/authz");
+const AiBlock = require("../lib/aiBlock");
 const U = require("../lib/util");
 const Rules = require("../domain/fieldRules");
 const Describe = require("../domain/describe");
@@ -647,7 +648,8 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
             duplicate: ev.ok ? await findDuplicate(pool, broker.agency_id, ev.listing) : null
           };
         } catch (err) {
-          if (err.code && /QUOTA/.test(err.code)) stopped = "quota";
+          const why = AiBlock.kindOf(err);
+          if (why !== "ai") stopped = why;
           results[i] = { i, error: stopped || "ai" };
         }
         await save().catch(() => {});

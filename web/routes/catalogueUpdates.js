@@ -78,7 +78,7 @@ ${recent.length ? html`<section class="card"><h2>${L(lang, "آخر التحدي�
     const htmx = req.get("HX-Request") === "true";
     const gate = await RateLimit.hit(pool, `extract:broker:${actor.id}`, RateLimit.LIMITS.extractBroker);
     if (!gate.allowed) {
-      const out = errorCard({ error: "quota" }, lang);
+      const out = errorCard({ error: "rate" }, lang);
       return htmx ? res.status(429).type("html").send(String(out)) : show(req, res, out, 429);
     }
     const file = (req.files?.voice || [])[0];

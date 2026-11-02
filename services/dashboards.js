@@ -100,55 +100,72 @@ async function brokerActivity(pool, agencyId, { since, until = new Date() }) {
   return [...per.values()];
 }
 
-/** The agency dashboard: pipeline now, the period's totals, and the leaderboard (deals, then commission, then moves). */
-async function agencyDashboard(pool, manager, { days = 30, now = new Date(), brokerId = null } = {}) {
+/**
+ * The agency dashboard: pipeline now, the period's totals, and the leaderboard (deals, then commission, then moves).
+ * brokerId narrows it to one broker; teamLeadId to one team lead's brokers (an id that is not a team lead here gives the agency view).
+ */
+async function agencyDashboard(pool, manager, { days = 30, now = new Date(), brokerId = null, teamLeadId = null } = {}) {
   if (!isManager(manager)) return null;
   const period = periodOf(days);
   const since = new Date(now.getTime() - period * DAY);
   const agencyId = manager.agency_id;
   const team = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId]);
   const who = team.rows.some((b) => b.id === brokerId) ? brokerId : null; // an id from another agency is ignored
-  const lf = who ? " AND assigned_broker_id = $2" : "";
-  const a = who ? [agencyId, who] : [agencyId];
-  const { rows: stageRows } = await pool.query(`SELECT stage, count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1${lf} GROUP BY stage`, a);
+  // A team lead's view: the brokers whose team lead is this one (an id from another agency or not a team lead gives nothing).
+  let lead = null;
+  if (teamLeadId && !who && /^[0-9a-f-]{36}$/i.test(String(teamLeadId))) {
+    const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND id = $2 AND lower(role) = 'team_lead'", [agencyId, teamLeadId]);
+    lead = rows[0] || null; // not a team lead here: the agency view
+  }
+  const ids = who ? [who] : lead ? (await pool.query("SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $2", [agencyId, lead.id])).rows.map((r) => r.id) : null;
+  // " AND col = ANY(ids)" when a broker or a team is picked; the agency view has no filter. Pushes ids onto the query's params.
+  const scope = (col, params) => (ids ? ` AND ${col} = ANY($${params.push(ids)}::uuid[])` : "");
+  const a = [agencyId];
+  const { rows: stageRows } = await pool.query(`SELECT stage, count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1${scope("assigned_broker_id", a)} GROUP BY stage`, a);
   const pipeline = Object.fromEntries(Stages.STAGES.map((s) => [s, 0]));
   for (const r of stageRows) pipeline[r.stage] = r.n;
+  const ua = [agencyId, now.toISOString()];
   const { rows: un } = await pool.query(
     `SELECT count(*) FILTER (WHERE assigned_broker_id IS NULL AND stage NOT IN ('won', 'lost'))::int AS unassigned,
             count(*) FILTER (WHERE stage = 'new' AND last_contact_at IS NULL)::int AS uncontacted,
             count(*) FILTER (WHERE follow_up_status = 'open' AND next_follow_up_at < $2)::int AS overdue
-       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1${who ? " AND assigned_broker_id = $3" : ""}`,
-    who ? [agencyId, now.toISOString(), who] : [agencyId, now.toISOString()]
+       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1${scope("assigned_broker_id", ua)}`,
+    ua
   );
+  const us = [agencyId, new Date(now.getTime() - 21 * DAY).toISOString()];
   const { rows: units } = await pool.query(
     `SELECT count(*) FILTER (WHERE status = 'active')::int AS active,
             count(*) FILTER (WHERE status = 'active' AND coalesce(confirmed_at, updated_at) < $2)::int AS stale
-       FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1${who ? " AND broker_id = $3" : ""}`,
-    who ? [agencyId, new Date(now.getTime() - 21 * DAY).toISOString(), who] : [agencyId, new Date(now.getTime() - 21 * DAY).toISOString()]
+       FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1${scope("broker_id", us)}`,
+    us
   );
+  const { rows: teamLeads } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active AND lower(role) = 'team_lead' ORDER BY name", [agencyId]);
+  const ds = [agencyId, since.toISOString()];
   const { rows: dealRows } = await pool.query(
     `SELECT count(*)::int AS n, coalesce(sum(commission_total), 0)::bigint AS commission, coalesce(sum(price), 0)::bigint AS value
-       FROM deals WHERE agency_id = $1 AND closed_at >= $2 AND status <> 'cancelled'${who ? " AND closing_broker_id = $3" : ""}`,
-    who ? [agencyId, since.toISOString(), who] : [agencyId, since.toISOString()]
+       FROM deals WHERE agency_id = $1 AND closed_at >= $2 AND status <> 'cancelled'${scope("closing_broker_id", ds)}`,
+    ds
   );
-  const brokers = (await brokerActivity(pool, agencyId, { since, until: now })).filter((b) => !who || b.id === who);
+  const brokers = (await brokerActivity(pool, agencyId, { since, until: now })).filter((b) => !ids || ids.includes(b.id));
   const board = brokers
     .filter((b) => b.active || b.deals || b.leads)
     .sort((a, b) => b.deals - a.deals || b.commission - a.commission || b.forward - a.forward || b.contacted - a.contacted || a.name.localeCompare(b.name));
   const leads = brokers.reduce((n, b) => n + b.leads, 0);
   // New leads per week (last 8 weeks, oldest first) and the period's top sources, for the bars on the page.
   const weekStart = new Date(now.getTime() - 8 * 7 * DAY);
+  const wa = [agencyId, now.toISOString(), weekStart.toISOString()];
   const { rows: wk } = await pool.query(
     `SELECT floor(extract(epoch FROM ($2::timestamptz - created_at)) / 604800)::int AS ago, count(*)::int AS n
-       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $3${who ? " AND assigned_broker_id = $4" : ""} GROUP BY 1`,
-    who ? [agencyId, now.toISOString(), weekStart.toISOString(), who] : [agencyId, now.toISOString(), weekStart.toISOString()]
+       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $3${scope("assigned_broker_id", wa)} GROUP BY 1`,
+    wa
   );
   const weekly = Array.from({ length: 8 }, (_, i) => wk.find((r) => r.ago === 7 - i)?.n || 0);
+  const sa = [agencyId, since.toISOString()];
   const { rows: sources } = await pool.query(
     `SELECT coalesce(nullif(source, ''), '-') AS source, count(*)::int AS n
-       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2${who ? " AND assigned_broker_id = $3" : ""}
+       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2${scope("assigned_broker_id", sa)}
       GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 3`,
-    who ? [agencyId, since.toISOString(), who] : [agencyId, since.toISOString()]
+    sa
   );
   return {
     days: period,
@@ -156,6 +173,9 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     sources,
     team: team.rows,
     brokerId: who,
+    teamLeads: teamLeads,
+    teamLeadId: lead ? lead.id : null,
+    teamName: lead ? lead.name : null,
     pipeline,
     ...un[0],
     units: units[0],

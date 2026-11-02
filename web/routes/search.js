@@ -2,7 +2,9 @@
 // "refine and see all" (?f=<filters token> from WhatsApp links) and saved searches.
 "use strict";
 
+const Switches = require("../../services/aiSwitches");
 const Search = require("../../services/search");
+const SearchLog = require("../../services/searchLog");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const { logOperation } = require("../../lib/db");
@@ -10,6 +12,8 @@ const { formatInterpretation } = require("../../lib/search");
 const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
 const { uploads, VOICE } = require("../uploads");
+const AiBlock = require("../../lib/aiBlock");
+const { isAgencyOwner } = require("../../lib/authz");
 const { html, raw } = require("../html");
 const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
@@ -43,10 +47,10 @@ function searchBox(q, lang, { voice = false } = {}) {
 `;
 }
 
-function pager(token, page, total, lang) {
+function pager(token, page, total, lang, sl = null) {
   const pages = Math.ceil(Math.min(total, Search.SNAPSHOT_MAX) / WEB_PAGE_SIZE);
   if (pages <= 1) return "";
-  const link = (p) => `/app/search?f=${token}&page=${p}`;
+  const link = (p) => `/app/search?f=${token}&page=${p}${sl ? `&sl=${sl}` : ""}`;
   return html`<nav class="row" aria-label="pages">
   ${page > 1 ? html`<a class="btn secondary" href="${link(page - 1)}">${L(lang, "→ السابق", "← Previous")}</a>` : ""}
   <span class="muted">${page} / ${pages}</span>
@@ -54,15 +58,45 @@ function pager(token, page, total, lang) {
 </nav>`;
 }
 
-function resultsSection({ res, filters, token, page, lang, savedId = null, asks = new Map() }) {
+const SOURCE_NOTE = {
+  parser: ["⚡ قراءة سريعة، من غير ذكاء اصطناعي", "⚡ Read by the quick reader, no AI used"],
+  ai: ["🤖 قرأها الذكاء الاصطناعي", "🤖 Read by the AI"],
+  fallback: ["⚡ القراءة السريعة (الذكاء الاصطناعي مش متاح دلوقتي)", "⚡ Quick reader (the AI is not available right now)"]
+};
+
+/**
+ * What was understood, always above the results: the reading in words, who read it, what could not be applied, and the
+ * two buttons (report a wrong search, search again with the AI) when the search is in the log.
+ */
+function understoodBlock({ meta = {}, source = null, filters, logId = null, q = "", lang, canAsk = false }) {
+  const interp = stripStars(formatInterpretation({ filters }, lang));
+  const note = SOURCE_NOTE[source];
+  const unapplied = meta.unapplied || [];
+  const termWords = (filters.place_terms || []).join("، ");
+  return html`<div class="card understood" data-understood>
+  <p><strong>🔎 ${L(lang, "فهمت إنك بتدور على", "I understood")}:</strong> ${interp || L(lang, "(مفيش فلتر)", "(no filter)")}</p>
+  ${note ? html`<p class="muted small">${L(lang, note[0], note[1])}</p>` : ""}
+  ${unapplied.length ? html`<p class="small" data-unapplied>⚠️ ${L(lang, "ما اتطبقش (الفلاتر مش بتدعمه):", "Not applied (filters cannot say it):")} <strong>${unapplied.join("، ")}</strong></p>` : ""}
+  ${termWords ? html`<p class="muted small">${L(lang, "كلمات اتدور بيها كاسم مكان:", "Words searched as a place name:")} ${termWords}</p>` : ""}
+  ${logId
+    ? html`<div class="row">
+    <form method="post" action="/app/search/report" class="row"><input type="hidden" name="sl" value="${logId}"><button type="submit" class="secondary small" data-report>🚩 ${L(lang, "البحث ده غلط؟", "Wrong search?")}</button></form>
+    ${canAsk && q ? html`<a class="btn secondary small" href="/app/search?q=${encodeURIComponent(q)}&ai=1&sl=${logId}" data-ask-ai>🤖 ${L(lang, "ابحث تاني بالذكاء الاصطناعي", "Search again with AI")}</a>` : ""}
+  </div>`
+    : ""}
+</div>`;
+}
+
+function resultsSection({ res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
-    return html`<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p>
+    return html`${understood}<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p>
 ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
   }
   return html`<section id="results">
-  ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2 class="interp">${interp}</h2>`}
+  ${understood}
+  ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : ""}
   ${res.rateMissing?.length ? html`<p class="card" role="status">⚠️ ${L(lang, "سعر الدولار/اليورو مش متسجل: حدده من «الاستخدام» عشان أسعار الوحدات بالعملة دي تتطابق.", "The dollar/euro rate is not set: set it under Usage so those prices match.")}</p>` : ""}
   <div class="row between"><p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
   ${savedId
@@ -73,12 +107,14 @@ ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?requ
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { ask: asks.get(r.id) || null, back: `/app/search?f=${token}${page > 1 ? `&page=${page}` : ""}` }))}</ol>
-  ${pager(token, page, res.total, lang)}
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { ask: asks.get(r.id) || null, back: `/app/search?f=${token}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
+  ${pager(token, page, res.total, lang, sl)}
 </section>`;
 }
 
 function register(web, { pool, page }) {
+  // Whether the AI may read this agency's searches (the owner's switch, services/aiSwitches.js).
+  const aiAllowed = (req) => Switches.isOn(pool, req.session.broker.agency_id, "search_ai");
   const searchCtx = (req) => ({ pool, AI, broker: req.session.broker, agency: req.session.agency, lang: langOf(req) });
 
   web.get("/search", async (req, res) => {
@@ -89,13 +125,17 @@ function register(web, { pool, page }) {
     let filters = null;
     let message = null;
     let source = "form";
+    let parse = null; // the reading of a typed or spoken request
+    let logRow = null; // the earlier search a link or a retry belongs to
+    const forceAi = req.query.ai === "1";
     const t0 = Date.now();
 
     // A search link (?f=) is the result of an earlier search: Back and reloads use it without asking the AI again.
     if (q && !req.query.f) {
       const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
       if (!gate.allowed) return page(req, res, { title: L(lang, "بحث", "Search"), nav: "search", body: html`${searchBox(q, lang)}<p class="card notice bad">⏳ ${L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.")}</p>` }, 429);
-      const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req) });
+      const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req), forceAi, aiAllowed: await aiAllowed(req) });
+      parse = parsed;
       source = parsed.source;
       const intent = Q.classifyIntent(parsed.parsed);
       if (intent === "search") filters = parsed.parsed.filters;
@@ -106,6 +146,7 @@ function register(web, { pool, page }) {
             : L(lang, "👋 اكتب مواصفات اللي بتدور عليه (مثال: شقة 3 غرف في التجمع تحت 8 مليون).", "👋 Type what you are looking for (e.g. 3-bedroom apartment in New Cairo under 8M).");
     } else if (req.query.f) {
       filters = SearchLink.decodeFilters(String(req.query.f));
+      if (req.query.sl) logRow = await SearchLog.mine(pool, broker, String(req.query.sl));
       if (!filters) message = L(lang, "⚠️ رابط البحث ده مش صحيح. ابحث من جديد.", "⚠️ This search link is not valid. Search again.");
     } else if (FORM_KEYS.some((k) => req.query[k] !== undefined && req.query[k] !== "")) {
       filters = SearchLink.filtersFromForm(req.query);
@@ -120,8 +161,32 @@ function register(web, { pool, page }) {
     if (filters) {
       const token = SearchLink.encodeFilters(filters);
       const out = await runFilters(pool, broker.agency_id, filters, pageNo);
-      results = resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows) });
-      searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+      // A new search is logged; a link back to one (Back, a page, a reload) shows the earlier log row's reading.
+      let logId = logRow?.id || null;
+      if (!req.query.f) {
+        logId = await SearchLog.record(pool, {
+          broker,
+          channel: req.query.voice === "1" ? "voice" : "web",
+          text: q,
+          parse: parse || { source: "form" },
+          used: filters,
+          total: out.total,
+          ids: out.ids,
+          relaxed: out.relaxed,
+          rerunOf: forceAi ? req.query.sl : null
+        });
+      }
+      const understood = understoodBlock({
+        meta: parse ? parse.parsed.meta : { unapplied: logRow?.unapplied || [] },
+        source: parse ? parse.source : logRow?.source || null,
+        filters,
+        logId,
+        q: parse ? q : "",
+        lang,
+        canAsk: Boolean(parse) && parse.source !== "ai" && (await aiAllowed(req))
+      });
+      results = resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId });
+      searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,
         broker_id: broker.id,
@@ -143,6 +208,19 @@ ${results}`
     });
   });
 
+  // "Wrong search?": one tap keeps the sentence, both readings and the result count for review.
+  web.post("/search/report", async (req, res) => {
+    const lang = langOf(req);
+    const r = await SearchLog.report(pool, req.session.broker, String(req.body.sl || ""), req.body.note);
+    const ok = r.ok || r.error === "again";
+    return page(req, res, {
+      title: L(lang, "بحث", "Search"),
+      nav: "search",
+      body: html`<p class="card notice ${ok ? "ok" : "bad"}">${ok ? L(lang, "🚩 اتسجل. شكرا، هنراجعه.", "🚩 Reported. Thank you, we will review it.") : L(lang, "مش لاقي البحث ده.", "That search was not found.")}</p>
+<p><a class="btn secondary" href="/app/search">${L(lang, "بحث جديد", "New search")}</a></p>`
+    }, ok ? 200 : 404);
+  });
+
   // Voice search: the browser sends a note; the AI writes it down (counted against the agency's voice allowance), then
   // the page searches that text as if it were typed. The phone's own speech is the fallback on the page.
   web.post("/search/voice", uploads([VOICE]), async (req, res) => {
@@ -159,8 +237,8 @@ ${results}`
       if (!text) return res.status(422).json({ error: L(lang, "مسمعناش كويس. جرب تاني.", "Couldn't hear you. Try again.") });
       return res.json({ q: text });
     } catch (err) {
-      const quota = err.code && /QUOTA/.test(err.code);
-      if (quota) return res.status(402).json({ error: L(lang, "رصيد الذكاء الاصطناعي خلص. اضغط المايك تاني عشان صوت التليفون.", "AI credits are used up. Tap the mic again to use the phone's voice."), fallback: true });
+      const why = AiBlock.kindOf(err);
+      if (why !== "ai") return res.status(402).json({ error: `${AiBlock.text(why, lang, { owner: isAgencyOwner(broker) })} ${L(lang, "اضغط المايك تاني عشان صوت التليفون.", "Tap the mic again to use the phone's voice.")}`, fallback: true });
       return res.status(503).json({ error: L(lang, "الذكاء الاصطناعي مش متاح دلوقتي.", "The AI is unavailable right now."), fallback: true });
     }
   });

@@ -135,7 +135,7 @@ ${notice || ""}
 </nav>
 <p class="row between small">
   <a class="pill-link${mine ? " on" : ""}" href="/app/units?status=${status}${mine ? "" : "&mine=1"}"${mine ? html` aria-pressed="true"` : ""}>${icon(mine ? "check" : "leads", 16)} ${L(lang, "وحداتي بس", "Mine only")}</a>
-  ${Authz.isAgencyOwner(broker) ? html`<a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/units?status=${status}${onlyPrivate ? "" : "&private=1"}">🔒 ${L(lang, "الخاصة", "Private")}</a>` : ""}
+  ${Authz.isAgencyOwner(broker) ? html`<a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/units?status=${status}${onlyPrivate ? "" : "&private=1"}">⭐ ${L(lang, "VIP", "VIP")}</a>` : ""}
   <a href="/app/insights">${icon("chart", 16)} ${L(lang, "أسعار المتر", "Prices per m²")}</a>
 </p>
 ${rows.length
@@ -401,7 +401,7 @@ ${rows.length
     ${listing.status === "active" ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
-  ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "🔓 رجّعها لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليها خاصة بالمالك", "🔒 Keep private to the owner")}</button>${listing.is_private ? html`<span class="badge">🔒 ${L(lang, "خاصة", "Private")}</span>` : ""}</form>` : ""}
+  ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button>${listing.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 </article>
 ${priv}
 ${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}

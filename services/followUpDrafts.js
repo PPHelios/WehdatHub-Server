@@ -5,6 +5,7 @@
 "use strict";
 
 const AI = require("../lib/ai");
+const AiBlock = require("../lib/aiBlock");
 const D = require("../domain/followUpDraft");
 const Card = require("../domain/leadCard");
 const Phone = require("../domain/phone");
@@ -33,7 +34,7 @@ async function draft(pool, broker, leadKey, { lang = "ar" } = {}) {
     });
     out = D.parse(r.text);
   } catch (err) {
-    return { error: /QUOTA/.test(String(err.code || err.message)) ? "quota" : "ai" };
+    return { error: AiBlock.kindOf(err) };
   }
   if (out.error) return out;
   return { text: out.text, lead, wa: Phone.waMeUrl(lead.phone_e164, out.text) };

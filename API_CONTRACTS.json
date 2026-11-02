@@ -114,6 +114,7 @@
       "normalizeKeywords": ["list", "max"],
       "normalizeTerm": ["t"],
       "handleSearchMessage": ["broker", "text", "ctx", "params"],
+      "handleButton": ["broker", "id", "ctx"],
       "handleMore": ["broker", "ctx"]
     },
     "lib/listing.js": {
@@ -268,10 +269,12 @@
       "MANAGER_ROLES": "Array",
       "isManager": ["broker"],
       "isAgencyOwner": ["broker"],
+      "isTeamLead": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],
       "canViewLead": ["broker", "lead"],
       "canEditLead": ["broker", "lead"],
+      "canReassignLead": ["broker", "lead", "targetTeamLeadId", "targetBrokerId"],
       "canManageLeads": ["broker"],
       "canViewDeal": ["broker", "deal"],
       "canEditDeal": ["broker", "deal"]
@@ -776,6 +779,7 @@
       "listFor": ["pool", "viewer", "params"],
       "history": ["pool", "viewer", "ownerId", "params"],
       "edit": ["pool", "actor", "ownerId", "params"],
+      "canEditOwner": ["pool", "viewer", "ownerId"],
       "remove": ["pool", "actor", "ownerId"],
       "reassign": ["pool", "actor", "listing", "to"],
       "leadFor": ["pool", "viewer", "owner"],
@@ -1122,7 +1126,7 @@
       "cairoDay": ["now"],
       "briefData": ["pool", "broker", "now"],
       "briefMessage": ["broker", "data"],
-      "digestData": ["pool", "agencyId", "now"],
+      "digestData": ["pool", "agencyId", "now", "teamLeadId"],
       "digestMessage": ["manager", "d"],
       "sendBriefs": ["pool", "params"],
       "sendDigests": ["pool", "params"],
@@ -1154,7 +1158,9 @@
       "invite": ["pool", "manager", "input", "opts"],
       "deactivate": ["pool", "manager", "brokerId", "params"],
       "inviteText": ["broker", "url", "agencyName"],
-      "changeRole": ["pool", "owner", "brokerId", "newRole"]
+      "changeRole": ["pool", "owner", "brokerId", "newRole"],
+      "setTeamLeadRole": ["pool", "manager", "brokerId", "on"],
+      "setTeam": ["pool", "manager", "brokerId", "teamLeadId"]
     },
     "web/routes/dashboard.js": {
       "register": ["web", "params"]
@@ -1293,6 +1299,7 @@
       "assign": ["pool", "actor", "id", "params"],
       "linkUnit": ["pool", "actor", "id", "unitCode"],
       "setAlerts": ["pool", "actor", "on"],
+      "isMuted": ["person"],
       "unitFor": ["db", "agencyId", "listingNo"]
     },
     "services/leadSources.js": {
@@ -2027,6 +2034,32 @@
       "dollars": ["raw"],
       "readText": ["raw"],
       "FOREIGN": "Object"
+    },
+    "lib/aiBlock.js": {
+      "kindOf": ["err"],
+      "resetOn": ["lang", "now"],
+      "text": ["kind", "lang", "params"]
+    },
+    "lib/flyerWorker.js": {},
+    "services/aiSwitches.js": {
+      "TABS": "Array",
+      "FEATURES": "Array",
+      "ROUTE_FEATURE": "Object",
+      "tabOf": ["key"],
+      "featureFor": ["operationType", "params"],
+      "allowed": ["settings", "key", "params"],
+      "forAgency": ["db", "agencyId"],
+      "isOn": ["db", "agencyId", "key"],
+      "assertOn": ["db", "agencyId", "key", "params"],
+      "save": ["db", "actor", "body"],
+      "clearCache": []
+    },
+    "services/searchLog.js": {
+      "cleanText": ["text"],
+      "record": ["pool", "params"],
+      "report": ["pool", "broker", "logId", "note"],
+      "mine": ["pool", "broker", "logId"],
+      "isId": ["v"]
     }
   },
   "invariant_variable_names": {
