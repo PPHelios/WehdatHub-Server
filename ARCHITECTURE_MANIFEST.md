@@ -192,18 +192,19 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 ### 3. AI Gateway & Resilience Architecture
 * **Single gateway:** every Gemini call goes through `lib/ai.js` `generateWithCascade({ contents, config, operationType, ctx })`. That covers search parsing, transcription, vision curation and draft extraction, which makes it the only place that controls AI latency, cost and telemetry. All calls pass through the in-process `rateGate` (60 RPM per process).
 * **Model chains (`tiersFor`):** text-only requests use `TEXT_TIERS` `gemini-3.5-flash-lite` → `gemini-3.6-flash` → `gemini-3.8-flash`; requests carrying audio, image or video parts (`hasMedia`) use `MEDIA_TIERS` `gemini-3.6-flash` → `gemini-3.8-flash` → `gemini-3.5-flash-lite`. A route may pin its own chain with `tiers`. Chosen by the 2026-10-25 model eval: Flash-Lite scored the same as Flash on text listings at ~45% less (72% less from 1 January 2027), but missed fields in 8 of 13 voice notes; 3.6 Flash matched 3.8 Flash on voice and was faster. `TIERS` is `TEXT_TIERS` (the eval script's default model).
-* **Per-task routes (`ROUTES`):** each `operationType` has a total `deadlineMs`, a `hedgeAfterMs`, and a thinking class. Unknown types use `default`.
+* **Per-task routes (`ROUTES`):** each `operationType` has a total `deadlineMs` and a thinking class. Unknown types use `default`. Each model gets a time limit of the total divided by the number of models in its chain.
 
-  | Route | Deadline | Hedge after | Thinking |
-  | :--- | :--- | :--- | :--- |
-  | `search_parse` | 8 s | 3.5 s | fast |
-  | `audio_transcription` | 25 s | 8 s | fast |
-  | `vision_curation` | 45 s | 15 s | fast |
-  | `default` (draft extraction and others) | 40 s | 12 s | model default |
+  | Route | Deadline | Thinking |
+  | :--- | :--- | :--- |
+  | `search_parse` | 8 s | fast |
+  | `audio_transcription` | 25 s | fast |
+  | `vision_curation` | 45 s | fast |
+  | `default` (draft extraction and others) | 40 s | model default |
 
-* **Hedged failover:**
-  - If the current tier hasn't answered within `hedgeAfterMs`, the next tier starts **in parallel**. The first successful answer wins, and the other attempts are cancelled through `abortSignal`.
-  - A hard error (overloaded, quota, invalid) moves to the next tier immediately, with no fixed sleeps.
+* **Sequential failover (no parallel calls):**
+  - Models are tried in turn. A try that times out or hits a temporary error (overloaded, server error, timeout) is retried on the same model up to 2 more times, with a 100 ms and then 200 ms wait.
+  - Quota and invalid-request errors are not retried: the next model is tried at once.
+  - Every try is recorded in `operation_logs` (retries included) with its model and outcome.
   - The call fails with `code: "AI_DEADLINE"` when the route deadline passes.
 * **Thinking per model (`FAST_THINKING`):** thinking settings aren't portable across models. `gemini-3.8-flash` rejects `MINIMAL`, and flash-lite rejects `thinkingBudget: 0` (probed 2026-10-24). So the "fast" class maps each model to its own lowest accepted level: 3.8 → `LOW`, 3.6 and lite → `MINIMAL`. Draft extraction (`listing_extraction`) uses the fast class too: the 2026-10-25 eval showed MINIMAL (LOW on 3.8) keeps accuracy on text and voice.
 * **Telemetry:**
@@ -338,7 +339,7 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * **A broker leaves (P6):** `services/brokers.js` `deactivateBroker` (CLI `npm run onboard -- --deactivate <agency.json> <phone>`) sets `is_active = false` and calls `releaseBrokerLeads`: their leads go to the unassigned pool with an `assigned` event, and every manager gets one notification with the count.
 * **WhatsApp (`lib/leadIntake.js`, `domain/leadIntake.js`):**
   - **No AI:** a contact card (all its numbers) or a bare number (`isBarePhone`, registry `who_is_calling`; skipped inside a unit draft, where it's the owner's, and inside a lead draft) shows the lead's card if the broker may see it, the Q2 copy if it's a colleague's (nothing else), or **[➕ Save as client]**; Save captures directly.
-  - **AI:** «ليد»/`lead`/«عميل جديد» + text, the next message after «ليد» alone (`lead_draft`, 30 minutes), a spoken «ليد …» (transcript), or **[➕ Save as client]** on a forwarded client text (`looksLikeLead`: a phone, no unit code, not a unit post) run one `lead_extraction` call (route 15 s deadline, 5 s hedge; the input fenced with a random token). Phones the AI read go through `domain/phone.js`; numbers written in the text are the fallback; nothing else is filled in. Several phones → a list; none → "send the client's number" (the next number completes it without another AI call); one → "I understood: …" **[✅ Confirm] [✏️ Edit] [❌ Cancel]**, saved only on Confirm. The AI down: "save the number alone?".
+  - **AI:** «ليد»/`lead`/«عميل جديد» + text, the next message after «ليد» alone (`lead_draft`, 30 minutes), a spoken «ليد …» (transcript), or **[➕ Save as client]** on a forwarded client text (`looksLikeLead`: a phone, no unit code, not a unit post) run one `lead_extraction` call (route 15 s deadline; the input fenced with a random token). Phones the AI read go through `domain/phone.js`; numbers written in the text are the fallback; nothing else is filled in. Several phones → a list; none → "send the client's number" (the next number completes it without another AI call); one → "I understood: …" **[✅ Confirm] [✏️ Edit] [❌ Cancel]**, saved only on Confirm. The AI down: "save the number alone?".
   - Pending input waits in `broker_sessions` (`pending_lead`); its buttons carry only a nonce (`ld:save|ok|edit|no|pick|read|search|force:<nonce>`), so a stale one says "expired".
   - **The card** (Q14): `Card.card` + the number and a `wa.me` link with a greeting; **[📞 Called] [📅 Follow-up] [🔄 Stage]** (`ld:called|fu|stage:L-0042`), a seller/landlord's first card has **[➕ Add their unit]** (opens a unit draft whose review fills `details.owner_name/owner_phone`, internal). Every tap reloads the lead and checks rights; changes answer with **[↩️ Undo]** (`ld:undo:<event id>`); Called suggests a follow-up in 2 days; follow-ups are 10:00 Cairo (`Stages.cairoDayAt`); Lost asks for a reason from a list.
   - **Commands** (registry): «عملائي»/`my leads`/`leads` (5 + web link), «متابعات»/`followups`, `L-0042` (the card; a colleague's says "not yours"; an unknown reference falls through to the unit lookup), «حول L-0042 لـ سارة»/`assign L-0042 to Sara` (managers; several matches → a list). Cancel also clears lead sessions. Every reply sets `setTurnAction("crm")`.

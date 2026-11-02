@@ -22,7 +22,8 @@ function fakeClient(behaviour) {
             e.name = "AbortError";
             reject(e);
           });
-          if (b === "ok") answer();
+          if (b === "quota") reject(Object.assign(new Error("429 RESOURCE_EXHAUSTED quota"), { status: 429 }));
+          else if (b === "ok") answer();
           else if (b === "fail") reject(Object.assign(new Error("503 UNAVAILABLE high demand"), { status: 503 }));
           else if (typeof b === "number") setTimeout(answer, b);
           // "hang": never settles unless aborted
@@ -32,9 +33,9 @@ function fakeClient(behaviour) {
   };
 }
 
-// Fast test route so hedging/deadline behaviour runs in milliseconds.
-AI.ROUTES.test_fast = { deadlineMs: 600, hedgeAfterMs: 100, thinking: "fast" };
-AI.ROUTES.test_default = { deadlineMs: 600, hedgeAfterMs: 100, thinking: "default" };
+// Fast test routes so retry/fallback/deadline behaviour runs in milliseconds.
+AI.ROUTES.test_fast = { deadlineMs: 1200, thinking: "fast" };
+AI.ROUTES.test_default = { deadlineMs: 1200, thinking: "default" };
 
 const logged = [];
 const quotaChecks = [];
@@ -72,25 +73,63 @@ test("default route sends no thinkingConfig (model keeps its own setting)", asyn
   expect(client.calls[0].config.thinkingConfig).toBeUndefined();
 });
 
-test("slow primary: the next tier is hedged in parallel and wins; the slow one is aborted", async () => {
-  AI._setClientForTests(fakeClient({ [M1]: "hang", [M2]: "ok" }));
-  const t0 = Date.now();
+test("a temporary error on the first model is retried on the same model, then the call succeeds there", async () => {
+  let n = 0;
+  const client = fakeClient({ [M1]: "ok" });
+  const orig = client.models.generateContent;
+  client.models.generateContent = (args) => {
+    if (args.model === M1 && n++ < 1) return Promise.reject(Object.assign(new Error("503 UNAVAILABLE high demand"), { status: 503 }));
+    return orig(args);
+  };
+  AI._setClientForTests(client);
+  const r = await AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx });
+  expect(r.modelUsed).toBe(M1);
+  expect(r.attempts.map((a) => [a.model, a.outcome])).toEqual([
+    [M1, "overloaded"],
+    [M1, "ok"]
+  ]);
+});
+
+test("after the retries on a model, the next model is tried in turn", async () => {
+  AI._setClientForTests(fakeClient({ [M1]: "fail", [M2]: "ok" }));
   const r = await AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx });
   expect(r.modelUsed).toBe(M2);
-  expect(Date.now() - t0).toBeLessThan(400);
   expect(r.attempts.map((a) => [a.model, a.outcome])).toEqual([
-    [M1, "aborted"],
+    [M1, "overloaded"],
+    [M1, "overloaded"],
+    [M1, "overloaded"],
     [M2, "ok"]
   ]);
 });
 
-test("hard failure moves to the next tier immediately (no hedge wait)", async () => {
-  AI._setClientForTests(fakeClient({ [M1]: "fail", [M2]: "ok" }));
-  const t0 = Date.now();
+test("a quota error is not retried on the same model; the next model is tried", async () => {
+  AI._setClientForTests(fakeClient({ [M1]: "quota", [M2]: "ok" }));
   const r = await AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx });
   expect(r.modelUsed).toBe(M2);
-  expect(Date.now() - t0).toBeLessThan(80);
-  expect(r.attempts[0].outcome).toBe("overloaded");
+  expect(r.attempts.map((a) => [a.model, a.outcome])).toEqual([
+    [M1, "quota"],
+    [M2, "ok"]
+  ]);
+});
+
+test("a try that hangs is cut at its own time limit, retried, and the retry answers", async () => {
+  let n = 0;
+  const client = fakeClient({ [M1]: "ok" });
+  client.models.generateContent = ({ model, config }) => {
+    if (model === M1 && n++ < 1) {
+      return new Promise((_, reject) =>
+        config.abortSignal.addEventListener("abort", () => reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError" })))
+      );
+    }
+    return Promise.resolve({ text: `from ${model}`, usageMetadata: {} });
+  };
+  AI._setClientForTests(client);
+  const r = await AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx });
+  expect(r.modelUsed).toBe(M1);
+  expect(r.attempts.map((a) => [a.model, a.outcome])).toEqual([
+    [M1, "timeout"],
+    [M1, "ok"]
+  ]);
 });
 
 test("all tiers fail: throws and logs a failed call with every attempt", async () => {
@@ -99,7 +138,7 @@ test("all tiers fail: throws and logs a failed call with every attempt", async (
   await flush();
   const [row] = logged;
   expect(row[3]).toBe("failed");
-  expect(JSON.parse(row[11]).attempts).toHaveLength(3);
+  expect(JSON.parse(row[11]).attempts).toHaveLength(9); // three models, each with its retries
 });
 
 test("everything hangs: the call fails at the route deadline", async () => {
@@ -108,8 +147,8 @@ test("everything hangs: the call fails at the route deadline", async () => {
   await expect(AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx })).rejects.toMatchObject({
     code: "AI_DEADLINE"
   });
-  expect(Date.now() - t0).toBeGreaterThanOrEqual(590);
-  expect(Date.now() - t0).toBeLessThan(900);
+  expect(Date.now() - t0).toBeGreaterThanOrEqual(1190);
+  expect(Date.now() - t0).toBeLessThan(1500);
 });
 
 test("success telemetry records model, tokens (thinking billed as output) and attempts", async () => {
