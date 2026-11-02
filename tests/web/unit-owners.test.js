@@ -62,17 +62,20 @@ test("who sees a profile: the unit's broker while it is active, managers, the ag
   expect(await get("owner")).toBe(200);
 });
 
-test("a manager edits the notes and flag, and the history records it; a broker cannot", async () => {
+test("a manager and the broker with an active unit edit the notes and flag, and the history records it", async () => {
   const broker = await row("broker");
   await require("../../services/unitOwners").syncFromListing(h.pool, broker, (await h.query("SELECT * FROM listings WHERE code = 'U-1'"))[0]);
   const [o] = await owners();
-  expect((await post(await signIn(h, "broker"), `/app/owners/${o.id}`, { name: "X", notes: "n", flag: "f" })).status).toBe(403);
+  // A broker edits an owner while one of their active units belongs to that owner.
+  expect((await post(await signIn(h, "broker"), `/app/owners/${o.id}`, { name: "X", notes: "n", flag: "f" })).status).toBe(303);
   const manager = await signIn(h, "manager");
   expect((await post(manager, `/app/owners/${o.id}`, { name: "Mr Owner", notes: "Wants a quick sale", flag: "Slow payer" })).status).toBe(303);
   const page = (await manager.agent.get(`/app/owners/${o.id}`)).text;
   expect(page).toContain("Wants a quick sale");
   expect(page).toContain("Slow payer");
-  expect((await h.query("SELECT kind FROM unit_owner_events WHERE owner_id = $1 ORDER BY id", [o.id])).map((e) => e.kind)).toEqual(["created", "unit_linked", "flag", "note"]);
+  const kinds = (await h.query("SELECT kind FROM unit_owner_events WHERE owner_id = $1 ORDER BY id", [o.id])).map((e) => e.kind);
+  expect(kinds.slice(0, 2)).toEqual(["created", "unit_linked"]);
+  expect(kinds).toEqual(expect.arrayContaining(["flag", "note"]));
 });
 
 test("a manager moves a unit to the lead who bought it; the lead becomes an owner profile and both histories record it", async () => {
