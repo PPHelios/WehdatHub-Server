@@ -51,7 +51,7 @@ describe("single values, typical floors and missing fields", () => {
 
   test("price and listing type stay strict for missing values", () => {
     const { sql } = buildSearchQuery("agency-1", Q.normalizeAiSearch({ filters: { price_max: 70000, listing_type: "rent" } }));
-    expect(sql).toContain("l.price_value <=");
+    expect(sql).toContain("END) <=");
     expect(sql).not.toContain("l.price_value IS NULL");
     expect(sql).toContain("l.listing_type = ");
   });

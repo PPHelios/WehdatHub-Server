@@ -5,6 +5,7 @@
 const Q = require("../domain/searchQuery");
 const Vis = require("../lib/visibility");
 const PlaceNames = require("../lib/placeNames");
+const Fx = require("./fx");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -43,10 +44,11 @@ Never invent a filter that was not asked for.
 }
 
 RULES:
-- Numbers are plain EGP numbers: "8 مليون ونص" = 8500000, "مقدم 500 ألف" → payment.max_down_payment 500000, "قسط مش أكتر من 150 ألف" → payment.max_installment 150000, "في حدود 6 مليون" → price_max 6000000.
+- Numbers are EGP unless the request names dollars or euros: "8 مليون ونص" = 8500000, "مقدم 500 ألف" → payment.max_down_payment 500000, "قسط مش أكتر من 150 ألف" → payment.max_installment 150000, "في حدود 6 مليون" → price_max 6000000.
 - "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max null (3 or more).
 - "متكرر" / "typical" floor → floor_min 1 and floor_max null (any floor except ground). Same for bathrooms ("3 حمامات" → bathrooms_min 3) and area ("150 متر" → area_min 150, area_max null). A range ("من 120 لـ 150 متر") sets both ends. "استوديو" → property_types ["studio"].
 - "budget" / "حدود" / "تحت" / "لحد" with a price → price_max only.
+- Dollars ("$", "USD", "دولار") → currency "USD"; euros ("€", "EUR", "يورو") → currency "EUR". Keep the number exactly as said ("1000 دولار" = price_max 1000 with currency "USD"). Never convert it to EGP yourself. No currency named means EGP.
 - "تحت الإنشاء" / "off plan" / "under construction" → delivery.off_plan true. "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
 - Units are searched by their English text for now, so a compound or area said in Arabic must come back in its English spelling (e.g. "ازاد" → "Azad").
 - "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
@@ -90,7 +92,7 @@ async function parseRequest(AI, { text = "", ctx = {} } = {}) {
  * Builds the search SQL. Every condition is agency-scoped and active-only.
  * relaxed widens price/area ±15%, bedrooms ±1 and drops finishing/furnishing/floor/bathrooms.
  */
-function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, offset = 0, relaxed = false, onlyIds = null } = {}) {
+function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, offset = 0, relaxed = false, onlyIds = null, fx = {} } = {}) {
   const f = Q.ensureFilters(parsedOrFilters?.filters ? parsedOrFilters : { filters: parsedOrFilters || {} });
   const where = ["l.agency_id = $1", "l.status = 'active'"];
   const params = [agencyId];
@@ -109,7 +111,6 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
   } else {
     if (f.listing_type) where.push(`l.listing_type = ${add(f.listing_type)}`);
     if (f.market) where.push(`l.market = ${add(f.market)}`);
-    if (f.currency) where.push(`coalesce(l.details->>'currency', 'EGP') = ${add(f.currency)}`);
     if (f.property_types.length) where.push(`l.property_type = ANY(${add(f.property_types)}::text[])`);
 
     // Places: resolved keys use the indexed key columns; free place words use the search document.
@@ -128,11 +129,21 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       rank = `GREATEST(${f.place_terms.map((t) => `word_similarity(${add(t)}, l.search_text_normalized)`).join(", ")}) DESC,`;
     }
 
+    // Prices are compared in EGP: a dollar or euro unit is converted with the agency's rate, and a budget in dollars or
+    // euros is converted the same way. A unit or budget with no rate set matches no price (see domain/fx.js).
+    // Built only where a price condition uses it, so no unused parameter is sent.
+    const priceEgp = () => `(CASE coalesce(l.details->>'currency', 'EGP')
+        WHEN 'EGP' THEN l.price_value
+        WHEN 'USD' THEN l.price_value * ${add(fx.USD ?? null)}::numeric
+        WHEN 'EUR' THEN l.price_value * ${add(fx.EUR ?? null)}::numeric END)`;
+    const qRate = f.currency && f.currency !== "EGP" ? fx[f.currency] ?? null : 1;
+    if (qRate === null && (f.price_min !== null || f.price_max !== null)) where.push("FALSE");
+    const toEgp = (v) => (v === null || qRate === null ? null : Math.round(v * qRate));
     const widen = (v, k) => (v === null ? null : relaxed ? Math.round(v * k) : v);
-    const pMin = widen(f.price_min, 0.85);
-    const pMax = widen(f.price_max, 1.15);
-    if (pMin !== null) where.push(`l.price_value >= ${add(pMin)}`);
-    if (pMax !== null) where.push(`l.price_value <= ${add(pMax)}`);
+    const pMin = widen(toEgp(f.price_min), 0.85);
+    const pMax = widen(toEgp(f.price_max), 1.15);
+    if (pMin !== null) where.push(`${priceEgp()} >= ${add(pMin)}`);
+    if (pMax !== null) where.push(`${priceEgp()} <= ${add(pMax)}`);
     const aMin = widen(f.area_min, 0.85);
     const aMax = widen(f.area_max, 1.15);
     // A unit with no area, bedrooms, bathrooms or floor recorded still matches (it is not dropped).
@@ -226,10 +237,11 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) 
   if (parsed.filters.place_terms?.length && !parsed.filters.places?.length) {
     parsed.filters.place_terms = await PlaceNames.widenSearchTerms(pool, parsed.filters.place_terms);
   }
-  let { sql, params } = buildSearchQuery(agencyId, parsed);
+  const fx = await Fx.loadRates(pool, agencyId);
+  let { sql, params } = buildSearchQuery(agencyId, parsed, { fx });
   let { rows } = await pool.query(sql, params);
   if (!rows.length && !parsed.filters.code) {
-    ({ sql, params } = buildSearchQuery(agencyId, parsed, { relaxed: true }));
+    ({ sql, params } = buildSearchQuery(agencyId, parsed, { relaxed: true, fx }));
     ({ rows } = await pool.query(sql, params));
     relaxed = rows.length > 0;
   }
@@ -240,10 +252,10 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) 
   if (!rows.length && !parsed.filters.code && soft.length) {
     const rest = { ...parsed, filters: { ...parsed.filters, place_terms: [], feature_terms: [] } };
     if (Q.hasAnyFilter(rest)) {
-      ({ sql, params } = buildSearchQuery(agencyId, rest));
+      ({ sql, params } = buildSearchQuery(agencyId, rest, { fx }));
       ({ rows } = await pool.query(sql, params));
       if (!rows.length) {
-        ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true }));
+        ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true, fx }));
         ({ rows } = await pool.query(sql, params));
         relaxed = rows.length > 0;
       }
@@ -255,7 +267,8 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) 
     }
   }
   const total = rows.length ? Number(rows[0].total_count) : 0;
-  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, dbMs: Date.now() - t0 };
+  const rateMissing = await Fx.missingRates(pool, agencyId, fx);
+  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, rateMissing, dbMs: Date.now() - t0 };
 }
 
 /**
