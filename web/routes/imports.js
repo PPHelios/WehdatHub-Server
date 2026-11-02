@@ -9,6 +9,7 @@ const { isManager } = require("../../lib/authz");
 const Imports = require("../../services/imports");
 const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
+const SheetImport = require("../../domain/sheetImport");
 const Chat = require("../../domain/chatExport");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
@@ -53,6 +54,7 @@ function excelPlanPage(imp, lang) {
     if (!rows.length) return "";
     return html`<section class="card" data-kind="${kind}"><h2>${L(lang, KIND_LABEL[kind][0], KIND_LABEL[kind][1])} (${rows.length})</h2>${body(rows)}</section>`;
   };
+  const notesOf = (i) => (i.notes?.length ? html`<div class="warn muted" data-notes="${i.row}">${i.notes.join(" · ")}</div>` : "");
   // Editing is per row: a small form outside the apply form (forms cannot nest), its inputs joined by the form attribute.
   const canEdit = !applied && Array.isArray(sheetRows) && Array.isArray(columns) && columns.length > 0;
   const rowCells = (n) => sheetRows?.find((r) => r.rowNumber === n)?.cells || {};
@@ -71,14 +73,14 @@ function excelPlanPage(imp, lang) {
 ${imp.result ? resultCard(imp.result, lang) : ""}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 ${section("new", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${editor(i)}</li>`)}</ul>`)}
+${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
-${section("unchanged", (rows) => html`<p class="muted">${rows.map((i) => i.code).join("، ")}</p>`)}
+${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير", "Same as in the app, nothing to change")}${notesOf(i)}</li>`)}</ul>`)}
 ${applied ? "" : html`<button type="submit">✅ ${L(lang, "طبّق المختار", "Apply the selected rows")}</button>`}
 </form>
 ${editForms}`;
@@ -248,6 +250,12 @@ ${tabs("import_tab", [
       }[err.code];
       if (!msg) throw err;
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⚠️ ${msg}</p>` }), 422);
+    }
+    const missing = SheetImport.emptyRequired(sheet.rows);
+    if (missing.length) {
+      const name = { code: L(lang, "الكود", "Code"), price_value: L(lang, "السعر", "Price"), area_value: L(lang, "المساحة", "Area") };
+      const list = missing.map((k) => name[k] || k).join("، ");
+      return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="empty-column">⚠️ ${L(lang, `العمود ده فاضي في كل الصفوف: ${list}. ملفش اتحفظ حاجة. ضيف القيم وارفع تاني.`, `These columns are empty on every row: ${list}. Nothing was saved. Fill them in and upload again.`)}</p>` }), 422);
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
     const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped }, { filename: String(file.originalname || "").slice(0, 120) });
