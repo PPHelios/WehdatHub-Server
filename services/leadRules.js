@@ -323,8 +323,7 @@ const responseJob = () => ({
 });
 
 /**
- * Hourly: each agency's managers get one line with the open leads nobody holds and the ones nobody has contacted, with
- * the oldest. Jobs have no viewer, so private leads never count. → { agencies }
+ * Hourly: when an agency has leads nobody holds, its managers get one line with the count and the oldest. Jobs have no viewer, so private leads never count. → { agencies }
  */
 async function unassignedDigest(pool, { now = new Date() } = {}) {
   const { rows } = await pool.query(
@@ -340,7 +339,7 @@ async function unassignedDigest(pool, { now = new Date() } = {}) {
   let sent = 0;
   for (const r of rows) {
     const unassigned = r.unassigned || 0;
-    if (!unassigned && !r.uncontacted) continue;
+    if (!unassigned) continue; // no unassigned leads, no digest
     const oldest = r.oldest ? new Date(r.oldest).toISOString().slice(0, 10) : null;
     for (const m of await Notifications.managersOf(pool, r.agency_id)) {
       await Notifications.notifyBroker(pool, m, {
