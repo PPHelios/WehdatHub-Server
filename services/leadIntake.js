@@ -167,7 +167,7 @@ async function receiveFor(pool, intake, body, { now = new Date(), test = false }
   try {
     // The intake acts as a manager of its agency (so it can assign); nobody is "the one who added it".
     const actor = { id: null, agency_id: intake.agency_id, role: "admin", name: intake.name, preferred_lang: "ar" };
-    const next = await LeadRules.nextBroker(pool, intake.agency_id, { now, advance: true });
+    const next = await LeadRules.nextBroker(pool, intake.agency_id, { now });
     const notes = [lead.notes, ...extra].filter(Boolean).join("\n");
     const res = await Leads.captureLead(
       pool,
@@ -179,6 +179,8 @@ async function receiveFor(pool, intake, body, { now = new Date(), test = false }
     await logRow(pool, intake, { outcome, externalId, leadId: res.lead?.id || null, phoneTail, detail: res.error || null });
     if (outcome === "created" || outcome === "merged") {
       await pool.query("UPDATE lead_intakes SET last_lead_at = $2 WHERE id = $1", [intake.id, now.toISOString()]);
+      // The rotation moves on only when this lead really went to the picked broker (not on a repeat or a colleague's lead).
+      if (outcome === "created" && res.lead?.assigned_broker_id && res.lead.assigned_broker_id === next?.id) await LeadRules.advanceRotation(pool, intake.agency_id, next.id);
       if (outcome === "created" && lead.request) await LeadRequests.saveRequest(pool, actor, res.lead.id, lead.request, { now }).catch(() => {});
       if (outcome === "merged") await tellRepeat(pool, res.lead, intake, now).catch((e) => console.warn("Intake repeat notice failed:", e.message));
     }

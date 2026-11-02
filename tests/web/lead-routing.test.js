@@ -34,14 +34,15 @@ test("an order goes round, skips anyone away, and remembers who got the last lea
   const admin = await row("admin");
   const agency = admin.agency_id;
   const saved = await LeadRules.saveRouting(h.pool, admin, { roundRobin: true, order: [id("colleague"), id("admin"), id("broker"), id("rival"), "junk"] });
-  expect(saved.routing.order).toEqual([id("colleague"), id("admin"), id("broker")]);
+  // Managers are never in the rotation, even when listed.
+  expect(saved.routing.order).toEqual([id("colleague"), id("broker")]);
   const picks = [];
   for (let i = 0; i < 4; i++) picks.push((await LeadRules.nextBroker(h.pool, agency, { advance: true })).id);
-  expect(picks).toEqual([id("colleague"), id("admin"), id("broker"), id("colleague")]);
+  expect(picks).toEqual([id("colleague"), id("broker"), id("colleague"), id("broker")]);
   // Without advance the same broker is offered again.
-  expect((await LeadRules.nextBroker(h.pool, agency)).id).toBe(id("admin"));
+  expect((await LeadRules.nextBroker(h.pool, agency)).id).toBe(id("colleague"));
   // Away is skipped.
-  await h.query("UPDATE brokers SET away_until = now() + interval '3 days' WHERE id = $1", [id("admin")]);
+  await h.query("UPDATE brokers SET away_until = now() + interval '3 days' WHERE id = $1", [id("colleague")]);
   expect((await LeadRules.nextBroker(h.pool, agency)).id).toBe(id("broker"));
   // A broker can't change it.
   expect(await LeadRules.saveRouting(h.pool, await row("broker"), { roundRobin: false })).toEqual({ error: "forbidden" });
@@ -68,9 +69,10 @@ test("Team page: ordered list with open leads; saving the switch and order", asy
   expect(post.status).toBe(200);
   expect(post.text).toContain("round robin is off");
   const after = await LeadRules.routingOf(h.pool, admin.agency_id);
-  expect(after).toMatchObject({ round_robin: false, order: [id("colleague"), id("broker"), id("admin")] });
+  expect(after).toMatchObject({ round_robin: false, order: [id("colleague"), id("broker")] });
   const list = await LeadRules.routingList(h.pool, admin.agency_id);
-  expect(list.brokers.map((b) => b.id)).toEqual([id("colleague"), id("broker"), id("admin")]);
+  // The list shows the rotation only: brokers and team leads.
+  expect(list.brokers.map((b) => b.id)).toEqual([id("colleague"), id("broker")]);
   expect(list.brokers[0].open_leads).toBe(1);
   // Brokers can't.
   const b = await signIn(h, "broker");
