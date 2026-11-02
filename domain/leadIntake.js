@@ -159,7 +159,7 @@ Never invent anything: a field that is not stated is null (or an empty list).
 }
 
 RULES:
-- Numbers are plain EGP numbers: "9 مليون" = 9000000, "من 7 لـ 9 مليون" → price_min 7000000, price_max 9000000, "قسط 50 ألف" → payment.max_installment 50000, "إيجار 25 ألف" → listing_type "rent", price_max 25000.
+- Numbers are EGP unless the client names dollars ("$", "USD", "دولار") or euros ("€", "EUR", "يورو"): then set currency to USD or EUR and keep the number as said, never converted. Otherwise: "9 مليون" = 9000000, "من 7 لـ 9 مليون" → price_min 7000000, price_max 9000000, "قسط 50 ألف" → payment.max_installment 50000, "إيجار 25 ألف" → listing_type "rent", price_max 25000.
 - "عايز يشتري" → buyer; "عايز يأجر" / "إيجار" → tenant; "عايز يبيع شقته" → seller; "عايز يأجر شقته" (owner) → landlord.
 - Several places ("التجمع أو زايد") all go in locations.
 - The broker's own words around the forward ("ده عميل", "client:") are not the client's name.

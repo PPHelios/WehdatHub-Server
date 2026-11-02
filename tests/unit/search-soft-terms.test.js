@@ -11,7 +11,7 @@ function pool(rowsByCall) {
     query: async (sql, params) => {
       calls.push({ sql, params });
       // The approved-names lookup is not a search: it always comes back empty here.
-      if (/place_names/.test(sql)) return { rows: [] };
+      if (/place_names|crm_settings|details->>.currency. = ANY/.test(sql)) return { rows: [] };
       return { rows: rowsByCall[Math.min(i++, rowsByCall.length - 1)] };
     }
   };

@@ -1956,6 +1956,22 @@
       "setTicked": ["pool", "importId", "agencyId", "seqs", "ticked"],
       "getRow": ["pool", "importId", "agencyId", "seq"],
       "tickedRows": ["pool", "importId", "agencyId"]
+    },
+    "domain/fx.js": {
+      "CURRENCIES": "Array",
+      "MIN_RATE": "Number",
+      "MAX_RATE": "Number",
+      "parseRate": ["raw"],
+      "ratesFrom": ["stored"],
+      "toEgp": ["amount", "currency", "rates"],
+      "currencyOfText": ["raw"],
+      "CURRENCY_WORDS": "Object",
+      "missing": ["currencies", "rates"]
+    },
+    "services/fx.js": {
+      "loadRates": ["db", "agencyId"],
+      "missingRates": ["db", "agencyId", "rates"],
+      "saveRates": ["db", "broker", "input"]
     }
   },
   "invariant_variable_names": {
