@@ -268,10 +268,12 @@
       "MANAGER_ROLES": "Array",
       "isManager": ["broker"],
       "isAgencyOwner": ["broker"],
+      "isTeamLead": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],
       "canViewLead": ["broker", "lead"],
       "canEditLead": ["broker", "lead"],
+      "canReassignLead": ["broker", "lead", "targetTeamLeadId", "targetBrokerId"],
       "canManageLeads": ["broker"],
       "canViewDeal": ["broker", "deal"],
       "canEditDeal": ["broker", "deal"]
@@ -709,6 +711,7 @@
       "usage": ["pool", "agencyId", "params"]
     },
     "lib/notifications.js": {
+      "brokersWithRoles": ["pool", "agencyId", "roles"],
       "KINDS": "Array",
       "KIND_LABELS": "Object",
       "DAILY_KINDS": "Array",
@@ -772,6 +775,7 @@
       "listFor": ["pool", "viewer", "params"],
       "history": ["pool", "viewer", "ownerId", "params"],
       "edit": ["pool", "actor", "ownerId", "params"],
+      "canEditOwner": ["pool", "viewer", "ownerId"],
       "remove": ["pool", "actor", "ownerId"],
       "reassign": ["pool", "actor", "listing", "to"],
       "leadFor": ["pool", "viewer", "owner"],
@@ -832,6 +836,7 @@
       "handleFlag": ["pool", "actor", "key", "reply", "params"],
       "openFlags": ["pool", "actor"],
       "flagCount": ["pool", "actor"],
+      "openRequestsOn": ["pool", "actor", "leadId"],
       "markContacted": ["pool", "actor", "key", "params"],
       "setFollowUp": ["pool", "actor", "key", "params"],
       "completeFollowUp": ["pool", "actor", "key", "params"],
@@ -1149,7 +1154,9 @@
       "invite": ["pool", "manager", "input", "opts"],
       "deactivate": ["pool", "manager", "brokerId", "params"],
       "inviteText": ["broker", "url", "agencyName"],
-      "changeRole": ["pool", "owner", "brokerId", "newRole"]
+      "changeRole": ["pool", "owner", "brokerId", "newRole"],
+      "setTeamLeadRole": ["pool", "manager", "brokerId", "on"],
+      "setTeam": ["pool", "manager", "brokerId", "teamLeadId"]
     },
     "web/routes/dashboard.js": {
       "register": ["web", "params"]
@@ -1279,44 +1286,16 @@
       "register": ["web", "params"]
     },
     "domain/portalEnquiry.js": {
-      "parse": [
-        "text"
-      ],
+      "parse": ["text"],
       "PORTALS": "Object"
     },
     "services/portalEnquiries.js": {
-      "capture": [
-        "pool",
-        "actor",
-        "text",
-        "params"
-      ],
-      "list": [
-        "pool",
-        "actor"
-      ],
-      "assign": [
-        "pool",
-        "actor",
-        "id",
-        "params"
-      ],
-      "linkUnit": [
-        "pool",
-        "actor",
-        "id",
-        "unitCode"
-      ],
-      "setAlerts": [
-        "pool",
-        "actor",
-        "on"
-      ],
-      "unitFor": [
-        "db",
-        "agencyId",
-        "listingNo"
-      ]
+      "capture": ["pool", "actor", "text", "params"],
+      "list": ["pool", "actor"],
+      "assign": ["pool", "actor", "id", "params"],
+      "linkUnit": ["pool", "actor", "id", "unitCode"],
+      "setAlerts": ["pool", "actor", "on"],
+      "unitFor": ["db", "agencyId", "listingNo"]
     },
     "services/leadSources.js": {
       "NONE": "String",
@@ -1345,10 +1324,7 @@
       "noteLine": ["m", "listing", "lang"]
     },
     "web/routes/portalEnquiries.js": {
-      "register": [
-        "web",
-        "params"
-      ]
+      "register": ["web", "params"]
     },
     "web/routes/sources.js": {
       "register": ["web", "params"]

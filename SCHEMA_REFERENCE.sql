@@ -324,7 +324,8 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   quiet_line boolean DEFAULT true NOT NULL,
   target_deals smallint,
   target_commission bigint,
-  onboarding jsonb DEFAULT '{}'::jsonb NOT NULL
+  onboarding jsonb DEFAULT '{}'::jsonb NOT NULL,
+  team_lead_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1414,7 +1415,7 @@ ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check CHECK (((length(credential_id) >= 16) AND (length(credential_id) <= 1400)));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_draft_style_check CHECK (((draft_style IS NULL) OR (length(draft_style) <= 600)));
-ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
+ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text, 'team_lead'::text])));
 ALTER TABLE brokers ADD CONSTRAINT brokers_target_commission_check CHECK (((target_commission IS NULL) OR (target_commission > 0)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_target_deals_check CHECK (((target_deals IS NULL) OR ((target_deals >= 1) AND (target_deals <= 1000))));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
@@ -1578,6 +1579,7 @@ ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (bro
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE brokers ADD CONSTRAINT brokers_team_lead_id_fkey FOREIGN KEY (team_lead_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
@@ -1716,6 +1718,7 @@ CREATE INDEX idx_broker_passkeys_broker ON public.broker_passkeys USING btree (b
 CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
+CREATE INDEX brokers_team_lead ON public.brokers USING btree (agency_id, team_lead_id) WHERE (team_lead_id IS NOT NULL);
 CREATE UNIQUE INDEX brokers_telegram_user_uidx ON public.brokers USING btree (telegram_user_id) WHERE (telegram_user_id IS NOT NULL);
 CREATE INDEX idx_catalogue_updates_agency ON public.catalogue_updates USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_commissions_agency_status ON public.commissions USING btree (agency_id, status);
