@@ -291,10 +291,16 @@ async function handleAudio(broker, message, ctx) {
     transcribedText = await AI.transcribeAudio(
       audioData.buffer,
       audioData.mimeType,
-      ctx
+      { ...ctx, broker, feature: "voice_search" }
     );
   } catch (err) {
     console.error("Gemini audio transcription error:", err);
+    // Credits spent, a daily cap or the owner's switch: say so, instead of "could not understand the audio".
+    const why = require("../lib/aiBlock").kindOf(err);
+    if (why !== "ai") {
+      await reply(broker, `${require("../lib/aiBlock").text(why, lang, { owner: require("../lib/authz").isAgencyOwner(broker) })}\n${lang === "en" ? "Type your request instead." : "اكتب طلبك كتابة بدل الصوت."}`);
+      return "done";
+    }
   }
 
   if (!transcribedText || !transcribedText.trim()) {

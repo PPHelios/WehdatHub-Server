@@ -14,6 +14,7 @@ const LeadRequests = require("../../services/leadRequests");
 const Privacy = require("../../services/privacy");
 const Viewings = require("../../services/viewings");
 const AI = require("../../lib/ai");
+const AiBlock = require("../../lib/aiBlock");
 const RateLimit = require("../../lib/rateLimit");
 const Store = require("../../lib/listingStore");
 const Card = require("../../domain/leadCard");
@@ -710,7 +711,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
     if (!lead) return;
     const lang = langOf(req);
     const out = await FollowUpDrafts.draft(pool, actor(req), lead.id, { lang: clientLangOf(lead, lang) });
-    if (out.error) return leadPage(req, res, lead, { status: out.error === "quota" ? 429 : 503, notice: `⚠️ ${L(lang, "مقدرتش أكتب الرسالة دلوقتي، جرب كمان شوية.", "Couldn't draft the message right now; try again shortly.")}` });
+    if (out.error) return leadPage(req, res, lead, { status: out.error === "ai" ? 503 : 429, notice: out.error === "ai" ? `⚠️ ${L(lang, "مقدرتش أكتب الرسالة دلوقتي، جرب كمان شوية.", "Couldn't draft the message right now; try again shortly.")}` : AiBlock.text(out.error, lang, { owner: isAgencyOwner(req.session.broker) }) });
     return leadPage(req, res, out.lead, { draft: out });
   });
 
