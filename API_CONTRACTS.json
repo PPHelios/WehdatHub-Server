@@ -638,6 +638,9 @@
       "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
       "batchExcel": ["pool", "broker", "id", "params", "params"],
       "batchStats": ["payload"],
+      "canUndo": ["pool", "broker", "imp"],
+      "undoPreview": ["pool", "agencyId", "imp"],
+      "undoExcel": ["pool", "broker", "id"],
       "TYPE_KEYS": "Array",
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
@@ -709,6 +712,7 @@
       "usage": ["pool", "agencyId", "params"]
     },
     "lib/notifications.js": {
+      "brokersWithRoles": ["pool", "agencyId", "roles"],
       "KINDS": "Array",
       "KIND_LABELS": "Object",
       "DAILY_KINDS": "Array",
@@ -832,6 +836,7 @@
       "handleFlag": ["pool", "actor", "key", "reply", "params"],
       "openFlags": ["pool", "actor"],
       "flagCount": ["pool", "actor"],
+      "openRequestsOn": ["pool", "actor", "leadId"],
       "markContacted": ["pool", "actor", "key", "params"],
       "setFollowUp": ["pool", "actor", "key", "params"],
       "completeFollowUp": ["pool", "actor", "key", "params"],
@@ -1279,44 +1284,16 @@
       "register": ["web", "params"]
     },
     "domain/portalEnquiry.js": {
-      "parse": [
-        "text"
-      ],
+      "parse": ["text"],
       "PORTALS": "Object"
     },
     "services/portalEnquiries.js": {
-      "capture": [
-        "pool",
-        "actor",
-        "text",
-        "params"
-      ],
-      "list": [
-        "pool",
-        "actor"
-      ],
-      "assign": [
-        "pool",
-        "actor",
-        "id",
-        "params"
-      ],
-      "linkUnit": [
-        "pool",
-        "actor",
-        "id",
-        "unitCode"
-      ],
-      "setAlerts": [
-        "pool",
-        "actor",
-        "on"
-      ],
-      "unitFor": [
-        "db",
-        "agencyId",
-        "listingNo"
-      ]
+      "capture": ["pool", "actor", "text", "params"],
+      "list": ["pool", "actor"],
+      "assign": ["pool", "actor", "id", "params"],
+      "linkUnit": ["pool", "actor", "id", "unitCode"],
+      "setAlerts": ["pool", "actor", "on"],
+      "unitFor": ["db", "agencyId", "listingNo"]
     },
     "services/leadSources.js": {
       "NONE": "String",
@@ -1345,10 +1322,7 @@
       "noteLine": ["m", "listing", "lang"]
     },
     "web/routes/portalEnquiries.js": {
-      "register": [
-        "web",
-        "params"
-      ]
+      "register": ["web", "params"]
     },
     "web/routes/sources.js": {
       "register": ["web", "params"]
