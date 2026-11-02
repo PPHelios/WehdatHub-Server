@@ -66,9 +66,9 @@ function register(web, { pool, page }) {
       nav: "units",
       body: html`<h1>👤 ${L(lang, "المُلّاك", "Owners")}</h1>
 <form method="get" action="/app/owners" class="row"><input name="q" value="${q}" placeholder="${L(lang, "اسم أو موبايل", "Name or mobile")}" aria-label="${L(lang, "بحث", "Search")}"><button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button></form>
-${isAgencyOwner(broker) ? html`<p><a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/owners?private=${onlyPrivate ? "" : "1"}">🔒 ${L(lang, "الخاصين", "Private")}</a></p>` : ""}
+${isAgencyOwner(broker) ? html`<p><a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/owners?private=${onlyPrivate ? "" : "1"}">⭐ ${L(lang, "VIP", "VIP")}</a></p>` : ""}
 ${list.rows.length
-  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.displayPhone(`+${p}`)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">🚩 ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</li>`)}</ul>`
+  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.displayPhone(`+${p}`)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">🚩 ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
   : html`<p class="muted">${L(lang, "مفيش مُلّاك لسه.", "No owners yet.")}</p>`}
 <p class="row">${n > 0 ? html`<a href="/app/owners?page=${n - 1}&q=${encodeURIComponent(q)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${list.more ? html`<a href="/app/owners?page=${n + 1}&q=${encodeURIComponent(q)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
     });
@@ -89,13 +89,13 @@ ${list.rows.length
   ${req.query.saved ? html`<p class="notice ok">✅ ${L(lang, "اتحفظ", "Saved")}</p>` : ""}
   <h1>👤 ${owner.name || L(lang, "بدون اسم", "No name")}</h1>
   <p dir="ltr">${(owner.phones || []).map((p) => html`<a href="${Phone.telUrl(`+${p}`)}">${Phone.displayPhone(`+${p}`)}</a> `)}</p>
-  ${owner.is_private ? html`<p class="badge">🔒 ${L(lang, "خاص بالمالك", "Private to the owner")}</p>` : ""}
+  ${owner.is_private ? html`<p class="badge">⭐ ${L(lang, "VIP", "VIP")}</p>` : ""}
   ${owner.flag ? html`<p>🚩 ${owner.flag}</p>` : ""}
   ${owner.notes ? html`<p>${owner.notes}</p>` : ""}
   ${lead ? html`<p data-owner-lead>🔗 ${L(lang, "هو كمان عميل", "Also a lead")}: <a href="/app/leads/L-${String(lead.ref).padStart(4, "0")}">L-${String(lead.ref).padStart(4, "0")}</a></p>` : ""}
   <h2>${L(lang, "وحداته", "Units")}</h2>
   <ul data-owner-units>${owner.units.map((u) => html`<li><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a> · ${u.compound || ""} · ${u.status}${u.is_private ? " 🔒" : ""}</li>`)}</ul>
-  ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/${owner.id}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${owner.is_private ? "0" : "1"}"><button type="submit" class="secondary">${owner.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button></form>` : ""}
+  ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/${owner.id}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${owner.is_private ? "0" : "1"}"><button type="submit" class="secondary">${owner.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليه VIP", "Make VIP")}</button></form>` : ""}
   ${manager
     ? html`<details><summary>${L(lang, "تعديل", "Edit")}</summary>
   <form method="post" action="/app/owners/${owner.id}" class="stack" data-owner-edit><input type="hidden" name="_csrf" value="${req.session.csrf}">
