@@ -26,5 +26,5 @@ test("clean then seed builds the demo set", async () => {
   expect(await n("deals")).toBeGreaterThanOrEqual(3);
   expect(await n("viewings")).toBeGreaterThan(0);
   expect(await n("unit_owners")).toBeGreaterThan(0);
-  expect(await h.query("SELECT 1 FROM leads WHERE flagged_at IS NOT NULL")).not.toEqual([]);
+  expect(await h.query("SELECT 1 FROM lead_requests WHERE handled_at IS NULL")).not.toEqual([]);
 });

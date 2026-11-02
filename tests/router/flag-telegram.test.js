@@ -14,7 +14,11 @@ jest.setTimeout(60000);
 
 let h;
 const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
-const flagOf = async () => (await h.query("SELECT flagged_at, flag_note FROM leads"))[0];
+// The lead's open request (one per broker per lead), or an empty state.
+const flagOf = async () => {
+  const [r] = await h.query("SELECT note AS flag_note, handled_at FROM lead_requests WHERE handled_at IS NULL ORDER BY created_at DESC LIMIT 1");
+  return r || { flag_note: null, handled_at: null };
+};
 const buttonsOf = (out) => out.flatMap((e) => (e.keyboard || []).flat()).map((b) => b.callback_data);
 
 beforeEach(async () => {
@@ -27,10 +31,12 @@ beforeEach(async () => {
 afterAll(closeHarness);
 
 test("a broker picks Needs manager from the stage menu, is asked for an optional note, and the note goes to the managers", async () => {
+  const menu = buttonsOf(await h.tgTap("broker", "ld:stage:L-0001"));
+  expect(menu).toEqual(expect.arrayContaining(["ld:st:L-0001:flag", "ld:st:L-0001:flagowner"]));
   const asked = await h.tgTap("broker", "ld:st:L-0001:flag");
   const ids = buttonsOf(asked);
-  expect(ids).toContain("ld:flagnow:L-0001");
-  expect(await flagOf()).toEqual({ flagged_at: null, flag_note: null });
+  expect(ids).toContain("ld:flagnow:L-0001:manager");
+  expect(await flagOf()).toEqual({ flag_note: null, handled_at: null });
 
   await h.tgText("broker", "Asked for a discount on the deposit");
   expect((await flagOf()).flag_note).toBe("Asked for a discount on the deposit");
@@ -54,7 +60,7 @@ test("a manager sees Handled on a flagged lead, gives an optional reply, and the
 
   await h.tgTap("manager", "ld:handle:L-0001");
   await h.tgText("manager", "Called the client, we will offer a 2% discount");
-  expect(await flagOf()).toEqual({ flagged_at: null, flag_note: null });
+  expect(await flagOf()).toEqual({ flag_note: null, handled_at: null });
   const [ev] = await h.query("SELECT data FROM lead_events WHERE kind = 'flag_handled' ORDER BY created_at DESC LIMIT 1");
   expect(ev.data.reply).toBe("Called the client, we will offer a 2% discount");
   const told = await h.query("SELECT broker_id FROM notifications WHERE broker_id = $1", [h.BROKERS.broker.id]);
@@ -68,5 +74,5 @@ test("the broker never gets Handled, and a manager can mark it handled without a
   expect(denied.some((e) => /ld|handle/i.test(e.text || "") && e.keyboard)).toBe(false);
   await h.tgTap("manager", "ld:handle:L-0001");
   await h.tgTap("manager", "ld:handlenow:L-0001");
-  expect((await flagOf()).flagged_at).toBeNull();
+  expect((await flagOf()).handled_at).toBeNull();
 });

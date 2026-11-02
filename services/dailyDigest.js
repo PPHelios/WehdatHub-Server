@@ -140,7 +140,7 @@ async function digestData(pool, agencyId, now) {
     [agencyId, new Date(now.getTime() - 24 * 3600 * 1000).toISOString()]
   );
   const flagged = await pool.query(
-    `SELECT count(*)::int AS n, min(flagged_at) AS oldest FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND flagged_at IS NOT NULL`,
+    `SELECT count(*)::int AS n, min(r.created_at) AS oldest FROM lead_requests r JOIN leads ON leads.id = r.lead_id WHERE ${Vis.leads("leads")} AND r.agency_id = $1 AND r.handled_at IS NULL`,
     [agencyId]
   );
   const events = await pool.query(
