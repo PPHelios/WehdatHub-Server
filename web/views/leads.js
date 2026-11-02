@@ -43,8 +43,8 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
     <h2>✨ ${L(lang, "املأ من الرسالة", "Fill from the message")}</h2>
     <label>${L(lang, "رسالة العميل (الصقها هنا)", "The client's message (paste it here)")}<textarea name="message" rows="4">${v.message || ""}</textarea></label>
     <div class="row">
-      <button type="button" class="secondary" hx-post="/app/leads/extract" hx-encoding="multipart/form-data" hx-include="#lead-form" hx-target="#lead-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الرسالة", "Fill from message")}</button>
-      <button type="button" class="secondary" data-voice-target="#lead-form" data-voice-url="/app/leads/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
+      <button type="button" class="secondary" data-ai="clients_text" hx-post="/app/leads/extract" hx-encoding="multipart/form-data" hx-include="#lead-form" hx-target="#lead-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الرسالة", "Fill from message")}</button>
+      <button type="button" class="secondary" data-ai="voice_clients" data-voice-target="#lead-form" data-voice-url="/app/leads/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
       <span class="spinner" aria-hidden="true"></span>
     </div>
     <p class="muted">${L(lang, "اللي الذكاء الاصطناعي يفهمه بيتملى في الخانات تحت؛ راجعه قبل الحفظ.", "What the AI understands fills the fields below; check it before saving.")}</p>

@@ -44,6 +44,8 @@ function loadSession(pool) {
     req.sid = req.cookies[SESSION_COOKIE()] || null;
     try {
       req.session = req.sid ? await WebAuth.getSession(pool, req.sid) : null;
+      // Features the agency owner switched off: their buttons are grayed out with a hint (web/static/app.js).
+      if (req.session?.broker?.agency_id) req.session.aiOff = await require("../services/aiSwitches").offList(pool, req.session.broker.agency_id).catch(() => []);
       next();
     } catch (err) {
       next(err);

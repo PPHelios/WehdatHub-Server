@@ -87,6 +87,7 @@
   | `063_team_lead.sql` | Team Lead: role `team_lead` (added to the role check) and `brokers.team_lead_id`. A team lead sees the leads of brokers in their team and reassigns within it or sends back to the managers. |
   | `064_lead_requests_rls.sql` | Row-level security on `lead_requests`. |
   | `065_search_log.sql` | The POC search log: `search_log` (every search: words with phone numbers hidden, the local reading, the AI reading when asked, the filters used, the units returned, the nightly check) and `search_reports` ("Wrong search?" reports). |
+  | `066_search_aliases.sql` | `search_aliases`: words brokers say mapped to words the dictionaries know (seeded spellings, AI-proposed words waiting for the owner, approved ones the parser uses). |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

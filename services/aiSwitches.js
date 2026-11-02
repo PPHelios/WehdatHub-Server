@@ -92,6 +92,13 @@ async function forAgency(db, agencyId) {
   };
 }
 
+/** Keys of the features switched off for this agency (their own switch or their tab's). */
+async function offList(db, agencyId) {
+  if (!agencyId) return [];
+  const s = await settingsOf(db, agencyId);
+  return FEATURES.filter((f) => !allowed(s, f.key)).map((f) => f.key);
+}
+
 /** Whether one feature works for this agency now (its switch and its tab's). */
 async function isOn(db, agencyId, key) {
   return allowed(await settingsOf(db, agencyId), key);
@@ -125,4 +132,4 @@ async function save(db, actor, body = {}) {
 
 const clearCache = () => cache.clear();
 
-module.exports = { TABS, FEATURES, ROUTE_FEATURE, tabOf, featureFor, allowed, forAgency, isOn, assertOn, save, clearCache };
+module.exports = { TABS, FEATURES, ROUTE_FEATURE, tabOf, featureFor, allowed, forAgency, offList, isOn, assertOn, save, clearCache };

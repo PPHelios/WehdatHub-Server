@@ -98,6 +98,7 @@
       "PROPERTY_TYPE_MAP": "Object"
     },
     "lib/search.js": {
+      "feedbackButtons": ["logId", "source", "lang", "params"],
       "PROPERTY_TYPES": "Array",
       "TYPE_AR": "Object",
       "SEARCH_PROMPT": "String",
@@ -435,6 +436,7 @@
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],
       "fallbackParse": ["text"],
+      "setAliases": ["list"],
       "hasAnyFilter": ["parsed"],
       "classifyIntent": ["parsed"],
       "ensureFilters": ["parsed"],
@@ -1838,6 +1840,9 @@
       "NONE": "String",
       "report": ["db", "manager", "params"]
     },
+    "web/routes/searchReview.js": {
+      "register": ["web", "params"]
+    },
     "web/routes/winLoss.js": {
       "register": ["web", "params"]
     },
@@ -2032,6 +2037,32 @@
       "readText": ["raw"],
       "FOREIGN": "Object"
     },
+    "services/searchVocab.js": {
+      "refresh": ["pool"],
+      "ensureLoaded": ["pool"],
+      "reset": []
+    },
+    "services/searchLearn.js": {
+      "AUTO_AGREED": "Number",
+      "AUTO_AFTER_DAYS": "Number",
+      "addedByAi": ["local", "ai"],
+      "learn": ["pool", "params"],
+      "pending": ["pool", "limit"],
+      "decide": ["pool", "id", "approve"],
+      "autoApprove": ["pool", "now"]
+    },
+    "services/searchShadow.js": {
+      "enabled": [],
+      "observe": ["pool", "AI", "params"],
+      "schedule": ["pool", "AI", "args"]
+    },
+    "services/searchAudit.js": {
+      "disagreements": ["a", "b"],
+      "badUnits": ["filters", "units"],
+      "run": ["pool", "params"],
+      "summary": ["pool", "counts"],
+      "auditJob": []
+    },
     "services/aiSwitches.js": {
       "TABS": "Array",
       "FEATURES": "Array",
@@ -2040,6 +2071,7 @@
       "featureFor": ["operationType", "params"],
       "allowed": ["settings", "key", "params"],
       "forAgency": ["db", "agencyId"],
+      "offList": ["db", "agencyId"],
       "isOn": ["db", "agencyId", "key"],
       "assertOn": ["db", "agencyId", "key", "params"],
       "save": ["db", "actor", "body"],

@@ -3,6 +3,7 @@
 "use strict";
 
 const Switches = require("../../services/aiSwitches");
+const Shadow = require("../../services/searchShadow");
 const Search = require("../../services/search");
 const SearchLog = require("../../services/searchLog");
 const AI = require("../../lib/ai");
@@ -40,7 +41,7 @@ async function runFilters(pool, agencyId, filters, page) {
 function searchBox(q, lang, { voice = false } = {}) {
   return html`<form method="get" action="/app/search" class="searchbox" role="search">
   ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
-  <button type="button" class="mic" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
+  <button type="button" class="mic" data-ai="voice_search" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
   <button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button>
 </form>
 <p class="row between small"><span class="muted">${L(lang, "اكتب أو اتكلم زي ما بتكلم البوت.", "Type or speak as you would to the bot.")}</span><a href="/app/searches">${icon("star", 16)} ${L(lang, "البحث المحفوظ", "Saved searches")}</a></p>
@@ -81,7 +82,7 @@ function understoodBlock({ meta = {}, source = null, filters, logId = null, q = 
   ${logId
     ? html`<div class="row">
     <form method="post" action="/app/search/report" class="row"><input type="hidden" name="sl" value="${logId}"><button type="submit" class="secondary small" data-report>🚩 ${L(lang, "البحث ده غلط؟", "Wrong search?")}</button></form>
-    ${canAsk && q ? html`<a class="btn secondary small" href="/app/search?q=${encodeURIComponent(q)}&ai=1&sl=${logId}" data-ask-ai>🤖 ${L(lang, "ابحث تاني بالذكاء الاصطناعي", "Search again with AI")}</a>` : ""}
+    ${canAsk && q ? html`<a class="btn secondary small" href="/app/search?q=${encodeURIComponent(q)}&ai=1&sl=${logId}" data-ask-ai data-ai="search_ai">🤖 ${L(lang, "ابحث تاني بالذكاء الاصطناعي", "Search again with AI")}</a>` : ""}
   </div>`
     : ""}
 </div>`;
@@ -175,6 +176,7 @@ function register(web, { pool, page }) {
           relaxed: out.relaxed,
           rerunOf: forceAi ? req.query.sl : null
         });
+        if (parse) Shadow.schedule(pool, AI, { logId, text: q, parse });
       }
       const understood = understoodBlock({
         meta: parse ? parse.parsed.meta : { unapplied: logRow?.unapplied || [] },
@@ -183,7 +185,7 @@ function register(web, { pool, page }) {
         logId,
         q: parse ? q : "",
         lang,
-        canAsk: Boolean(parse) && parse.source !== "ai" && (await aiAllowed(req))
+        canAsk: Boolean(parse) && parse.source !== "ai"
       });
       results = resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId });
       searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;

@@ -7,6 +7,7 @@ const Vis = require("../lib/visibility");
 const PlaceNames = require("../lib/placeNames");
 const Fx = require("./fx");
 const Switches = require("./aiSwitches");
+const Vocab = require("./searchVocab");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -71,6 +72,7 @@ function featureListForPrompt() {
  */
 async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true } = {}) {
   const t0 = Date.now();
+  if (ctx.pool) await Vocab.ensureLoaded(ctx.pool);
   const local = Q.fallbackParse(text);
   const reasons = local.meta?.reasons || [];
   // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).

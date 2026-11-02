@@ -45,7 +45,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "" }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "", aiOff = [] }) {
   const en = lang === "en";
   const tab = broker ? tabOf(path, nav) : null;
   return html`<!doctype html>
@@ -68,7 +68,7 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
 <script src="${assets("voice.js")}" defer></script>` : ""}
 </head>
-<body${broker ? raw(' class="has-tabbar"') : ""}>
+<body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الوكالة"}"`) : ""}>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread, tab }) : ""}
 <main id="main">${broker ? pageBar({ nav, lang, tab, path }) : ""}${body}</main>
 ${broker ? footer(broker, lang) : ""}

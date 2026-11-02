@@ -549,7 +549,7 @@ function register(web, { pool, page }) {
     if (!d) return notFound(req, res, page);
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
     const [agencies, log, names] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceNames.pending(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, names, csrf: req.session.csrf }) }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`<p class="card"><a href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, names, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;

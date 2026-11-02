@@ -512,3 +512,7 @@ details.sheet { padding-block: 4px; }
 
 /* Bulk imports are a desktop job: hidden on phones and small tablets (the pages still open by link). */
 @media (max-width: 1023.98px) { .desktop-only { display: none !important; } }
+
+/* AI features the agency owner switched off: grayed out, with a hint below. */
+.ai-off { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.ai-off-hint { display: block; margin-top: 0.25rem; }

@@ -41,7 +41,7 @@ function inputCard(lang, text = "") {
   <label>${L(lang, "التحديث (زي ما بتقوله)", "The update (as you would say it)")}<textarea name="text" rows="2" maxlength="1000" placeholder="${L(lang, "زيادة 7% على بادية من الشهر الجاي", "7% increase on Badya from next month")}">${text}</textarea></label>
   <div class="row">
     <button type="submit">⚡ ${L(lang, "اقرأ التحديث", "Read the update")}</button>
-    <button type="button" class="secondary" data-voice-target="#cu-result" data-voice-url="/app/catalogue/updates" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")}</button>
+    <button type="button" class="secondary" data-ai="voice_catalogue" data-voice-target="#cu-result" data-voice-url="/app/catalogue/updates" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")}</button>
   </div>
   <p class="muted">${L(lang, "أمثلة: «B12-304 اتباعت»، «تخفيض 5% على المرحلة 2 في بادية من 1/12»، «خطة جديدة 5% مقدم 8 سنين على بادية»، «سعر B12-304 9.5 مليون». هتشوف عدد الوحدات ومثال قبل أي تغيير.", "Examples: \"B12-304 sold\", \"5% cut on Phase 2 of Badya from 1/12\", \"new plan 5% down 8 years on Badya\", \"price B12-304 9.5M\". You see the unit count and an example before anything changes.")}</p>
 </form>`;

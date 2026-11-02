@@ -23,6 +23,7 @@ const PRIVATE = [
   require("./passkeys"),
   require("./usage"),
   require("./dashboard"),
+  require("./searchReview"),
   require("./team"),
   require("./plan"),
   require("./report"),
