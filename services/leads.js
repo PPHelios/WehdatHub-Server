@@ -639,6 +639,15 @@ async function postponeFollowUp(pool, actor, key, { days = 1, version = null, no
  * Reverts a reversible event within 10 minutes, if every later change was undone too (else a conflict).
  * @returns {Promise<{ ok, lead } | { error: "not_found"|"forbidden"|"not_undoable"|"undo_expired"|"already_undone" } | { conflict, lead }>}
  */
+/** A team lead's own reassignment: undoable when the assignee it restores is in their team, or nobody. */
+async function teamLeadMayUndoAssign(client, actor, ev) {
+  if (!Authz.isTeamLead(actor) || ev.broker_id !== actor.id) return false;
+  const prevId = ev.data?.prev?.assigned_broker_id || null;
+  if (!prevId || prevId === actor.id) return true;
+  const { rows } = await client.query("SELECT team_lead_id FROM brokers WHERE id = $1 AND agency_id = $2", [prevId, actor.agency_id]);
+  return rows[0]?.team_lead_id === actor.id;
+}
+
 async function undo(pool, actor, eventId, { now = new Date() } = {}) {
   if (!/^\d+$/.test(String(eventId))) return { error: "not_found" };
   return withTransaction(pool, async (client) => {
@@ -647,8 +656,10 @@ async function undo(pool, actor, eventId, { now = new Date() } = {}) {
     if (!ev) return { error: "not_found" };
     const lead = await loadLead(client, actor.agency_id, ev.lead_id, { forUpdate: true });
     if (!lead) return { error: "not_found" };
-    const managerOnly = ev.kind === "assigned";
-    if (managerOnly ? !Authz.canManageLeads(actor) : !Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    if (ev.kind === "assigned") {
+      // A team lead may cancel their own reassignment when the assignee it restores is in their team (or nobody).
+      if (!Authz.canManageLeads(actor) && !(await teamLeadMayUndoAssign(client, actor, ev))) return { error: "forbidden" };
+    } else if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
     if (!(ev.kind in REVERSIBLE)) return { error: "not_undoable" };
     if (ev.undone_at) return { error: "already_undone" };
     if (ev.broker_id !== actor.id && !Authz.isManager(actor)) return { error: "forbidden" };
