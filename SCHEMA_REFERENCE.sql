@@ -296,7 +296,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   referred_by uuid,
   referral_rewarded_at timestamp with time zone,
   referral_credit_months smallint DEFAULT 0 NOT NULL,
-  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL
+  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL,
+  portal_alerts boolean DEFAULT true NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -397,7 +398,8 @@ CREATE TABLE IF NOT EXISTS public.listings (
   stale_hidden_at timestamp with time zone,
   phase_id uuid,
   is_private boolean DEFAULT false NOT NULL,
-  owner_id uuid
+  owner_id uuid,
+  portal_listing_no text
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -1273,6 +1275,23 @@ CREATE TABLE IF NOT EXISTS public.import_rows (
   state text DEFAULT 'pending'::text NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.portal_enquiries (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  portal text NOT NULL,
+  client_name text,
+  link text NOT NULL,
+  listing_no text,
+  created_by_broker_id uuid,
+  status text DEFAULT 'new'::text NOT NULL,
+  phone_e164 text,
+  lead_id uuid,
+  assigned_broker_id uuid,
+  merged boolean DEFAULT false NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1317,6 +1336,7 @@ ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KE
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE place_names ADD CONSTRAINT place_names_pkey PRIMARY KEY (id);
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_pkey PRIMARY KEY (id);
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id);
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_pkey PRIMARY KEY (fingerprint);
 ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_pkey PRIMARY KEY (id);
@@ -1472,6 +1492,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_delivery_quarter_check CHECK (((del
 ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_market_check CHECK ((market = ANY (ARRAY['resale'::text, 'primary'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((payment_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_portal_listing_no_check CHECK (((portal_listing_no IS NULL) OR ((length(portal_listing_no) >= 4) AND (length(portal_listing_no) <= 20))));
 ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text])));
@@ -1484,6 +1505,12 @@ ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRA
 ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
 ALTER TABLE place_names ADD CONSTRAINT place_names_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text])));
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_client_name_check CHECK (((client_name IS NULL) OR (length(client_name) <= 120)));
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_link_check CHECK ((length(link) <= 1000));
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_listing_no_check CHECK (((listing_no IS NULL) OR ((length(listing_no) >= 4) AND (length(listing_no) <= 20))));
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_phone_e164_check CHECK (((phone_e164 IS NULL) OR (phone_e164 ~ '^\+[1-9][0-9]{7,14}$'::text)));
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_portal_check CHECK (((length(portal) >= 1) AND (length(portal) <= 40)));
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_status_check CHECK ((status = ANY (ARRAY['new'::text, 'assigned'::text])));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pct_check CHECK ((((pct >= ('-50'::integer)::numeric) AND (pct <= (100)::numeric)) AND (pct <> (0)::numeric)));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'applied'::text, 'cancelled'::text])));
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_fingerprint_check CHECK ((length(fingerprint) <= 120));
@@ -1604,6 +1631,10 @@ ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN K
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_bundle_id_fkey FOREIGN KEY (bundle_id) REFERENCES credit_bundles(id);
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE CASCADE;
@@ -1724,6 +1755,7 @@ CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (
 CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
 CREATE INDEX listings_location_keywords_gin ON public.listings USING gin (location_keywords);
 CREATE INDEX listings_owner ON public.listings USING btree (owner_id) WHERE (owner_id IS NOT NULL);
+CREATE UNIQUE INDEX listings_portal_no_idx ON public.listings USING btree (agency_id, portal_listing_no) WHERE (portal_listing_no IS NOT NULL);
 CREATE INDEX listings_private ON public.listings USING btree (agency_id) WHERE is_private;
 CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_normalized gin_trgm_ops);
 CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);
@@ -1744,6 +1776,7 @@ CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (list
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
 CREATE INDEX place_names_status ON public.place_names USING btree (status, times_seen DESC);
+CREATE INDEX portal_enquiries_agency_idx ON public.portal_enquiries USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effective_on) WHERE (status = 'scheduled'::text);
 CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);
 CREATE INDEX idx_price_sheets_project ON public.price_sheets USING btree (project_id, created_at DESC);

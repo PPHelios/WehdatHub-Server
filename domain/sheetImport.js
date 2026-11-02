@@ -144,10 +144,33 @@ const market = (v) => {
   const t = normalizeSearch(v);
   return /(primary|developer|برايمري|مطور)/.test(t) ? "primary" : /(resale|ريسيل|اعاده بيع)/.test(t) ? "resale" : null;
 };
+// Words that say a unit is gone: rented or sold (status "sold" is used for both) or no longer available (archived).
+const GONE_WORDS = /(\bsold\b|\brented\b|\bleased\b|مباع|اتباع|اتأجر|اتاجر|مؤجر|مأجر|متأجر|متاجر|ايجار منتهي)/;
+const CLOSED_WORDS = /(not available|unavailable|\bclosed\b|off market|مش متاح|غير متاح|مغلق|مقفول)/;
 const status = (v) => {
   const t = normalizeSearch(v);
-  return /(sold|مباع|اتباع)/.test(t) ? "sold" : /(archiv|مؤرشف|مورشف|ارشيف)/.test(t) ? "archived" : /(active|available|متاح|نشط)/.test(t) ? "active" : null;
+  return GONE_WORDS.test(t) ? "sold" : CLOSED_WORDS.test(t) || /(archiv|مؤرشف|مورشف|ارشيف)/.test(t) ? "archived" : /(active|available|متاح|نشط)/.test(t) ? "active" : null;
 };
+
+/** A unit status the notes state ("rented", "مباع", "not available"), for the one-time confirmation; null when they say nothing. */
+function statusHint(cells) {
+  if (cells.status !== undefined && cells.status !== null && String(cells.status).trim() !== "") return null;
+  for (const k of ["notes", "details_text"]) {
+    const t = normalizeSearch(cells[k]);
+    if (!t) continue;
+    if (GONE_WORDS.test(t)) return "sold";
+    if (CLOSED_WORDS.test(t)) return "archived";
+  }
+  return null;
+}
+
+/** A delivery cell that Excel stored as a date (a serial number like 45567) → "10/2026"; anything else unchanged. */
+function deliveryCell(v) {
+  const n = typeof v === "number" ? v : /^\d{5}$/.test(String(v).trim()) ? Number(v) : NaN;
+  if (!(n >= 40000 && n <= 60000)) return v;
+  const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000);
+  return `${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`;
+}
 const FREQ = [["semi_annual", /(semi|نص سنوي|نصف سنوي)/], ["quarterly", /(quarter|ربع)/], ["monthly", /(month|شهري)/], ["annual", /(annual|year|سنوي)/]];
 const frequency = (v) => {
   const t = normalizeSearch(v);
@@ -264,7 +287,7 @@ function rowToDraft(input = {}) {
     else if (n !== null && /^\D*\d+\D*$/.test(digits(f))) draft.floor_level = Math.round(n);
     else draft.details.floor = text(f, 40);
   }
-  if (has("delivery")) Object.assign(draft, Delivery.parseDelivery(text(cells.delivery, 60)));
+  if (has("delivery")) Object.assign(draft, Delivery.parseDelivery(text(deliveryCell(cells.delivery), 60)));
   if (has("finishing")) draft.finishing = finishing(cells.finishing);
   if (has("features") || has("orientation")) {
     const words = [cells.features, cells.orientation]
@@ -306,4 +329,4 @@ function rowToDraft(input = {}) {
   return { code, status: has("status") ? status(cells.status) : null, draft, errors: [...new Set(errors)], derived: expanded.derived };
 }
 
-module.exports = { COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };
+module.exports = { statusHint, deliveryCell, COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };

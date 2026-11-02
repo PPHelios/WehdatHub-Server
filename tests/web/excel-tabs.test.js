@@ -97,34 +97,18 @@ describe("one change for many rows", () => {
     expect(Number((await unit("VR2")).price_value)).toBe(60000);
   });
 
-  test("dollar prices use the agency's central rate: set in Settings, applied at upload, or picked up later with one button", async () => {
+  test("a dollar price is saved in dollars with its currency, not converted", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const data = [unitRow(1, "VR", "2000$"), unitRow(2, "VR", "25k")];
-    // No rate yet: the row is held back with the batch button.
-    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", data)] });
-    let page = await agent.get(a.body.url);
-    expect(page.text).toMatch(/data-kind="invalid"/);
-    expect(page.text).toMatch(/data-batch-form="usd_rate"/);
-    expect(page.text).toMatch(/\/app\/usage"/);
-    // Without a rate the button does nothing.
-    const none = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
-    expect(none.headers.location).toMatch(/\?batch=0$/);
-    // The manager sets the rate; the button now converts at it.
-    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "50" });
-    const b = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
-    expect(b.headers.location).toMatch(/\?batch=1$/);
-    page = await agent.get(a.body.url);
+    const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [unitRow(1, "VR", "2000$"), unitRow(2, "VR", "25k")])] });
+    const page = await agent.get(r.body.url);
     expect(page.text).not.toMatch(/data-kind="invalid"/);
     expect(page.text).toMatch(/data-usd-info/);
-    await agent.post(`${a.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });
-    expect(Number((await unit("VR1")).price_value)).toBe(100000);
-    expect((await unit("VR1")).details.notes).toContain("2000$");
-    // A later upload converts at once, and a later change of the rate does not touch the plan that was made.
-    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "60" });
-    const c = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [unitRow(1, "MI", "1000$")])] });
-    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "70" });
-    await agent.post(`${c.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1"] });
-    expect(Number((await unit("MI1")).price_value)).toBe(60000);
+    await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });
+    const usd = await unit("VR1");
+    expect(Number(usd.price_value)).toBe(2000);
+    expect(usd.details.currency).toBe("USD");
+    expect(Number((await unit("VR2")).price_value)).toBe(25000);
+    expect((await unit("VR2")).details.currency ?? null).toBeNull();
   });
 });
 
@@ -182,6 +166,89 @@ describe("the sheet's own code pattern", () => {
     const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [coded(1, "A1"), coded(2, "ZZ-7"), coded(3, "Q4"), coded(4, "")])] });
     const page = await agent.get(a.body.url);
     expect(page.text).not.toMatch(/(numbered in the sheet's own pattern|اتعمل بنفس نمط)/);
+  });
+});
+
+describe("status words, dates, duplicates and remembered choices", () => {
+  const withDetails = (row, text) => [...row.slice(0, 5), text, ...row.slice(6)];
+  const rented = (i, prefix) => withDetails(unitRow(i, prefix), "3 bedrooms / 2 bathrooms - rented");
+
+  test("status words in the notes are asked about each time, with the last answer shown", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [rented(1, "VR"), unitRow(2, "VR")])] });
+    const page = await agent.get(a.body.url);
+    expect(page.text).toMatch(/data-batch-form="status_words"/);
+    await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "status_words", value: "yes" });
+    await agent.post(`${a.body.url}/apply`).type("form").send({ _csrf: csrf, all: "1" });
+    expect((await unit("VR1")).status).toBe("sold");
+    expect((await unit("VR2")).status).toBe("active");
+    const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [rented(1, "MI")])] });
+    const next = await agent.get(b.body.url);
+    // Asked again, with last time's answer shown: nothing is applied without a tap.
+    expect(next.text).toMatch(/data-batch-form="status_words"/);
+    expect(next.text).toMatch(/data-remembered="status"/);
+    await agent.post(`${b.body.url}/apply`).type("form").send({ _csrf: csrf, all: "1" });
+    expect((await unit("MI1")).status).toBe("active");
+    // Forget: the next upload asks again.
+    const fresh = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Zed", [unitRow(1, "ZD")])] });
+    await agent.post(`${fresh.body.url}/batch`).type("form").send({ _csrf: csrf, action: "forget_prefs" });
+    const c = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Hyde", [rented(1, "HP")])] });
+    const asked = (await agent.get(c.body.url)).text;
+    expect(asked).toMatch(/data-batch-form="status_words"/);
+    expect(asked).not.toMatch(/data-remembered="status"/);
+  });
+
+  test("a type word picked once comes back pre-selected, never applied on its own", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const odd = (i, prefix) => [...unitRow(i, prefix).slice(0, 2), "mazonette", ...unitRow(i, prefix).slice(3)];
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [odd(1, "VR")])] });
+    await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "mazonette", value: "duplex" });
+    const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [odd(1, "MI")])] });
+    const page = await agent.get(b.body.url);
+    expect(page.text).toMatch(/data-type-word="mazonette"/);
+    expect(page.text).toMatch(/<option value="duplex" selected data-remembered>/);
+    expect(page.text).toMatch(/data-kind="invalid"/);
+  });
+
+  test("a delivery date stored by Excel as a number is read as a month and year", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const rows = [{ n: 1, v: [...HEAD, "delivery"] }, { n: 2, v: [...unitRow(1, "VR"), 45567] }];
+    const r = await post(agent, csrf, { filename: "SALE.xlsx", tabs: [{ name: "Villette", rows }] });
+    await agent.get(r.body.url);
+    await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1"] });
+    const u = await unit("VR1");
+    expect([u.delivery_year, u.delivery_month]).toEqual([2024, 10]);
+  });
+
+  test("a likely duplicate is warned about, in the sheet and in the agency's units", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const twin = [...unitRow(1, "ZZ").slice(0, 8), "VR9"];
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [unitRow(1, "VR"), twin])] });
+    const page = await agent.get(a.body.url);
+    expect(page.text).toMatch(/(Looks like row 1 in this sheet|شكلها نفس الصف 1)/);
+    await agent.post(`${a.body.url}/apply`).type("form").send({ _csrf: csrf, all: "1" });
+    const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [[...unitRow(1, "ZZ").slice(0, 8), "VR50"]])] });
+    expect((await agent.get(b.body.url)).text).toMatch(/(Looks like your existing unit|شكلها نفس وحدتك) VR/);
+  });
+});
+
+describe("preferences learned from edits, and no bulk import on phones", () => {
+  test("a type word fixed by hand in the review is suggested on the next upload", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const odd = (i, prefix) => [...unitRow(i, prefix).slice(0, 2), "sky loft", ...unitRow(i, prefix).slice(3)];
+    const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [odd(1, "VR")])] });
+    await agent.post(`${a.body.url}/edit/1`).type("form").send({ _csrf: csrf, c_property_type: "penthouse" });
+    const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [odd(1, "MI")])] });
+    const page = await agent.get(b.body.url);
+    expect(page.text).toMatch(/<option value="penthouse" selected data-remembered>/);
+  });
+
+  test("the import entries are marked desktop-only on the Add and More pages", async () => {
+    const { agent } = await signIn(h, "manager");
+    const add = await agent.get("/app/add");
+    expect(add.text).toMatch(/class="tile-link desktop-only" href="\/app\/import"/);
+    const more = await agent.get("/app/more");
+    expect(more.text).toMatch(/<li class="desktop-only"><a class="listrow" href="\/app\/import"/);
   });
 });
 
