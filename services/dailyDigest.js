@@ -88,6 +88,41 @@ async function briefData(pool, broker, now) {
   };
 }
 
+/**
+ * What a manager or team lead should look at, for their scope (the agency, or a team lead's team): leads nobody holds,
+ * leads nobody contacted for a day, and follow-ups overdue. Null for brokers and the owner.
+ */
+async function opsFor(pool, person, now) {
+  const role = String(person.role || "").toLowerCase();
+  if (role === "broker" || role === "owner") return null;
+  const team = role === "team_lead" ? person.id : null;
+  const dayStart = Stages.cairoDayAt(now, 0, 0);
+  const args = team ? [person.agency_id, team, dayStart.toISOString(), new Date(now.getTime() - 24 * 3600 * 1000).toISOString()] : [person.agency_id, dayStart.toISOString(), new Date(now.getTime() - 24 * 3600 * 1000).toISOString()];
+  const scope = team ? "AND l.assigned_broker_id IN (SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $2)" : "";
+  const d = team ? "$3" : "$2";
+  const u = team ? "$4" : "$3";
+  const { rows } = await pool.query(
+    `SELECT count(*) FILTER (WHERE l.assigned_broker_id IS NULL AND ${team ? "false" : "true"})::int AS unassigned,
+            count(*) FILTER (WHERE l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at < ${u})::int AS uncontacted_old,
+            count(*) FILTER (WHERE l.follow_up_status = 'open' AND l.next_follow_up_at < ${d})::int AS overdue
+       FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage NOT IN ('won', 'lost') ${scope}`,
+    args
+  );
+  const o = rows[0];
+  return { unassigned: o.unassigned, uncontactedOld: o.uncontacted_old, overdue: o.overdue, team: Boolean(team) };
+}
+
+/** The ops lines of a manager's or team lead's morning brief (nothing when all counts are zero). */
+function opsSection(person, ops) {
+  if (!ops) return [];
+  const lines = [];
+  if (ops.unassigned) lines.push(L(person, `📥 عملاء مفيش بروكر ماسكهم: ${ops.unassigned}`, `📥 Leads with no broker: ${ops.unassigned}`));
+  if (ops.uncontactedOld) lines.push(L(person, `⏰ محدش كلمهم من أكتر من 24 ساعة: ${ops.uncontactedOld}`, `⏰ Not contacted for over 24 hours: ${ops.uncontactedOld}`));
+  if (ops.overdue) lines.push(L(person, `⚠️ متابعات متأخرة: ${ops.overdue}`, `⚠️ Overdue follow-ups: ${ops.overdue}`));
+  if (!lines.length) return [];
+  return [L(person, ops.team ? "👥 فريقك" : "🏢 الوكالة", ops.team ? "👥 Your team" : "🏢 The agency"), ...lines];
+}
+
 /** The brief as a notification message, or null when there's nothing to say. */
 function briefMessage(broker, data) {
   const lg = lang(broker);
@@ -106,6 +141,8 @@ function briefMessage(broker, data) {
     section(L(broker, `💸 عمولات متأخرة عند المطورين`, `💸 Overdue developer commissions`), data.commissions?.overdue || [], (c) => `• D-${String(c.deal_ref).padStart(4, "0")} ${c.unit_code || ""} · ${c.developer_name || "—"} · ${money(c.outstanding, broker)} · ${L(broker, `متأخرة ${c.days} يوم`, `${c.days} days late`)}`),
     section(L(broker, `📝 تسجيل عملاء هيخلص`, `📝 Client registrations about to lapse`), data.commissions?.registrations || [], (c) => `• D-${String(c.deal_ref).padStart(4, "0")} ${c.unit_code || ""} · ${c.developer_name || "—"} · ${L(broker, `فاضل ${c.days_left} يوم`, `${c.days_left} days left`)}`)
   ].filter((p) => p.length);
+  const ops = opsSection(broker, data.ops);
+  if (ops.length) parts.push(ops);
   if (!parts.length) return null;
   const goal = require("./targets").briefLine(data.target, lg, (n) => money(n, broker));
   if (goal) parts.push([goal]);
@@ -221,7 +258,8 @@ function digestMessage(manager, d) {
   const lines = [];
   const src = d.sources.slice(0, 3).map(([s, n]) => `${s === "—" ? L(manager, "بدون مصدر", "no source") : Stages.sourceLabel(s, lg) || s} ${n}`).join(" · ");
   lines.push(L(manager, `🆕 عملاء جداد النهارده: ${d.newLeads}`, `🆕 New leads today: ${d.newLeads}`) + (d.newLeads && src ? ` (${src})` : ""));
-  if (d.unassigned) lines.push(L(manager, `   منهم ${d.unassigned} من غير بروكر`, `   ${d.unassigned} not assigned yet`));
+  const owner = String(manager.role || "").toLowerCase() === "owner";
+  if (d.unassigned && !owner) lines.push(L(manager, `   منهم ${d.unassigned} من غير بروكر`, `   ${d.unassigned} not assigned yet`));
   if (d.uncontacted) {
     lines.push(
       L(manager, `⏰ لسه محدش كلمهم: ${d.uncontacted}`, `⏰ Not contacted yet: ${d.uncontacted}`) +
@@ -232,7 +270,7 @@ function digestMessage(manager, d) {
   const moves = Stages.STAGES.filter((s) => d.stageMoves[s]).map((s) => `${Stages.stageLabel(s, lg)} ${d.stageMoves[s]}`);
   if (moves.length) lines.push(L(manager, `🔀 تحركات المراحل: `, `🔀 Stage moves: `) + moves.join(" · "));
   lines.push(L(manager, `🤝 صفقات النهارده: ${d.deals}`, `🤝 Deals today: ${d.deals}`) + (d.deals ? ` · ${L(manager, "عمولة", "commission")} ${money(d.commission, manager)}` : ""));
-  if (d.brokers.length) {
+  if (d.brokers.length && !owner) {
     lines.push("", L(manager, "👥 حسب البروكر:", "👥 By broker:"));
     for (const b of d.brokers.slice(0, 10)) {
       const bits = [];
@@ -256,66 +294,99 @@ function digestMessage(manager, d) {
 /* Job                                                                     */
 /* ---------------------------------------------------------------------- */
 
-/** Sends today's morning briefs. → { sent, empty, skipped } */
-async function sendBriefs(pool, { now = new Date(), agencyId = null } = {}) {
+// Pacing: one pass of the job sends at most PASS_SERVER messages server-wide and PASS_AGENCY per agency, with a short gap
+// between messages. Whoever is left waits for the next pass (5 minutes later, inside the same window); the day's stamp is
+// set only when nothing was left, so nobody is skipped and nobody gets two.
+const SEND_GAP_MS = 200;
+const PASS_SERVER = 300;
+const PASS_AGENCY = 40;
+
+/** A pass's budget: { server, perAgency, agency: Map, gapMs }. Tests pass smaller numbers and no gap. */
+function budgetFor(opts = {}) {
+  return { server: opts.serverLimit ?? PASS_SERVER, perAgency: opts.agencyLimit ?? PASS_AGENCY, agency: new Map(), gapMs: opts.gapMs ?? SEND_GAP_MS, left: 0 };
+}
+
+/** Sends one message within the budget. → the notification result, or null when the pass has no room left for it. */
+async function paced(pool, person, msg, budget) {
+  const used = budget.agency.get(person.agency_id) || 0;
+  if (budget.server <= 0 || used >= budget.perAgency) {
+    budget.left++;
+    return null;
+  }
+  if (budget.gapMs) await new Promise((resolve) => setTimeout(resolve, budget.gapMs));
+  budget.server--;
+  budget.agency.set(person.agency_id, used + 1);
+  return Notifications.notifyBroker(pool, person, msg);
+}
+
+/** Sends today's morning briefs. The owner has no brief (no leads of their own). → { sent, empty, skipped, pending } */
+async function sendBriefs(pool, { now = new Date(), agencyId = null, ...opts } = {}) {
   const { date, hour } = cairoDay(now);
-  if (!inHours(hour, BRIEF_HOURS)) return { sent: 0, empty: 0, skipped: true };
+  if (!inHours(hour, BRIEF_HOURS)) return { sent: 0, empty: 0, skipped: true, pending: false };
   const key = `brief:${date}`;
   const { rows: brokers } = await pool.query(
     `SELECT ${BROKER_COLS} FROM brokers b WHERE is_active AND ($2::uuid IS NULL OR agency_id = $2)
-        AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.broker_id = b.id AND n.dedupe_key = $1)`,
+        AND lower(role) <> 'owner'
+        AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.broker_id = b.id AND n.dedupe_key = $1)
+      ORDER BY agency_id, name, id`,
     [key, agencyId]
   );
+  const budget = budgetFor(opts);
   let sent = 0;
   let empty = 0;
   for (const broker of brokers) {
-    const m = briefMessage(broker, await briefData(pool, broker, now));
+    const data = await briefData(pool, broker, now);
+    data.ops = await opsFor(pool, broker, now);
+    const m = briefMessage(broker, data);
     if (!m) {
       empty++;
       continue;
     }
-    const r = await Notifications.notifyBroker(pool, broker, { kind: "daily_brief", dedupeKey: key, ...m, now });
-    if (!r.duplicate) sent++;
+    const r = await paced(pool, broker, { kind: "daily_brief", dedupeKey: key, ...m, now }, budget);
+    if (r && !r.duplicate) sent++;
   }
-  return { sent, empty, skipped: false };
+  return { sent, empty, skipped: false, pending: budget.left > 0 };
 }
 
-/** Sends today's manager digests (one per manager, built once per agency). → { sent, skipped } */
-async function sendDigests(pool, { now = new Date(), agencyId = null } = {}) {
+/**
+ * Sends today's manager digests: managers and the owner (the agency's, the owner's totals only), and team leads (their
+ * team's). Built once per agency or team. → { sent, skipped, pending }
+ */
+async function sendDigests(pool, { now = new Date(), agencyId = null, ...opts } = {}) {
   const { date, hour } = cairoDay(now);
-  if (!inHours(hour, DIGEST_HOURS)) return { sent: 0, skipped: true };
+  if (!inHours(hour, DIGEST_HOURS)) return { sent: 0, skipped: true, pending: false };
   const key = `digest:${date}`;
   const { rows: managers } = await pool.query(
     `SELECT ${BROKER_COLS} FROM brokers b WHERE is_active AND lower(role) = ANY($2::text[]) AND ($3::uuid IS NULL OR agency_id = $3)
         AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.broker_id = b.id AND n.dedupe_key = $1)
-      ORDER BY agency_id`,
+      ORDER BY agency_id, name, id`,
     [key, MANAGER_ROLES, agencyId]
   );
-  // Team leads get the same digest for their own team (their brokers only), built once per team lead.
   const { rows: teamLeads } = await pool.query(
     `SELECT ${BROKER_COLS} FROM brokers b WHERE is_active AND lower(role) = 'team_lead' AND ($2::uuid IS NULL OR agency_id = $2)
         AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.broker_id = b.id AND n.dedupe_key = $1)
-      ORDER BY agency_id`,
+      ORDER BY agency_id, name, id`,
     [key, agencyId]
   );
   const byAgency = new Map();
   const byTeam = new Map();
+  const budget = budgetFor(opts);
   let sent = 0;
   for (const m of managers) {
     if (!byAgency.has(m.agency_id)) byAgency.set(m.agency_id, await digestData(pool, m.agency_id, now));
     const msg = digestMessage(m, byAgency.get(m.agency_id));
     if (!msg) continue;
-    const r = await Notifications.notifyBroker(pool, m, { kind: "daily_digest", dedupeKey: key, ...msg, now });
-    if (!r.duplicate) sent++;
+    const r = await paced(pool, m, { kind: "daily_digest", dedupeKey: key, ...msg, now }, budget);
+    if (r && !r.duplicate) sent++;
   }
   for (const t of teamLeads) {
     if (!byTeam.has(t.id)) byTeam.set(t.id, await digestData(pool, t.agency_id, now, t.id));
     const msg = digestMessage(t, byTeam.get(t.id));
     if (!msg) continue;
-    const r = await Notifications.notifyBroker(pool, t, { kind: "daily_digest", dedupeKey: key, ...msg, now });
-    if (!r.duplicate) sent++;
+    const r = await paced(pool, t, { kind: "daily_digest", dedupeKey: key, ...msg, now }, budget);
+    if (r && !r.duplicate) sent++;
   }
-  return { sent, skipped: false };
+  return { sent, skipped: false, pending: budget.left > 0 };
 }
 
 /** The scheduler job entry (lib/jobs.js): every 5 minutes; each pass is cheap outside the windows. */
@@ -328,16 +399,16 @@ const digestJob = () => ({
     const counts = {};
     if (watermark.brief !== date) {
       const b = await sendBriefs(pool, { now });
-      Object.assign(counts, { briefs: b.sent, empty_briefs: b.empty });
-      if (!b.skipped) out.brief = date;
+      Object.assign(counts, { briefs: b.sent, empty_briefs: b.empty, briefs_pending: b.pending ? 1 : 0 });
+      if (!b.skipped && !b.pending) out.brief = date;
     }
     if (watermark.digest !== date) {
       const d = await sendDigests(pool, { now });
-      counts.digests = d.sent;
-      if (!d.skipped) out.digest = date;
+      Object.assign(counts, { digests: d.sent, digests_pending: d.pending ? 1 : 0 });
+      if (!d.skipped && !d.pending) out.digest = date;
     }
     return { counts, watermark: out };
   }
 });
 
-module.exports = { BRIEF_HOURS, DIGEST_HOURS, cairoDay, briefData, briefMessage, digestData, digestMessage, sendBriefs, sendDigests, digestJob };
+module.exports = { BRIEF_HOURS, DIGEST_HOURS, SEND_GAP_MS, PASS_SERVER, PASS_AGENCY, cairoDay, briefData, briefMessage, digestData, digestMessage, sendBriefs, sendDigests, digestJob, opsFor };

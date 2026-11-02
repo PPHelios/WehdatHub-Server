@@ -1125,6 +1125,9 @@
     "services/dailyDigest.js": {
       "BRIEF_HOURS": "Array",
       "DIGEST_HOURS": "Array",
+      "SEND_GAP_MS": "Number",
+      "PASS_SERVER": "Number",
+      "PASS_AGENCY": "Number",
       "cairoDay": ["now"],
       "briefData": ["pool", "broker", "now"],
       "briefMessage": ["broker", "data"],
@@ -1132,7 +1135,8 @@
       "digestMessage": ["manager", "d"],
       "sendBriefs": ["pool", "params"],
       "sendDigests": ["pool", "params"],
-      "digestJob": []
+      "digestJob": [],
+      "opsFor": ["pool", "person", "now"]
     },
     "services/unitChecks.js": {
       "ASK_AFTER_DAYS": "Number",
