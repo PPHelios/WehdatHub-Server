@@ -64,7 +64,7 @@ test("a broker cannot reassign leads", async () => {
 
 test("the team lead hears about an update on a lead in their team, but not about their own", async () => {
   await Leads.addNote(h.pool, await row("broker"), "L-0001", "Client wants a second viewing");
-  const told = await h.query("SELECT broker_id, title FROM notifications WHERE kind = 'manager_alert' AND broker_id = $1", [h.BROKERS.colleague.id]);
+  const told = await h.query("SELECT broker_id, title FROM notifications WHERE kind = 'team_activity' AND broker_id = $1", [h.BROKERS.colleague.id]);
   expect(told.length).toBe(1);
   await Leads.addNote(h.pool, await row("colleague"), "L-0001", "My own note");
   const again = await h.query("SELECT 1 FROM notifications WHERE broker_id = $1", [h.BROKERS.colleague.id]);

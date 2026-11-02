@@ -15,7 +15,7 @@ const Vis = require("../lib/visibility");
 
 const BATCH = 100;
 const DAY = 24 * 3600 * 1000;
-const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until";
+const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until, team_lead_id";
 const SWITCHABLE = [...Notifications.KINDS, ...Notifications.DAILY_KINDS];
 
 const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCase());
@@ -92,8 +92,9 @@ async function routingOf(db, agencyId) {
 /** The managers' switch and order (broker ids, first gets the next lead). */
 async function saveRouting(pool, manager, { roundRobin, order }) {
   if (!isManager(manager)) return { error: "forbidden" };
-  const { rows } = await pool.query("SELECT id FROM brokers WHERE agency_id = $1 AND is_active", [manager.agency_id]);
-  const known = new Set(rows.map((r) => r.id));
+  const { rows } = await pool.query("SELECT id, role FROM brokers WHERE agency_id = $1 AND is_active", [manager.agency_id]);
+  // Only brokers and team leads can be in the rotation; managers and the owner never are.
+  const known = new Set(rows.filter((r) => !MANAGER_ROLES.includes(String(r.role || "").toLowerCase())).map((r) => r.id));
   const clean = [...new Set([].concat(order ?? []).filter((id) => known.has(id)))];
   const now = await routingOf(pool, manager.agency_id);
   const routing = { round_robin: Boolean(roundRobin), order: clean, last: now.last };
@@ -107,9 +108,9 @@ async function routingList(db, agencyId) {
   const { rows } = await db.query(
     `SELECT b.id, b.name, b.role, b.away_until,
             (SELECT count(*)::int FROM leads l WHERE ${Vis.leads("l")} AND l.assigned_broker_id = b.id AND l.agency_id = b.agency_id AND l.stage NOT IN ('won', 'lost')) AS open_leads
-       FROM brokers b WHERE b.agency_id = $1 AND b.is_active
+       FROM brokers b WHERE b.agency_id = $1 AND b.is_active AND lower(b.role) <> ALL($2::text[])
       ORDER BY (lower(b.role) = 'broker') DESC, b.name, b.id`,
-    [agencyId]
+    [agencyId, MANAGER_ROLES.map((r) => r.toLowerCase())]
   );
   const pos = new Map(routing.order.map((id, i) => [id, i]));
   rows.sort((a, b) => (pos.has(a.id) ? pos.get(a.id) : 1e6) - (pos.has(b.id) ? pos.get(b.id) : 1e6));
@@ -125,11 +126,13 @@ async function routingList(db, agencyId) {
 async function nextBroker(db, agencyId, { exclude = [], now = new Date(), advance = false } = {}) {
   const routing = await routingOf(db, agencyId);
   if (!routing.round_robin) return null;
+  // The rotation takes brokers and team leads only: managers and the agency owner never get leads from it.
   const { rows } = await db.query(
     `SELECT ${BROKER_COLS} FROM brokers
       WHERE agency_id = $1 AND is_active AND NOT (id = ANY($2::uuid[])) AND (away_until IS NULL OR away_until <= $3)
+        AND lower(role) <> ALL($4::text[])
       ORDER BY (lower(role) = 'broker') DESC, last_lead_at NULLS FIRST, name, id`,
-    [agencyId, exclude, now.toISOString()]
+    [agencyId, exclude, now.toISOString(), MANAGER_ROLES.map((r) => r.toLowerCase())]
   );
   let pick = rows[0] || null;
   if (routing.order.length && rows.length) {
@@ -149,6 +152,39 @@ async function nextBroker(db, agencyId, { exclude = [], now = new Date(), advanc
   if (pick && advance) await db.query("UPDATE agencies SET lead_routing = lead_routing || jsonb_build_object('last', $2::text) WHERE id = $1", [agencyId, pick.id]);
   return pick;
 }
+
+/** A broker's own rotation pointer: moved only when a lead really went to them (intake and ad leads). */
+async function advanceRotation(db, agencyId, brokerId) {
+  if (brokerId) await db.query("UPDATE agencies SET lead_routing = lead_routing || jsonb_build_object('last', $2::text) WHERE id = $1", [agencyId, brokerId]);
+}
+
+/**
+ * The escalation step for a lead nobody has contacted in time: first the other brokers of the holder's team, then the
+ * team lead, then nobody (null: the lead goes back to the managers). A holder with no team moves to the agency's next
+ * broker (round robin), then nobody. A team lead holding a lead goes straight back to the managers. Managers and the
+ * owner never take a lead through this step.
+ */
+async function nextStep(db, lead, { exclude = [], now = new Date() } = {}) {
+  const holder = lead.assigned_broker_id ? await brokerOf(db, lead.agency_id, lead.assigned_broker_id) : null;
+  if (!holder || isTeamLeadRole(holder)) return null;
+  const free = `is_active AND NOT (id = ANY($2::uuid[])) AND (away_until IS NULL OR away_until <= $3)`;
+  if (!holder.team_lead_id) return nextBroker(db, lead.agency_id, { exclude, now, advance: true });
+  const { rows } = await db.query(
+    `SELECT ${BROKER_COLS} FROM brokers WHERE agency_id = $1 AND team_lead_id = $4 AND lower(role) = 'broker' AND ${free}
+      ORDER BY last_lead_at NULLS FIRST, name, id LIMIT 1`,
+    [lead.agency_id, exclude, now.toISOString(), holder.team_lead_id]
+  );
+  if (rows[0]) return rows[0];
+  const { rows: tl } = await db.query(`SELECT ${BROKER_COLS} FROM brokers WHERE agency_id = $1 AND id = $4 AND lower(role) = 'team_lead' AND ${free}`, [
+    lead.agency_id,
+    exclude,
+    now.toISOString(),
+    holder.team_lead_id
+  ]);
+  return tl[0] || null;
+}
+
+const isTeamLeadRole = (b) => String(b?.role || "").toLowerCase() === "team_lead";
 
 /** Scheduler step: moves every lead past its deadline. → { moved, stopped } */
 async function moveOverdue(pool, { now = new Date(), limit = BATCH } = {}) {
@@ -180,26 +216,23 @@ async function moveOverdue(pool, { now = new Date(), limit = BATCH } = {}) {
         [lead.id, lead.agency_id]
       );
       const exclude = [lead.assigned_broker_id, ...past.map((r) => r.id).filter(Boolean)];
-      const next = lead.response_jumps < rules.max_jumps ? await nextBroker(client, lead.agency_id, { exclude, now, advance: true }) : null;
-      if (!next) {
-        await clear();
-        stopped.push({ lead, reason: lead.response_jumps < rules.max_jumps ? "nobody" : "max" });
-        continue;
-      }
-      const due = Rules.dueAt(rules, now);
+      // The escalation chain: the team's other brokers, the team lead, then back to the managers (no next = unassigned).
+      const next = await nextStep(client, lead, { exclude, now });
+      const due = next ? Rules.dueAt(rules, now) : null;
       const { rows: upd } = await client.query(
         `UPDATE leads SET assigned_broker_id = $2, assigned_at = $3, response_due_at = $4, response_jumps = response_jumps + 1,
-                follow_up_reminded_at = NULL, updated_at = $3, version = version + 1
+                follow_up_reminded_at = NULL, updated_at = $5, version = version + 1
           WHERE id = $1 RETURNING *`,
-        [lead.id, next.id, now.toISOString(), due.toISOString()]
+        [lead.id, next?.id || null, next ? now.toISOString() : null, due ? due.toISOString() : null, now.toISOString()]
       );
-      await client.query("UPDATE brokers SET last_lead_at = $2 WHERE id = $1", [next.id, now.toISOString()]);
+      if (next) await client.query("UPDATE brokers SET last_lead_at = $2 WHERE id = $1", [next.id, now.toISOString()]);
       await client.query(
         `INSERT INTO lead_events (agency_id, lead_id, broker_id, kind, data, created_at)
          VALUES ($1, $2, NULL, 'assigned', $3, $4)`,
-        [lead.agency_id, lead.id, JSON.stringify({ from: lead.assigned_broker_id, to: next.id, to_name: next.name, reason: "no_response", wait_minutes: rules.wait_minutes }), now.toISOString()]
+        [lead.agency_id, lead.id, JSON.stringify({ from: lead.assigned_broker_id, to: next?.id || null, to_name: next?.name || null, reason: "no_response", wait_minutes: rules.wait_minutes }), now.toISOString()]
       );
-      moved.push({ lead: upd[0], from: lead.assigned_broker_id, to: next, rules });
+      if (next) moved.push({ lead: upd[0], from: lead.assigned_broker_id, to: next, rules });
+      else stopped.push({ lead: upd[0], reason: "back", from: lead.assigned_broker_id });
     }
     return { moved, stopped };
   });
@@ -230,7 +263,7 @@ async function tellMove(pool, { lead, from, to, rules }, now) {
     await Notifications.notifyBroker(pool, old, {
       kind: "assignment",
       dedupeKey: `lead_moved:${lead.id}:${old.id}:${lead.version}`,
-      title: L(old, `↪️ ${ref} اتحول لـ ${to.name}`, `↪️ ${ref} moved to ${to.name}`),
+      title: L(old, `↪️ ${ref} اتحول لزميل`, `↪️ ${ref} moved to a colleague`),
       body: L(old, `محدش كلّمه في ${mins} دقيقة.`, `Nobody contacted them within ${mins} minutes.`),
       url: "/app/leads",
       now
@@ -249,9 +282,23 @@ async function tellMove(pool, { lead, from, to, rules }, now) {
   }
 }
 
-async function tellStop(pool, { lead, reason }, now) {
+async function tellStop(pool, { lead, reason, from = null }, now) {
   const ref = Card.refLabel(lead.ref);
-  const holder = await brokerOf(pool, lead.agency_id, lead.assigned_broker_id);
+  const holder = await brokerOf(pool, lead.agency_id, from || lead.assigned_broker_id);
+  if (reason === "back") {
+    for (const m of await Notifications.managersOf(pool, lead.agency_id)) {
+      await Notifications.notifyBroker(pool, m, {
+        kind: "manager_alert",
+        dedupeKey: `lead_back:${lead.id}:${lead.version}`,
+        title: L(m, `↩️ ${ref} رجع للمدير: محدش كلّمه`, `↩️ ${ref} is back with managers: nobody contacted it`),
+        body: L(m, `كان مع ${holder?.name || "—"} وفريقه. مش متسلم لحد دلوقتي.`, `It was with ${holder?.name || "—"} and their team. Unassigned for now.`),
+        url: leadUrl(lead),
+        leadId: lead.id,
+        now
+      });
+    }
+    return;
+  }
   for (const m of await Notifications.managersOf(pool, lead.agency_id)) {
     await Notifications.notifyBroker(pool, m, {
       kind: "manager_alert",
@@ -274,6 +321,44 @@ const responseJob = () => ({
   everyMs: 60 * 1000,
   run: async ({ pool, now }) => ({ counts: await moveOverdue(pool, { now: new Date(now) }) })
 });
+
+/**
+ * Hourly: each agency's managers get one line with the open leads nobody holds and the ones nobody has contacted, with
+ * the oldest. Jobs have no viewer, so private leads never count. → { agencies }
+ */
+async function unassignedDigest(pool, { now = new Date() } = {}) {
+  const { rows } = await pool.query(
+    `SELECT l.agency_id, count(*) FILTER (WHERE l.assigned_broker_id IS NULL)::int AS unassigned,
+            count(*) FILTER (WHERE l.assigned_broker_id IS NOT NULL)::int AS uncontacted,
+            min(l.created_at) FILTER (WHERE l.assigned_broker_id IS NULL) AS oldest
+       FROM leads l
+      WHERE ${Vis.leads("l")} AND l.stage NOT IN ('won', 'lost')
+        AND (l.assigned_broker_id IS NULL OR (l.stage = 'new' AND l.last_contact_at IS NULL))
+      GROUP BY l.agency_id`
+  );
+  const hour = now.toISOString().slice(0, 13);
+  let sent = 0;
+  for (const r of rows) {
+    const unassigned = r.unassigned || 0;
+    if (!unassigned && !r.uncontacted) continue;
+    const oldest = r.oldest ? new Date(r.oldest).toISOString().slice(0, 10) : null;
+    for (const m of await Notifications.managersOf(pool, r.agency_id)) {
+      await Notifications.notifyBroker(pool, m, {
+        kind: "manager_alert",
+        dedupeKey: `unassigned_digest:${r.agency_id}:${hour}`,
+        title: L(m, `📥 عملاء مفيش حد مسكهم: ${unassigned} · لسه محدش كلّمهم: ${r.uncontacted}`, `📥 Unassigned leads: ${unassigned} · not contacted yet: ${r.uncontacted}`),
+        body: oldest ? L(m, `الأقدم من ${oldest}.`, `Oldest from ${oldest}.`) : "",
+        url: "/app/leads?tab=overdue",
+        now
+      });
+      sent++;
+    }
+  }
+  return { agencies: rows.length, sent };
+}
+
+/** The scheduler job entry: hourly. */
+const unassignedJob = () => ({ name: "lead_unassigned_digest", everyMs: 60 * 60 * 1000, run: async ({ pool, now }) => ({ counts: await unassignedDigest(pool, { now: new Date(now) }) }) });
 
 /**
  * Speed-to-lead per broker over the last `days`: leads contacted after someone gave them one (count, median minutes,
@@ -306,7 +391,7 @@ async function speedToLead(pool, agencyId, { days = 30, now = new Date(), waitMi
   return out;
 }
 
-module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, nextBroker,
+module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, nextBroker, nextStep, advanceRotation,
   routingOf,
   saveRouting,
-  routingList, moveOverdue, responseJob, speedToLead, cairoMidnight };
+  routingList, moveOverdue, responseJob, unassignedDigest, unassignedJob, speedToLead, cairoMidnight };

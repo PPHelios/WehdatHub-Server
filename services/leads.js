@@ -293,11 +293,10 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
  * @returns {Promise<{ ok, lead, eventId } | { error } | { conflict, lead } | { unchanged, lead }>}
  */
 // Changes a team lead hears about (on the lead's assignee's team).
-const TEAM_NOTICE_KINDS = ["note", "stage", "contacted", "follow_up_set", "follow_up_done", "flag", "flag_handled"];
 
 /** Tells the team lead of the lead's assignee about an update or a status change (not to the one who made it). */
 async function tellTeamLead(pool, actor, lead, kind, eventId, now) {
-  if (!lead.assigned_broker_id) return;
+  if (!lead.assigned_broker_id || Authz.isManager(actor)) return; // a manager's action is not sent to the team lead
   const { rows } = await pool.query(
     "SELECT t.id, t.agency_id, t.name, t.role, t.is_active, t.preferred_lang, t.notify_prefs FROM brokers b JOIN brokers t ON t.id = b.team_lead_id WHERE b.id = $1 AND t.is_active",
     [lead.assigned_broker_id]
@@ -306,7 +305,7 @@ async function tellTeamLead(pool, actor, lead, kind, eventId, now) {
   if (!tl || tl.id === actor.id) return;
   const what = { note: L(tl, "تحديث", "update"), stage: L(tl, "تغيير مرحلة", "stage change"), contacted: L(tl, "اتكلّم", "contacted"), follow_up_set: L(tl, "متابعة", "follow-up"), follow_up_done: L(tl, "متابعة خلصت", "follow-up done"), flag: L(tl, "طلب مساعدة", "request"), flag_handled: L(tl, "طلب اتعالج", "request done") }[kind] || kind;
   await Notifications.notifyBroker(pool, tl, {
-    kind: "manager_alert",
+    kind: "team_activity",
     dedupeKey: `team:${eventId}:${tl.id}`,
     title: L(tl, `🧑‍💼 ${actor.name}: ${what} · ${Card.displayName(lead, tl.preferred_lang)}`, `🧑‍💼 ${actor.name}: ${what} · ${Card.displayName(lead, tl.preferred_lang)}`),
     body: Card.refLabel(lead.ref),
@@ -318,7 +317,7 @@ async function tellTeamLead(pool, actor, lead, kind, eventId, now) {
 
 async function mutate(pool, actor, key, { kind, version = null, manage = false, now = new Date() }, change) {
   const out = await mutateInTransaction(pool, actor, key, { kind, version, manage, now }, change);
-  if (out.ok && TEAM_NOTICE_KINDS.includes(kind) && !out.lead.is_private) await tellTeamLead(pool, actor, out.lead, kind, out.eventId, now);
+  if (out.ok && !out.lead.is_private) await tellTeamLead(pool, actor, out.lead, kind, out.eventId, now);
   return out;
 }
 
@@ -366,15 +365,17 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
       if (!x.rows.length) return { error: "unit_not_found" };
     }
   }
-  return withTransaction(pool, async (client) => {
+  const out = await withTransaction(pool, async (client) => {
     let lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
     if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
     const eventIds = [];
+    const kinds = [];
     const step = async (kind, c) => {
       const r = await applyChange(client, actor, lead, kind, c, now);
       lead = r.lead;
       eventIds.push(r.eventId);
+      kinds.push({ kind, eventId: r.eventId });
     };
     const via = u.via || null;
     if (u.contacted) {
@@ -394,8 +395,11 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
     }
     if (u.note) await step("note", { fields: {}, data: { text: cleanText(u.note, NOTE_MAX), via } });
     if (!eventIds.length) return { unchanged: true, lead };
-    return { ok: true, lead, eventIds };
+    return { ok: true, lead, eventIds, kinds };
   });
+  // The team lead hears each step after the commit (one notice per step, as with the single actions).
+  if (out.ok && !out.lead.is_private) for (const k of out.kinds) await tellTeamLead(pool, actor, out.lead, k.kind, k.eventId, now);
+  return out;
 }
 
 /** Inside the deal's transaction (services/deals.js): the lead is won, with a "deal" event (not undoable). */

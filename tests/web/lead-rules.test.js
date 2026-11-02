@@ -69,21 +69,23 @@ describe("a lead nobody contacts moves on", () => {
     expect(lead.assigned_broker_id).toBe(h.BROKERS.colleague.id); // brokers before managers
     expect(lead.response_jumps).toBe(1);
     expect((await notes("colleague", "lead_assigned:%"))[0].body).toContain("30");
-    expect((await notes("broker", "lead_moved:%"))[0].title).toContain("Broker Two");
+    // The old broker hears it moved, never to whom.
+    expect((await notes("broker", "lead_moved:%"))[0].title).toBe("↪️ L-0001 اتحول لزميل");
     expect((await notes("admin", "lead_jump:%"))[0].title).toBe("↪️ L-0001 moved from Broker One to Broker Two");
     const [ev] = await h.query("SELECT broker_id, data FROM lead_events WHERE lead_id = $1 AND kind = 'assigned'", [lead.id]);
     expect(ev).toMatchObject({ broker_id: null, data: { from: h.BROKERS.broker.id, to: h.BROKERS.colleague.id, reason: "no_response" } });
 
-    // The cap (1 move): the next deadline stops with the managers instead of moving again.
+    // The chain ends: nobody else in the agency takes it, so it goes back to the managers, unassigned, and they hear.
     expect(await LeadRules.moveOverdue(h.pool, { now: new Date(t0.getTime() + 70 * MIN) })).toEqual({ moved: 0, stopped: 1 });
     lead = await leadRow(r.lead.id);
-    expect(lead).toMatchObject({ assigned_broker_id: h.BROKERS.colleague.id, response_due_at: null });
-    expect((await notes("admin", "lead_jump_stop:%"))[0].body).toContain("Broker Two");
+    expect(lead).toMatchObject({ assigned_broker_id: null, response_due_at: null });
+    expect((await notes("admin", "lead_back:%")).length).toBe(1);
 
-    // The colleague calls: speed-to-lead counts from when they got it.
+    // A manager gives it to the colleague again: speed-to-lead counts from then.
+    expect((await Leads.assignLead(h.pool, admin, lead.id, h.BROKERS.colleague.id, { now: new Date(t0.getTime() + 70 * MIN) })).ok).toBe(true);
     await Leads.markContacted(h.pool, await row("colleague"), lead.id, { now: new Date(t0.getTime() + 75 * MIN) });
     const speed = await LeadRules.speedToLead(h.pool, h.BROKERS.broker.agency_id, { now: new Date(t0.getTime() + 80 * MIN) });
-    expect(speed.get(h.BROKERS.colleague.id)).toEqual({ responded: 1, median: 44, on_time: 0, missed: 0 });
+    expect(speed.get(h.BROKERS.colleague.id)).toEqual({ responded: 1, median: 5, on_time: 1, missed: 1 });
     expect(speed.get(h.BROKERS.broker.id)).toMatchObject({ responded: 0, missed: 1 });
   });
 
@@ -117,7 +119,8 @@ describe("away until", () => {
     expect((await Leads.captureLead(h.pool, admin, { phones: "01044444444", assignTo: h.BROKERS.broker.id })).error).toBe("assignee_away");
     const other = await Leads.captureLead(h.pool, admin, { phones: "01055555555" });
     expect((await Leads.assignLead(h.pool, admin, other.lead.id, h.BROKERS.broker.id)).error).toBe("assignee_away");
-    expect((await LeadRules.nextBroker(h.pool, h.BROKERS.broker.agency_id, { exclude: [h.BROKERS.colleague.id] })).id).toBe(h.BROKERS.admin.id);
+    // Managers are out of the rotation: with the only other broker away, nobody is picked.
+    expect(await LeadRules.nextBroker(h.pool, h.BROKERS.broker.agency_id, { exclude: [h.BROKERS.colleague.id] })).toBeNull();
 
     await Reminders.remindDue(h.pool, { now: new Date(at.getTime() + MIN) });
     expect(await notes("broker", "fu:%")).toEqual([]);
