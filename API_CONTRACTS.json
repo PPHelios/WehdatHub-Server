@@ -643,6 +643,9 @@
       "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
       "batchExcel": ["pool", "broker", "id", "params", "params"],
       "batchStats": ["payload"],
+      "canUndo": ["pool", "broker", "imp"],
+      "undoPreview": ["pool", "agencyId", "imp"],
+      "undoExcel": ["pool", "broker", "id"],
       "TYPE_KEYS": "Array",
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
@@ -2037,6 +2040,26 @@
       "readText": ["raw"],
       "FOREIGN": "Object"
     },
+    "lib/aiBlock.js": {
+      "kindOf": ["err"],
+      "resetOn": ["lang", "now"],
+      "text": ["kind", "lang", "params"]
+    },
+    "lib/flyerWorker.js": {},
+    "services/aiSwitches.js": {
+      "TABS": "Array",
+      "FEATURES": "Array",
+      "ROUTE_FEATURE": "Object",
+      "tabOf": ["key"],
+      "featureFor": ["operationType", "params"],
+      "allowed": ["settings", "key", "params"],
+      "forAgency": ["db", "agencyId"],
+      "offList": ["db", "agencyId"],
+      "isOn": ["db", "agencyId", "key"],
+      "assertOn": ["db", "agencyId", "key", "params"],
+      "save": ["db", "actor", "body"],
+      "clearCache": []
+    },
     "services/searchVocab.js": {
       "refresh": ["pool"],
       "ensureLoaded": ["pool"],
@@ -2062,25 +2085,6 @@
       "run": ["pool", "params"],
       "summary": ["pool", "counts"],
       "auditJob": []
-    },
-    "services/aiSwitches.js": {
-      "TABS": "Array",
-      "FEATURES": "Array",
-      "ROUTE_FEATURE": "Object",
-      "tabOf": ["key"],
-      "featureFor": ["operationType", "params"],
-      "allowed": ["settings", "key", "params"],
-      "forAgency": ["db", "agencyId"],
-      "offList": ["db", "agencyId"],
-      "isOn": ["db", "agencyId", "key"],
-      "assertOn": ["db", "agencyId", "key", "params"],
-      "save": ["db", "actor", "body"],
-      "clearCache": []
-    },
-    "lib/aiBlock.js": {
-      "kindOf": ["err"],
-      "resetOn": ["lang", "now"],
-      "text": ["kind", "lang", "params"]
     },
     "services/searchLog.js": {
       "cleanText": ["text"],
