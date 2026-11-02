@@ -13,6 +13,7 @@ function welcome({ manager = false, telegram = false } = {}, lang = "ar") {
     { text: pick(["دوّر زي ما بتتكلم: «شقة 3 غرف في زايد تحت 5 مليون».", "Search the way you talk: \"3-bed apartment in Zayed under 5M\"."], lang), href: "/app/search" },
     { text: pick(["سجّل عميل برقمه، والبرنامج يفكرك تتابعه ويقولك لما تنزل وحدة تناسبه.", "Save a client by phone; you get follow-up reminders and units that fit them."], lang), href: "/app/leads" },
     { text: pick(["اعرف حدود باقتك: رسايل الذكاء الاصطناعي والفويس وقراية قوايم الأسعار والوحدات.", "Know your plan's limits: AI messages, voice notes, price-list reading and units."], lang), href: manager ? "/app/dashboard#limits" : "/app/plan" },
+    manager && { text: pick(["حدد سعر الدولار واليورو من «الاستخدام» عشان أسعار الوحدات بالعملة دي تتطابق في البحث.", "Set the dollar and euro rates under Usage so dollar and euro unit prices match in search."], lang), href: "/app/usage" },
     manager && { text: pick(["ضيف فريقك من «الفريق والقواعد».", "Invite your team from \"Team and rules\"."], lang), href: "/app/team" }
   ].filter(Boolean);
   return { title: pick(["👋 أهلاً بيك في WehdatHub", "👋 Welcome to WehdatHub"], lang), steps };

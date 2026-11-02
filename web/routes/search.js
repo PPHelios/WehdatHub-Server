@@ -63,6 +63,7 @@ ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?requ
   }
   return html`<section id="results">
   ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2 class="interp">${interp}</h2>`}
+  ${res.rateMissing?.length ? html`<p class="card" role="status">⚠️ ${L(lang, "سعر الدولار/اليورو مش متسجل: حدده من «الاستخدام» عشان أسعار الوحدات بالعملة دي تتطابق.", "The dollar/euro rate is not set: set it under Usage so those prices match.")}</p>` : ""}
   <div class="row between"><p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
   ${savedId
     ? ""

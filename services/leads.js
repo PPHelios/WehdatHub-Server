@@ -605,6 +605,23 @@ async function logMatchSent(pool, actor, key, listing, { now = new Date() } = {}
 /* ---------------------------------------------------------------------- */
 
 /** The lead if the broker may see it, else null (a colleague's lead and another agency's look the same). */
+/** The client's language (ar | en | null = the broker's). Only the client's messages use it; no timeline event, no screen change. */
+async function setLang(pool, actor, key, lang, { version = null, now = new Date() } = {}) {
+  const next = lang === "en" ? "en" : lang === "ar" ? "ar" : null;
+  return withTransaction(pool, async (client) => {
+    const lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
+    if (!lead) return { error: "not_found" };
+    if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    if (version !== null && version !== undefined && Number(version) !== lead.version) return { conflict: true, lead };
+    if ((lead.lang || null) === next) return { unchanged: true, lead };
+    const { rows } = await client.query(
+      "UPDATE leads SET lang = $3, updated_at = $4, version = version + 1 WHERE id = $1 AND agency_id = $2 RETURNING *",
+      [lead.id, actor.agency_id, next, now.toISOString()]
+    );
+    return { ok: true, lead: rows[0] };
+  });
+}
+
 async function getLead(pool, actor, key) {
   const lead = await loadLead(pool, actor.agency_id, key);
   return lead && Authz.canViewLead(actor, lead) ? lead : null;
@@ -767,6 +784,7 @@ module.exports = {
   completeFollowUp,
   postponeFollowUp,
   applyUpdate,
+  setLang,
   undoMany,
   recordDeal,
   undo,

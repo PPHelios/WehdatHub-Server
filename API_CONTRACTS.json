@@ -834,6 +834,7 @@
       "completeFollowUp": ["pool", "actor", "key", "params"],
       "postponeFollowUp": ["pool", "actor", "key", "params"],
       "applyUpdate": ["pool", "actor", "key", "u", "params"],
+      "setLang": ["pool", "actor", "key", "lang", "params"],
       "undoMany": ["pool", "actor", "eventIds", "params"],
       "recordDeal": ["client", "actor", "leadId", "params", "now"],
       "undo": ["pool", "actor", "eventId", "params"],
@@ -1261,6 +1262,7 @@
       "OPEN": "Array",
       "whenLabel": ["at", "lang"],
       "unitLabel": ["listing", "lang"],
+      "clientMessage": ["params"],
       "latestFor": ["db", "agencyId", "leadId"],
       "schedule": ["pool", "actor", "leadKey", "params"],
       "byToken": ["db", "token"],
@@ -1960,6 +1962,28 @@
       "getRow": ["pool", "importId", "agencyId", "seq"],
       "tickedRows": ["pool", "importId", "agencyId"]
     },
+    "domain/clientMessageTemplates.js": {
+      "templatesFor": ["lang"]
+    },
+    "domain/fx.js": {
+      "CURRENCIES": "Array",
+      "MIN_RATE": "Number",
+      "MAX_RATE": "Number",
+      "parseRate": ["raw"],
+      "ratesFrom": ["stored"],
+      "toEgp": ["amount", "currency", "rates"],
+      "currencyOfText": ["raw"],
+      "CURRENCY_WORDS": "Object",
+      "missing": ["currencies", "rates"]
+    },
+    "services/fx.js": {
+      "loadRates": ["db", "agencyId"],
+      "missingRates": ["db", "agencyId", "rates"],
+      "saveRates": ["db", "broker", "input"]
+    },
+    "lib/importFailed.js": {
+      "failedRowsWorkbook": ["payload", "params"]
+    },
     "lib/sheetGrid.js": {
       "buildSheet": ["tabs", "params"],
       "codePattern": ["codes"],
@@ -1980,9 +2004,6 @@
       "dollars": ["raw"],
       "readText": ["raw"],
       "FOREIGN": "Object"
-    },
-    "lib/importFailed.js": {
-      "failedRowsWorkbook": ["payload", "params"]
     }
   },
   "invariant_variable_names": {

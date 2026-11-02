@@ -44,8 +44,8 @@ describe("the search query uses the minimum and the ceiling", () => {
     const { sql, params } = build("azad 2 bedroom budget 70k");
     expect(sql).toMatch(/l\.bedrooms >= \$\d+/);
     expect(sql).not.toMatch(/l\.bedrooms = \$\d+/);
-    expect(sql).toMatch(/l\.price_value <= \$\d+/);
-    expect(sql).not.toMatch(/l\.price_value >= \$\d+/);
+    expect(sql).toMatch(/END\) <= \$\d+/);
+    expect(sql).not.toMatch(/END\) >= \$\d+/);
     expect(params).toContain(70000);
   });
 });

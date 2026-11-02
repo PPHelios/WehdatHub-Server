@@ -16,7 +16,7 @@ Written from the NCH "RENT - All compounds" workbook (29 tabs, 3,751 rows, 26 vi
 | Facts inside the description | `fully finished / kitchen / ACs` | Auto-fixed: finishing and features read with the app's vocabulary, only when the sheet has no column for them | Shown on the unit line |
 | Price with words around it | `60k negotiable`, `25k/2month insurance` | Auto-fixed: the amount is the price, the words go to the notes | Nothing |
 | Several prices in one cell | `long 90k / short 100k / day 6k` | **Batch**: use the long-term or monthly price, or the first; a daily price is never used | A button with the count |
-| Prices in dollars | `3000$` | **Auto-fixed** at the agency's central rate (set by an owner or manager in Settings, read at upload). With no rate set the rows are flagged and one button converts them once it is set; the original is kept in the notes | A line with the rate, or a link to Settings |
+| Prices in dollars | `3000$` | **Auto-fixed** at the agency's central rate (set by an owner or manager on the Usage page, read at upload). With no rate set the rows are flagged and one button converts them once it is set; the original is kept in the notes | A line with the rate, or a link to the Usage page |
 | A word where the price should be | `wait price`, `rented`, `after eid` | Flagged, with what the cell says | Reason `Invalid price: «wait price»` and the edit form |
 | Phone number forms | `1069985171`, `+20 100…`, `1001222400/ 1275615557` | Auto-fixed: 0 added, first number is the owner's, the others go to the notes | A note only when the number is not an Egyptian mobile |
 | Code written with spaces, case or `#` | `MVICr 128`, `vr1` | Auto-fixed (codes are normalised everywhere) | Nothing, no flag |

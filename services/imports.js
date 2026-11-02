@@ -14,6 +14,7 @@ const Features = require("../domain/features");
 const Delivery = require("../domain/delivery");
 const SheetImport = require("../domain/sheetImport");
 const Mixed = require("../domain/sheetMixed");
+const Fx = require("../domain/fx");
 const SheetGrid = require("../lib/sheetGrid");
 const Dup = require("../domain/unitDuplicate");
 const { normalizeCode } = require("../domain/searchQuery");
@@ -118,11 +119,10 @@ const NOTE = {
   codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت")
 };
 
-/** The agency's central dollar rate (EGP per dollar), set by an owner or manager; null when none is set. */
+/** The agency's central dollar rate (EGP per dollar, set by an owner or manager under Usage); null when none is set. */
 async function agencyUsdRate(pool, agencyId) {
-  const { rows } = await pool.query("SELECT crm_settings->>'usd_rate' AS rate FROM agencies WHERE id = $1", [agencyId]);
-  const rate = Number(rows[0]?.rate);
-  return rate >= 2 && rate <= 1000 ? rate : null;
+  const { rows } = await pool.query("SELECT crm_settings->'fx' AS fx FROM agencies WHERE id = $1", [agencyId]);
+  return Fx.ratesFrom(rows[0]?.fx).USD;
 }
 const EGY_PHONE = /^(\+?20|0)?1[0-9]{9}$/;
 // "UPtown cairo" and "UPtown" are the same compound: the city word at the end is not part of the name.

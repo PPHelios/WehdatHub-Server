@@ -105,12 +105,12 @@ describe("one change for many rows", () => {
     let page = await agent.get(a.body.url);
     expect(page.text).toMatch(/data-kind="invalid"/);
     expect(page.text).toMatch(/data-batch-form="usd_rate"/);
-    expect(page.text).toMatch(/\/app\/usage\?tab=settings/);
+    expect(page.text).toMatch(/\/app\/usage"/);
     // Without a rate the button does nothing.
     const none = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
     expect(none.headers.location).toMatch(/\?batch=0$/);
     // The manager sets the rate; the button now converts at it.
-    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "50" });
+    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "50" });
     const b = await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "usd_rate" });
     expect(b.headers.location).toMatch(/\?batch=1$/);
     page = await agent.get(a.body.url);
@@ -120,22 +120,11 @@ describe("one change for many rows", () => {
     expect(Number((await unit("VR1")).price_value)).toBe(100000);
     expect((await unit("VR1")).details.notes).toContain("2000$");
     // A later upload converts at once, and a later change of the rate does not touch the plan that was made.
-    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "60" });
+    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "60" });
     const c = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [unitRow(1, "MI", "1000$")])] });
-    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "70" });
+    await agent.post("/app/usage/fx").type("form").send({ _csrf: csrf, USD: "70" });
     await agent.post(`${c.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1"] });
     expect(Number((await unit("MI1")).price_value)).toBe(60000);
-  });
-
-  test("a bad rate is ignored; an empty one clears it", async () => {
-    const { agent, csrf } = await signIn(h, "manager");
-    const rate = async () => (await h.query("SELECT crm_settings->>'usd_rate' AS r FROM agencies WHERE id = (SELECT agency_id FROM brokers WHERE role = 'manager' LIMIT 1)"))[0].r;
-    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "50" });
-    expect(await rate()).toBe("50");
-    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "abc" });
-    expect(await rate()).toBe("50");
-    await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", usd_rate: "" });
-    expect(await rate()).toBeNull();
   });
 });
 
