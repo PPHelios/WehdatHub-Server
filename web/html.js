@@ -117,6 +117,7 @@ const NAV = [
   { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work" },
   { key: "dashboard", href: "/app/dashboard", ar: "لوحة الوكالة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },
   { key: "sources", href: "/app/sources", ar: "مصادر العملاء وتكلفتها", en: "Lead sources and cost", icon: "chart", group: "agency", who: "manager" },
+  { key: "portal", href: "/app/portal-enquiries", ar: "استفسارات البوابات", en: "Portal enquiries", icon: "chart", group: "agency", who: "manager" },
   { key: "winloss", href: "/app/winloss", ar: "المكسب والخسارة", en: "Win and loss", icon: "chart", group: "agency", who: "manager" },
   { key: "insights", href: "/app/insights", ar: "أسعار المتر", en: "Price per m²", icon: "chart", group: "agency" },
   { key: "usage", href: "/app/usage", ar: "استخدامي والحصص", en: "My usage and limits", icon: "gauge", group: "agency" },
