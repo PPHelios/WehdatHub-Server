@@ -831,6 +831,7 @@
       "completeFollowUp": ["pool", "actor", "key", "params"],
       "postponeFollowUp": ["pool", "actor", "key", "params"],
       "applyUpdate": ["pool", "actor", "key", "u", "params"],
+      "setLang": ["pool", "actor", "key", "lang", "params"],
       "undoMany": ["pool", "actor", "eventIds", "params"],
       "recordDeal": ["client", "actor", "leadId", "params", "now"],
       "undo": ["pool", "actor", "eventId", "params"],
@@ -1258,6 +1259,7 @@
       "OPEN": "Array",
       "whenLabel": ["at", "lang"],
       "unitLabel": ["listing", "lang"],
+      "clientMessage": ["params"],
       "latestFor": ["db", "agencyId", "leadId"],
       "schedule": ["pool", "actor", "leadKey", "params"],
       "byToken": ["db", "token"],
@@ -1956,6 +1958,9 @@
       "setTicked": ["pool", "importId", "agencyId", "seqs", "ticked"],
       "getRow": ["pool", "importId", "agencyId", "seq"],
       "tickedRows": ["pool", "importId", "agencyId"]
+    },
+    "domain/clientMessageTemplates.js": {
+      "templatesFor": ["lang"]
     }
   },
   "invariant_variable_names": {

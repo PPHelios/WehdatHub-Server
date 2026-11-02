@@ -46,7 +46,7 @@ async function latestFor(db, agencyId, leadId) {
 
 function clientMessage({ lead, actor, listing, at, place, url, lang }) {
   const first = String(lead.name || "").trim().split(/\s+/)[0];
-  const hello = lang === "en" ? `Hello${first ? ` ${first}` : ""},` : `أهلاً${first ? ` ${first}` : ""}،`;
+  const hello = lang === "en" ? `Hello${first ? ` ${first}` : ""},` : first ? `أهلاً ${first}،` : "أهلاً بحضرتك،";
   return [
     hello,
     L(lang, `ميعاد المعاينة: ${whenLabel(at, lang)}`, `Your viewing: ${whenLabel(at, lang)}`),
@@ -217,4 +217,4 @@ function googleCalendarUrl(entry) {
   return `https://calendar.google.com/calendar/render?${q}`;
 }
 
-module.exports = { OPEN, whenLabel, unitLabel, latestFor, schedule, byToken, isLive, respond, calendarEntry, ics, googleCalendarUrl };
+module.exports = { OPEN, whenLabel, unitLabel, clientMessage, latestFor, schedule, byToken, isLive, respond, calendarEntry, ics, googleCalendarUrl };
