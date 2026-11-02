@@ -1235,7 +1235,8 @@ CREATE TABLE IF NOT EXISTS public.unit_owners (
   flag text,
   created_by uuid,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  is_private boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.unit_owner_events (

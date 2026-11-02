@@ -65,7 +65,7 @@ function brokerOnly(viewer, alias = "u") {
 /** May this person see this profile? Returns the profile with its visible units, or null. */
 async function getFor(pool, viewer, ownerId) {
   if (!/^[0-9a-f-]{36}$/i.test(String(ownerId))) return null;
-  const { rows } = await pool.query("SELECT * FROM unit_owners WHERE id = $1 AND agency_id = $2", [ownerId, viewer.agency_id]);
+  const { rows } = await pool.query(`SELECT * FROM unit_owners WHERE id = $1 AND agency_id = $2 AND ${Vis.owners("unit_owners")}`, [ownerId, viewer.agency_id]);
   if (!rows[0]) return null;
   const { rows: units } = await pool.query(
     `SELECT u.id, u.code, u.status, u.listing_type, u.property_type, u.compound, u.price_value, u.broker_id, u.is_private
@@ -79,13 +79,14 @@ async function getFor(pool, viewer, ownerId) {
 }
 
 /** Pages of profiles this person may see, newest first. */
-async function listFor(pool, viewer, { q = "", limit = 50, offset = 0 } = {}) {
+async function listFor(pool, viewer, { q = "", limit = 50, offset = 0, onlyPrivate = false } = {}) {
   const term = String(q || "").trim();
   const digits = Phone.normalizePhone(term);
+  const privateOnly = onlyPrivate && isAgencyOwner(viewer) ? " AND o.is_private" : "";
   const { rows } = await pool.query(
     `SELECT o.*, (SELECT count(*)::int FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerOnly(viewer)}) AS unit_count
        FROM unit_owners o
-      WHERE o.agency_id = $1
+      WHERE o.agency_id = $1 AND ${Vis.owners("o")}${privateOnly}
         AND (CASE WHEN $2::text = '' THEN true ELSE (o.name ILIKE '%' || $2 || '%' OR ($3::text IS NOT NULL AND o.phones @> ARRAY[$3]::text[])) END)
         AND ((SELECT count(*) FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerOnly(viewer)}) > 0
              ${isManager(viewer) ? `OR NOT EXISTS (SELECT 1 FROM listings u WHERE ${Vis.allUnits()} AND u.owner_id = o.id AND u.agency_id = o.agency_id)` : ""})
