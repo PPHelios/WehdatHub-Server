@@ -512,3 +512,9 @@ details.sheet { padding-block: 4px; }
 
 /* Bulk imports are a desktop job: hidden on phones and small tablets (the pages still open by link). */
 @media (max-width: 1023.98px) { .desktop-only { display: none !important; } }
+
+/* Kinds of a long import review (new, changed, problems…) as tabs that stay at the top while the list scrolls. */
+.kind-tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; background: var(--bg, #fff); border-block-end: 1px solid var(--line); }
+.kind-tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 8px 12px; min-height: 40px; border-radius: 10px; background: var(--soft); color: var(--ink); font-weight: 600; text-decoration: none; }
+.kind-tab.on { background: var(--brand); color: #fff; }
+.kind-count { font-variant-numeric: tabular-nums; opacity: 0.85; }

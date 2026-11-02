@@ -155,8 +155,9 @@ function excelPlanPage(imp, lang, query = {}) {
 </section>`
       : "";
 
+  // Kinds as tabs across the top of a long list: one kind at a time, always in view while scrolling.
   const kindNav = paged
-    ? html`<nav class="row" data-kind-nav aria-label="${L(lang, "الأنواع", "Kinds")}">${kinds.map((k) => html`<a class="chip${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-current="page"') : ""}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} ${paged && k === kind && tab ? shown.length : counts[k]}</a>`)}</nav>`
+    ? html`<nav class="kind-tabs" role="tablist" aria-label="${L(lang, "الأنواع", "Kinds")}" data-kind-nav>${kinds.map((k) => html`<a role="tab" class="kind-tab${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-selected="true" aria-current="page"') : raw(' aria-selected="false"')}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}<span class="kind-count">${paged && k === kind && tab ? shown.length : counts[k]}</span></a>`)}</nav>`
     : "";
   const tabsNav =
     paged && Array.isArray(tabInfos) && tabInfos.length > 1
