@@ -80,6 +80,7 @@ details.tip summary::-webkit-details-marker { display: none; }
 details.tip[open] summary { background: var(--brand); color: #fff; }
 details.tip ol { position: absolute; z-index: 15; inset-inline-end: 0; inset-block-start: 46px; width: min(320px, calc(100vw - 32px)); margin: 0; padding: 14px 16px 14px 14px; padding-inline-start: 32px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 24px rgba(14, 21, 33, 0.16); font-size: 0.92rem; }
 details.tip ol li + li { margin-top: 6px; }
+details.tip p { position: absolute; z-index: 15; inset-inline-end: 0; inset-block-start: 46px; width: min(320px, calc(100vw - 32px)); margin: 0; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 24px rgba(14, 21, 33, 0.16); font-size: 0.85rem; color: var(--muted); white-space: pre-line; }
 
 /* Cards and text */
 .card { background: var(--card); border: 1px solid transparent; border-radius: var(--radius); padding: 16px; margin-block: var(--gap); box-shadow: var(--shadow); }

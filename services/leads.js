@@ -36,7 +36,8 @@ const REVERSIBLE = {
   note: [],
   flag: ["flagged_at", "flag_note", "flagged_by"],
   flag_handled: ["flagged_at", "flag_note", "flagged_by"],
-  assigned: ["assigned_broker_id", "assigned_at", "response_due_at", "response_jumps"]
+  assigned: ["assigned_broker_id", "assigned_at", "response_due_at", "response_jumps"],
+  lang: ["lang"]
 };
 
 const en = (b) => b?.preferred_lang === "en";
@@ -605,6 +606,15 @@ async function logMatchSent(pool, actor, key, listing, { now = new Date() } = {}
 /* ---------------------------------------------------------------------- */
 
 /** The lead if the broker may see it, else null (a colleague's lead and another agency's look the same). */
+/** The client's language (ar | en | null = the broker's). Only the client's messages use it; the broker's screen does not change. */
+async function setLang(pool, actor, key, lang, { version = null, now = new Date() } = {}) {
+  const next = lang === "en" ? "en" : lang === "ar" ? "ar" : null;
+  return mutate(pool, actor, key, { kind: "lang", version, now }, (lead) => {
+    if ((lead.lang || null) === next) return { unchanged: true };
+    return { fields: { lang: next }, data: { from: lead.lang || null, to: next } };
+  });
+}
+
 async function getLead(pool, actor, key) {
   const lead = await loadLead(pool, actor.agency_id, key);
   return lead && Authz.canViewLead(actor, lead) ? lead : null;
@@ -767,6 +777,7 @@ module.exports = {
   completeFollowUp,
   postponeFollowUp,
   applyUpdate,
+  setLang,
   undoMany,
   recordDeal,
   undo,

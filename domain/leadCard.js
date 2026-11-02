@@ -125,6 +125,8 @@ function timelineLine(ev, lang) {
         return `✅ ${L(lang, "المدير خلّص", "Manager handled")}${d.reply ? `: ${d.reply}` : ""}`;
       case "undo":
         return L(lang, "↩️ تراجع", "↩️ Undone");
+      case "lang":
+        return L(lang, `🌐 لغة العميل: ${d.to === "en" ? "إنجليزي" : d.to === "ar" ? "عربي" : "لغة الوسيط"}`, `🌐 Client language: ${d.to === "en" ? "English" : d.to === "ar" ? "Arabic" : "broker's language"}`);
       default:
         return ev.kind;
     }
