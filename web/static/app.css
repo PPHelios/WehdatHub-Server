@@ -509,3 +509,6 @@ details.sheet { padding-block: 4px; }
 .tg-app .tabbar { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-bottom, 0px)); }
 .tg-main-on [data-tg-main] { display: none !important; }
 .tg-main-on .stepnav { position: static; }
+
+/* Bulk imports are a desktop job: hidden on phones and small tablets (the pages still open by link). */
+@media (max-width: 1023.98px) { .desktop-only { display: none !important; } }
