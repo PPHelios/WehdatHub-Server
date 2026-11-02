@@ -455,8 +455,8 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
 ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length ? "" : html`<p class="card muted">${L(lang, "العميل ده مش بيدور على وحدة.", "This client isn't looking for a unit.")}</p>`}
   </div>
   <div class="tab-panel" data-tab="lt-hist">
-<section class="card" id="note"><h2>📝 ${L(lang, "ملاحظة", "Note")}</h2>
-  <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "إضافة", "Add")}</button></form>
+<section class="card" id="note"><h2>📝 ${L(lang, "تحديث للعميل", "Add update")}</h2>
+  <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "سجّل التحديث", "Save update")}</button></form>
 </section>
 ${tl ? V.timelineList(tl.rows, lang, { more: tl.more, lead }) : ""}
   </div>
@@ -525,7 +525,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       stage: L(lang, "✅ المرحلة اتحفظت.", "✅ Stage saved."),
       follow_up: L(lang, "✅ المتابعة اتحفظت.", "✅ Follow-up saved."),
       follow_up_done: L(lang, "✅ المتابعة خلصت.", "✅ Follow-up done."),
-      note: L(lang, "✅ الملاحظة اتضافت.", "✅ Note added."),
+      note: L(lang, "✅ التحديث اتسجّل.", "✅ Update saved."),
       contacted: L(lang, "📞 اتسجل إنك كلمته.", "📞 Marked as contacted."),
       assigned: L(lang, "✅ اتسلم.", "✅ Assigned."),
       undone: L(lang, "↩️ اتلغى.", "↩️ Undone."),
