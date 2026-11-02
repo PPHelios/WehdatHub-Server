@@ -1275,6 +1275,46 @@
     "web/routes/viewing.js": {
       "register": ["web", "params"]
     },
+    "domain/portalEnquiry.js": {
+      "parse": [
+        "text"
+      ],
+      "PORTALS": "Object"
+    },
+    "services/portalEnquiries.js": {
+      "capture": [
+        "pool",
+        "actor",
+        "text",
+        "params"
+      ],
+      "list": [
+        "pool",
+        "actor"
+      ],
+      "assign": [
+        "pool",
+        "actor",
+        "id",
+        "params"
+      ],
+      "linkUnit": [
+        "pool",
+        "actor",
+        "id",
+        "unitCode"
+      ],
+      "setAlerts": [
+        "pool",
+        "actor",
+        "on"
+      ],
+      "unitFor": [
+        "db",
+        "agencyId",
+        "listingNo"
+      ]
+    },
     "services/leadSources.js": {
       "NONE": "String",
       "monthOf": ["text", "now"],
@@ -1300,6 +1340,12 @@
       "extrasOf": ["l"],
       "likeLabel": ["m", "lang"],
       "noteLine": ["m", "listing", "lang"]
+    },
+    "web/routes/portalEnquiries.js": {
+      "register": [
+        "web",
+        "params"
+      ]
     },
     "web/routes/sources.js": {
       "register": ["web", "params"]

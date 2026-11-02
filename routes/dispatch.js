@@ -7,6 +7,9 @@ const Drafts = require("../lib/drafts");
 const Edits = require("../lib/edits");
 const BugReports = require("../lib/bugReports");
 const LeadIntake = require("../lib/leadIntake");
+const PortalEnquiries = require("../services/portalEnquiries");
+const PortalParse = require("../domain/portalEnquiry");
+const Authz = require("../lib/authz");
 const DealsWA = require("../lib/deals");
 const { reply, replyButtons, setTurnNote } = require("../lib/dispatcher");
 const { handleCommand } = require("./commands");
@@ -161,6 +164,19 @@ async function dispatchMessage(broker, message, ctx) {
 
       // 3. A4: inside an edit session, text is part of the edit (never a search).
       if (await Edits.appendToEdit(broker, ctx, { text })) return "done";
+
+      // 3b. A manager's or owner's forwarded portal enquiry (Bayut, Dubizzle, Nawy): kept in the Portal enquiries tab.
+      if (Authz.isManager(broker) && PortalParse.parse(text)) {
+        const r = await PortalEnquiries.capture(ctx.pool, broker, text);
+        const en = broker.preferred_lang === "en";
+        if (r.outcome === "created") {
+          const who = r.enquiry.client_name ? ` (${r.enquiry.client_name})` : "";
+          reply(broker, en ? `📩 Saved the ${r.enquiry.portal} enquiry${who}. Add the phone and assign a broker in Portal enquiries on the website.${r.unit ? ` Unit: ${r.unit.code}.` : ""}` : `📩 اتسجل استفسار ${r.enquiry.portal}${who}. ضيف الرقم وحوّله لوسيط من «استفسارات البوابات» على الموقع.${r.unit ? ` الوحدة: ${r.unit.code}.` : ""}`);
+        } else if (r.outcome === "repeat") {
+          reply(broker, en ? "This enquiry was already saved in the last 24 hours." : "الاستفسار ده اتسجل قبل كده في آخر 24 ساعة.");
+        }
+        return "done";
+      }
 
       // 4. A client's message (a phone, no unit): "Is this a client?" [Save as client] [Search].
       if (await LeadIntake.offerForward(broker, text, ctx)) return "done";
