@@ -10,19 +10,34 @@ const MANAGER_TYPES = ["secret_details_request", "secret_details_decision", "com
 const OWNER_TYPES = [...MANAGER_TYPES, "secret_details_scope", "team_role_change", "portfolio_private"];
 const PAGE = 50;
 
-/** Pages of 50, newest first, or null for someone who may not read the log. */
-async function list(pool, viewer, { offset = 0, now = new Date() } = {}) {
+/**
+ * Pages of 50, newest first, or null for someone who may not read the log. Optional filters: from and to (instants: the
+ * "to" is exclusive) and person (the broker who asked, answered or exported).
+ */
+async function list(pool, viewer, { offset = 0, now = new Date(), from = null, to = null, person = null } = {}) {
   if (!isManager(viewer)) return null;
   const types = isAgencyOwner(viewer) ? OWNER_TYPES : MANAGER_TYPES;
   const since = new Date(now.getTime() - KEEP_DAYS * 24 * 3600 * 1000).toISOString();
+  const args = [viewer.agency_id, types, from && from > since ? from : since];
+  let extra = "";
+  if (to) extra += ` AND o.created_at < $${args.push(to)}`;
+  if (person) extra += ` AND o.broker_id = $${args.push(person)}`;
+  args.push(PAGE + 1, offset);
   const { rows } = await pool.query(
     `SELECT o.id, o.created_at, o.operation_type, o.metadata, b.name AS broker_name
        FROM operation_logs o LEFT JOIN brokers b ON b.id = o.broker_id
-      WHERE o.agency_id = $1 AND o.operation_type = ANY($2::text[]) AND o.created_at >= $3
-      ORDER BY o.created_at DESC, o.id DESC LIMIT $4 OFFSET $5`,
-    [viewer.agency_id, types, since, PAGE + 1, offset]
+      WHERE o.agency_id = $1 AND o.operation_type = ANY($2::text[]) AND o.created_at >= $3${extra}
+      ORDER BY o.created_at DESC, o.id DESC LIMIT $${args.length - 1} OFFSET $${args.length}`,
+    args
   );
   return { rows: rows.slice(0, PAGE), more: rows.length > PAGE };
+}
+
+/** The people the log can be filtered by (the agency's brokers). */
+async function people(pool, viewer) {
+  if (!isManager(viewer)) return [];
+  const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY name, id", [viewer.agency_id]);
+  return rows;
 }
 
 /** One readable line for a log row. */
@@ -47,4 +62,5 @@ function describe(row, lang) {
   }
 }
 
-module.exports = { KEEP_DAYS, PAGE, list, describe };
+module.exports = {
+  people, KEEP_DAYS, PAGE, list, describe };

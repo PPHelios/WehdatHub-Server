@@ -91,19 +91,39 @@ ${rows.length
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).send(L(lang, "للمديرين بس.", "Managers only."));
     const n = Math.max(0, parseInt(req.query.page, 10) || 0);
-    const log = await Notifications.agencyLog(pool, broker, { limit: 50, offset: n * 50 });
+    const DAY = /^\d{4}-\d{2}-\d{2}$/;
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const cairo = (v) => (DAY.test(String(v || "")) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) ? require("../../services/leadRules").cairoMidnight(String(v)) : null);
+    const fromDay = cairo(req.query.from) ? String(req.query.from) : "";
+    const toDay = cairo(req.query.to) ? String(req.query.to) : "";
+    const person = UUID.test(String(req.query.person || "")) ? String(req.query.person) : "";
+    const from = cairo(fromDay);
+    const to = cairo(toDay) ? new Date(cairo(toDay).getTime() + 24 * 3600 * 1000) : null;
+    const log = await Notifications.agencyLog(pool, broker, { limit: 50, offset: n * 50, brokerId: person || null, from, to });
+    const people = await Notifications.people(pool, broker);
+    const pageLink = (p) => {
+      const q = new URLSearchParams({ ...(fromDay ? { from: fromDay } : {}), ...(toDay ? { to: toDay } : {}), ...(person ? { person } : {}), page: String(p) });
+      return `/app/notifications/log?${q.toString()}`;
+    };
     return page(req, res, {
       title: L(lang, "سجل التنبيهات", "Notification log"),
       nav: "notifications",
       body: html`<h1>📋 ${L(lang, "سجل التنبيهات", "Notification log")}</h1>
 <p class="muted">${L(lang, "كل تنبيه: مين استلمه، على أي قناة، وليه، واتبعت ولا لأ.", "Every alert: who got it, on which channel, why, and whether it went out.")}</p>
+<form method="get" action="/app/notifications/log" class="row" data-notification-filter>
+  <label>${L(lang, "من", "From")} <input type="date" name="from" value="${fromDay}"></label>
+  <label>${L(lang, "لغاية", "To")} <input type="date" name="to" value="${toDay}"></label>
+  <label>${L(lang, "مين", "Who")}
+    <select name="person"><option value="">${L(lang, "الكل", "Everyone")}</option>${people.map((p) => html`<option value="${p.id}"${p.id === person ? html` selected` : ""}>${p.name}</option>`)}</select></label>
+  <button type="submit" class="secondary">${L(lang, "فلتر", "Filter")}</button>
+</form>
 <table>
 <thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "التنبيه", "Alert")}</th><th>${L(lang, "القناة", "Channel")}</th><th>${L(lang, "السبب", "Why")}</th><th>${L(lang, "الحالة", "Status")}</th></tr></thead>
 <tbody>${log.rows.map(
         (r) => html`<tr data-log="${r.id}"><td>${when(r.created_at)}</td><td>${r.broker_name}</td><td>${r.title}</td><td>${pick(CHANNEL, r.channel || "inbox", lang)}</td><td>${pick(REASON, r.reason, lang)}</td><td>${r.status}</td></tr>`
       )}</tbody>
 </table>
-<p class="row">${n > 0 ? html`<a href="/app/notifications/log?page=${n - 1}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${log.more ? html`<a href="/app/notifications/log?page=${n + 1}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
+<p class="row">${n > 0 ? html`<a href="${pageLink(n - 1)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${log.more ? html`<a href="${pageLink(n + 1)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
     });
   });
 }

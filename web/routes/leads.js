@@ -6,6 +6,7 @@
 "use strict";
 
 const Leads = require("../../services/leads");
+const LeadRules = require("../../services/leadRules");
 const IntakeUrls = require("../../services/leadIntake");
 const Leases = require("../../services/leases");
 const FollowUpDrafts = require("../../services/followUpDrafts");
@@ -520,6 +521,45 @@ ${V.bottomBar(lead, lang, broker.name)}`
     if (!isAgencyOwner(req.session.broker)) return next();
     await Portfolio.setPrivate(pool, req.session.broker, "lead", lead.id, req.body.value === "1");
     return res.redirect(303, `/app/leads/${encodeURIComponent(req.params.ref)}`);
+  });
+
+  // The lead's history with filters: date (Cairo days, from and to inclusive) and the person who acted.
+  web.get("/leads/:ref/history", async (req, res, next) => {
+    const broker = req.session.broker;
+    const lang = langOf(req);
+    const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) && !Number.isNaN(Date.parse(v + "T00:00:00Z")) ? String(v) : null);
+    const fromDay = day(req.query.from);
+    const toDay = day(req.query.to);
+    const from = fromDay ? LeadRules.cairoMidnight(fromDay) : null;
+    const to = toDay ? new Date(LeadRules.cairoMidnight(toDay).getTime() + 24 * 3600 * 1000) : null;
+    const person = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(req.query.person || "")) ? req.query.person : null;
+    const beforeId = /^\d+$/.test(String(req.query.before || "")) ? req.query.before : null;
+    const h = await Leads.historyFor(pool, broker, req.params.ref, { from, to, brokerId: person, beforeId });
+    if (!h) return next();
+    const people = await Leads.historyPeople(pool, broker);
+    const base = `/app/leads/${Card.refLabel(h.lead.ref)}/history`;
+    const keep = (extra = {}) => {
+      const q = new URLSearchParams({ ...(fromDay ? { from: fromDay } : {}), ...(toDay ? { to: toDay } : {}), ...(person ? { person } : {}), ...extra });
+      const str = q.toString();
+      return str ? `${base}?${str}` : base;
+    };
+    const title = L(lang, `سجل ${Card.displayName(h.lead, lang)}`, `History of ${Card.displayName(h.lead, lang)}`);
+    return page(req, res, {
+      title,
+      nav: "leads",
+      body: html`<h1>🕓 ${title}</h1>
+<p><a href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "← رجوع للعميل", "← Back to the lead")}</a></p>
+<form method="get" action="${base}" class="row" data-history-filter>
+  <label>${L(lang, "من", "From")} <input type="date" name="from" value="${fromDay || ""}"></label>
+  <label>${L(lang, "لغاية", "To")} <input type="date" name="to" value="${toDay || ""}"></label>
+  <label>${L(lang, "مين عمل", "Who did it")}
+    <select name="person"><option value="">${L(lang, "الكل", "Everyone")}</option>${people.map((p) => html`<option value="${p.id}"${p.id === person ? html` selected` : ""}>${p.name}</option>`)}</select></label>
+  <button type="submit" class="secondary">${L(lang, "فلتر", "Filter")}</button>
+</form>
+<section class="card"><ul class="timeline" data-history-list>${h.rows.map((e) => html`<li data-event="${e.kind}">${Card.timelineLine(e, lang)}</li>`)}</ul>
+${h.more ? html`<a href="${keep({ before: h.rows[h.rows.length - 1].id })}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}
+${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بالفلتر ده.", "Nothing matches this filter.")}</p>`}</section>`,
+    });
   });
 
   web.get("/leads/:ref", async (req, res, next) => {

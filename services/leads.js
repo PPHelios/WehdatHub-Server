@@ -831,6 +831,73 @@ async function timeline(pool, actor, key, { limit = PAGE, beforeId = null } = {}
 }
 
 /* ---------------------------------------------------------------------- */
+/* History with filters (date, person)                                     */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * A team lead's view of a lead's history: the actions of brokers who were in their team at the time (the broker_team_history
+ * dates), so after a broker moves, the old team lead keeps the old logs and sees nothing new for that broker.
+ * `p` is the parameter number that holds the team lead's id.
+ */
+const teamEventSql = (ph) =>
+  `EXISTS (SELECT 1 FROM broker_team_history h WHERE h.team_lead_id = ${ph} AND h.broker_id = e.broker_id AND h.agency_id = e.agency_id
+            AND e.created_at >= h.from_at AND (h.to_at IS NULL OR e.created_at < h.to_at))`;
+
+/**
+ * The history page: a lead's events, newest first, filtered by from/to (instants) and by the acting person (brokerId).
+ * Managers see all of it. A team lead sees their team's brokers' actions (see teamEventSql); a lead with no such events
+ * is not theirs to read. Brokers see what the lead page shows. Null when it isn't visible.
+ */
+async function historyFor(pool, actor, key, { from = null, to = null, brokerId = null, beforeId = null, limit = PAGE } = {}) {
+  const k = keyClause(key);
+  if (!k) return null;
+  const teamLead = !Authz.isManager(actor) && Authz.isTeamLead(actor);
+  let lead = await getLead(pool, actor, key);
+  if (!lead && teamLead) {
+    const { rows } = await pool.query(
+      `SELECT l.* FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql}
+          AND EXISTS (SELECT 1 FROM lead_events e WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND ${teamEventSql("$3")}) LIMIT 1`,
+      [actor.agency_id, k.value, actor.id]
+    );
+    lead = rows[0] || null;
+  }
+  if (!lead) return null;
+  const args = [actor.agency_id, lead.id];
+  const where = ["e.agency_id = $1", "e.lead_id = $2"];
+  const add = (sql, v) => {
+    args.push(v);
+    where.push(sql.replace("?", `$${args.length}`));
+  };
+  if (teamLead) add(teamEventSql("?"), actor.id);
+  if (from) add("e.created_at >= ?", from);
+  if (to) add("e.created_at < ?", to);
+  if (brokerId) add("e.broker_id = ?", brokerId);
+  if (beforeId) add("e.id < ?", beforeId);
+  args.push(limit + 1);
+  const { rows } = await pool.query(
+    `SELECT e.id, e.kind, e.data, e.created_at, e.undone_at, e.broker_id, b.name AS broker_name
+       FROM lead_events e LEFT JOIN brokers b ON b.id = e.broker_id AND b.agency_id = e.agency_id
+      WHERE ${where.join(" AND ")} ORDER BY e.id DESC LIMIT $${args.length}`,
+    args
+  );
+  return { lead, rows: rows.slice(0, limit), more: rows.length > limit };
+}
+
+/** The people a history page can filter by: all of the agency's brokers for managers; a team lead's team members. */
+async function historyPeople(pool, actor) {
+  if (Authz.isManager(actor)) {
+    const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY name, id", [actor.agency_id]);
+    return rows;
+  }
+  if (!Authz.isTeamLead(actor)) return [];
+  const { rows } = await pool.query(
+    "SELECT DISTINCT b.id, b.name FROM broker_team_history h JOIN brokers b ON b.id = h.broker_id WHERE h.team_lead_id = $1 AND h.agency_id = $2 ORDER BY b.name, b.id",
+    [actor.id, actor.agency_id]
+  );
+  return rows;
+}
+
+/* ---------------------------------------------------------------------- */
 /* A broker leaves (P6)                                                    */
 /* ---------------------------------------------------------------------- */
 
@@ -868,6 +935,8 @@ async function releaseBrokerLeads(pool, agencyId, brokerId, { actorId = null, no
 }
 
 module.exports = {
+  historyFor,
+  historyPeople,
   MAX_PHONES,
   UNDO_MS,
   phoneHash,
