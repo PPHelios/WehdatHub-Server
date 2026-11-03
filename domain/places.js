@@ -44,7 +44,25 @@ const COMPOUNDS = {
   zed_east: ["new_cairo", "ora", "زد ايست", "zed east"],
   marassi: ["north_coast", "emaar", "مراسي", "marassi"],
   swan_lake: ["new_cairo", "hassan_allam", "سوان ليك", "سوانليك", "swan lake", "swanlake"],
-  beverly_hills: ["sheikh_zayed", null, "بيفرلي هيلز", "beverly hills"]
+  beverly_hills: ["sheikh_zayed", null, "بيفرلي هيلز", "beverly hills"],
+  // New Cairo compounds from the NCH rent sheet (names as Haytham confirmed them).
+  lake_view: ["new_cairo", null, "lake view", "ليك فيو", "لايك فيو"],
+  fifth_square: ["new_cairo", null, "5th square", "فيفث سكوير"],
+  cfc: ["new_cairo", null, "cfc", "cairo festival city", "سي اف سي", "كايرو فيستيفال سيتي"],
+  the_village: ["new_cairo", null, "the village", "ذا فيليدج", "افيليدج"],
+  the_square: ["new_cairo", null, "the square", "ذا سكوير", "اسكوير"],
+  village_gate: ["new_cairo", null, "village gate", "فيليدج جيت", "فيلدج جيت"],
+  galleria_moon_valley: ["new_cairo", null, "galleria moon valley", "جاليريا مون فالي", "مون فالي"],
+  mvhp: ["new_cairo", "mountain_view", "mvhp", "mountain view hyde park", "ماونتن فيو هايد بارك"],
+  azad: ["new_cairo", null, "azad", "أزاد"],
+  el_patio: ["new_cairo", null, "el patio", "الباتيو"],
+  dyar_park: ["new_cairo", null, "dyar park", "ديار بارك", "ديار", "ديار المخابرات"],
+  uptown_cairo: ["new_cairo", null, "uptown cairo", "أبتاون كايرو", "ابتاون"],
+  pk2: ["new_cairo", null, "pk2"],
+  vgk: ["new_cairo", null, "vgk"],
+  village_avenue: ["new_cairo", null, "village avenue", "فيليدج أفينيو"],
+  palm_hills_new_cairo: ["new_cairo", "palm_hills", "palm hills new cairo", "بالم هيلز القاهرة الجديدة", "بالم هيلز نيو كايرو"],
+  porto_new_cairo: ["new_cairo", null, "porto new cairo", "porto", "بورتو نيو كايرو"]
 };
 
 /** Every synonym row: { kind, key, synonym, norm, area_key, developer_key }. */
