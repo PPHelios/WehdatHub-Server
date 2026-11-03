@@ -14,13 +14,24 @@ describe("English compound fallback", () => {
     expect(f.furnishing).toBe("furnished");
   });
 
-  test("the AI reading of an English compound name searches the English unit text", () => {
+  test("the AI reading of an English compound name not in the place list searches the English unit text", () => {
+    const parsed = Q.normalizeAiSearch({
+      filters: { listing_type: "rent", compound: "Zephyr Gardens", bedrooms_min: 2, price_max: 70000, furnishing: "furnished" }
+    });
+    expect(parsed.filters.place_terms).toEqual(["zephyr gardens"]);
+    const { sql, params } = buildSearchQuery("agency-1", parsed);
+    expect(sql).toContain("l.search_text_normalized LIKE '%' || ");
+    expect(params).toContain("zephyr gardens");
+  });
+
+  test("a compound in the place list is searched by its compound key, not by text", () => {
     const parsed = Q.normalizeAiSearch({
       filters: { listing_type: "rent", compound: "Azad", bedrooms_min: 2, price_max: 70000, furnishing: "furnished" }
     });
-    expect(parsed.filters.place_terms).toEqual(["azad"]);
+    expect(parsed.filters.places).toEqual([{ kind: "compound", key: "azad" }]);
+    expect(parsed.filters.place_terms).toEqual([]);
     const { sql, params } = buildSearchQuery("agency-1", parsed);
-    expect(sql).toContain("l.search_text_normalized LIKE '%' || ");
+    expect(sql).toContain("l.compound_key = $");
     expect(params).toContain("azad");
   });
 
