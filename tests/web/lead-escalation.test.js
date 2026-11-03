@@ -69,7 +69,7 @@ test("the team lead hears every broker action on their team's lead, the manager 
   expect((await notesOf("colleague", "team:%")).length).toBe(1);
 });
 
-test("unassigned and uncontacted leads: one manager digest per hour, private leads never counted", async () => {
+test("unassigned and uncontacted leads: manager digest once per day per count, private leads never counted", async () => {
   const admin = await row("admin");
   await Leads.captureLead(h.pool, admin, { phones: "01022222222", name: "Nour" });
   const now = new Date("2026-11-02T12:00:00Z");
@@ -78,7 +78,12 @@ test("unassigned and uncontacted leads: one manager digest per hour, private lea
   const digest = await notesOf("admin", "unassigned_digest:%");
   expect(digest.length).toBe(1);
   expect(digest[0].title).toContain("1");
-  // The same hour again does not repeat it.
-  await LeadRules.unassignedDigest(h.pool, { now });
+  // The next hours with the same counts do not repeat it (this was the triplicated alert).
+  await LeadRules.unassignedDigest(h.pool, { now: new Date("2026-11-02T13:00:00Z") });
+  await LeadRules.unassignedDigest(h.pool, { now: new Date("2026-11-02T14:00:00Z") });
   expect((await notesOf("admin", "unassigned_digest:%")).length).toBe(1);
+  // A new unassigned lead changes the counts, so the digest goes out again.
+  await Leads.captureLead(h.pool, admin, { phones: "01033333333", name: "Salma" });
+  await LeadRules.unassignedDigest(h.pool, { now: new Date("2026-11-02T15:00:00Z") });
+  expect((await notesOf("admin", "unassigned_digest:%")).length).toBe(2);
 });

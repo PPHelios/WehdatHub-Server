@@ -335,7 +335,8 @@ async function unassignedDigest(pool, { now = new Date() } = {}) {
         AND (l.assigned_broker_id IS NULL OR (l.stage = 'new' AND l.last_contact_at IS NULL))
       GROUP BY l.agency_id`
   );
-  const hour = now.toISOString().slice(0, 13);
+  // Keyed by the Cairo day and the two counts: the hourly job repeats an unchanged digest at most once a day, and a changed count sends at once.
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(now);
   let sent = 0;
   for (const r of rows) {
     const unassigned = r.unassigned || 0;
@@ -344,7 +345,7 @@ async function unassignedDigest(pool, { now = new Date() } = {}) {
     for (const m of await Notifications.managersOf(pool, r.agency_id)) {
       await Notifications.notifyBroker(pool, m, {
         kind: "manager_alert",
-        dedupeKey: `unassigned_digest:${r.agency_id}:${hour}`,
+        dedupeKey: `unassigned_digest:${r.agency_id}:${day}:${unassigned}:${r.uncontacted || 0}`,
         title: L(m, `📥 عملاء مفيش حد مسكهم: ${unassigned} · لسه محدش كلّمهم: ${r.uncontacted}`, `📥 Unassigned leads: ${unassigned} · not contacted yet: ${r.uncontacted}`),
         body: oldest ? L(m, `الأقدم من ${oldest}.`, `Oldest from ${oldest}.`) : "",
         url: "/app/leads?tab=overdue",
