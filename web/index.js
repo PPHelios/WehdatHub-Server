@@ -116,7 +116,7 @@ function mountWeb(app, { pool, config }) {
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   // Data entry: only units (add, edit, look up), search, settings and notifications. Everything else is closed to them.
-  const DATA_ENTRY_PATHS = /^\/(units|search|settings|passkeys?|notifications|guide|logout|csrf|push)(\/|$)/;
+  const DATA_ENTRY_PATHS = /^\/(units|search|settings|passkeys?|notifications|guide|logout|csrf|push|test-role)(\/|$)/;
   priv.use((req, res, next) => {
     if (!Authz.isDataEntry(req.session.broker)) return next();
     if (req.path === "/" && req.method === "GET") return res.redirect(303, "/app/units");

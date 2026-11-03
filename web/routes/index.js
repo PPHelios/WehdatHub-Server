@@ -35,7 +35,8 @@ const PRIVATE = [
   require("./brochure"),
   require("./gallery"),
   require("./catalogue"),
-  require("./priceSheets")
+  require("./priceSheets"),
+  require("./testRole")
 ];
 
 module.exports = { PUBLIC, PRIVATE };

@@ -2109,6 +2109,15 @@
       "report": ["pool", "broker", "logId", "note"],
       "mine": ["pool", "broker", "logId"],
       "isId": ["v"]
+    },
+    "lib/testRole.js": {
+      "ROLES": "Array",
+      "CRM_ADMIN_PHONE": "String",
+      "canSwitch": ["broker", "env"],
+      "config": ["env"]
+    },
+    "web/routes/testRole.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

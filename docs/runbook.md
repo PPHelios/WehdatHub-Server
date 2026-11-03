@@ -16,6 +16,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
 | `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
 | `WHATSAPP_ALLOWED_NUMBER` | no | `01055881114` | The only number WhatsApp talks to (the CRM owner's; national or international form). Other senders get no reply, and nothing is sent on WhatsApp to any other number. Both checks are in `lib/waOwnerOnly.js`. |
+| `TEST_SWITCH_PHONE` | no | (unset) | The test number that may switch its own role on the website (owner, manager, broker, data entry). Off unless `TEST_SWITCH_AGENCY_ID` is also set. The CRM admin number is never allowed. |
+| `TEST_SWITCH_AGENCY_ID` | no | (unset) | The ID of the test agency the role switch works in (the POC test agency). Off unless `TEST_SWITCH_PHONE` is also set. |
 | `WHATSAPP_OWNER_ONLY` | no | on | Set `false` only in tests: turns the owner-only check off. Leave it unset in production. |
 | `WHATSAPP_APP_SECRET` | yes | — | Meta app secret; every webhook must carry a valid `X-Hub-Signature-256` (fail-closed). |
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |

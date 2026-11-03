@@ -171,11 +171,20 @@ function tabBar(broker, tab, lang) {
   )}</nav>`;
 }
 
+function testRoleForm(broker, lang) {
+  const en = lang === "en";
+  const TestRole = require("../lib/testRole");
+  const names = { owner: en ? "Owner" : "مالك", manager: en ? "Manager" : "مدير", broker: en ? "Broker" : "بروكر", data_entry: en ? "Data entry" : "مدخل بيانات" };
+  return html`<form method="post" action="/app/test-role" class="test-role" data-test-role><label><span class="sr-only">${en ? "Test role" : "دور التجربة"}</span><select name="role" data-autosubmit>${TestRole.ROLES.map((r) => html`<option value="${r}"${r === broker.role ? raw(" selected") : ""}>${names[r]}</option>`)}</select></label><noscript><button type="submit">✓</button></noscript></form>`;
+}
+
 function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   const en = lang === "en";
   const { icon, MARK } = require("./icons");
+  const TestRole = require("../lib/testRole");
   return html`<header class="top">
   <a class="brand" href="${broker ? "/app/" : "/"}" aria-label="WehdatHub">${MARK}<span dir="ltr">Wehdat<b>Hub</b></span></a>
+  ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
   ${broker
     ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
   <a class="iconbtn" href="/app/more" aria-label="${en ? "More" : "المزيد"}"${tab === "more" ? raw(' aria-current="page"') : ""}>${icon("more")}</a>`
