@@ -44,7 +44,6 @@ const COMPOUNDS = {
   zed_east: ["new_cairo", "ora", "زد ايست", "zed east"],
   marassi: ["north_coast", "emaar", "مراسي", "marassi"],
   swan_lake: ["new_cairo", "hassan_allam", "سوان ليك", "سوانليك", "swan lake", "swanlake"],
-  lake_view: ["new_cairo", null, "ليك فيو", "لايك فيو", "lake view", "lakeview"],
   beverly_hills: ["sheikh_zayed", null, "بيفرلي هيلز", "beverly hills"]
 };
 
