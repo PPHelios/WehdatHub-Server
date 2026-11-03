@@ -27,6 +27,8 @@ const FILES = {
   "chatparse.js": path.join(__dirname, "..", "domain", "chatParse.js"),
   "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
   "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
+  // The add/edit unit form's photo tray (zip of one unit's photos, ticks, order).
+  "unitPhotos.js": path.join(STATIC_DIR, "unitPhotos.js"),
   // Excel import: the workbook is read in the browser, tab by tab.
   "xlsxread.js": path.join(STATIC_DIR, "xlsxread.js"),
   "ximport.js": path.join(STATIC_DIR, "ximport.js"),
