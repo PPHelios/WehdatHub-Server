@@ -89,6 +89,8 @@
   | `065_search_log.sql` | The POC search log: `search_log` (every search: words with phone numbers hidden, the local reading, the AI reading when asked, the filters used, the units returned, the nightly check) and `search_reports` ("Wrong search?" reports). |
   | `066_search_aliases.sql` | `search_aliases`: words brokers say mapped to words the dictionaries know (seeded spellings, AI-proposed words waiting for the owner, approved ones the parser uses). |
   | `067_broker_team_history.sql` | `broker_team_history`: which team lead each broker was under and when, so a team lead keeps the history of a broker's actions from their time in the team after that broker moves. |
+  | `068_sync_compound_names.js` | `compound_synonyms`: copies the compound names from the code's place list into the table, so units are tagged with the same compounds the search reads. Existing names are left as they are. |
+  | `069_login_code_channel.sql` | `web_login_tokens` and `brokers`: a website sign-in can be a six-digit code sent on the bot (a new channel), and the `data_entry` role (adds and edits units by hand, no leads or deals). |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

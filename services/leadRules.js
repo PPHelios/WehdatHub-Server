@@ -108,9 +108,9 @@ async function routingList(db, agencyId) {
   const { rows } = await db.query(
     `SELECT b.id, b.name, b.role, b.away_until,
             (SELECT count(*)::int FROM leads l WHERE ${Vis.leads("l")} AND l.assigned_broker_id = b.id AND l.agency_id = b.agency_id AND l.stage NOT IN ('won', 'lost')) AS open_leads
-       FROM brokers b WHERE b.agency_id = $1 AND b.is_active AND lower(b.role) <> ALL($2::text[])
+       FROM brokers b WHERE b.agency_id = $1 AND b.is_active AND lower(b.role) IN ('broker', 'team_lead')
       ORDER BY (lower(b.role) = 'broker') DESC, b.name, b.id`,
-    [agencyId, MANAGER_ROLES.map((r) => r.toLowerCase())]
+    [agencyId]
   );
   const pos = new Map(routing.order.map((id, i) => [id, i]));
   rows.sort((a, b) => (pos.has(a.id) ? pos.get(a.id) : 1e6) - (pos.has(b.id) ? pos.get(b.id) : 1e6));
@@ -130,9 +130,9 @@ async function nextBroker(db, agencyId, { exclude = [], now = new Date(), advanc
   const { rows } = await db.query(
     `SELECT ${BROKER_COLS} FROM brokers
       WHERE agency_id = $1 AND is_active AND NOT (id = ANY($2::uuid[])) AND (away_until IS NULL OR away_until <= $3)
-        AND lower(role) <> ALL($4::text[])
+        AND lower(role) IN ('broker', 'team_lead')
       ORDER BY (lower(role) = 'broker') DESC, last_lead_at NULLS FIRST, name, id`,
-    [agencyId, exclude, now.toISOString(), MANAGER_ROLES.map((r) => r.toLowerCase())]
+    [agencyId, exclude, now.toISOString()]
   );
   let pick = rows[0] || null;
   if (routing.order.length && rows.length) {

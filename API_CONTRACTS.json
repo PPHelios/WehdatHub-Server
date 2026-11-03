@@ -268,8 +268,10 @@
     },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
+      "DATA_ENTRY_ROLE": "String",
       "isManager": ["broker"],
       "isAgencyOwner": ["broker"],
+      "isDataEntry": ["broker"],
       "isTeamLead": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],
@@ -506,6 +508,9 @@
       "PRIVATE": "Array"
     },
     "lib/webAuth.js": {
+      "LOGIN_CODE_TTL_MINUTES": "Number",
+      "issueLoginCode": ["pool", "broker"],
+      "consumeLoginCode": ["pool", "broker", "code"],
       "LOGIN_TOKEN_TTL_MINUTES": "Number",
       "SESSION_DAYS": "Number",
       "sha256": ["s"],
