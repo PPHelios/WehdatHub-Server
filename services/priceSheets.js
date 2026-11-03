@@ -169,12 +169,15 @@ async function apply(pool, actor, projectId, sheetId, { markSold = [], now = new
     for (const e of sheet.entries) {
       if (e.action === "new") {
         const phase = phaseFor(phases, e);
-        const res = await Store.createListing(client, owner, { fields: fieldsFor(e, project, phase), lang: "ar" });
+        const fields = fieldsFor(e, project, phase);
+        // A sheet has no one to ask: an owner phone with no name uses the phone as the name.
+        if (fields.details?.owner_phone && !fields.details.owner_name) fields.details.owner_name = require("../domain/phone").displayPhone(fields.details.owner_phone);
+        const res = await Store.createListing(client, owner, { fields, lang: "ar" });
         if (res.limit) {
           await client.query("ROLLBACK"); // the sheet stays a preview; nothing is half applied
           return { error: "unit_limit", limit: res.limit };
         }
-        if (res.owner_required) {
+        if (res.owner_required || res.owner_name_required) {
           await client.query("ROLLBACK");
           return { error: "owner_required", code: e.code || null };
         }

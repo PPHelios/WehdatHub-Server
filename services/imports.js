@@ -324,6 +324,8 @@ async function insertOne(pool, broker, fields, code, lang) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // A file has no one to ask: a row with an owner phone and no name uses the phone as the name.
+    if (fields.details?.owner_phone && !fields.details.owner_name) fields.details.owner_name = require("../domain/phone").displayPhone(fields.details.owner_phone);
     const res = await Store.createListing(client, broker, { fields, code, lang });
     if (res.listing && fields.status && fields.status !== "active") {
       await client.query("UPDATE listings SET status = $1 WHERE id = $2 AND agency_id = $3", [fields.status, res.listing.id, broker.agency_id]);
@@ -370,7 +372,7 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
       else if (res.limit) {
         result.limit = res.limit;
         break;
-      } else if (res.owner_required) result.failed.push(item.code || `row ${item.row}`);
+      } else if (res.owner_required || res.owner_name_required) result.failed.push(item.code || `row ${item.row}`);
       else result.conflicts.push(res.code);
     } else if (item.kind === "changed") {
       const res = await patchOne(pool, broker, item.code, item.patch, item.version);

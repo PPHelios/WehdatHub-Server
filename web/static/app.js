@@ -308,58 +308,6 @@
     if (b.getAttribute("data-move") === "down" && li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li);
     li.parentNode.dispatchEvent(new CustomEvent("sorted", { bubbles: true }));
   });
-  // Add/edit a unit: chosen photos show as a list the broker can drag (or move with arrows) before saving; the file
-  // input is rebuilt in that order, so the unit's photos are stored in the order shown (the first is the cover).
-  document.addEventListener("change", function (e) {
-    var input = e.target;
-    if (input.matches && input.matches("select[name=market]")) {
-      var tab = document.getElementById(input.value === "primary" ? "pay-tab-primary" : "pay-tab-resale");
-      if (tab) tab.checked = true;
-    }
-    if (!input.matches || !input.matches("input[data-photo-sort]") || !window.DataTransfer) return;
-    var form = input.form;
-    var list = form && form.querySelector("[data-photo-preview]");
-    if (!list) return;
-    input._files = Array.prototype.slice.call(input.files);
-    var render = function () {
-      list.innerHTML = "";
-      input._files.forEach(function (f, i) {
-        var li = document.createElement("li");
-        li.draggable = true;
-        li.setAttribute("data-file", String(i));
-        var img = document.createElement("img");
-        img.alt = "";
-        img.src = URL.createObjectURL(f);
-        var name = document.createElement("span");
-        name.className = "grow";
-        name.textContent = (i + 1) + ". " + f.name;
-        var up = document.createElement("button");
-        up.type = "button"; up.className = "secondary"; up.setAttribute("data-move", "up"); up.textContent = "\u2191";
-        var down = document.createElement("button");
-        down.type = "button"; down.className = "secondary"; down.setAttribute("data-move", "down"); down.textContent = "\u2193";
-        li.appendChild(img); li.appendChild(name); li.appendChild(up); li.appendChild(down);
-        list.appendChild(li);
-      });
-      list.hidden = !input._files.length;
-      var hint = form.querySelector("[data-photo-preview-hint]");
-      if (hint) hint.hidden = input._files.length < 2;
-    };
-    list.onsorted = null;
-    if (!list._wired) {
-      list._wired = true;
-      list.addEventListener("sorted", function () {
-        var order = Array.prototype.map.call(list.children, function (li) { return Number(li.getAttribute("data-file")); });
-        input._files = order.map(function (i) { return input._files[i]; });
-        var dt = new DataTransfer();
-        input._files.forEach(function (f) { dt.items.add(f); });
-        input.files = dt.files;
-        var manual = form.querySelector("[data-photo-manual]");
-        if (manual) manual.checked = true;
-        render();
-      });
-    }
-    render();
-  });
   // Mini App sign-in (/app/tg): Telegram puts its signed initData in the URL fragment as tgWebAppData.
   (function () {
     var box = document.getElementById("tg-signin");

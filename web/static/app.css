@@ -231,6 +231,7 @@ ol[data-sortable] > li { display: flex; gap: 8px; align-items: center; padding: 
 ol[data-sortable] > li .grow { flex: 1; }
 ol[data-sortable] button { min-height: 40px; padding: 6px 12px; }
 ol.photo-order img { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; }
+ol.photo-order li.skip { opacity: 0.45; }
 
 .welcome ol li { margin-bottom: 6px; }
 

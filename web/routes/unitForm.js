@@ -65,10 +65,20 @@ function evaluate({ existing, form, lang, photoCount }) {
 
 // The agency-only map pin typed in the form: a Google Maps link or coordinates; empty clears it.
 const pinFrom = (body) => (String(body.pin || "").trim() ? Privacy.parsePin(body.pin) : null);
+// The owner's name: a phone with no name is refused unless the broker says to use the phone as the name (saved as it is).
+const ownerNameError = (listing, body, lang) => {
+  const d = listing.details || {};
+  if (!String(d.owner_phone || "").trim() || String(d.owner_name || "").trim()) return null;
+  if (String(body.owner_name_from_phone || "") === "1") {
+    d.owner_name = require("../../domain/phone").displayPhone(d.owner_phone);
+    return null;
+  }
+  return L10n(lang, "⚠️ اكتب اسم المالك، أو علّم \"استخدم التليفون كاسم\".", "⚠️ Enter the owner's name, or tick \"Use the phone as the name\".");
+};
 const pinError = (body, lang) => (String(body.pin || "").trim() && !pinFrom(body) ? L10n(lang, "⛔ اللوكيشن مش واضح. الصق لينك جوجل ماب أو الإحداثيات.", "⛔ The location isn't clear. Paste a Google Maps link or the coordinates.") : null);
 const savePin = (client, listing, pin) => client.query("UPDATE listings SET lat = $3, lng = $4, updated_at = now() WHERE id = $1 AND agency_id = $2", [listing.id, listing.agency_id, pin?.lat ?? null, pin?.lng ?? null]);
 
-function register(web, { pool, page }) {
+function register(web, { pool, page, assets }) {
   // The owner's lead code: an existing lead of this agency that this broker may see (L-0042), or an error text.
   const checkOwnerLead = async (broker, listing, lang) => {
     const raw = listing?.details?.owner_lead;
@@ -90,7 +100,7 @@ function register(web, { pool, page }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}<datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist>`
+        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}<datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
       },
       status
     );
@@ -171,6 +181,8 @@ function register(web, { pool, page }) {
     const again = (status, error, duplicate = null) =>
       formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
+    const nameError = ownerNameError(ev.listing, req.body, lang);
+    if (nameError) return again(422, nameError);
     const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
     if (leadError) return again(422, leadError);
     // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
@@ -235,6 +247,8 @@ function register(web, { pool, page }) {
       const photoCount = rows[0].n + photos.urls.length;
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
+      const nameError = ownerNameError(ev.listing, req.body, lang);
+      if (nameError) return { rollback: true, listing, ev, leadError: nameError };
       const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
       if (leadError) return { rollback: true, listing, ev, leadError };
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };

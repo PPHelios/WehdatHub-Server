@@ -117,8 +117,9 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   </section>
 
   <section class="card" data-step="3"><h2>🔒 ${L(lang, "بيانات داخلية (مش بتظهر للعميل)", "Internal (never shown to clients)")}</h2><div class="grid">
-    ${input("owner_name", L(lang, "المالك", "Owner"), v.owner_name)}
+    ${input("owner_name", L(lang, "المالك *", "Owner *"), v.owner_name)}
     ${input("owner_phone", L(lang, "تليفون المالك", "Owner phone"), v.owner_phone, { type: "tel", dir: "ltr" })}
+    <label class="check"><input type="checkbox" name="owner_name_from_phone" value="1"${chk(v.owner_name_from_phone)}>${L(lang, "مفيش اسم: استخدم التليفون كاسم", "No name: use the phone as the name")}</label>
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
     ${input("co_broker", L(lang, "وسيط مشارك", "Co-broker"), v.co_broker)}
@@ -137,7 +138,9 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
       <button type="button" class="secondary" data-move="up" aria-label="${L(lang, "لفوق", "Up")}">↑</button><button type="button" class="secondary" data-move="down" aria-label="${L(lang, "لتحت", "Down")}">↓</button></li>`
         )}</ol>`
       : ""}
-    <input type="file" name="photos" accept="image/*" multiple data-photo-sort>
+    <input type="file" name="photos" accept="image/*" multiple data-photo-tray>
+    <label class="muted">${L(lang, "أو زيب من \"تحميل الكل\" في واتساب (صور الوحدة دي بس؛ الفيديوهات بتتشال):", "Or a zip from WhatsApp \"Download all\" (this unit's photos; videos are dropped):")} <input type="file" accept=".zip,application/zip" data-photo-zip></label>
+    <p class="notice warn" data-photo-note hidden></p>
     <ol data-sortable data-photo-preview class="photo-order" hidden></ol>
     <p class="muted" data-photo-preview-hint hidden>${L(lang, "اسحب الصور (أو الأسهم) لترتيبها قبل الحفظ؛ الأولى هي الغلاف.", "Drag the photos (or arrows) to order them before saving; the first is the cover.")}</p>
     <label class="check" data-photo-manual-box><input type="checkbox" name="photo_manual" value="on" data-photo-manual> ${L(lang, "رتّبتها بنفسي: من غير ترتيب بالذكاء الاصطناعي (بيوفر رصيد الذكاء الاصطناعي)", "I ordered them myself: no AI ordering (saves AI credits)")}</label>
