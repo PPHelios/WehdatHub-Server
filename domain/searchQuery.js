@@ -121,12 +121,19 @@ function resolvePlaceNames(names = []) {
   return { places, terms };
 }
 
+// Words that name a kind of place, not a place: "compound mivida" must search for Mivida only, since the word would match
+// every unit whose text says compound.
+const GENERIC_PLACE_WORDS = new Set(["compound", "compounds", "كمبوند", "كمبوندات", "كومبوند", "project", "projects", "مشروع", "مشاريع"].map(normalizeSearch));
+function dropGenericPlaceWords(term) {
+  return normalizeSearch(term).split(" ").filter((w) => w && !GENERIC_PLACE_WORDS.has(w)).join(" ");
+}
+
 /** Sorted, de-duplicated, canonical filters (order-independent equality across languages). */
 function canonical(f) {
   const out = { ...emptyFilters(), ...f };
   out.property_types = uniq(out.property_types.filter((t) => PROPERTY_TYPES.includes(t))).sort();
   out.places = sortPlaces(out.places);
-  out.place_terms = uniq(out.place_terms.map(normalizeSearch).filter(Boolean)).sort();
+  out.place_terms = uniq(out.place_terms.map(dropGenericPlaceWords).filter(Boolean)).sort();
   out.features = Features.sortKeys(out.features);
   out.feature_terms = uniq(out.feature_terms.map(normalizeSearch).filter(Boolean)).sort();
   out.finishing = uniq(out.finishing.filter((k) => FINISHING_KEYS.includes(k))).sort();
@@ -674,7 +681,7 @@ function fallbackParse(text) {
   // Leftover words: unresolved places (≥3 letters, not stop words, not numbers).
   const leftovers = hay
     .split(" ")
-    .filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d+$/.test(w));
+    .filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d+$/.test(w) && !GENERIC_PLACE_WORDS.has(w));
   if (!f.places.length && leftovers.length) f.place_terms = [leftovers.join(" ")];
   // Numbers nobody used ("5000", "8"): the local reading cannot say what they are.
   const leftNumbers = hay.split(" ").filter((w) => /^\d+(?:\.\d+)?$/.test(w));
