@@ -46,7 +46,7 @@
       var li = document.createElement("li");
       li.draggable = true;
       li.setAttribute("data-file", String(i));
-      if (!it.keep) li.style.opacity = "0.45";
+      if (!it.keep) li.classList.add("skip");
       var tick = document.createElement("input");
       tick.type = "checkbox"; tick.checked = it.keep; tick.setAttribute("data-keep", String(i));
       var label = document.createElement("label"); label.className = "check";
