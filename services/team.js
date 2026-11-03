@@ -11,7 +11,7 @@ const Billing = require("./billing");
 const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const { getConfig } = require("../config");
 
-const INVITE_ROLES = ["broker", "manager"];
+const INVITE_ROLES = ["broker", "manager", "data_entry"];
 const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCase());
 const TOP_ROLES = ["admin", "owner"];
 /** A manager may act on brokers and managers; only an admin or owner may act on an admin or owner. */

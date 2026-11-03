@@ -41,6 +41,7 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
     <input type="hidden" name="next" value="${next}">
     <label>${L(lang, "رقم الموبايل", "Mobile number")} <input name="phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="01012345678" dir="ltr"></label>
     <button type="submit">${L(lang, "ابعتلي رابط الدخول", "Send me a sign-in link")}</button>
+    <button type="submit" name="mode" value="code" class="secondary">${L(lang, "ابعتلي كود بدل الرابط", "Send me a code instead")}</button>
   </form>
   <div id="passkey-login" class="stack" data-csrf="${pre}" data-next="${next}" hidden>
     <p class="or"><span>${L(lang, "أو", "or")}</span></p>
@@ -51,6 +52,23 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
     <p>${lang === "en" ? html`Or send <strong>"login"</strong> to the WehdatHub bot. Inside Telegram, the WehdatHub button opens the website already signed in.` : html`أو ابعت <strong>«دخول»</strong> لبوت WehdatHub. ومن جوه تليجرام، زرار WehdatHub بيفتح الموقع وانت داخل على طول.`}</p>
     ${botUrl ? html`<a class="btn secondary small" href="${botUrl}" rel="noopener">✈️ ${L(lang, "افتح البوت", "Open the bot")}</a>` : ""}
   </div>
+</div>`;
+}
+
+// Second step for a typed code: the same number and token, then the six digits the bot sent.
+function codeForm({ pre, next, phone, message = null, lang = "ar" }) {
+  return html`<div class="card auth">
+  <h1>${L(lang, "اكتب الكود", "Enter the code")}</h1>
+  <p class="muted">${L(lang, "الكود اتبعت على تليجرام (أو واتساب). صالح 5 دقايق.", "The code was sent on Telegram (or WhatsApp). Valid for 5 minutes.")}</p>
+  ${message ? html`<p class="notice card">${message}</p>` : ""}
+  <form method="post" action="/app/login/code" class="stack">
+    <input type="hidden" name="_csrf" value="${pre}">
+    <input type="hidden" name="next" value="${next}">
+    <input type="hidden" name="phone" value="${phone}">
+    <label>${L(lang, "الكود (6 أرقام)", "Code (6 digits)")} <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required dir="ltr"></label>
+    <button type="submit">${L(lang, "دخول", "Sign in")}</button>
+  </form>
+  <p class="muted"><a href="/app/login">${L(lang, "ارجع وابعت رابط بدل كده", "Go back and send a link instead")}</a></p>
 </div>`;
 }
 
@@ -82,7 +100,12 @@ function register(web, { pool, page }) {
         [phone]
       );
       const broker = rows[0];
-      if (broker) {
+      if (broker && req.body.mode === "code") {
+        const code = await WebAuth.issueLoginCode(pool, broker);
+        const lang = broker.preferred_lang || "ar";
+        const sent = await notifyPreferred(broker, t("web_login_code", lang, { code, minutes: WebAuth.LOGIN_CODE_TTL_MINUTES }), { pool, kind: "web_login_link", action: "sign_in" });
+        logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_code", status: sent ? "success" : "dropped" });
+      } else if (broker) {
         const token = await WebAuth.issueLoginToken(pool, broker, { channel: "web" });
         const lang = broker.preferred_lang || "ar";
         const sent = await notifyPreferred(broker, t("web_login_link", lang, { url: Links.loginLinkUrl(token), minutes: WebAuth.LOGIN_TOKEN_TTL_MINUTES }), {
@@ -92,6 +115,15 @@ function register(web, { pool, page }) {
         });
         logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_link", status: sent ? "success" : "dropped" });
       }
+    }
+    if (req.body.mode === "code" && phone.length >= 8) {
+      // Same answer whether or not the number is registered: the code form always shows.
+      const pre = S.issuePreToken(req, res);
+      return page(req, res, {
+        title: L(req.lang, "الكود", "Code"),
+        langSwitch: true,
+        body: codeForm({ pre, next: S.safeNext(req.body.next), phone, lang: req.lang, message: L(req.lang, "📲 لو الرقم ده مسجل، الكود هيوصلك على تليجرام خلال دقيقة.", "📲 If this number is registered, the code reaches you on Telegram within a minute.") })
+      });
     }
     const pre = S.issuePreToken(req, res);
     return page(req, res, {
@@ -164,6 +196,35 @@ function register(web, { pool, page }) {
     S.setSessionCookie(res, sid);
     logOperation(pool, { agency_id: out.broker.agency_id, broker_id: out.broker.id, operation_type: "web_login_passkey" });
     return res.json({ next: S.safeNext(b.next) });
+  });
+
+  // Typed code: the phone and the six digits. Rate-limited per number and per IP; a wrong code says the same as an expired one.
+  web.post("/login/code", S.noStore, async (req, res) => {
+    res.set("Referrer-Policy", "no-referrer");
+    if (!S.verifyPreToken(req)) return res.status(403).send("Invalid or missing CSRF token");
+    const phone = Onboarding.normalizeEgyptMobile(req.body.phone) || String(req.body.phone || "").replace(/\D/g, "");
+    const pre = S.issuePreToken(req, res);
+    const next = S.safeNext(req.body.next);
+    const bad = (msg) => page(req, res, { title: L(req.lang, "الكود", "Code"), langSwitch: true, body: codeForm({ pre, next, phone, lang: req.lang, message: msg }) }, 422);
+    const ipGate = await RateLimit.hit(pool, `login_confirm:ip:${req.ip}`, RateLimit.LIMITS.loginConfirmIp);
+    if (!ipGate.allowed) return tooMany(page, req, res, ipGate);
+    const phoneGate = await RateLimit.hit(pool, `login_code_try:phone:${phone}`, { limit: 5, windowSec: 900 });
+    if (!phoneGate.allowed) return tooMany(page, req, res, phoneGate);
+    const { rows } = await pool.query(
+      `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang
+       FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`,
+      [phone]
+    );
+    const broker = await WebAuth.consumeLoginCode(pool, rows[0], req.body.code);
+    if (!broker) {
+      logOperation(pool, { operation_type: "web_login_code", status: "failed" });
+      return bad(L(req.lang, "الكود مش صح، أو انتهى، أو اتستخدم قبل كده.", "That code is wrong, expired, or already used."));
+    }
+    if (req.sid) await WebAuth.revokeSession(pool, req.sid);
+    const { sid } = await WebAuth.createSession(pool, broker, { userAgent: req.get("user-agent") });
+    S.setSessionCookie(res, sid);
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_code" });
+    return res.redirect(303, next || "/app/");
   });
 
   web.get("/login/confirm", S.noStore, async (req, res) => {

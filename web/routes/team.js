@@ -19,6 +19,7 @@ const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const ROLE_LABEL = { data_entry: ["مدخل بيانات", "Data entry"] };
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };
 const LINKS = { limit: 30, windowSec: 24 * 3600 };
@@ -158,7 +159,7 @@ function roleForm(b, lang) {
 
 function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
   return html`<li class="member" data-broker="${b.id}" data-active="${b.is_active ? "1" : "0"}">
-  <div class="m-head"><b>${b.name}</b> <span class="chip">${b.role}</span>${b.is_active ? "" : html` <span class="muted">(${L(lang, "موقوف", "deactivated")}${b.deactivated_at ? ` ${when(b.deactivated_at)}` : ""})</span>`}${Rules.awayNow(b, now) ? html` <span class="badge" data-away>🌴 ${L(lang, `إجازة لحد ${cairoDay(b.away_until)}`, `away until ${cairoDay(b.away_until)}`)}</span>` : ""}</div>
+  <div class="m-head"><b>${b.name}</b> <span class="chip">${ROLE_LABEL[b.role] ? L(lang, ROLE_LABEL[b.role][0], ROLE_LABEL[b.role][1]) : b.role}</span>${b.is_active ? "" : html` <span class="muted">(${L(lang, "موقوف", "deactivated")}${b.deactivated_at ? ` ${when(b.deactivated_at)}` : ""})</span>`}${Rules.awayNow(b, now) ? html` <span class="badge" data-away>🌴 ${L(lang, `إجازة لحد ${cairoDay(b.away_until)}`, `away until ${cairoDay(b.away_until)}`)}</span>` : ""}</div>
   <dl class="m-facts">
     <div><dt>Telegram</dt><dd>${b.telegram ? "✅" : b.link_until ? html`⏳ <span class="muted">${L(lang, `لينك لحد ${when(b.link_until)}`, `link until ${when(b.link_until)}`)}</span>` : "—"}</dd></div>
     <div><dt>${L(lang, "آخر نشاط", "Last active")}</dt><dd dir="ltr">${when(b.last_active_at)}</dd></div>
@@ -185,7 +186,7 @@ ${tabs("team_tab", [
   <form method="post" action="/app/team/invite" class="stack">
   <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80"></label>
   <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>
-  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}</select></label>
+  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
   <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en">English</option></select></label>
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>
