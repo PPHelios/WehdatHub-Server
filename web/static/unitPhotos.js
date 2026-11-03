@@ -155,6 +155,8 @@
   document.addEventListener("submit", function (e) {
     var form = e.target;
     if (!form || !form.matches || !form.matches("#unit-form") || !window.fetch || !window.DOMParser) return;
+    // Edit saves stay a normal form post for now (the background save is for adding a unit).
+    if (/\/edit$/.test(form.getAttribute("action") || "")) return;
     if (!tray || tray.form !== form) start(form);
     e.preventDefault();
     if (kept() > MAX) { sync(); return; }
