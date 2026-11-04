@@ -1,6 +1,7 @@
-# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every pull request and on pushes to main.
+# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every pull request and on every push to main.
+# Nothing reaches main without a pull request run first; the full offline suite runs on each of them.
 # The browser pass (phone-size clicks through search, forms, imports and voice) runs in its own job and
-# only when a change touches the web app, its imports or leads services, the login helper, or the browser tests.
+# runs whenever a change touches the web app or the code it uses, or when the change set cannot be read.
 # Both jobs use fake data and fake AI: no credits are spent.
 # Logs are errors-only: failing tests and the last lines are printed; passing output is kept out of the log.
 # A change that touches only docs or plan files runs neither job.
@@ -19,7 +20,8 @@ on:
 
 concurrency:
   group: tests-${{ github.ref }}
-  cancel-in-progress: true
+  # Runs on main are never cancelled, so every commit that lands on main keeps its own result.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   changes:
@@ -35,11 +37,17 @@ jobs:
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
+          # Any doubt (no base, unreadable diff, force-push) means run the browser job.
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            echo "browser=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "no base commit: browser on"; exit 0
           fi
-          changed=$(git diff --name-only "$BASE_SHA" HEAD)
-          if echo "$changed" | grep -Eq '^(web/|services/imports|services/leads|lib/webAuth|tests/browser/|tests/harness/|package(-lock)?\.json|\.github/workflows/test\.yml)'; then
+          if ! changed=$(git diff --name-only "$BASE_SHA" HEAD 2>/dev/null); then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "diff unreadable: browser on"; exit 0
+          fi
+          if [ -z "$changed" ]; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "empty diff: browser on"; exit 0
+          fi
+          if echo "$changed" | grep -Eq '^(web/|routes/|domain/|services/|lib/|db/|scripts/|tests/|fonts/|package(-lock)?\.json|\.github/workflows/)'; then
             echo "browser=true" >> "$GITHUB_OUTPUT"
           else
             echo "browser=false" >> "$GITHUB_OUTPUT"
@@ -58,9 +66,9 @@ jobs:
       - name: Run offline tests (errors only)
         run: |
           npm run test:ci > test.log 2>&1 || {
-            grep -E '^(FAIL|  ●)' test.log | head -200
-            echo '--- last 80 lines ---'
-            tail -n 80 test.log
+            grep -E '^(FAIL|not ok)|  ●|Error:|✕' test.log | head -300
+            echo '--- last 120 lines ---'
+            tail -n 120 test.log
             exit 1
           }
           tail -n 5 test.log
@@ -81,9 +89,9 @@ jobs:
       - name: Run browser tests (errors only)
         run: |
           npm run test:browser > browser.log 2>&1 || {
-            grep -E '^(FAIL|  ●)' browser.log | head -200
-            echo '--- last 80 lines ---'
-            tail -n 80 browser.log
+            grep -E '^(FAIL|not ok)|  ●|Error:|✕' browser.log | head -300
+            echo '--- last 120 lines ---'
+            tail -n 120 browser.log
             exit 1
           }
           tail -n 5 browser.log
