@@ -7,7 +7,7 @@ jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
 const request = require("supertest");
 const { createHarness, closeHarness } = require("../harness/app");
-const { signIn, preOf } = require("../harness/web");
+const { signIn, preOf, csrfOf } = require("../harness/web");
 const WebAuth = require("../../lib/webAuth");
 
 jest.setTimeout(60000);
@@ -19,14 +19,13 @@ beforeEach(async () => {
 });
 afterAll(closeHarness);
 
-test("data entry lands on units and is kept out of leads, owners and imports", async () => {
+test("data entry lands on units and is kept out of leads and imports", async () => {
   const { agent } = await signIn(h, h.BROKERS.colleague);
   const home = await agent.get("/app/");
   expect(home.status).toBe(303);
   expect(home.headers.location).toBe("/app/units");
   expect((await agent.get("/app/units")).status).toBe(200);
   expect((await agent.get("/app/leads")).status).toBe(403);
-  expect((await agent.get("/app/owners")).status).toBe(403);
   expect((await agent.get("/app/deals")).status).toBe(403);
 });
 
@@ -40,4 +39,60 @@ test("a code typed on the website signs the broker in once", async () => {
   expect(ok.status).toBe(303);
   const again = await agent.post("/app/login/code").type("form").send({ _csrf: preOf(ok.text) || pre, phone: h.BROKERS.broker.phone, code });
   expect(again.status).toBe(422);
+});
+
+test("data entry sees only its own places: no Today or Leads tab, the plus adds a unit, and the More page lists only allowed links", async () => {
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  const page = (await agent.get("/app/units")).text;
+  expect(page).not.toContain('data-tab="home"');
+  expect(page).not.toContain('data-tab="leads"');
+  expect(page).toContain('class="fab" href="/app/units/new"');
+  const more = (await agent.get("/app/more")).text;
+  expect(more).toContain('href="/app/units"');
+  expect(more).not.toContain('href="/app/deals"');
+  expect(more).toContain('href="/app/owners"');
+  expect(more).not.toContain('href="/app/owner"');
+  expect(more).not.toContain('href="/app/leads/import"');
+  expect((await agent.get("/app/owners")).status).toBe(200);
+});
+
+test("data entry can create a share link for a unit in its agency", async () => {
+  const listing = await h.insertListing({ code: "DE-SHARE-1", broker_id: h.BROKERS.broker.id });
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  const csrf = csrfOf((await agent.get("/app/units")).text);
+  const res = await agent.post(`/app/units/${listing.code}/share`).type("form").send({ lang: "ar", _csrf: csrf });
+  expect(res.status).toBe(200);
+  expect(res.text).toContain("DE-SHARE-1");
+  const links = await h.query("SELECT count(*)::int AS n FROM share_links WHERE listing_id = $1", [listing.id]);
+  expect(links[0].n).toBeGreaterThan(0);
+});
+
+test("data entry sees every owner except VIP ones, on the owners page", async () => {
+  await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Plain Owner', ARRAY['201011111111'], false)", [h.AGENCY_A]);
+  await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'VIP Owner', ARRAY['201022222222'], true)", [h.AGENCY_A]);
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  const page = (await agent.get("/app/owners")).text;
+  expect(page).toContain("Plain Owner");
+  expect(page).not.toContain("VIP Owner");
+});
+
+test("data entry can edit any non-VIP owner, but not a VIP one", async () => {
+  const plain = (await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Editable Owner', ARRAY['201033333333'], false) RETURNING id", [h.AGENCY_A]))[0].id;
+  const vip = (await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Hidden VIP', ARRAY['201044444444'], true) RETURNING id", [h.AGENCY_A]))[0].id;
+  const UnitOwners = require("../../services/unitOwners");
+  const data = { ...h.BROKERS.colleague, role: "data_entry" };
+  expect(await UnitOwners.canEditOwner(h.pool, data, plain)).toBe(true);
+  expect(await UnitOwners.canEditOwner(h.pool, data, vip)).toBe(false);
+});
+
+test("a VIP owner is fully hidden from data entry: no list entry, no profile page, no edit", async () => {
+  const vip = (await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Locked VIP', ARRAY['201055555555'], true) RETURNING id", [h.AGENCY_A]))[0].id;
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  expect((await agent.get("/app/owners")).text).not.toContain("Locked VIP");
+  expect((await agent.get(`/app/owners/${vip}`)).status).toBe(404);
+  const csrf = csrfOf((await agent.get("/app/units")).text);
+  const edit = await agent.post(`/app/owners/${vip}`).type("form").send({ name: "Renamed", _csrf: csrf });
+  expect(edit.status).toBeGreaterThanOrEqual(400);
+  const [row] = await h.query("SELECT name FROM unit_owners WHERE id = $1", [vip]);
+  expect(row.name).toBe("Locked VIP");
 });

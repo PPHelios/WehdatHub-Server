@@ -113,6 +113,7 @@ const NAV = [
   { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
   { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", who: "manager" },
+  { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
   { key: "import", href: "/app/import", ar: "استيراد وحدات", en: "Import units", icon: "import", group: "work", desktop: true },
   { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work", desktop: true },
   { key: "dashboard", href: "/app/dashboard", ar: "لوحة الوكالة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },
@@ -130,8 +131,13 @@ const NAV = [
 ];
 
 /** The More page links this broker sees (managers: the agency pages; the app owner: App tracking too). */
+// Data entry sees only these More links (the pages it may open); everything else is hidden, not just refused.
+const DATA_ENTRY_NAV = new Set(["units", "owners", "notifications", "settings", "guide"]);
+const DATA_ENTRY_TABS = ["search", "add", "units"];
+
 function navFor(broker) {
   const Dash = require("../services/dashboards");
+  if (require("../lib/authz").isDataEntry(broker)) return NAV.filter((n) => DATA_ENTRY_NAV.has(n.key));
   return NAV.filter((n) => !n.who || (n.who === "manager" ? Dash.isManager(broker) : Dash.isOwner(broker)));
 }
 
@@ -163,10 +169,11 @@ function tabBar(broker, tab, lang) {
   const en = lang === "en";
   const manager = require("../services/dashboards").isManager(broker);
   const { icon } = require("./icons");
-  const tabs = TABS.filter((t) => (t.broker ? !manager : t.manager ? manager : true));
+  const dataEntry = require("../lib/authz").isDataEntry(broker);
+  const tabs = TABS.filter((t) => (dataEntry ? DATA_ENTRY_TABS.includes(t.key) : t.broker ? !manager : t.manager ? manager : true));
   return html`<nav class="tabbar" aria-label="${en ? "Main" : "القائمة الرئيسية"}">${tabs.map((t) =>
     t.fab
-      ? html`<a class="fab" href="${t.href}" aria-label="${en ? t.en : t.ar}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon, 28)}</a>`
+      ? html`<a class="fab" href="${dataEntry ? "/app/units/new" : t.href}" aria-label="${en ? t.en : t.ar}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon, 28)}</a>`
       : html`<a href="${t.href}" data-tab="${t.key}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon)}<span>${en ? t.en : t.ar}</span></a>`
   )}</nav>`;
 }
