@@ -121,6 +121,7 @@ function mountWeb(app, { pool, config }) {
     if (!Authz.isDataEntry(req.session.broker)) return next();
     if (req.path === "/" && req.method === "GET") return res.redirect(303, "/app/units");
     if (DATA_ENTRY_PATHS.test(req.path)) return next();
+    if (req.method === "GET" && !req.get("HX-Request")) return res.redirect(303, "/app/units");
     return res.status(403).type("text/plain").send(req.lang === "en" ? "Not available for data entry" : "مش متاح لمدخل البيانات");
   });
   // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).

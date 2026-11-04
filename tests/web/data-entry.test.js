@@ -25,8 +25,8 @@ test("data entry lands on units and is kept out of leads and imports", async () 
   expect(home.status).toBe(303);
   expect(home.headers.location).toBe("/app/units");
   expect((await agent.get("/app/units")).status).toBe(200);
-  expect((await agent.get("/app/leads")).status).toBe(403);
-  expect((await agent.get("/app/deals")).status).toBe(403);
+  expect((await agent.get("/app/leads")).status).toBe(303);
+  expect((await agent.get("/app/deals")).status).toBe(303);
 });
 
 test("a code typed on the website signs the broker in once", async () => {
@@ -48,9 +48,11 @@ test("data entry sees only its own places: no Today or Leads tab, the plus adds 
   expect(page).not.toContain('data-tab="leads"');
   expect(page).toContain('class="fab" href="/app/units/new"');
   const more = (await agent.get("/app/more")).text;
-  expect(more).toContain('href="/app/units"');
+  const moreList = more.replace(/<nav class="tabbar[\s\S]*?<\/nav>/, "");
+  expect(moreList).not.toContain('href="/app/units"');
+  expect(moreList).not.toContain('href="/app/owners"');
   expect(more).not.toContain('href="/app/deals"');
-  expect(more).toContain('href="/app/owners"');
+  expect(page).toContain('data-tab="owners"');
   expect(more).not.toContain('href="/app/owner"');
   expect(more).not.toContain('href="/app/leads/import"');
   expect((await agent.get("/app/owners")).status).toBe(200);

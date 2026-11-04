@@ -63,7 +63,9 @@ img { max-width: 100%; }
 .tabbar a[aria-current="page"] { color: var(--brand); font-weight: 700; }
 .tabbar .fab { justify-self: center; width: 56px; height: 56px; min-height: 0; margin-block-start: -22px; border-radius: 18px; background: linear-gradient(180deg, #2a82cc, #1d70b8); color: #fff; box-shadow: 0 6px 14px rgba(14, 21, 33, 0.18); }
 .tabbar .fab[aria-current="page"] { color: #fff; }
+.tabbar.de { grid-template-columns: repeat(2, minmax(0, 1fr)) 72px repeat(2, minmax(0, 1fr)); }
 @media (min-width: 1024px) {
+  .tabbar.de { grid-template-columns: 1fr; }
   body.has-tabbar { padding-block-end: 0; padding-inline-start: 96px; }
   .tabbar { inset-inline: 0 auto; inset-block: 56px 0; width: 96px; height: auto; grid-template-columns: 1fr; grid-auto-rows: 72px; align-content: start; padding: 16px 0; border-block-start: 0; border-inline-end: 1px solid var(--line); }
   .tabbar .fab { margin: 0 auto; }
