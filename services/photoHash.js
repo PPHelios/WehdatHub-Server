@@ -66,7 +66,7 @@ async function saveHashes(db, agencyId, byUrl = new Map()) {
 async function backfill(pool, { limit = BACKFILL_BATCH } = {}) {
   const cursor = (await Billing.getSetting(pool, "phash_cursor", { id: null })).id;
   const { rows } = await pool.query(
-    `SELECT id, url FROM listing_images WHERE phash IS NULL AND url LIKE 'https://%' AND ($1::uuid IS NULL OR id > $1::uuid)
+    `SELECT id, url FROM listing_images WHERE phash IS NULL AND url <> '' AND ($1::uuid IS NULL OR id > $1::uuid)
       ORDER BY id LIMIT $2`,
     [cursor, limit]
   );

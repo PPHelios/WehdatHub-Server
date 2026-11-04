@@ -1604,7 +1604,7 @@ ALTER TABLE project_materials ADD CONSTRAINT project_materials_check_status_chec
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_kind_check CHECK ((kind = ANY (ARRAY['master_plan'::text, 'brochure'::text, 'layout'::text, 'video'::text, 'location'::text, 'website'::text, 'price_sheet'::text, 'other'::text])));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_label_check CHECK (((length(btrim(label)) >= 1) AND (length(btrim(label)) <= 80)));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_unit_type_check CHECK (((unit_type IS NULL) OR (length(unit_type) <= 60)));
-ALTER TABLE project_materials ADD CONSTRAINT project_materials_url_check CHECK (((url ~ '^https?://'::text) AND (length(url) <= 1000)));
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_url_check CHECK ((((url ~ '^https?://'::text) OR (storage_path IS NOT NULL)) AND (length(url) <= 1000)));
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_delivery_quarter_check CHECK (((delivery_quarter IS NULL) OR ((delivery_quarter >= 1) AND (delivery_quarter <= 4))));
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_delivery_year_check CHECK (((delivery_year IS NULL) OR ((delivery_year >= 2000) AND (delivery_year <= 2100))));
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));

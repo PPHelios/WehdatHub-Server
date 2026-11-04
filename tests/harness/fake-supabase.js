@@ -12,23 +12,28 @@ module.exports = {
   uploadListingImage: async (agencyId, storagePath, buffer) => {
     if (!buffer || !storagePath) return null;
     objects.set(pathOf(storagePath), buffer);
-    return BASE + pathOf(storagePath);
+    return pathOf(storagePath);
   },
   uploadFlyerImage: async (agencyId, storagePath, buffer) => {
     objects.set(pathOf(storagePath), buffer);
-    return BASE + pathOf(storagePath);
+    return pathOf(storagePath);
   },
   uploadAgencyLogo: async (agencyId, storagePath, buffer) => {
     objects.set(pathOf(storagePath), buffer);
-    return BASE + pathOf(storagePath);
+    return pathOf(storagePath);
   },
   uploadProjectFile: async (agencyId, storagePath, buffer) => {
     objects.set(pathOf(storagePath), buffer);
-    return BASE + pathOf(storagePath);
+    return pathOf(storagePath);
   },
-  downloadListingImage: async (url) => {
-    if (typeof url !== "string" || !url.startsWith(BASE)) return null;
-    const buffer = objects.get(pathOf(url));
+  photoUrl: (value) => {
+    if (!value || typeof value !== "string") return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    return BASE + pathOf(value);
+  },
+  downloadListingImage: async (keyOrUrl) => {
+    if (typeof keyOrUrl !== "string" || !keyOrUrl) return null;
+    const buffer = objects.get(pathOf(keyOrUrl));
     return buffer ? { buffer, mimeType: "image/jpeg" } : null;
   },
   deleteStorageFiles: async (paths = []) => {

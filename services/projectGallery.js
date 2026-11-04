@@ -124,7 +124,7 @@ async function sharedFor(db, listing, { limit = 10 } = {}) {
     "SELECT url FROM project_images WHERE project_id = $1 AND agency_id = $2 AND role = 'shared' AND mime LIKE 'image/%' ORDER BY position LIMIT $3",
     [listing.project_id, listing.agency_id, limit]
   );
-  return rows;
+  return rows.map((r) => ({ ...r, url: Storage.photoUrl(r.url) }));
 }
 
 /** The layouts attached to a unit: [{ url, mime, layout }]. */
@@ -134,7 +134,7 @@ async function layoutsFor(db, listing) {
     "SELECT url, mime, layout FROM project_images WHERE project_id = $1 AND agency_id = $2 AND role = 'layout' AND $3 = ANY(listing_ids) ORDER BY position",
     [listing.project_id, listing.agency_id, listing.id]
   );
-  return rows;
+  return rows.map((r) => ({ ...r, url: Storage.photoUrl(r.url) }));
 }
 
 module.exports = { upload, list, update, remove, sharedFor, layoutsFor };

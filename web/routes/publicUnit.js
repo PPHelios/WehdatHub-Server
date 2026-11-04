@@ -19,6 +19,7 @@ const Stages = require("../../domain/leadStages");
 const SchedulePdf = require("../../lib/schedulePdf");
 const Compare = require("../../lib/compareLinks");
 const { fetchBuf } = require("../../lib/flyerAssets");
+const { photoUrl } = require("../../lib/supabase");
 const sharp = require("sharp");
 const { RESERVED_SLUGS } = require("../../domain/slug");
 const Session = require("../session");
@@ -182,7 +183,7 @@ const cairoToday = () => new Date(`${Stages.toCairoLocal(new Date()).slice(0, 10
 async function logoData(url) {
   if (!url) return null;
   try {
-    const buf = await fetchBuf(url);
+    const buf = await fetchBuf(photoUrl(url));
     if (!buf) return null;
     const png = await sharp(buf, { failOn: "none" }).resize(240, 240, { fit: "inside" }).png().toBuffer();
     return `data:image/png;base64,${png.toString("base64")}`;
@@ -239,7 +240,7 @@ function mountPublic(app, { pool, assets }) {
       // F23: the unit's layouts and the project's shared photos follow the unit's own.
       const layouts = (await Gallery.layoutsFor(pool, listing)).filter((i) => i.mime.startsWith("image/"));
       const seen = new Set();
-      const images = [...own, ...layouts, ...(await Gallery.sharedFor(pool, listing))].filter((i) => !seen.has(i.url) && seen.add(i.url)).slice(0, 15);
+      const images = [...own.map((i) => ({ ...i, url: photoUrl(i.url) })), ...layouts, ...(await Gallery.sharedFor(pool, listing))].filter((i) => !seen.has(i.url) && seen.add(i.url)).slice(0, 15);
       unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, images, lang, ...(await projectOf(listing)) });
     } else {
       unit = PublicUnit.unavailable(listing, { agency, lang });
@@ -289,7 +290,7 @@ function mountPublic(app, { pool, assets }) {
         continue;
       }
       const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated', 'layout')) ORDER BY position LIMIT 1", [listing.id, listing.agency_id]);
-      const u = PublicUnit.toPublicUnit(listing, { agency: resolved.agency, broker, images, lang, ...(await projectOf(listing)) });
+      const u = PublicUnit.toPublicUnit(listing, { agency: resolved.agency, broker, images: images.map((i) => ({ ...i, url: photoUrl(i.url) })), lang, ...(await projectOf(listing)) });
       const perM2 = listing.listing_type !== "rent" && Number(listing.area_value) > 0 && Number(listing.price_value) > 0 ? Math.round(Number(listing.price_value) / Number(listing.area_value)) : null;
       units.push({ ...u, per_m2: perM2 });
     }
