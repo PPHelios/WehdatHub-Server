@@ -2,6 +2,9 @@
 // It also never turns an exclusion ("بدون مصعد") into a filter: the phrase is reported as not applied.
 "use strict";
 
+// This file tests the quick-reader-first mode (SEARCH_AI_FIRST=false); AI-first has its own file.
+process.env.SEARCH_AI_FIRST = "false";
+
 const Q = require("../../domain/searchQuery");
 const Search = require("../../services/search");
 

@@ -6,6 +6,8 @@
 "use strict";
 // Router tests drive brokers over WhatsApp; the owner-only WhatsApp check is tested on its own (tests/router/whatsapp-owner-only.test.js).
 process.env.WHATSAPP_OWNER_ONLY ??= "false";
+// Existing tests read searches with the quick reader first; the AI-first mode has its own tests (tests/unit/search-ai-first.test.js).
+process.env.SEARCH_AI_FIRST ??= "false";
 
 const sharp = require("sharp");
 const { createTestDb } = require("./db");

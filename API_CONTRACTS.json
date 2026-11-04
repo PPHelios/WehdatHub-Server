@@ -419,6 +419,7 @@
       "toLatinDigits": ["s"]
     },
     "domain/places.js": {
+      "closePlaces": ["words"],
       "AREAS": "Object",
       "DEVELOPERS": "Object",
       "COMPOUNDS": "Object",
@@ -430,6 +431,7 @@
     },
     "domain/searchText.js": {
       "normalizeSearch": ["text"],
+      "foldLetters": ["text"],
       "NORMALIZE_SEARCH_SQL": "String"
     },
     "domain/searchQuery.js": {
@@ -442,7 +444,8 @@
       "hasAnyFilter": ["parsed"],
       "classifyIntent": ["parsed"],
       "ensureFilters": ["parsed"],
-      "canonical": ["f"]
+      "canonical": ["f"],
+      "disagreements": ["a", "b"]
     },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",

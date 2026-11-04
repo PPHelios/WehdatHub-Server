@@ -22,6 +22,15 @@ function normalizeSearch(text) {
     .trim();
 }
 
+/**
+ * Letters typed from a Persian or Urdu keyboard (and ڤ, which brokers use for "v") folded to the Arabic letters the unit
+ * text uses: ڤ→ف, پ→ب, چ→ج, گ→ج, ک→ك, ی→ي, ھ ہ ۀ→ه. Applied to what a broker types or says before it is read; the stored
+ * text never holds these letters, so the SQL twin below does not need it.
+ */
+function foldLetters(text) {
+  return String(text ?? "").replace(/[ڤپچگکیھہۀ]/g, (c) => ({ "ڤ": "ف", "پ": "ب", "چ": "ج", "گ": "ج", "ک": "ك", "ی": "ي", "ھ": "ه", "ہ": "ه", "ۀ": "ه" })[c]);
+}
+
 // SQL twin (kept here so the migration and the tests use the same text).
 const NORMALIZE_SEARCH_SQL = `
 CREATE OR REPLACE FUNCTION public.normalize_search(t text)
@@ -38,4 +47,4 @@ AS $function$
     '[^0-9a-z\\u0621-\\u064A\\u0660-\\u0669\\u0671-\\u06D3-]+', ' ', 'g'))
 $function$;`;
 
-module.exports = { normalizeSearch, NORMALIZE_SEARCH_SQL };
+module.exports = { normalizeSearch, foldLetters, NORMALIZE_SEARCH_SQL };

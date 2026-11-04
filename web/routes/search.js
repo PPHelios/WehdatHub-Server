@@ -31,8 +31,8 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const stripStars = (s) => String(s || "").replace(/\*/g, "");
 
 /** Runs canonical filters for the agency: strict, then relaxed; the page comes from the id snapshot. */
-async function runFilters(pool, agencyId, filters, page) {
-  const res = await Search.runSearch(pool, agencyId, { filters }, { pageSize: WEB_PAGE_SIZE });
+async function runFilters(pool, agencyId, filters, page, { ask = false } = {}) {
+  const res = await Search.runSearch(pool, agencyId, { filters }, { pageSize: WEB_PAGE_SIZE, ask });
   const offset = (page - 1) * WEB_PAGE_SIZE;
   const rows = offset === 0 ? res.rows : await Search.pageByIds(pool, agencyId, res.ids, offset, WEB_PAGE_SIZE);
   return { ...res, rows, offset };
@@ -69,15 +69,18 @@ const SOURCE_NOTE = {
  * What was understood, always above the results: the reading in words, who read it, what could not be applied, and the
  * two buttons (report a wrong search, search again with the AI) when the search is in the log.
  */
-function understoodBlock({ meta = {}, source = null, filters, logId = null, q = "", lang, canAsk = false }) {
+function understoodBlock({ meta = {}, source = null, filters, logId = null, q = "", lang, canAsk = false, ignored = [] }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const note = SOURCE_NOTE[source];
   const unapplied = meta.unapplied || [];
-  const termWords = (filters.place_terms || []).join("، ");
+  const termWords = (filters.places || []).length ? "" : (filters.place_terms || []).join("، ");
+  const guesses = meta.guesses || [];
   return html`<div class="card understood" data-understood>
   <p><strong>🔎 ${L(lang, "فهمت إنك بتدور على", "I understood")}:</strong> ${interp || L(lang, "(مفيش فلتر)", "(no filter)")}</p>
   ${note ? html`<p class="muted small">${L(lang, note[0], note[1])}</p>` : ""}
   ${unapplied.length ? html`<p class="small" data-unapplied>⚠️ ${L(lang, "ما اتطبقش (الفلاتر مش بتدعمه):", "Not applied (filters cannot say it):")} <strong>${unapplied.join("، ")}</strong></p>` : ""}
+  ${guesses.length ? html`<p class="muted small" data-guesses>🔤 ${L(lang, "فهمت", "I read")} ${guesses.map((g) => `«${g.typed}» ${L(lang, "على إنها", "as")} «${g.as}»`).join("، ")}</p>` : ""}
+  ${ignored.length ? html`<p class="small" data-ignored>ℹ️ ${L(lang, "مفيش عندي", "I could not match")} <strong>${ignored.join("، ")}</strong> ${L(lang, "في المخزون، فدورت من غيرها.", "in your inventory, so I searched without it.")}</p>` : ""}
   ${termWords ? html`<p class="muted small">${L(lang, "كلمات اتدور بيها كاسم مكان:", "Words searched as a place name:")} ${termWords}</p>` : ""}
   ${logId
     ? html`<div class="row">
@@ -85,6 +88,20 @@ function understoodBlock({ meta = {}, source = null, filters, logId = null, q = 
     ${canAsk && q ? html`<a class="btn secondary small" href="/app/search?q=${encodeURIComponent(q)}&ai=1&sl=${logId}" data-ask-ai data-ai="search_ai">🤖 ${L(lang, "ابحث تاني بالذكاء الاصطناعي", "Search again with AI")}</a>` : ""}
   </div>`
     : ""}
+</div>`;
+}
+
+/** Words or numbers the search could not place: say so, show how many units fit without them, and offer to go on. */
+function askCard({ ask, filters, q, lang, understood, logId }) {
+  const interp = stripStars(formatInterpretation({ filters }, lang));
+  const words = (ask.terms || []).map((w) => `«${w}»`).join("، ");
+  const nums = (ask.numbers || []).map((w) => `«${w}»`).join("، ");
+  const go = `/app/search?q=${encodeURIComponent(q)}&drop=1${logId ? `&sl=${logId}` : ""}`;
+  return html`${understood}<div class="card notice warn" data-ask-unknown>
+  ${words ? html`<p>❓ ${L(lang, "مش عارف", "I do not know")} <strong>${words}</strong>.</p>` : ""}
+  ${nums ? html`<p>❓ ${L(lang, "الذكاء الاصطناعي مش متاح دلوقتي ومقدرتش أعرف الرقم", "The AI is not available right now and I could not tell what")} <strong>${nums}</strong> ${L(lang, "ده إيه (سعر؟ قسط؟).", "is (price? installment?).")}</p>` : ""}
+  <p>${L(lang, `فيه ${ask.withoutTotal} وحدة من غيرها. أبحث من غيرها ولا تكتبها تاني بالشكل الصح؟`, `${ask.withoutTotal} unit(s) fit without it. Search without it, or retype with the spelling you mean.`)}</p>
+  <p><a class="btn" href="${go}" data-search-without>${L(lang, "ابحث من غيرها", "Search without it")}</a></p>
 </div>`;
 }
 
@@ -161,7 +178,11 @@ function register(web, { pool, page }) {
     let searchUrl = null;
     if (filters) {
       const token = SearchLink.encodeFilters(filters);
-      const out = await runFilters(pool, broker.agency_id, filters, pageNo);
+      const noDrop = Boolean(parse) && !req.query.drop;
+      const out = await runFilters(pool, broker.agency_id, filters, pageNo, { ask: noDrop });
+      // The AI could not answer and a number was left unplaced: ask first, never search as if it were not there.
+      const numbers = noDrop && parse.source === "fallback" ? parse.local?.meta?.leftover_numbers || [] : [];
+      if (numbers.length) out.ask = { terms: out.ask?.terms || [], numbers, aiDown: true, withoutTotal: out.ask ? out.ask.withoutTotal : out.total };
       // A new search is logged; a link back to one (Back, a page, a reload) shows the earlier log row's reading.
       let logId = logRow?.id || null;
       if (!req.query.f) {
@@ -169,9 +190,9 @@ function register(web, { pool, page }) {
           broker,
           channel: req.query.voice === "1" ? "voice" : "web",
           text: q,
-          parse: parse || { source: "form" },
+          parse: parse ? { ...parse, ask: out.ask } : { source: "form" },
           used: filters,
-          total: out.total,
+          total: out.ask ? 0 : out.total,
           ids: out.ids,
           relaxed: out.relaxed,
           rerunOf: forceAi ? req.query.sl : null
@@ -185,9 +206,12 @@ function register(web, { pool, page }) {
         logId,
         q: parse ? q : "",
         lang,
-        canAsk: Boolean(parse) && parse.source !== "ai"
+        canAsk: Boolean(parse) && parse.source !== "ai",
+        ignored: out.ignoredTerms || []
       });
-      results = resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId });
+      results = out.ask
+        ? askCard({ ask: out.ask, filters, q, lang, understood, logId })
+        : resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId });
       searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,

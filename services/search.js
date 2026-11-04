@@ -56,6 +56,9 @@ RULES:
 - "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
 - "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).
 - بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".
+- "Lake View" is a compound: "compound": "Lake View". It is the lake-view feature ("view_lagoon") ONLY in "overlooking lake", "with lake view", "فيو بحيرة" and "فيو على بحيرة"; then do not put it in compound.
+- "budget" / "بادجت" / "ميزانية" with a number is a price ceiling (price_max), never an installment. A monthly installment is set only when the request says "قسط" / "installment".
+- Names may be misspelled or written in Arabic letters; give the usual English spelling of the compound, and if you do not know a place put it in "locations" as said. Never guess a place you do not know.
 - Exclusions are NEVER filters: what follows "بدون" / "من غير" / "مش في" / "without" / "not" is left out completely ("شقة بدون مصعد" → apartment only, no elevator feature). "الدور الاخير" / "last floor" and "قانون جديد" / "new rent law" are also left out.`;
 
 function featureListForPrompt() {
@@ -70,6 +73,31 @@ function featureListForPrompt() {
  * @returns {Promise<{ parsed, source: "parser"|"ai"|"fallback", modelUsed, usage, ms, local, ai, reasons }>}
  *   source "fallback" = the parser was unsure, the AI could not answer. local / ai keep both readings for the search log.
  */
+// During the POC the AI reads every search and the quick reader runs beside it; the two readings are compared and kept in the
+// search log. SEARCH_AI_FIRST=false goes back to the quick reader first (the AI only when it is unsure or asked).
+const aiFirst = () => !/^(0|false|off|no)$/i.test(String(process.env.SEARCH_AI_FIRST ?? "true"));
+const aiFirstDailyMax = () => Math.max(0, Number(process.env.SEARCH_AI_FIRST_DAILY_MAX) || 2000);
+let capCache = { at: 0, n: 0 };
+async function underAiFirstCap(pool) {
+  if (!pool) return true;
+  if (Date.now() - capCache.at > 60000) {
+    try {
+      const { rows } = await pool.query("SELECT COUNT(*)::int AS n FROM search_log WHERE created_at > now() - interval '1 day' AND source = 'ai' AND ai_filters IS NOT NULL");
+      capCache = { at: Date.now(), n: rows[0].n };
+    } catch {
+      capCache = { at: Date.now(), n: 0 };
+    }
+  }
+  return capCache.n < aiFirstDailyMax();
+}
+
+/**
+ * Reads a request. The quick (local) reader always reads it. In AI-first mode the AI reads it too and its answer is used; the
+ * agency pays no credit for that read (it runs with no broker in its context, like the quiet check), and the differences
+ * between the two readings are kept for the search log. When the AI fails or is switched off, the quick reading stands and
+ * `aiError` says why. A read the broker asked for ("Search with AI") or one the quick reader is unsure of is charged as before.
+ * @returns {Promise<{ parsed, source: "parser"|"ai"|"fallback", modelUsed, usage, ms, local, ai, reasons, disagree, aiError }>}
+ */
 async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true } = {}) {
   const t0 = Date.now();
   if (ctx.pool) await Vocab.ensureLoaded(ctx.pool);
@@ -77,8 +105,10 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
   const reasons = local.meta?.reasons || [];
   // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).
   if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
-  if (!aiAllowed || (!forceAi && !local.meta?.unsure)) {
-    return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons };
+  const charged = forceAi || Boolean(local.meta?.unsure);
+  const free = !charged && aiAllowed && local.intent !== "other" && aiFirst() && (await underAiFirstCap(ctx.pool));
+  if (!aiAllowed || (!charged && !free)) {
+    return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, disagree: [] };
   }
   try {
     const res = await AI.generateWithCascade({
@@ -90,17 +120,17 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
       ],
       config: { responseMimeType: "application/json", temperature: 0 },
       operationType: "search_parse",
-      ctx
+      ctx: free ? { pool: ctx.pool } : ctx
     });
     const raw = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
     const parsed = Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text);
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
     // Phrases the filters cannot say are the parser's to report; the AI reading carries them over.
     parsed.meta = { ...(local.meta || {}), unsure: false };
-    return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0, local, ai: parsed, reasons };
+    return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0, local, ai: parsed, reasons, disagree: Q.disagreements(local, parsed) };
   } catch (err) {
     console.warn("AI search parsing failed, using the local parser:", err.message);
-    return { parsed: local, source: "fallback", modelUsed: "fallback_regex", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, aiError: err.code || "ai" };
+    return { parsed: local, source: "fallback", modelUsed: "fallback_regex", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, disagree: [], aiError: err.code || "ai" };
   }
 }
 
@@ -229,8 +259,15 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
 
     // "furnished" is already the furnishing filter; requiring the feature key too dropped units that had only one of them.
     const featureKeys = f.furnishing ? f.features.filter((k) => k !== "furnished") : f.features;
-    if (featureKeys.length) where.push(`l.feature_keys @> ${add(featureKeys)}::text[]`);
-    for (const t of f.feature_terms) where.push(`l.search_text_normalized LIKE '%' || ${add(t)} || '%'`);
+    // Lake View is a compound: the lake-view feature also matches that compound's units.
+    const plainKeys = featureKeys.filter((k) => k !== "view_lagoon");
+    if (plainKeys.length) where.push(`l.feature_keys @> ${add(plainKeys)}::text[]`);
+    if (featureKeys.includes("view_lagoon")) where.push(`(l.feature_keys @> ARRAY['view_lagoon']::text[] OR l.compound_key = 'lake_view')`);
+    for (const t of f.feature_terms) {
+      const like = `l.search_text_normalized LIKE '%' || ${add(t)} || '%'`;
+      // A swimming pool asked for plainly also matches a private pool.
+      where.push(t === "حمام سباحه" ? `(l.feature_keys @> ARRAY['private_pool']::text[] OR ${like})` : like);
+    }
   }
 
   const sql = `
@@ -244,9 +281,12 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
 
 /**
  * Runs a search: strict pass, then a relaxed pass when strict finds nothing.
- * @returns {Promise<{ rows, ids, total, relaxed, dbMs }>} rows = first page, ids = snapshot for "more"
+ * Words nobody knows (a place or extra the dictionaries and the units do not know) are never dropped silently. With `ask`
+ * the answer comes back as `ask: { terms, withoutTotal }` and no rows, so the broker is asked; without it (a saved link, a
+ * "search without it" choice) the search is repeated without those words and `ignoredTerms` says which were left out.
+ * @returns {Promise<{ rows, ids, total, relaxed, dbMs, ask }>} rows = first page, ids = snapshot for "more"
  */
-async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) {
+async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = false } = {}) {
   const t0 = Date.now();
   let relaxed = false;
   // A word that is an approved compound name (lib/placeNames.js) searches in both its languages.
@@ -261,30 +301,46 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) 
     ({ rows } = await pool.query(sql, params));
     relaxed = rows.length > 0;
   }
-  // Soft words: a place or extra the dictionaries do not know ("المعادي", "اخر دور") must not empty the answer. When
-  // nothing matched and other filters remain, search again without those words and say which words were ignored.
+  // Soft words: a place or extra the dictionaries do not know ("المعادي", "اخر دور"). When a place was found, the query ignores
+  // the unknown place words; when nothing matched, the unknown words are what emptied the answer.
   let ignoredTerms = [];
-  const soft = [...(parsed.filters.place_terms || []), ...(parsed.filters.feature_terms || [])];
-  if (!rows.length && !parsed.filters.code && soft.length) {
-    const rest = { ...parsed, filters: { ...parsed.filters, place_terms: [], feature_terms: [] } };
-    if (Q.hasAnyFilter(rest)) {
-      ({ sql, params } = buildSearchQuery(agencyId, rest, { fx }));
-      ({ rows } = await pool.query(sql, params));
-      if (!rows.length) {
-        ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true, fx }));
-        ({ rows } = await pool.query(sql, params));
-        relaxed = rows.length > 0;
-      }
-      if (rows.length) {
-        ignoredTerms = soft;
-        parsed.filters.place_terms = [];
-        parsed.filters.feature_terms = [];
-      }
+  const f0 = parsed.filters;
+  const placeFound = (f0.places || []).length > 0;
+  const soft = [...(placeFound ? [] : f0.place_terms || []), ...(f0.feature_terms || [])];
+  const unusedPlaceWords = placeFound ? f0.place_terms || [] : [];
+  const unknown = [...(!rows.length ? soft : []), ...unusedPlaceWords];
+  if (unknown.length && !f0.code) {
+    const rest = { ...parsed, filters: { ...f0, place_terms: [], feature_terms: [] } };
+    let restRows = rows;
+    let restRelaxed = relaxed;
+    if (!rows.length || soft.length) {
+      if (Q.hasAnyFilter(rest)) {
+        ({ sql, params } = buildSearchQuery(agencyId, rest, { fx }));
+        ({ rows: restRows } = await pool.query(sql, params));
+        restRelaxed = false;
+        if (!restRows.length) {
+          ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true, fx }));
+          ({ rows: restRows } = await pool.query(sql, params));
+          restRelaxed = restRows.length > 0;
+        }
+      } else restRows = [];
+    }
+    if (ask) {
+      const total = restRows.length ? Number(restRows[0].total_count) : 0;
+      const rateMissing = await Fx.missingRates(pool, agencyId, fx);
+      return { rows: [], ids: [], total: 0, relaxed: false, ignoredTerms: [], rateMissing, dbMs: Date.now() - t0, ask: { terms: [...new Set(unknown)], withoutTotal: total } };
+    }
+    if (restRows.length || (rows.length && unusedPlaceWords.length)) {
+      ignoredTerms = [...new Set(unknown)];
+      rows = restRows.length ? restRows : rows;
+      relaxed = restRows.length ? restRelaxed : relaxed;
+      parsed.filters.place_terms = [];
+      parsed.filters.feature_terms = [];
     }
   }
   const total = rows.length ? Number(rows[0].total_count) : 0;
   const rateMissing = await Fx.missingRates(pool, agencyId, fx);
-  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, rateMissing, dbMs: Date.now() - t0 };
+  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, rateMissing, dbMs: Date.now() - t0, ask: null };
 }
 
 /**
@@ -307,12 +363,16 @@ async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE) {
  * The whole search for one request: parse → intent guard → run.
  * @returns {Promise<{ status: "results"|"none"|"small_talk"|"listing", parsed, source, rows, ids, total, relaxed, timings }>}
  */
-async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true }) {
+async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false }) {
   const parse = await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
   const intent = Q.classifyIntent(parse.parsed);
-  const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons };
+  const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons, disagree: parse.disagree || [], aiError: parse.aiError || null };
   if (intent !== "search") return { ...base, status: intent, rows: [], ids: [], total: 0, relaxed: false, timings: { parseMs: parse.ms, dbMs: 0 } };
-  const res = await runSearch(pool, agencyId, parse.parsed, { pageSize });
+  const res = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: !allowDrop });
+  // The AI could not answer and the quick reader left a number it could not place ("بادجت 70000"): ask, never search without it.
+  const numbers = parse.source === "fallback" && !allowDrop ? parse.local?.meta?.leftover_numbers || [] : [];
+  if (numbers.length) res.ask = { terms: res.ask?.terms || [], numbers, aiDown: true, withoutTotal: res.ask ? res.ask.withoutTotal : res.total };
+  if (res.ask) return { ...base, ...res, rows: [], ids: [], total: 0, status: "ask", timings: { parseMs: parse.ms, dbMs: res.dbMs } };
   return { ...base, ...res, status: res.rows.length ? "results" : "none", timings: { parseMs: parse.ms, dbMs: res.dbMs } };
 }
 
