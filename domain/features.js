@@ -35,7 +35,7 @@ const FEATURES = [
 
   { key: "view_garden", ar: "فيو جاردن", en: "Garden view", group: "view", syn: ["فيو جاردن", "فيو حديقه", "فيو حديقة", "على الجاردن", "garden view"] },
   { key: "view_pool", ar: "فيو بول", en: "Pool view", group: "view", syn: ["فيو بول", "فيو حمام السباحه", "pool view"] },
-  { key: "view_lagoon", ar: "فيو لاجون", en: "Lagoon view", group: "view", syn: ["فيو لاجون", "لاجون", "lagoon", "lagoon view", "فيو بحيره", "فيو بحيرة", "lake view"] },
+  { key: "view_lagoon", ar: "فيو لاجون", en: "Lagoon view", group: "view", syn: ["فيو لاجون", "لاجون", "lagoon", "lagoon view", "فيو بحيره", "فيو بحيرة", "فيو علي بحيره", "overlooking lake"] },
   { key: "view_landscape", ar: "فيو لاندسكيب", en: "Landscape view", group: "view", syn: ["فيو لاند سكيب", "فيو لاندسكيب", "لاندسكيب", "لاند سكيب", "علي لاند سكيب", "landscape", "landscape view"] },
   { key: "view_club", ar: "فيو النادي", en: "Club view", group: "view", syn: ["فيو النادي", "فيو الكلوب", "club view"] },
   { key: "view_sea", ar: "فيو بحر", en: "Sea view", group: "view", syn: ["فيو بحر", "فيو البحر", "sea view"] },
@@ -43,9 +43,9 @@ const FEATURES = [
   { key: "view_street", ar: "على الشارع", en: "Street view", group: "view", syn: ["على الشارع", "فيو شارع", "street view"] },
 
   { key: "furnished", ar: "مفروشة", en: "Furnished", group: "equipment", syn: ["مفروشه", "مفروشة", "مفروش", "furnished", "fully furnished"] },
-  { key: "kitchen_installed", ar: "مطبخ مركب", en: "Fitted kitchen", group: "equipment", syn: ["مطبخ مركب", "بالمطبخ", "fitted kitchen", "kitchen installed"] },
+  { key: "kitchen_installed", ar: "مطبخ مركب", en: "Fitted kitchen", group: "equipment", syn: ["مطبخ مركب", "بالمطبخ", "مطبخ", "fitted kitchen", "kitchen installed", "kitchen", "with kitchen"] },
   { key: "appliances", ar: "بالأجهزة", en: "With appliances", group: "equipment", syn: ["بالاجهزه", "بالأجهزة", "بالاجهزة", "اجهزه كهربائيه", "appliances", "with appliances"] },
-  { key: "ac_installed", ar: "تكييفات", en: "ACs installed", group: "equipment", syn: ["تكييفات", "مكيفات", "بالتكييفات", "تكييف", "ac", "acs", "air conditioning"] },
+  { key: "ac_installed", ar: "تكييفات", en: "ACs installed", group: "equipment", syn: ["تكييفات", "مكيفات", "بالتكييفات", "تكييف", "ac", "acs", "ac s", "air conditioning", "air conditioners", "air conditioner", "aircon"] },
   { key: "smart_home", ar: "سمارت هوم", en: "Smart home", group: "equipment", syn: ["سمارت هوم", "smart home"] },
   { key: "natural_gas", ar: "عداد غاز", en: "Natural gas", group: "equipment", syn: ["غاز طبيعي", "عداد غاز", "natural gas"] },
 

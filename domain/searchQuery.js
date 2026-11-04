@@ -8,7 +8,7 @@ const Fx = require("./fx");
 const Features = require("./features");
 const Places = require("./places");
 const { TYPE_TERMS } = require("./vocabulary");
-const { normalizeSearch } = require("./searchText");
+const { normalizeSearch, foldLetters } = require("./searchText");
 const { PROPERTY_TYPES } = require("./fieldRules");
 
 const FINISHING_KEYS = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
@@ -115,7 +115,12 @@ function resolvePlaceNames(names = []) {
         .split(" ")
         .filter((w) => w.length >= 3 && !STOP.has(w))
         .join(" ");
-      if (!found.length && leftover) terms.push(leftover);
+      if (!found.length && leftover) {
+        // A name the AI wrote with a slightly different spelling ("Mivda"): snapped to the known place when one fits.
+        const close = Places.closePlaces(leftover.split(" "));
+        if (close.matched.length && !close.ambiguous.length && close.used.size === leftover.split(" ").length) places.push(...close.matched.map((m) => ({ kind: m.kind, key: m.key })));
+        else terms.push(leftover);
+      }
     }
   }
   return { places, terms };
@@ -230,7 +235,8 @@ const STOP = new Set(
     // Spoken fillers and polite words (Egyptian Arabic): they carry no filter.
     "ممكن", "تدورلي", "تدور", "ادورلي", "بلاش", "اللي", "يا", "باشا", "بيه", "ريس", "هندسه", "استاذ", "اخي", "تمام", "طيب",
     "بسعر", "سعر", "ميزانيه", "ميزانيتي", "بميزانيه", "بادجت", "جنيه", "جنية", "جنيها", "الشهر", "شهريا", "شهري", "وصاله", "صاله",
-    "مساحتها", "مساحه", "الاقل", "كومباوند", "كومبوند", "كمبوند", "كمبوندات", "كومباوندات", "قريبه", "ابغي", "ابي", "عندكم", "عندكو", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
+    "مساحتها", "مساحه", "الاقل", "كومباوند", "كومبوند", "كمبوند", "كمبوندات", "كومباوندات", "قريبه", "ابغي", "ابي", "عندكم", "عندكو", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب",
+    "more", "شقتين", "فيلتين", "وحدتين", "بدور", "دور", "البادجت", "بدجت", "بودجت", "الميزانيه", "بدوّر", "عاوزه", "عايزين", "محتاجه"
   ].map(normalizeSearch)
 );
 
@@ -400,8 +406,9 @@ function applyAliases(hay) {
 }
 
 function fallbackParse(text) {
-  const raw = String(text || "").trim();
+  const raw = foldLetters(String(text || "").trim());
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
+  const egpWord = / (جنيه|جنيها|egp|pound|pounds|le) /.test(` ${normalizeSearch(raw)} `);
   const f = emptyFilters();
   // A dollar or euro budget keeps its currency; the amount is converted only at search time (domain/fx.js).
   f.currency = Fx.currencyOfText(raw);
@@ -411,10 +418,17 @@ function fallbackParse(text) {
   }
 
   // A unit code written like NH-V12 (initials, a hyphen, an optional letter, a number).
-  let c = consume(hay, / ([a-z]{1,6}-[a-z]{0,2}\d{1,5}) /);
+  let c = consume(hay, / ([a-z]{1,6}\d{0,3}-[a-z]{0,2}\d{1,5}) /);
   if (c.m) {
     f.code = normalizeCode(c.m[1]);
     hay = c.hay;
+  } else {
+    // A code typed with no hyphen ("HP218") is a code only when it is the whole message.
+    const whole = hay.trim().match(/^([a-z]{1,6}\d{2,5})$/);
+    if (whole) {
+      f.code = normalizeCode(whole[1]);
+      hay = " ";
+    }
   }
 
   hay = hay.replace(/(\d)([a-zء-ي])/g, "$1 $2");
@@ -426,6 +440,11 @@ function fallbackParse(text) {
   const unapplied = [];
   hay = takeUnapplied(hay, unapplied);
   hay = applyAliases(hay);
+
+  // "Lake View" is a compound. It is the lake-view feature only in these phrasings, read before the places.
+  const lake = consume(hay, / (?:overlooking (?:the )?lake|with (?:a |the )?lake view|ب?فيو (?:علي |ع )?(?:ال)?بحيره) /);
+  const lakeFeature = Boolean(lake.m);
+  hay = lake.hay;
 
   // Places first (they can contain type-like words, e.g. "town").
   const placeScan = Places.findPlaces(hay);
@@ -447,6 +466,7 @@ function fallbackParse(text) {
 
   // Features (dictionary only).
   f.features = Features.matchFeatureKeys(hay);
+  if (lakeFeature && !f.features.includes("view_lagoon")) f.features.push("view_lagoon");
   for (const key of f.features) {
     const terms = Features.FEATURES.find((x) => x.key === key).syn.map(normalizeSearch).sort((a, b) => b.length - a.length);
     for (const t of terms) hay = hay.split(` ${t} `).join(" ").split(` و${t} `).join(" ");
@@ -508,6 +528,13 @@ function fallbackParse(text) {
     f.payment_installments = true;
     hay = c.hay;
   }
+  // "قسط 20000": the installment word with a plain number is the monthly installment ceiling.
+  c = consume(hay, / و?(?:قسط شهري|قسط|monthly installment|installment) (\d{4,9}) /);
+  if (c.m) {
+    f.max_installment = Number(c.m[1]);
+    f.payment_installments = true;
+    hay = c.hay;
+  }
   // "مش عايز أكتر من 9 مليون" is a ceiling, not a floor.
   c = consume(hay, new RegExp(` مش (?:عايز )?(?:اكتر|اكثر) من ${MONEY} `));
   if (c.m) {
@@ -552,8 +579,17 @@ function fallbackParse(text) {
     }
   }
 
+  // A currency named with one plain number and no limit word ("شقة 5000 دولار", "8500 جنيه"): that number is the price ceiling.
+  if (f.price_max === null && f.price_min === null && (f.currency || egpWord)) {
+    const bare = hay.split(" ").filter((w) => /^\d{3,9}$/.test(w));
+    if (bare.length === 1) {
+      f.price_max = Number(bare[0]);
+      hay = hay.replace(` ${bare[0]} `, " ");
+    }
+  }
+
   // Budget: "تحت 8 مليون" / "under 8 million" / "8 مليون" (a ceiling).
-  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|budget)? ?(\d+(?:\.\d+)?|\d+ \d+|[ء-ي]+) (مليون|million|m|الف|k|thousand)( ونص)? /);
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|budget|(?:ال)?(?:بادجت|بدجت|بودجت|ميزانيه|ميزانيتي))? ?(\d+(?:\.\d+)?|\d+ \d+|[ء-ي]+) (مليون|million|m|الف|k|thousand)( ونص)? /);
   if (c.m) {
     const n = spokenAmount(c.m[1].replace(" ", "."));
     const v = n === null ? null : parseMoneyWords(String(n), c.m[2]);
@@ -564,7 +600,7 @@ function fallbackParse(text) {
 
   // "بحد اقصى 8000" / "تحت 15000": a bare number of four digits or more after a limit word is the price ceiling (rent).
   if (f.price_max === null) {
-    c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget) (\d{4,9}) /);
+    c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|الميزانيه|بادجت|البادجت|بدجت|بودجت|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget) (\d{4,9}) /);
     if (c.m) {
       f.price_max = Number(c.m[1]);
       hay = c.hay;
@@ -678,11 +714,32 @@ function fallbackParse(text) {
   }
   hay = fuzzyTypes(hay, f.property_types);
 
+  // "حمام سباحة" / "pool" (not "private pool", which is its own feature) is a feature word, not a place.
+  c = consume(hay, / (?:ب|مع )?(?:حمام سباحه|حمامات سباحه|بيسين|swimming pool|pool) /);
+  if (c.m) {
+    f.feature_terms.push("حمام سباحه");
+    hay = c.hay;
+  }
+
   // Leftover words: unresolved places (≥3 letters, not stop words, not numbers).
-  const leftovers = hay
+  let leftovers = hay
     .split(" ")
     .filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d+$/.test(w) && !GENERIC_PLACE_WORDS.has(w));
-  if (!f.places.length && leftovers.length) f.place_terms = [leftovers.join(" ")];
+  // Close spellings of known places ("مفيده", "mivda") are read as the place; ambiguous ones are left for the bot to ask about.
+  const guesses = [];
+  const ambiguous = [];
+  if (leftovers.length) {
+    const close = Places.closePlaces(leftovers);
+    for (const m of close.matched) {
+      if (!f.places.some((p) => p.kind === m.kind && p.key === m.key)) f.places.push({ kind: m.kind, key: m.key });
+      guesses.push({ typed: m.typed, as: m.as });
+    }
+    for (const a of close.ambiguous) ambiguous.push(a);
+    const askWords = new Set(ambiguous.flatMap((a) => a.typed.split(" ")));
+    leftovers = leftovers.filter((w, i) => !close.used.has(i) || askWords.has(w));
+  }
+  // Words nobody knew are kept even when a place was found, so the bot can ask about them (the query ignores them then).
+  if (leftovers.length) f.place_terms = [leftovers.join(" ")];
   // Numbers nobody used ("5000", "8"): the local reading cannot say what they are.
   const leftNumbers = hay.split(" ").filter((w) => /^\d+(?:\.\d+)?$/.test(w));
 
@@ -702,8 +759,32 @@ function fallbackParse(text) {
     language: /[؀-ۿ]/.test(raw) ? "ar" : "en",
     filters,
     // What the local reader did and did not understand: shown to the broker and used to decide whether to ask the AI.
-    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied }
+    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied, guesses, ambiguous }
   };
+}
+
+/**
+ * Where two readings of the same request differ (the quick reader and the AI): the names of the filters that are not equal.
+ * Unknown words count as one field, "place_terms", so a place one reading could not find shows up as a difference.
+ */
+function disagreements(a, b) {
+  const fa = canonical(a?.filters || a || {});
+  const fb = canonical(b?.filters || b || {});
+  const keys = Object.keys(emptyFilters()).filter((k) => !["feature_terms"].includes(k));
+  const out = [];
+  for (const k of keys) {
+    let x = fa[k];
+    let y = fb[k];
+    if (k === "places") {
+      x = (x || []).map((p) => `${p.kind}:${p.key}`).join("|");
+      y = (y || []).map((p) => `${p.kind}:${p.key}`).join("|");
+    } else if (k === "place_terms") {
+      x = (x || []).length > 0;
+      y = (y || []).length > 0;
+    }
+    if (JSON.stringify(x) !== JSON.stringify(y)) out.push(k);
+  }
+  return out;
 }
 
 /** True when the request names at least one real filter. */
@@ -773,5 +854,6 @@ module.exports = {
   hasAnyFilter,
   classifyIntent,
   ensureFilters,
-  canonical
+  canonical,
+  disagreements
 };

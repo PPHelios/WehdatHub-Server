@@ -357,4 +357,55 @@ function snapCompound(name, agencyNames = []) {
   return { name: best.display, changed: normalizeSearch(best.display) !== norm };
 }
 
-module.exports = { AREAS, DEVELOPERS, COMPOUNDS, synonymRows, findPlaces, resolvePlace, placeName, snapCompound };
+// Weak letters (alef, waw, ya, ha) are written many ways in Egyptian spelling ("مفيده" / "ميفيدا"), so Arabic names are
+// also compared by their strong letters only.
+const skeleton = (s) => fuzzKey(s).replace(/[اويه]/g, "");
+const isArabic = (s) => /[؀-ۿ]/.test(s);
+
+/**
+ * Close spellings of known places: words the quick reader could not use ("مفيده", "ميڤيدا", "mivda", "palm hils") matched to
+ * a known compound, developer or area. A word counts when it is one letter off (two for a long name) with the same first
+ * letter, or when its strong Arabic letters are the same. Only one clear answer is taken; two different places that fit
+ * equally well are reported as ambiguous, so the bot asks instead of guessing. Up to three words in a row make one name.
+ * @param {string[]} words normalized words that nothing else used
+ * @returns {{ matched: {typed, as, kind, key}[], ambiguous: {typed, options: string[]}[], used: Set<string> }}
+ */
+function closePlaces(words = []) {
+  const matched = [];
+  const ambiguous = [];
+  const used = new Set();
+  const ws = words.map((w) => String(w || ""));
+  for (let size = 3; size >= 1; size--) {
+    for (let i = 0; i + size <= ws.length; i++) {
+      const slice = ws.slice(i, i + size);
+      if (slice.some((w, k) => !w || used.has(i + k) || /\d/.test(w) || w.length < 3)) continue;
+      const typed = slice.join(" ");
+      const key = fuzzKey(typed);
+      if (key.length < 5) continue;
+      const arabic = isArabic(typed);
+      const sk = arabic ? skeleton(typed) : "";
+      const max = key.length >= 8 ? 2 : 1;
+      let best = null;
+      let options = [];
+      for (const m of MATCHERS) {
+        if (isArabic(m.norm) !== arabic) continue;
+        const mk = fuzzKey(m.norm);
+        if (mk.length < 4 || mk[0] !== key[0] || Math.abs(mk.length - key.length) > max) continue;
+        let d = distance(key, mk, max);
+        if (d > max && arabic && sk.length >= 3 && sk === skeleton(m.norm) && Math.abs(mk.length - key.length) <= 2) d = 1;
+        if (d > max || m.norm === typed) continue;
+        if (!best || d < best.d) {
+          best = { d, kind: m.kind, key: m.key, as: m.norm };
+          options = [m];
+        } else if (d === best.d && !options.some((o) => o.kind === m.kind && o.key === m.key)) options.push(m);
+      }
+      if (!best) continue;
+      for (let k = 0; k < size; k++) used.add(i + k);
+      if (options.length > 1) ambiguous.push({ typed, options: options.slice(0, 3).map((o) => o.norm) });
+      else matched.push({ typed, as: best.as, kind: best.kind, key: best.key });
+    }
+  }
+  return { matched, ambiguous, used };
+}
+
+module.exports = { closePlaces, AREAS, DEVELOPERS, COMPOUNDS, synonymRows, findPlaces, resolvePlace, placeName, snapCompound };

@@ -1325,7 +1325,11 @@ CREATE TABLE IF NOT EXISTS public.search_log (
   result_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
   rerun_of uuid,
   audit jsonb,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  disagree text[] DEFAULT '{}'::text[] NOT NULL,
+  guesses jsonb,
+  asked text[] DEFAULT '{}'::text[] NOT NULL,
+  ai_error text
 );
 
 CREATE TABLE IF NOT EXISTS public.search_reports (
@@ -1895,6 +1899,7 @@ CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (age
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX search_aliases_status ON public.search_aliases USING btree (status, agreed DESC);
 CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id, created_at DESC);
+CREATE INDEX search_log_disagree ON public.search_log USING btree (created_at DESC) WHERE (cardinality(disagree) > 0);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
 CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WHERE (lead_id IS NOT NULL);

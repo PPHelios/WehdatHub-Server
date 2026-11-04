@@ -25,8 +25,8 @@ async function record(pool, { broker, channel, text = "", parse = {}, used = nul
     const meta = parse.parsed?.meta || parse.local?.meta || {};
     const { rows } = await pool.query(
       `INSERT INTO search_log (agency_id, broker_id, channel, query_text, source, reasons, local_filters, ai_filters, used_filters,
-                               unapplied, leftover, total, relaxed, result_ids, rerun_of)
-       VALUES ($1, $2, $3, $4, $5, $6::text[], $7::jsonb, $8::jsonb, $9::jsonb, $10::text[], $11::text[], $12, $13, $14::uuid[], $15)
+                               unapplied, leftover, total, relaxed, result_ids, rerun_of, disagree, guesses, asked, ai_error)
+       VALUES ($1, $2, $3, $4, $5, $6::text[], $7::jsonb, $8::jsonb, $9::jsonb, $10::text[], $11::text[], $12, $13, $14::uuid[], $15, $16::text[], $17::jsonb, $18::text[], $19)
        RETURNING id`,
       [
         broker.agency_id,
@@ -43,7 +43,11 @@ async function record(pool, { broker, channel, text = "", parse = {}, used = nul
         Number(total) || 0,
         Boolean(relaxed),
         (ids || []).slice(0, MAX_IDS),
-        isId(rerunOf) ? rerunOf : null
+        isId(rerunOf) ? rerunOf : null,
+        parse.disagree || [],
+        meta.guesses?.length ? JSON.stringify(meta.guesses) : null,
+        [...(parse.ask?.terms || []), ...(parse.ask?.numbers || [])].map(String).slice(0, 10),
+        parse.aiError || null
       ]
     );
     return rows[0]?.id || null;
