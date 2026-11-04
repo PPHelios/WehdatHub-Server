@@ -93,10 +93,25 @@ function brokerSees(viewer, scopeAll, alias = "u") {
   return ` AND ((${alias}.broker_id = '${me}'::uuid AND ${alias}.status = 'active') OR EXISTS (SELECT 1 FROM unit_access_requests r WHERE r.listing_id = ${alias}.id AND r.broker_id = '${me}'::uuid AND r.status = 'approved' AND r.decided_at > now() - make_interval(days => 30)))`;
 }
 
+/** The agency owner\'s switch: may data entry see and edit owners (never VIP ones)? On by default. */
+async function dataEntryOwnersOn(pool, agencyId) {
+  const { rows } = await pool.query("SELECT crm_settings->>'data_entry_owners' AS s FROM agencies WHERE id = $1", [agencyId]);
+  return rows[0]?.s !== "off";
+}
+
+/** Only the agency owner switches it. Logged. */
+async function setDataEntryOwners(pool, actor, on) {
+  if (!isAgencyOwner(actor)) return { ok: false, reason: "not_allowed" };
+  await pool.query("UPDATE agencies SET crm_settings = crm_settings || jsonb_build_object('data_entry_owners', $2::text) WHERE id = $1", [actor.agency_id, on ? "on" : "off"]);
+  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "data_entry_owners_switch", status: "success", metadata: { on: Boolean(on) } });
+  return { ok: true, on: Boolean(on) };
+}
+
 /** Managers and data entry edit any non-VIP owner; a broker edits an owner while one of their active units belongs to that owner. */
 async function canEditOwner(pool, viewer, ownerId) {
   if (isManager(viewer)) return true;
   if (isDataEntry(viewer)) {
+    if (!(await dataEntryOwnersOn(pool, viewer.agency_id))) return false;
     const { rows: open } = await pool.query("SELECT 1 FROM unit_owners WHERE id = $1 AND agency_id = $2 AND is_private IS NOT TRUE", [ownerId, viewer.agency_id]);
     return open.length > 0;
   }
@@ -153,14 +168,24 @@ async function history(pool, viewer, ownerId, { limit = 50 } = {}) {
   return rows;
 }
 
-/** Managers edit the name, notes and flag. */
-async function edit(pool, actor, ownerId, { name, notes, flag }) {
+/** Managers edit the name, phone, notes and flag. A phone already on another profile is refused (no merge yet); a change is logged with both numbers. Units follow the profile. */
+async function edit(pool, actor, ownerId, { name, phone, notes, flag }) {
   if (!(await canEditOwner(pool, actor, ownerId))) return { error: "forbidden" };
   const before = (await pool.query("SELECT * FROM unit_owners WHERE id = $1 AND agency_id = $2", [ownerId, actor.agency_id])).rows[0];
   if (!before) return { error: "not_found" };
   if (!(await getFor(pool, actor, ownerId))) return { error: "not_found" };
   const next = { name: clean(name, 120), notes: clean(notes, NOTE_MAX), flag: clean(flag, 200) };
-  await pool.query("UPDATE unit_owners SET name = $3, notes = $4, flag = $5, updated_at = now() WHERE id = $1 AND agency_id = $2", [ownerId, actor.agency_id, next.name, next.notes, next.flag]);
+  // An empty phone keeps the current one; a new one must be valid and not belong to another profile.
+  const digits = String(phone ?? "").trim() ? Phone.normalizePhone(phone) : (before.phones || [])[0] || null;
+  if (!digits) return { error: "bad_phone" };
+  const oldPhone = (before.phones || [])[0] || null;
+  if (digits !== oldPhone) {
+    const { rows: clash } = await pool.query("SELECT id, name FROM unit_owners WHERE agency_id = $1 AND phones @> ARRAY[$2]::text[] AND id <> $3 LIMIT 1", [actor.agency_id, digits, ownerId]);
+    if (clash[0]) return { error: "duplicate", existingId: clash[0].id, existingName: clash[0].name };
+  }
+  const phones = [digits, ...(before.phones || []).slice(1).filter((p) => p !== digits)];
+  await pool.query("UPDATE unit_owners SET name = $3, notes = $4, flag = $5, phones = $6::text[], updated_at = now() WHERE id = $1 AND agency_id = $2", [ownerId, actor.agency_id, next.name, next.notes, next.flag, phones]);
+  if (digits !== oldPhone) await addEvent(pool, actor.agency_id, ownerId, actor.id, "edited", { phone_from: oldPhone, phone_to: digits });
   if (next.flag !== before.flag) await addEvent(pool, actor.agency_id, ownerId, actor.id, "flag", { from: before.flag, to: next.flag });
   if (next.notes !== before.notes) await addEvent(pool, actor.agency_id, ownerId, actor.id, "note", { text: next.notes });
   if (next.name !== before.name) await addEvent(pool, actor.agency_id, ownerId, actor.id, "edited", { name: next.name });
@@ -231,4 +256,4 @@ async function forLead(pool, viewer, lead) {
   return rows[0] ? getFor(pool, viewer, rows[0].id) : null;
 }
 
-module.exports = { findByPhone, findOrCreate, renameFromDraft, syncFromListing, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead };
+module.exports = { findByPhone, findOrCreate, renameFromDraft, syncFromListing, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead, dataEntryOwnersOn, setDataEntryOwners };

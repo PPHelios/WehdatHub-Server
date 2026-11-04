@@ -132,8 +132,16 @@ const NAV = [
 
 /** The More page links this broker sees (managers: the agency pages; the app owner: App tracking too). */
 // Data entry sees only these More links (the pages it may open); everything else is hidden, not just refused.
-const DATA_ENTRY_NAV = new Set(["units", "owners", "notifications", "settings", "guide"]);
-const DATA_ENTRY_TABS = ["search", "add", "units"];
+const DATA_ENTRY_NAV = new Set(["notifications", "settings", "guide"]);
+// Bar order for data entry: Search · Units · + · Owners · Settings (two places each side keep the + centred).
+const DATA_ENTRY_TABS = ["search", "units", "add", "owners", "settings"];
+const DATA_ENTRY_BAR = [
+  { key: "search", href: "/app/search", ar: "بحث", en: "Search", icon: "search" },
+  { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units" },
+  { key: "add", href: "/app/units/new", ar: "إضافة", en: "Add", icon: "plus", fab: true },
+  { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units" },
+  { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings" }
+];
 
 function navFor(broker) {
   const Dash = require("../services/dashboards");
@@ -162,6 +170,8 @@ function tabOf(path, nav) {
   if (/^\/app\/leads(\/|$)/.test(p)) return "leads";
   if (/^\/app\/units(\/|$)/.test(p)) return "units";
   if (/^\/app\/team(\/|$)/.test(p)) return "team";
+  if (/^\/app\/owners(\/|$)/.test(p)) return "owners";
+  if (/^\/app\/settings(\/|$)/.test(p)) return "settings";
   return nav === "search" ? "search" : nav === "leads" ? "leads" : nav === "units" ? "units" : "more";
 }
 
@@ -170,10 +180,10 @@ function tabBar(broker, tab, lang) {
   const manager = require("../services/dashboards").isManager(broker);
   const { icon } = require("./icons");
   const dataEntry = require("../lib/authz").isDataEntry(broker);
-  const tabs = TABS.filter((t) => (dataEntry ? DATA_ENTRY_TABS.includes(t.key) : t.broker ? !manager : t.manager ? manager : true));
-  return html`<nav class="tabbar" aria-label="${en ? "Main" : "القائمة الرئيسية"}">${tabs.map((t) =>
+  const tabs = dataEntry ? DATA_ENTRY_BAR : TABS.filter((t) => (t.broker ? !manager : t.manager ? manager : true));
+  return html`<nav class="tabbar${dataEntry ? " de" : ""}" aria-label="${en ? "Main" : "القائمة الرئيسية"}">${tabs.map((t) =>
     t.fab
-      ? html`<a class="fab" href="${dataEntry ? "/app/units/new" : t.href}" aria-label="${en ? t.en : t.ar}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon, 28)}</a>`
+      ? html`<a class="fab" href="${t.href}" aria-label="${en ? t.en : t.ar}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon, 28)}</a>`
       : html`<a href="${t.href}" data-tab="${t.key}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon)}<span>${en ? t.en : t.ar}</span></a>`
   )}</nav>`;
 }

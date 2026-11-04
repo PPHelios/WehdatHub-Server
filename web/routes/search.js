@@ -14,7 +14,8 @@ const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
 const { uploads, VOICE } = require("../uploads");
 const AiBlock = require("../../lib/aiBlock");
-const { isAgencyOwner } = require("../../lib/authz");
+const { isAgencyOwner, isDataEntry } = require("../../lib/authz");
+const Vis = require("../../lib/visibility");
 const { html, raw } = require("../html");
 const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
@@ -110,14 +111,14 @@ function resultsSection({ res, filters, token, page, lang, savedId = null, asks 
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
     return html`${understood}<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p>
-${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
+${filters.code || isDataEntry(Vis.viewer()) ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
   }
   return html`<section id="results">
   ${understood}
   ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : ""}
   ${res.rateMissing?.length ? html`<p class="card" role="status">⚠️ ${L(lang, "سعر الدولار/اليورو مش متسجل: حدده من «الاستخدام» عشان أسعار الوحدات بالعملة دي تتطابق.", "The dollar/euro rate is not set: set it under Usage so those prices match.")}</p>` : ""}
   <div class="row between"><p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
-  ${savedId
+  ${savedId || isDataEntry(Vis.viewer())
     ? ""
     : html`<details class="savebox"><summary class="btn secondary small">${icon("star", 16)} ${L(lang, "احفظ البحث", "Save search")}</summary>
     <form method="post" action="/app/searches" class="row">

@@ -265,7 +265,8 @@
       "allUnits": [],
       "allLeads": [],
       "run": ["viewer", "fn"],
-      "asSystem": ["fn"]
+      "asSystem": ["fn"],
+      "viewer": []
     },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
@@ -803,6 +804,8 @@
       "history": ["pool", "viewer", "ownerId", "params"],
       "edit": ["pool", "actor", "ownerId", "params"],
       "canEditOwner": ["pool", "viewer", "ownerId"],
+      "dataEntryOwnersOn": ["pool", "agencyId"],
+      "setDataEntryOwners": ["pool", "actor", "on"],
       "remove": ["pool", "actor", "ownerId"],
       "reassign": ["pool", "actor", "listing", "to"],
       "leadFor": ["pool", "viewer", "owner"],

@@ -19,6 +19,7 @@ const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
 const { unitOwnerBlock } = require("./owners");
+const Owners = require("../../services/unitOwners");
 const Bulk = require("../../services/bulk");
 const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
@@ -390,22 +391,22 @@ ${rows.length
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
-  ${listing.details?.owner_lead && Authz.canEdit(broker, listing) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
-  ${!view.hidden ? await unitOwnerBlock(pool, broker, listing, lang, req.session.csrf) : ""}
+  ${listing.details?.owner_lead && Authz.canEdit(broker, listing) && !Authz.isDataEntry(broker) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
+  ${!view.hidden && (!Authz.isDataEntry(broker) || (await Owners.dataEntryOwnersOn(pool, broker.agency_id))) ? await unitOwnerBlock(pool, broker, listing, lang, req.session.csrf) : ""}
   ${linkable ? resaleLinkForm(listing, project, await Catalogue.listProjects(pool, broker), lang, req.session.csrf) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
-    ${listing.status === "active" ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
+    ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
   ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button>${listing.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 </article>
 ${priv}
 ${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}
-${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
+${listing.status === "active" && !Authz.isDataEntry(broker) ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`
     });
   });
