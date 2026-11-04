@@ -7,7 +7,7 @@ jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
 const request = require("supertest");
 const { createHarness, closeHarness } = require("../harness/app");
-const { signIn, preOf } = require("../harness/web");
+const { signIn, preOf, csrfOf } = require("../harness/web");
 const WebAuth = require("../../lib/webAuth");
 
 jest.setTimeout(60000);
@@ -53,4 +53,15 @@ test("data entry sees only its own places: no Today or Leads tab, the plus adds 
   expect(more).not.toContain('href="/app/deals"');
   expect(more).not.toContain('href="/app/owner"');
   expect(more).not.toContain('href="/app/leads/import"');
+});
+
+test("data entry can create a share link for a unit in its agency", async () => {
+  const listing = await h.insertListing({ code: "DE-SHARE-1", broker_id: h.BROKERS.broker.id });
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  const csrf = csrfOf((await agent.get("/app/units")).text);
+  const res = await agent.post(`/app/units/${listing.code}/share`).type("form").send({ lang: "ar", _csrf: csrf });
+  expect(res.status).toBe(200);
+  expect(res.text).toContain("DE-SHARE-1");
+  const links = await h.query("SELECT count(*)::int AS n FROM share_links WHERE listing_id = $1", [listing.id]);
+  expect(links[0].n).toBeGreaterThan(0);
 });
