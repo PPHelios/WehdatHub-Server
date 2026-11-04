@@ -36,7 +36,8 @@ const PRIVATE = [
   require("./gallery"),
   require("./catalogue"),
   require("./priceSheets"),
-  require("./testRole")
+  require("./testRole"),
+  require("./adminBoard")
 ];
 
 module.exports = { PUBLIC, PRIVATE };

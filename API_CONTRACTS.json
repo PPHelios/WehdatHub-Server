@@ -2122,6 +2122,23 @@
     },
     "web/routes/testRole.js": {
       "register": ["web", "params"]
+    },
+    "services/adminBoard.js": {
+      "TABS": "Array",
+      "PERIODS": "Array",
+      "REFRESH_COOLDOWN_MS": "Number",
+      "computeAll": ["pool", "now"],
+      "computeTab": ["pool", "tab", "now"],
+      "refreshTab": ["pool", "tab", "params"],
+      "readTab": ["pool", "tab", "days"],
+      "addFixedCost": ["pool", "params"],
+      "deleteFixedCost": ["pool", "id"],
+      "listFixedCosts": ["pool"],
+      "adminBoardJob": [],
+      "usdToEgp": []
+    },
+    "web/routes/adminBoard.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {
