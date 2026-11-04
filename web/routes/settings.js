@@ -34,7 +34,7 @@ function brandSection(lang, agency, notice) {
   <h2>🏢 ${L(lang, "شعار الوكالة", "Agency logo")}</h2>
   ${notice || ""}
   <p class="muted">${L(lang, "بيظهر للعملاء على صفحات الوحدات وجداول الدفع PDF مع اسم الوكالة ورقم البروكر.", "Clients see it on unit pages and payment-schedule PDFs, with the agency's name and the broker's number.")}</p>
-  ${agency.logo_url ? html`<img class="logo" src="${agency.logo_url}" alt="" data-agency-logo>` : html`<p class="muted" data-agency-logo="none">${L(lang, "لسه مفيش شعار.", "No logo yet.")}</p>`}
+  ${agency.logo_url ? html`<img class="logo" src="${Storage.photoUrl(agency.logo_url)}" alt="" data-agency-logo>` : html`<p class="muted" data-agency-logo="none">${L(lang, "لسه مفيش شعار.", "No logo yet.")}</p>`}
   <form method="post" action="/app/settings/logo" enctype="multipart/form-data" class="row">
     <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
     <button type="submit" class="secondary">${L(lang, "رفع الشعار", "Upload logo")}</button>

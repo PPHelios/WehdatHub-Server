@@ -26,7 +26,7 @@ async function load(db, agencyId, projectId) {
     phases: phases.rows,
     plans: plans.rows,
     units: units.rows,
-    materials: materials.rows,
+    materials: materials.rows.map((m) => ({ ...m, url: require("../lib/supabase").photoUrl(m.url) })),
     priceSheet: sheet.rows[0] || null,
     unitsKey: key(units.rows, "updated_at"),
     plansKey: key(plans.rows, "updated_at"),

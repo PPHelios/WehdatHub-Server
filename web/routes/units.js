@@ -34,7 +34,7 @@ async function imagesOf(pool, listing) {
     listing.id,
     listing.agency_id
   ]);
-  return rows;
+  return rows.map((r) => ({ ...r, url: Storage.photoUrl(r.url) }));
 }
 
 /** Wow 1: "🔥 N clients want this unit", the broker's own listed with Send (the count is the agency's). */
