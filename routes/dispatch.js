@@ -171,9 +171,10 @@ async function dispatchMessage(broker, message, ctx) {
         const en = broker.preferred_lang === "en";
         if (r.outcome === "created") {
           const who = r.enquiry.client_name ? ` (${r.enquiry.client_name})` : "";
-          reply(broker, en ? `📩 Saved the ${r.enquiry.portal} enquiry${who}. Add the phone and assign a broker in Portal enquiries on the website.${r.unit ? ` Unit: ${r.unit.code}.` : ""}` : `📩 اتسجل استفسار ${r.enquiry.portal}${who}. ضيف الرقم وحوّله لوسيط من «استفسارات البوابات» على الموقع.${r.unit ? ` الوحدة: ${r.unit.code}.` : ""}`);
+          // Awaited: the safety net below checks for a reply once the turn returns, so an unawaited one looked like silence.
+          await reply(broker, en ? `📩 Saved the ${r.enquiry.portal} enquiry${who}. Add the phone and assign a broker in Portal enquiries on the website.${r.unit ? ` Unit: ${r.unit.code}.` : ""}` : `📩 اتسجل استفسار ${r.enquiry.portal}${who}. ضيف الرقم وحوّله لوسيط من «استفسارات البوابات» على الموقع.${r.unit ? ` الوحدة: ${r.unit.code}.` : ""}`);
         } else if (r.outcome === "repeat") {
-          reply(broker, en ? "This enquiry was already saved in the last 24 hours." : "الاستفسار ده اتسجل قبل كده في آخر 24 ساعة.");
+          await reply(broker, en ? "This enquiry was already saved in the last 24 hours." : "الاستفسار ده اتسجل قبل كده في آخر 24 ساعة.");
         }
         return "done";
       }

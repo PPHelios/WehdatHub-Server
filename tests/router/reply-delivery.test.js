@@ -56,6 +56,17 @@ describe("Reply truth (plan #7, Part 2 C)", () => {
   });
 });
 
+describe("Portal enquiries from a manager", () => {
+  test("a forwarded Bayut enquiry is saved and answered, with no fallback bubble after it", async () => {
+    const replies = await h.text(
+      "admin",
+      "New enquiry on Bayut\nName: Khaled El-Sawy\nProperty Link: https://www.bayut.eg/pm/503956661/2662e7a7-7689-4a1c-9803-42d7977cf71a"
+    );
+    expect(textOf(replies)).toMatch(/Saved the Bayut enquiry/);
+    expect(textOf(replies)).not.toMatch(FALLBACK_AR);
+  });
+});
+
 describe("Perceived latency (plan L8)", () => {
   test("every inbound message gets a read receipt with the typing indicator", async () => {
     await h.send("broker", { id: "wamid.typing.1", type: "text", text: { body: "مساعدة" } });
