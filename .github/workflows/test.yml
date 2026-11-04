@@ -1,12 +1,15 @@
-# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every push and pull request.
-# The browser pass (phone-size clicks through every search box, form and voice button) runs in its own job
-# so the main run stays fast. Both use fake data and fake AI: no credits are spent.
-# A change that touches only docs or plan files runs neither job; any code change runs both in full.
+# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every pull request and on every push to main.
+# Nothing reaches main without a pull request run first; the full offline suite runs on each of them.
+# The browser pass (phone-size clicks through search, forms, imports and voice) runs in its own job and
+# runs whenever a change touches the web app or the code it uses, or when the change set cannot be read.
+# Both jobs use fake data and fake AI: no credits are spent.
+# Logs are errors-only: failing tests and the last lines are printed; passing output is kept out of the log.
+# A change that touches only docs or plan files runs neither job.
 name: tests
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths-ignore:
       - "docs/**"
       - "**.md"
@@ -15,7 +18,41 @@ on:
       - "docs/**"
       - "**.md"
 
+concurrency:
+  group: tests-${{ github.ref }}
+  # Runs on main are never cancelled, so every commit that lands on main keeps its own result.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      browser: ${{ steps.filter.outputs.browser }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # Any doubt (no base, unreadable diff, force-push) means run the browser job.
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "no base commit: browser on"; exit 0
+          fi
+          if ! changed=$(git diff --name-only "$BASE_SHA" HEAD 2>/dev/null); then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "diff unreadable: browser on"; exit 0
+          fi
+          if [ -z "$changed" ]; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "empty diff: browser on"; exit 0
+          fi
+          if echo "$changed" | grep -Eq '^(web/|routes/|domain/|services/|lib/|db/|scripts/|tests/|fonts/|package(-lock)?\.json|\.github/workflows/)'; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "browser=false" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -26,9 +63,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:ci
+      - name: Run offline tests (errors only)
+        run: |
+          npm run test:ci > test.log 2>&1 || {
+            grep -E '^(FAIL|not ok)|  ●|Error:|✕' test.log | head -300
+            echo '--- last 120 lines ---'
+            tail -n 120 test.log
+            exit 1
+          }
+          tail -n 5 test.log
 
   browser:
+    needs: changes
+    if: needs.changes.outputs.browser == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -39,4 +86,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      - name: Run browser tests (errors only)
+        run: |
+          npm run test:browser > browser.log 2>&1 || {
+            grep -E '^(FAIL|not ok)|  ●|Error:|✕' browser.log | head -300
+            echo '--- last 120 lines ---'
+            tail -n 120 browser.log
+            exit 1
+          }
+          tail -n 5 browser.log
