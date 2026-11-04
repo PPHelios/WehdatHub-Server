@@ -84,3 +84,15 @@ test("data entry can edit any non-VIP owner, but not a VIP one", async () => {
   expect(await UnitOwners.canEditOwner(h.pool, data, plain)).toBe(true);
   expect(await UnitOwners.canEditOwner(h.pool, data, vip)).toBe(false);
 });
+
+test("a VIP owner is fully hidden from data entry: no list entry, no profile page, no edit", async () => {
+  const vip = (await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Locked VIP', ARRAY['201055555555'], true) RETURNING id", [h.AGENCY_A]))[0].id;
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  expect((await agent.get("/app/owners")).text).not.toContain("Locked VIP");
+  expect((await agent.get(`/app/owners/${vip}`)).status).toBe(404);
+  const csrf = csrfOf((await agent.get("/app/units")).text);
+  const edit = await agent.post(`/app/owners/${vip}`).type("form").send({ name: "Renamed", _csrf: csrf });
+  expect(edit.status).toBeGreaterThanOrEqual(400);
+  const [row] = await h.query("SELECT name FROM unit_owners WHERE id = $1", [vip]);
+  expect(row.name).toBe("Locked VIP");
+});
