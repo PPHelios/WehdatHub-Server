@@ -211,7 +211,7 @@
       "invalidateStagedReview": ["pool", "brokerId"],
       "reviewDraft": ["broker", "ctx"],
       "answerInstallments": ["broker", "ctx", "yes"],
-      "answerOwner": ["broker", "ctx", "keep"],
+      "answerOwner": ["broker", "ctx", "choice"],
       "commitStagedReview": ["broker", "ctx"],
       "commitDraftToDatabase": ["broker", "_draft", "ctx"],
       "commitDraftToListing": ["broker", "_draft", "ctx"],
@@ -702,6 +702,9 @@
       "lockKey": ["name"],
       "STALE_RUNNING_MS": "Number"
     },
+    "domain/ownerLine.js": {
+      "parseOwnerLine": ["texts"]
+    },
     "domain/phone.js": {
       "toAsciiDigits": ["s"],
       "normalizePhone": ["raw"],
@@ -787,6 +790,7 @@
     "services/unitOwners.js": {
       "findByPhone": ["db", "agencyId", "phone"],
       "findOrCreate": ["db", "agencyId", "params"],
+      "renameFromDraft": ["db", "broker", "phone", "name"],
       "syncFromListing": ["db", "broker", "listing"],
       "getFor": ["pool", "viewer", "ownerId"],
       "listFor": ["pool", "viewer", "params"],
