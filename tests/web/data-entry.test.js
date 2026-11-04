@@ -41,3 +41,16 @@ test("a code typed on the website signs the broker in once", async () => {
   const again = await agent.post("/app/login/code").type("form").send({ _csrf: preOf(ok.text) || pre, phone: h.BROKERS.broker.phone, code });
   expect(again.status).toBe(422);
 });
+
+test("data entry sees only its own places: no Today or Leads tab, the plus adds a unit, and the More page lists only allowed links", async () => {
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  const page = (await agent.get("/app/units")).text;
+  expect(page).not.toContain('data-tab="home"');
+  expect(page).not.toContain('data-tab="leads"');
+  expect(page).toContain('class="fab" href="/app/units/new"');
+  const more = (await agent.get("/app/more")).text;
+  expect(more).toContain('href="/app/units"');
+  expect(more).not.toContain('href="/app/deals"');
+  expect(more).not.toContain('href="/app/owner"');
+  expect(more).not.toContain('href="/app/leads/import"');
+});
