@@ -75,3 +75,12 @@ test("data entry sees every owner except VIP ones, on the owners page", async ()
   expect(page).toContain("Plain Owner");
   expect(page).not.toContain("VIP Owner");
 });
+
+test("data entry can edit any non-VIP owner, but not a VIP one", async () => {
+  const plain = (await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Editable Owner', ARRAY['201033333333'], false) RETURNING id", [h.AGENCY_A]))[0].id;
+  const vip = (await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Hidden VIP', ARRAY['201044444444'], true) RETURNING id", [h.AGENCY_A]))[0].id;
+  const UnitOwners = require("../../services/unitOwners");
+  const data = { ...h.BROKERS.colleague, role: "data_entry" };
+  expect(await UnitOwners.canEditOwner(h.pool, data, plain)).toBe(true);
+  expect(await UnitOwners.canEditOwner(h.pool, data, vip)).toBe(false);
+});

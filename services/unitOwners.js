@@ -80,9 +80,13 @@ function brokerSees(viewer, scopeAll, alias = "u") {
   return ` AND ((${alias}.broker_id = '${me}'::uuid AND ${alias}.status = 'active') OR EXISTS (SELECT 1 FROM unit_access_requests r WHERE r.listing_id = ${alias}.id AND r.broker_id = '${me}'::uuid AND r.status = 'approved' AND r.decided_at > now() - make_interval(days => 30)))`;
 }
 
-/** Managers edit any owner; a broker edits an owner while one of their active units belongs to that owner. */
+/** Managers and data entry edit any non-VIP owner; a broker edits an owner while one of their active units belongs to that owner. */
 async function canEditOwner(pool, viewer, ownerId) {
   if (isManager(viewer)) return true;
+  if (isDataEntry(viewer)) {
+    const { rows: open } = await pool.query("SELECT 1 FROM unit_owners WHERE id = $1 AND agency_id = $2 AND is_private IS NOT TRUE", [ownerId, viewer.agency_id]);
+    return open.length > 0;
+  }
   const { rows } = await pool.query(
     `SELECT 1 FROM listings WHERE owner_id = $1 AND agency_id = $2 AND broker_id = $3 AND status = 'active' AND ${Vis.units("listings")} LIMIT 1`,
     [ownerId, viewer.agency_id, viewer.id]
