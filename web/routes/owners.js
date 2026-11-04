@@ -7,6 +7,7 @@ const Store = require("../../lib/listingStore");
 const Phone = require("../../domain/phone");
 const { isManager, isAgencyOwner } = require("../../lib/authz");
 const Portfolio = require("../../services/privatePortfolio");
+const Vis = require("../../lib/visibility");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -97,7 +98,11 @@ ${list.rows.length
   ${lead ? html`<p data-owner-lead>🔗 ${L(lang, "هو كمان عميل", "Also a lead")}: <a href="/app/leads/L-${String(lead.ref).padStart(4, "0")}">L-${String(lead.ref).padStart(4, "0")}</a></p>` : ""}
   <h2>${L(lang, "وحداته", "Units")}</h2>
   <ul data-owner-units>${owner.units.map((u) => html`<li><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a> · ${u.compound || ""} · ${u.status}${u.is_private ? " 🔒" : ""}</li>`)}</ul>
-  ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/${owner.id}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${owner.is_private ? "0" : "1"}"><button type="submit" class="secondary">${owner.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليه VIP", "Make VIP")}</button></form>` : ""}
+  ${isAgencyOwner(broker) && owner.is_private ? html`<form method="post" action="/app/owners/${owner.id}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="0"><button type="submit" class="secondary">${L(lang, "⭐ شيل الـ VIP", "Remove VIP")}</button></form>` : ""}
+  ${isAgencyOwner(broker) && !owner.is_private ? html`<form method="post" action="/app/owners/${owner.id}/portfolio" class="stack" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="1">
+    <p class="muted small">${L(lang, "الـ VIP بيخفي المالك وبياناته من كل حد غيرك. اختار الوحدات اللي تتخفي كمان:", "VIP hides the owner and their details from everyone but you. Choose which of their units to hide too:")}</p>
+    ${owner.units.map((u) => html`<label class="row"><input type="checkbox" name="units" value="${u.code}" checked> ${u.code}${u.is_private ? " 🔒" : ""}</label>`)}
+    <button type="submit" class="secondary">${L(lang, "⭐ خليه VIP", "Make VIP")}</button></form>` : ""}
   ${owner.canEdit
     ? html`<details><summary>${L(lang, "تعديل", "Edit")}</summary>
   <form method="post" action="/app/owners/${owner.id}" class="stack" data-owner-edit><input type="hidden" name="_csrf" value="${req.session.csrf}">
@@ -123,11 +128,22 @@ ${list.rows.length
   });
 
   // The agency owner marks a profile private or public again.
+  // Making a profile VIP also hides the owner's name and phone on every unit, and the units ticked on the form (the owner's
+  // own units; the others stay as they are). Removing VIP puts those details back on the units.
   web.post("/owners/:id/portfolio", async (req, res, next) => {
     const { broker } = req.session;
     if (!isAgencyOwner(broker)) return next();
-    const r = await Portfolio.setPrivate(pool, broker, "owner", req.params.id, req.body.value === "1");
+    const makePrivate = req.body.value === "1";
+    const r = await Portfolio.setPrivate(pool, broker, "owner", req.params.id, makePrivate);
     if (r.error) return next();
+    if (makePrivate) {
+      const ticked = [].concat(req.body.units || []).map(String);
+      const owned = (await pool.query(`SELECT id, code FROM listings WHERE owner_id = $1 AND agency_id = $2 AND ${Vis.units("listings")}`, [req.params.id, broker.agency_id])).rows;
+      for (const u of owned.filter((x) => ticked.includes(x.code))) await Portfolio.setPrivate(pool, broker, "unit", u.id, true);
+      await Owners.hideOwnerDetails(pool, broker.agency_id, req.params.id);
+    } else {
+      await Owners.restoreOwnerDetails(pool, broker.agency_id, req.params.id);
+    }
     return res.redirect(303, `/app/owners/${req.params.id}`);
   });
 

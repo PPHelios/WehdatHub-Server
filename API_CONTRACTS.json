@@ -788,6 +788,8 @@
       "findByPhone": ["db", "agencyId", "phone"],
       "findOrCreate": ["db", "agencyId", "params"],
       "syncFromListing": ["db", "broker", "listing"],
+      "hideOwnerDetails": ["db", "agencyId", "ownerId"],
+      "restoreOwnerDetails": ["db", "agencyId", "ownerId"],
       "getFor": ["pool", "viewer", "ownerId"],
       "listFor": ["pool", "viewer", "params"],
       "history": ["pool", "viewer", "ownerId", "params"],
