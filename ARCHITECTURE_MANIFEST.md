@@ -91,6 +91,7 @@
   | `067_broker_team_history.sql` | `broker_team_history`: which team lead each broker was under and when, so a team lead keeps the history of a broker's actions from their time in the team after that broker moves. |
   | `068_sync_compound_names.js` | `compound_synonyms`: copies the compound names from the code's place list into the table, so units are tagged with the same compounds the search reads. Existing names are left as they are. |
   | `069_login_code_channel.sql` | `web_login_tokens` and `brokers`: a website sign-in can be a six-digit code sent on the bot (a new channel), and the `data_entry` role (adds and edits units by hand, no leads or deals). |
+  | `070_photo_keys.sql` | `listing_images`, `project_images`, `agencies.logo_url`, `project_materials`: photos, flyers, logos and project files are stored as storage keys, not Supabase links (the link is built on display, `photoUrl` in `lib/supabase.js`); existing links are cut to keys, and project files may now be stored by key alone. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
