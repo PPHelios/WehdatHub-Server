@@ -17,3 +17,7 @@ CREATE TABLE IF NOT EXISTS fixed_costs (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS fixed_costs_month ON fixed_costs (month);
+
+-- Like every public table: no client role may read these rows (the app reads them as the server's own role).
+ALTER TABLE admin_board_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fixed_costs ENABLE ROW LEVEL SECURITY;
