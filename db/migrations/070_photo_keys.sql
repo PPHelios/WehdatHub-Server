@@ -14,9 +14,11 @@ UPDATE agencies
    SET logo_url = regexp_replace(logo_url, '^.*/storage/v1/object/public/listing-images/', '')
  WHERE logo_url LIKE '%/storage/v1/object/public/listing-images/%';
 
+-- The old http-only check must go before stored project files get a key in url.
+ALTER TABLE project_materials DROP CONSTRAINT IF EXISTS project_materials_url_check;
+
 -- A stored project file keeps its key in url too (storage_path holds the same key); links to outside sites stay http(s).
 UPDATE project_materials SET url = storage_path WHERE storage_path IS NOT NULL;
 
-ALTER TABLE project_materials DROP CONSTRAINT IF EXISTS project_materials_url_check;
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_url_check
   CHECK (((url ~ '^https?://'::text) OR (storage_path IS NOT NULL)) AND (length(url) <= 1000));

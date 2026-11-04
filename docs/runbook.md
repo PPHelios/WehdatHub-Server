@@ -18,6 +18,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WHATSAPP_ALLOWED_NUMBER` | no | `01055881114` | The only number WhatsApp talks to (the CRM owner's; national or international form). Other senders get no reply, and nothing is sent on WhatsApp to any other number. Both checks are in `lib/waOwnerOnly.js`. |
 | `TEST_SWITCH_PHONE` | no | (unset) | The test number that may switch its own role on the website (owner, manager, broker, data entry). Off unless `TEST_SWITCH_AGENCY_ID` is also set. The CRM admin number is never allowed. |
 | `TEST_SWITCH_AGENCY_ID` | no | (unset) | The ID of the test agency the role switch works in (the POC test agency). Off unless `TEST_SWITCH_PHONE` is also set. |
+| `ADMIN_USD_EGP` | no | 60 | The dollar rate the owner board uses to turn logged AI cost (USD) into EGP estimates. |
 | `WHATSAPP_OWNER_ONLY` | no | on | Set `false` only in tests: turns the owner-only check off. Leave it unset in production. |
 | `WHATSAPP_APP_SECRET` | yes | — | Meta app secret; every webhook must carry a valid `X-Hub-Signature-256` (fail-closed). |
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |
@@ -54,6 +55,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
 | `SEARCH_SHADOW_AI` | no | off | `true` makes the AI read every search the quick reader answered alone, quietly after the answer, for the nightly check and word learning (POC). It uses no agency credits. |
+| `SEARCH_AI_FIRST` | no | on | During the POC the AI reads every search and the quick reader runs beside it; the differences are kept in the search log. It uses no agency credits (the read has no broker in its context). `false` goes back to the quick reader first (AI only when it is unsure or asked). |
+| `SEARCH_AI_FIRST_DAILY_MAX` | no | `2000` | Most AI-first reads per day across all agencies; past it, searches use the quick reader first until the next day. |
 | `SEARCH_SHADOW_DAILY_MAX` | no | `300` | Most quiet AI reads per day (the POC budget). |
 | `SUPPORT_WHATSAPP` / `SUPPORT_TELEGRAM` | no | off | The owner's WhatsApp number (digits, with country code) and/or Telegram username. When set, every signed-in page footer shows "Talk to a person" (WhatsApp first, else Telegram). |
 | `OWNER_BROKER_IDS` | no | empty | Broker ids (comma-separated UUIDs) of the product owner. Only they see the app tracking dashboard at `/app/owner` (weekly active agencies and brokers, units/leads/deals, AI cost per agency, errors). Everyone else gets a 404 there. |
