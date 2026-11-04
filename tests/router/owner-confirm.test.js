@@ -66,3 +66,25 @@ test("a phone of an existing owner links the unit to that owner, not a new one",
   expect(l.owner_id).toBe(owner.id);
   expect((await h.query("SELECT count(*)::int AS n FROM unit_owners WHERE agency_id = $1", [h.AGENCY_A]))[0].n).toBe(1);
 });
+
+// A typed owner line ("Owner: name number") is read exactly; a saved owner with another name asks which name to keep.
+test("a typed owner line with a saved owner under another name lets the broker choose the name", async () => {
+  await h.query(
+    "INSERT INTO unit_owners (agency_id, name, phones, created_by) VALUES ($1, 'Old Name', ARRAY['201055550011']::text[], $2)",
+    [h.AGENCY_A, h.BROKERS.broker.id]
+  );
+  await h.text("broker", "اضافة");
+  await h.text("broker", "شقة هايد بارك 150 متر 3 غرف 8.5 مليون كود HP-78");
+  await h.text("broker", "Owner: New Name 01055550011");
+  const card = await h.text("broker", "تم");
+  expect(textOf(card)).toMatch(/Old Name/);
+  expect(textOf(card)).toMatch(/New Name/);
+  expect(ids(card[card.length - 1])).toContain("draft_owner_keep_typed");
+  const after = await h.tap("broker", "draft_owner_keep_typed");
+  expect(ids(after[after.length - 1])).toContain("draft_confirm");
+  await h.tap("broker", "draft_confirm");
+  const [l] = await h.query("SELECT owner_id FROM listings WHERE code = 'HP-78'");
+  expect(l.owner_id).not.toBeNull();
+  expect((await ownerRow("201055550011")).name).toBe("New Name");
+  expect((await h.query("SELECT count(*)::int AS n FROM unit_owners WHERE agency_id = $1", [h.AGENCY_A]))[0].n).toBe(1);
+});
