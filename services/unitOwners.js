@@ -72,7 +72,25 @@ async function syncFromListing(db, broker, listing) {
   if (!d.owner_phone) return null;
   const owner = await findOrCreate(db, listing.agency_id, { phone: d.owner_phone, name: d.owner_name, brokerId: broker?.id || null });
   if (owner) await link(db, listing.agency_id, listing, owner.id, broker?.id || null);
+  // A VIP owner's name and phone are not kept on the unit: the link stays, the details do not.
+  if (owner?.is_private) await db.query("UPDATE listings SET details = details - 'owner_name' - 'owner_phone' WHERE id = $1 AND agency_id = $2", [listing.id, listing.agency_id]);
   return owner;
+}
+
+/** Removes the owner's name and phone from every unit linked to a VIP owner (the link stays). */
+async function hideOwnerDetails(db, agencyId, ownerId) {
+  await db.query("UPDATE listings SET details = details - 'owner_name' - 'owner_phone' WHERE owner_id = $1 AND agency_id = $2", [ownerId, agencyId]);
+}
+
+/** Puts the owner's name and phone back on every unit linked to the owner (used when VIP is removed). */
+async function restoreOwnerDetails(db, agencyId, ownerId) {
+  const { rows } = await db.query("SELECT name, phones FROM unit_owners WHERE id = $1 AND agency_id = $2", [ownerId, agencyId]);
+  if (!rows[0]) return;
+  const phone = rows[0].phones?.[0] ? `+${rows[0].phones[0]}` : null;
+  await db.query(
+    `UPDATE listings SET details = (details - 'owner_name' - 'owner_phone') || jsonb_strip_nulls(jsonb_build_object('owner_name', $3::text, 'owner_phone', $4::text)) WHERE owner_id = $1 AND agency_id = $2`,
+    [ownerId, agencyId, rows[0].name, phone]
+  );
 }
 
 /** Whether the agency lets every broker see secret details (the same switch unitPrivacy reads). */
@@ -231,4 +249,4 @@ async function forLead(pool, viewer, lead) {
   return rows[0] ? getFor(pool, viewer, rows[0].id) : null;
 }
 
-module.exports = { findByPhone, findOrCreate, renameFromDraft, syncFromListing, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead };
+module.exports = { findByPhone, findOrCreate, renameFromDraft, syncFromListing, hideOwnerDetails, restoreOwnerDetails, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead };
