@@ -19,14 +19,13 @@ beforeEach(async () => {
 });
 afterAll(closeHarness);
 
-test("data entry lands on units and is kept out of leads, owners and imports", async () => {
+test("data entry lands on units and is kept out of leads and imports", async () => {
   const { agent } = await signIn(h, h.BROKERS.colleague);
   const home = await agent.get("/app/");
   expect(home.status).toBe(303);
   expect(home.headers.location).toBe("/app/units");
   expect((await agent.get("/app/units")).status).toBe(200);
   expect((await agent.get("/app/leads")).status).toBe(403);
-  expect((await agent.get("/app/owners")).status).toBe(403);
   expect((await agent.get("/app/deals")).status).toBe(403);
 });
 
@@ -51,8 +50,10 @@ test("data entry sees only its own places: no Today or Leads tab, the plus adds 
   const more = (await agent.get("/app/more")).text;
   expect(more).toContain('href="/app/units"');
   expect(more).not.toContain('href="/app/deals"');
+  expect(more).toContain('href="/app/owners"');
   expect(more).not.toContain('href="/app/owner"');
   expect(more).not.toContain('href="/app/leads/import"');
+  expect((await agent.get("/app/owners")).status).toBe(200);
 });
 
 test("data entry can create a share link for a unit in its agency", async () => {

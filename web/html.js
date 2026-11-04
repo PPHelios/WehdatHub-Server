@@ -113,6 +113,7 @@ const NAV = [
   { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
   { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", who: "manager" },
+  { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
   { key: "import", href: "/app/import", ar: "استيراد وحدات", en: "Import units", icon: "import", group: "work", desktop: true },
   { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work", desktop: true },
   { key: "dashboard", href: "/app/dashboard", ar: "لوحة الوكالة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },
@@ -131,7 +132,7 @@ const NAV = [
 
 /** The More page links this broker sees (managers: the agency pages; the app owner: App tracking too). */
 // Data entry sees only these More links (the pages it may open); everything else is hidden, not just refused.
-const DATA_ENTRY_NAV = new Set(["units", "notifications", "settings", "guide"]);
+const DATA_ENTRY_NAV = new Set(["units", "owners", "notifications", "settings", "guide"]);
 const DATA_ENTRY_TABS = ["search", "add", "units"];
 
 function navFor(broker) {
