@@ -1,12 +1,13 @@
-# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every push and pull request.
+# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every pull request and on pushes to main.
 # The browser pass (phone-size clicks through every search box, form and voice button) runs in its own job
 # so the main run stays fast. Both use fake data and fake AI: no credits are spent.
+# Logs are errors-only: failing tests and the last lines are printed; passing output is kept out of the log.
 # A change that touches only docs or plan files runs neither job; any code change runs both in full.
 name: tests
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
     paths-ignore:
       - "docs/**"
       - "**.md"
@@ -14,6 +15,10 @@ on:
     paths-ignore:
       - "docs/**"
       - "**.md"
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -26,7 +31,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:ci
+      - name: Run offline tests (errors only)
+        run: |
+          npm run test:ci > test.log 2>&1 || {
+            grep -E '^(FAIL|  ●)' test.log | head -200
+            echo '--- last 80 lines ---'
+            tail -n 80 test.log
+            exit 1
+          }
+          tail -n 5 test.log
 
   browser:
     runs-on: ubuntu-latest
@@ -39,4 +52,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      - name: Run browser tests (errors only)
+        run: |
+          npm run test:browser > browser.log 2>&1 || {
+            grep -E '^(FAIL|  ●)' browser.log | head -200
+            echo '--- last 80 lines ---'
+            tail -n 80 browser.log
+            exit 1
+          }
+          tail -n 5 browser.log
