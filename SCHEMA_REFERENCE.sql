@@ -1365,7 +1365,23 @@ CREATE TABLE IF NOT EXISTS public.broker_team_history (
   to_at timestamp with time zone
 );
 
+CREATE TABLE IF NOT EXISTS public.admin_board_snapshots (
+  tab text NOT NULL,
+  period_days integer NOT NULL,
+  payload jsonb NOT NULL,
+  computed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.fixed_costs (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  month date NOT NULL,
+  label text NOT NULL,
+  amount_egp numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
+ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_pkey PRIMARY KEY (id);
@@ -1391,6 +1407,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pkey PRIMARY KEY (id);
 ALTER TABLE developers ADD CONSTRAINT developers_pkey PRIMARY KEY (id);
 ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
+ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_pkey PRIMARY KEY (id);
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
@@ -1466,6 +1483,8 @@ ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp >= 0));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
+ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_period_days_check CHECK ((period_days = ANY (ARRAY[7, 30, 90])));
+ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_tab_check CHECK ((tab = ANY (ARRAY['overview'::text, 'money'::text, 'ai'::text, 'performance'::text, 'search'::text, 'agencies'::text, 'operations'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
@@ -1538,6 +1557,8 @@ ALTER TABLE developers ADD CONSTRAINT developers_name_check CHECK (((length(btri
 ALTER TABLE developers ADD CONSTRAINT developers_name_en_check CHECK (((name_en IS NULL) OR (length(name_en) <= 120)));
 ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
+ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_amount_egp_check CHECK ((amount_egp >= (0)::numeric));
+ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_label_check CHECK (((length(label) >= 1) AND (length(label) <= 120)));
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_kind_check CHECK ((kind = ANY (ARRAY['new'::text, 'changed'::text, 'unchanged'::text, 'invalid'::text, 'forbidden'::text, 'duplicate_code'::text, 'duplicate_unit'::text, 'photos_only'::text])));
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_source_check CHECK ((source = ANY (ARRAY['excel'::text, 'post'::text, 'chat'::text])));
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'done'::text, 'failed'::text, 'conflict'::text])));
@@ -1812,6 +1833,7 @@ CREATE INDEX demo_requests_created_idx ON public.demo_requests USING btree (crea
 CREATE UNIQUE INDEX uq_developers_agency_name ON public.developers USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX error_events_fingerprint ON public.error_events USING btree (fingerprint, created_at DESC);
 CREATE INDEX error_events_recent ON public.error_events USING btree (created_at DESC);
+CREATE INDEX fixed_costs_month ON public.fixed_costs USING btree (month);
 CREATE INDEX import_rows_agency_idx ON public.import_rows USING btree (agency_id);
 CREATE INDEX import_rows_tab_idx ON public.import_rows USING btree (import_id, kind, seq);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
