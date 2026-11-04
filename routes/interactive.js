@@ -165,8 +165,9 @@ async function handleInteractive(broker, message, ctx) {
   }
 
   // Answer to the review's owner card: link (or create) the owner, or discard the owner.
-  if (replyId === "draft_owner_keep" || replyId === "draft_owner_drop") {
-    return await Drafts.answerOwner(broker, ctx, replyId === "draft_owner_keep");
+  if (replyId === "draft_owner_keep" || replyId === "draft_owner_keep_typed" || replyId === "draft_owner_drop") {
+    const choice = replyId === "draft_owner_keep_typed" ? "keep_typed" : replyId === "draft_owner_drop" ? "drop" : "keep";
+    return await Drafts.answerOwner(broker, ctx, choice);
   }
 
   // 5. DRAFT: review (DRAFT_SAVE / draft_save_exit) or commit the staged review (draft_confirm)
