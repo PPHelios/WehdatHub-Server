@@ -10,7 +10,10 @@
 "use strict";
 
 const Phone = require("../domain/phone");
-const { isManager, isAgencyOwner } = require("../lib/authz");
+const { isManager, isAgencyOwner, isDataEntry } = require("../lib/authz");
+
+/** Managers and data entry see every owner (VIP owners stay hidden: Vis.owners); brokers see their own units' owners. */
+const seesAllOwners = (viewer) => isManager(viewer) || isDataEntry(viewer);
 const { logOperation } = require("../lib/db");
 const Vis = require("../lib/visibility");
 
@@ -71,7 +74,7 @@ async function scopeIsAll(pool, agencyId) {
  * Managers see every unit.
  */
 function brokerSees(viewer, scopeAll, alias = "u") {
-  if (isManager(viewer)) return "";
+  if (seesAllOwners(viewer)) return "";
   if (scopeAll) return "";
   const me = String(viewer.id).replace(/[^0-9a-f-]/gi, "");
   return ` AND ((${alias}.broker_id = '${me}'::uuid AND ${alias}.status = 'active') OR EXISTS (SELECT 1 FROM unit_access_requests r WHERE r.listing_id = ${alias}.id AND r.broker_id = '${me}'::uuid AND r.status = 'approved' AND r.decided_at > now() - make_interval(days => 30)))`;
@@ -116,7 +119,7 @@ async function listFor(pool, viewer, { q = "", limit = 50, offset = 0, onlyPriva
       WHERE o.agency_id = $1 AND ${Vis.owners("o")}${privateOnly}
         AND (CASE WHEN $2::text = '' THEN true ELSE (o.name ILIKE '%' || $2 || '%' OR ($3::text IS NOT NULL AND o.phones @> ARRAY[$3]::text[])) END)
         AND ((SELECT count(*) FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerSees(viewer, scopeAll)}) > 0
-             ${isManager(viewer) ? `OR NOT EXISTS (SELECT 1 FROM listings u WHERE ${Vis.allUnits()} AND u.owner_id = o.id AND u.agency_id = o.agency_id)` : ""})
+             ${seesAllOwners(viewer) ? `OR NOT EXISTS (SELECT 1 FROM listings u WHERE ${Vis.allUnits()} AND u.owner_id = o.id AND u.agency_id = o.agency_id)` : ""})
       ORDER BY o.created_at DESC LIMIT $4 OFFSET $5`,
     [viewer.agency_id, term.replace(/[%_\\]/g, (c) => `\\${c}`), digits, limit + 1, offset]
   );

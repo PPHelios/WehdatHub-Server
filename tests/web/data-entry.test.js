@@ -66,3 +66,12 @@ test("data entry can create a share link for a unit in its agency", async () => 
   const links = await h.query("SELECT count(*)::int AS n FROM share_links WHERE listing_id = $1", [listing.id]);
   expect(links[0].n).toBeGreaterThan(0);
 });
+
+test("data entry sees every owner except VIP ones, on the owners page", async () => {
+  await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'Plain Owner', ARRAY['201011111111'], false)", [h.AGENCY_A]);
+  await h.query("INSERT INTO unit_owners (agency_id, name, phones, is_private) VALUES ($1, 'VIP Owner', ARRAY['201022222222'], true)", [h.AGENCY_A]);
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  const page = (await agent.get("/app/owners")).text;
+  expect(page).toContain("Plain Owner");
+  expect(page).not.toContain("VIP Owner");
+});
