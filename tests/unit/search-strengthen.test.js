@@ -92,8 +92,8 @@ describe("budget, currency and installment words", () => {
 });
 
 describe("feature words and unit codes", () => {
-  test("kitchen and the apostrophe form of ACs", () => {
-    expect(parse("3 bedrooms Kitchen and ac's").filters.features.sort()).toEqual(["ac_installed", "kitchen_installed"]);
+  test("kitchen and the apostrophe form of ACs is the kitchen-and-AC status", () => {
+    expect(parse("3 bedrooms Kitchen and ac's").filters.furnishing).toBe("kitchen_and_ac");
   });
   test("a plain swimming pool is a feature word, not a place", () => {
     const f = parse("فيلا حمام سباحة 4 غرف").filters;

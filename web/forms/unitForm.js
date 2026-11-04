@@ -8,7 +8,7 @@ const Features = require("../../domain/features");
 const { PROPERTY_TYPES, unitKind } = require("../../domain/fieldRules");
 
 const FINISHING = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
-const FURNISHING = ["furnished", "semi_furnished", "unfurnished"];
+const FURNISHING = ["furnished", "semi_furnished", "unfurnished", "kitchen_and_ac", "ac_only", "kitchen_only"];
 const FREQUENCIES = ["monthly", "quarterly", "semi_annual", "annual"];
 const PLAN_ROWS = 3;
 

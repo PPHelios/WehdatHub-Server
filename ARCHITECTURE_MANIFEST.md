@@ -93,6 +93,7 @@
   | `069_login_code_channel.sql` | `web_login_tokens` and `brokers`: a website sign-in can be a six-digit code sent on the bot (a new channel), and the `data_entry` role (adds and edits units by hand, no leads or deals). |
   | `070_photo_keys.sql` | `listing_images`, `project_images`, `agencies.logo_url`, `project_materials`: photos, flyers, logos and project files are stored as storage keys, not Supabase links (the link is built on display, `photoUrl` in `lib/supabase.js`); existing links are cut to keys, and project files may now be stored by key alone. |
   | `071_search_compare_log.sql` | `search_log`: how the quick reader and the AI differed (`disagree`), close spellings accepted (`guesses`), unknown words the bot asked about (`asked`) and why the AI read failed (`ai_error`). |
+  | `073_furnishing_status.sql` | `listings.furnishing`: "kitchen and AC" is a status (`kitchen_and_ac`); units with both features and no status get it. |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
