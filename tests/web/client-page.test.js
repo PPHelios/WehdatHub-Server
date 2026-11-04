@@ -90,8 +90,8 @@ describe("agency logo", () => {
     const up = await agent.post("/app/settings/logo").field("_csrf", csrf).attach("logo", png, { filename: "logo.png", contentType: "image/png" });
     expect(up.headers.location).toMatch(/logo=saved/);
     const url = (await h.query("SELECT logo_url FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].logo_url;
-    expect(url).toMatch(/^https:\/\/storage\.test\/listing-images\/.+\/brand\/logo-[0-9a-f]{12}\.png$/);
-    expect((await open(path)).text).toContain(`src="${url}"`);
+    expect(url).toMatch(/^.+\/brand\/logo-[0-9a-f]{12}\.png$/);
+    expect((await open(path)).text).toContain(`src="https://storage.test/listing-images/${url}"`);
     const bad = await agent.post("/app/settings/logo").field("_csrf", csrf).attach("logo", Buffer.from("not an image"), { filename: "x.png", contentType: "image/png" });
     expect(bad.headers.location).toMatch(/logo=bad/);
 

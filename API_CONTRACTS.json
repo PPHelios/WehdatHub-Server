@@ -166,7 +166,8 @@
     },
     "lib/supabase.js": {
       "supabase": "Object",
-      "downloadListingImage": ["url"],
+      "photoUrl": ["value"],
+      "downloadListingImage": ["keyOrUrl"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],

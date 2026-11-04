@@ -634,7 +634,7 @@ async function clientMaterials(db, listing) {
     "SELECT kind, label, url, unit_type FROM project_materials WHERE project_id = $1 AND agency_id = $2 AND client_visible AND kind <> 'price_sheet' AND check_status IS DISTINCT FROM 'broken' ORDER BY created_at",
     [listing.project_id, listing.agency_id]
   );
-  return rows;
+  return rows.map((r) => ({ ...r, url: Storage.photoUrl(r.url) }));
 }
 
 /** A unit's project with its developer name and every material (for the broker: internal ones marked). */
@@ -647,7 +647,7 @@ async function projectForUnit(db, listing) {
   );
   if (!rows[0]) return null;
   const { rows: materials } = await db.query("SELECT kind, label, url, client_visible, check_status FROM project_materials WHERE project_id = $1 ORDER BY created_at", [rows[0].id]);
-  return { ...rows[0], materials };
+  return { ...rows[0], materials: materials.map((m) => ({ ...m, url: Storage.photoUrl(m.url) })) };
 }
 
 /* ---------------------------------------------------------------------- */
