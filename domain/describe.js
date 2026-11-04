@@ -34,7 +34,10 @@ const FINISHING_LABELS = {
 const FURNISHING_LABELS = {
   furnished: ["مفروشة", "Furnished"],
   semi_furnished: ["نصف فرش", "Semi-furnished"],
-  unfurnished: ["بدون فرش", "Unfurnished"]
+  unfurnished: ["بدون فرش", "Unfurnished"],
+  kitchen_and_ac: ["مطبخ وتكييف", "Kitchen and AC"],
+  ac_only: ["تكييف بس", "AC only"],
+  kitchen_only: ["مطبخ بس", "Kitchen only"]
 };
 
 const FREQUENCY_LABELS = {

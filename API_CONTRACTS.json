@@ -448,6 +448,12 @@
       "canonical": ["f"],
       "disagreements": ["a", "b"]
     },
+    "domain/furnishingStatus.js": {
+      "FURNISHING_STATUSES": "Array",
+      "FINISHING_STATUSES": "Array",
+      "mapFurnishing": ["text"],
+      "mapFinishing": ["text"]
+    },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
       "vocabularyRows": [],
