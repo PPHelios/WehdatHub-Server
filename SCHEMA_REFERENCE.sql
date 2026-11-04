@@ -1591,7 +1591,7 @@ ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_price_check CHECK ((pri
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_source_check CHECK ((source = ANY (ARRAY['sheet'::text, 'increase'::text, 'edit'::text, 'quick'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_quarter_check CHECK (((delivery_quarter >= 1) AND (delivery_quarter <= 4)));
-ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text, 'kitchen_and_ac'::text, 'ac_only'::text, 'kitchen_only'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_market_check CHECK ((market = ANY (ARRAY['resale'::text, 'primary'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((payment_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_portal_listing_no_check CHECK (((portal_listing_no IS NULL) OR ((length(portal_listing_no) >= 4) AND (length(portal_listing_no) <= 20))));

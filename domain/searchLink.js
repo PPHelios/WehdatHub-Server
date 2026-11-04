@@ -12,7 +12,7 @@ const MAX_TOKEN = 2000;
 const NUMBER_KEYS = ["price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "floor_max", "delivery_by_year", "payment_years", "payment_down_pct", "max_down_payment", "max_installment"];
 const FLAG_KEYS = ["delivery_ready", "payment_cash", "payment_installments"];
 const FINISHING = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
-const FURNISHING = ["furnished", "semi_furnished", "unfurnished"];
+const FURNISHING = ["furnished", "semi_furnished", "unfurnished", "kitchen_and_ac", "ac_only", "kitchen_only"];
 
 const isEmpty = (v) => v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
 const strList = (v, max = 12, len = 60) =>

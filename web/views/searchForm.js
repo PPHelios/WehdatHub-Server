@@ -88,10 +88,8 @@ function refineForm(filters, lang = "ar", { open = false, action = "/app/search"
     ${numberField("floor_min", L(lang, "الدور من", "Floor from"), v.floor_min)}
     ${numberField("floor_max", L(lang, "الدور حتى", "Floor up to"), v.floor_max)}
   </div>`)}
-  ${group(L(lang, "التشطيب والفرش", "Finishing and furnishing"), any(v.finishing, v.furnishing), html`<div class="pills">
-    ${Object.entries(Describe.FINISHING_LABELS).map(([k, pair]) => pill("checkbox", "finishing", k, v.finishing.includes(k), pick(pair, lang)))}
-  </div>
-  ${select("furnishing", L(lang, "الفرش", "Furnishing"), v.furnishing, [["", L(lang, "الكل", "Any")], ["furnished", L(lang, "مفروشة", "Furnished")], ["semi_furnished", L(lang, "نصف فرش", "Semi-furnished")], ["unfurnished", L(lang, "بدون فرش", "Unfurnished")]])}`)}
+  ${group(L(lang, "التشطيب والفرش", "Finishing and furnishing"), any(v.finishing, v.furnishing), html`${select("finishing", L(lang, "التشطيب", "Finishing"), (v.finishing || [])[0] || "", [["", L(lang, "الكل", "Any")], ...Object.entries(Describe.FINISHING_LABELS).map(([k, pair]) => [k, pick(pair, lang)])])}
+  ${select("furnishing", L(lang, "الفرش", "Furnishing"), v.furnishing, [["", L(lang, "الكل", "Any")], ["furnished", L(lang, "مفروشة", "Furnished")], ["semi_furnished", L(lang, "نصف فرش", "Semi-furnished")], ["unfurnished", L(lang, "بدون فرش", "Unfurnished")], ["kitchen_and_ac", L(lang, "مطبخ وتكييف", "Kitchen and AC")], ["ac_only", L(lang, "تكييف بس", "AC only")], ["kitchen_only", L(lang, "مطبخ بس", "Kitchen only")]])}`)}
   ${group(L(lang, "التسليم والدفع", "Delivery and payment"), any(v.ready, v.by_year, v.cash, v.installments, v.max_down_payment, v.max_installment), html`<div class="pills">
     ${pill("checkbox", "ready", "1", v.ready, L(lang, "استلام فوري", "Ready to move"))}${pill("checkbox", "cash", "1", v.cash, L(lang, "كاش", "Cash"))}${pill("checkbox", "installments", "1", v.installments, L(lang, "تقسيط", "Installments"))}
   </div>

@@ -46,6 +46,19 @@ async function findOrCreate(db, agencyId, { phone, name = null, brokerId = null 
   return rows[0];
 }
 
+/** The broker chose the typed name on a unit draft: the owner (found by phone) takes that name; history records it. */
+async function renameFromDraft(db, broker, phone, name) {
+  const digits = Phone.normalizePhone(phone);
+  const next = clean(name, 120);
+  if (!digits || !next) return null;
+  const { rows } = await db.query("SELECT * FROM unit_owners WHERE agency_id = $1 AND phones @> ARRAY[$2]::text[] ORDER BY created_at LIMIT 1", [broker.agency_id, digits]);
+  const owner = rows[0];
+  if (!owner || owner.name === next) return owner || null;
+  await db.query("UPDATE unit_owners SET name = $2, updated_at = now() WHERE id = $1", [owner.id, next]);
+  await addEvent(db, broker.agency_id, owner.id, broker.id, "edited", { name: next });
+  return owner;
+}
+
 /** Points a unit at an owner (no-op when it already does) and records it on the owner's history. */
 async function link(db, agencyId, listing, ownerId, brokerId, kind = "unit_linked") {
   if (listing.owner_id === ownerId) return;
@@ -236,4 +249,4 @@ async function forLead(pool, viewer, lead) {
   return rows[0] ? getFor(pool, viewer, rows[0].id) : null;
 }
 
-module.exports = { findByPhone, findOrCreate, syncFromListing, hideOwnerDetails, restoreOwnerDetails, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead };
+module.exports = { findByPhone, findOrCreate, renameFromDraft, syncFromListing, hideOwnerDetails, restoreOwnerDetails, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead };

@@ -149,6 +149,7 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
   // The match sweep: the same filters, restricted to the units that changed (step 7).
   if (onlyIds) where.push(`l.id = ANY(${add(onlyIds)}::uuid[])`);
   let rank = "";
+  let exactFirst = "";
 
   if (f.code) {
     // B6/B7: case-folded code through the unique (agency_id, code_norm) index.
@@ -212,7 +213,11 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       if (f.floor_max !== null) where.push(`(l.floor_level IS NULL OR l.floor_level <= ${add(f.floor_max)})`);
       // A blank finishing or furnishing matches both sides of the filter (only the special fields stay strict).
       if (f.finishing.length) where.push(`(l.finishing IS NULL OR l.finishing = ANY(${add(f.finishing)}::text[]))`);
-      if (f.furnishing) where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
+      if (f.furnishing) {
+        where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
+        // Exact status first, then the units whose status is blank (Haytham 2026-11-04).
+        exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} THEN 0 ELSE 1 END, `;
+      }
     }
 
     if (f.delivery_ready === true) where.push(`l.is_ready = true`);
@@ -274,7 +279,7 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     SELECT l.*, COUNT(*) OVER() AS total_count
     FROM listings l
     WHERE ${Vis.units("l")} AND ${where.join("\n      AND ")}
-    ORDER BY ${rank} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
+    ORDER BY ${rank} ${exactFirst} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
     LIMIT ${add(limit)} OFFSET ${add(offset)}`;
   return { sql, params };
 }

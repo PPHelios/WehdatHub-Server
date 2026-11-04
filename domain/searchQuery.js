@@ -9,9 +9,12 @@ const Features = require("./features");
 const Places = require("./places");
 const { TYPE_TERMS } = require("./vocabulary");
 const { normalizeSearch, foldLetters } = require("./searchText");
+const { mapFurnishing, mapFinishing } = require("./furnishingStatus");
 const { PROPERTY_TYPES } = require("./fieldRules");
 
 const FINISHING_KEYS = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
+// Furnishing status values. "kitchen_and_ac" / "ac_only" / "kitchen_only" are states of the same field (Haytham 2026-11-04).
+const FURNISHING_VALUES = ["furnished", "semi_furnished", "unfurnished", "kitchen_and_ac", "ac_only", "kitchen_only"];
 const SMALL_TALK = [
   "شكرا", "شكرا جزيلا", "تمام", "اوكي", "ok", "okay", "thanks", "thank you", "السلام عليكم", "سلام", "صباح الخير",
   "مساء الخير", "اهلا", "hi", "hello", "hey", "مرحبا", "تسلم", "ماشي", "حاضر", "👍"
@@ -198,8 +201,8 @@ function normalizeAiSearch(raw) {
     bathrooms_min: nonNegInt(f.bathrooms_min),
     floor_min: num(f.floor_min) !== null ? Math.round(num(f.floor_min)) : null,
     floor_max: num(f.floor_max) !== null ? Math.round(num(f.floor_max)) : null,
-    finishing: (Array.isArray(f.finishing) ? f.finishing : f.finishing ? [f.finishing] : []).map((x) => String(x).toLowerCase()),
-    furnishing: ["furnished", "semi_furnished", "unfurnished"].includes(f.furnishing) ? f.furnishing : null,
+    finishing: (Array.isArray(f.finishing) ? f.finishing : f.finishing ? [f.finishing] : []).map((x) => mapFinishing(x)).filter(Boolean),
+    furnishing: mapFurnishing(f.furnishing),
     delivery_ready: delivery.ready === true ? true : delivery.off_plan === true ? false : null,
     delivery_by_year: num(delivery.by_year) && num(delivery.by_year) >= 2000 ? Math.round(num(delivery.by_year)) : null,
     payment_cash: payment.cash === true ? true : null,
@@ -743,6 +746,25 @@ function fallbackParse(text) {
   // Numbers nobody used ("5000", "8"): the local reading cannot say what they are.
   const leftNumbers = hay.split(" ").filter((w) => /^\d+(?:\.\d+)?$/.test(w));
 
+  // "kitchen and AC" is a furnishing status: when the request names no other furnishing, the two features become that status.
+  // "AC only" / "kitchen only" (بس is optional in Arabic) are the other two statuses of the same field.
+  if (!f.furnishing) {
+    const nraw = ` ${normalizeSearch(raw)} `;
+    const onlyAc = /(?:تكييف|تكييفات|تكيفات|\bac\b|\bacs\b|air condition\w*)(?: بس)? only | (?:تكييف|تكييفات|تكيفات|\bac\b|\bacs\b) بس /.test(nraw);
+    const onlyKitchen = /(?:مطبخ|kitchen)(?: بس)? only | مطبخ بس /.test(nraw);
+    const hasK = f.features.includes("kitchen_installed");
+    const hasA = f.features.includes("ac_installed");
+    if (hasK && hasA) {
+      f.features = f.features.filter((k) => k !== "kitchen_installed" && k !== "ac_installed");
+      f.furnishing = "kitchen_and_ac";
+    } else if (hasA && onlyAc) {
+      f.features = f.features.filter((k) => k !== "ac_installed");
+      f.furnishing = "ac_only";
+    } else if (hasK && onlyKitchen) {
+      f.features = f.features.filter((k) => k !== "kitchen_installed");
+      f.furnishing = "kitchen_only";
+    }
+  }
   const filters = canonical(f);
   const intent = hasAnyFilter({ filters }) ? "search" : "other";
   const reasons = [];

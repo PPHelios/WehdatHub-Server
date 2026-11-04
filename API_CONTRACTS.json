@@ -211,7 +211,7 @@
       "invalidateStagedReview": ["pool", "brokerId"],
       "reviewDraft": ["broker", "ctx"],
       "answerInstallments": ["broker", "ctx", "yes"],
-      "answerOwner": ["broker", "ctx", "keep"],
+      "answerOwner": ["broker", "ctx", "choice"],
       "commitStagedReview": ["broker", "ctx"],
       "commitDraftToDatabase": ["broker", "_draft", "ctx"],
       "commitDraftToListing": ["broker", "_draft", "ctx"],
@@ -447,6 +447,12 @@
       "ensureFilters": ["parsed"],
       "canonical": ["f"],
       "disagreements": ["a", "b"]
+    },
+    "domain/furnishingStatus.js": {
+      "FURNISHING_STATUSES": "Array",
+      "FINISHING_STATUSES": "Array",
+      "mapFurnishing": ["text"],
+      "mapFinishing": ["text"]
     },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
@@ -702,6 +708,9 @@
       "lockKey": ["name"],
       "STALE_RUNNING_MS": "Number"
     },
+    "domain/ownerLine.js": {
+      "parseOwnerLine": ["texts"]
+    },
     "domain/phone.js": {
       "toAsciiDigits": ["s"],
       "normalizePhone": ["raw"],
@@ -787,6 +796,7 @@
     "services/unitOwners.js": {
       "findByPhone": ["db", "agencyId", "phone"],
       "findOrCreate": ["db", "agencyId", "params"],
+      "renameFromDraft": ["db", "broker", "phone", "name"],
       "syncFromListing": ["db", "broker", "listing"],
       "hideOwnerDetails": ["db", "agencyId", "ownerId"],
       "restoreOwnerDetails": ["db", "agencyId", "ownerId"],
