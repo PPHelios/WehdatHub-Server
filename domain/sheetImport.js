@@ -294,6 +294,8 @@ function rowToDraft(input = {}) {
         continue;
       }
       draft[k] = money(cells[k]);
+      // A bare rent figure under 1,000 is thousands: "50" in rent is 50k.
+      if (k === "price_value" && draft.listing_type === "rent" && /^\s*\d+(\.\d+)?\s*$/.test(String(cells[k])) && draft[k] && draft[k] < 1000) draft[k] = draft[k] * 1000;
       if (draft[k] === null && k === "price_value") errors.push(k);
     }
   }

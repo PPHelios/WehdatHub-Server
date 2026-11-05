@@ -151,30 +151,39 @@ function cellPrice(raw) {
   return d !== null ? { value: d, usd: true } : { value: raw, usd: false };
 }
 
-/** A figure written with separators: "3,000,000", "1.200.000", "7.326,000", "1,338,355.2". Any other shape → null (held). */
+/** A figure as written: "3,000,000", "1.200.000", "7.326,000", "1,338,355.2", "7,200,00" → the digits. */
 function figure(raw) {
-  const stripped = String(raw).trim().replace(/[.,](?=\d{3}(?!\d))/g, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(stripped)) return null;
-  const n = Number(stripped);
+  const x = String(raw).trim().replace(/\.(?=\d{3}(?!\d))/g, "").replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(x)) return null;
+  return Number(x);
+}
+
+/** An amount with its unit: "6 M" is 6,000,000, "193,224 k" stays 193,224; a bare figure under 1,000 is held. */
+function amountWithUnit(raw, unit) {
+  const n = figure(raw);
+  if (n === null || n <= 0) return null;
+  const u = String(unit || "").toLowerCase();
+  if (n < 1000 && u === "m") return n * 1e6;
+  if (n < 1000 && u === "k") return n * 1e3;
   return n >= 1000 ? n : null;
 }
 
 /**
  * A resale price cell that states an installment plan: "total 3,000,000 / down payment 2,485,000 / installments 515,000
- * till Feb 2026". → { price_value, down_payment_value, remaining_amount } or null when the three figures are not all read.
+ * till Feb 2026". → { price_value, down_payment_value, remaining_amount } or null when the figures are not all read.
  * The whole text is kept by the caller (it goes into the description with the dates and months).
  */
 function installmentOf(raw) {
   const s = clean(raw).toLowerCase();
-  const num = "([\\d][\\d.,]*)";
+  const num = "([\\d][\\d.,]*)\\s*(m|k)?(?![\\w])";
   const total = new RegExp(`total(?:\\s*price)?\\s*[:=]?\\s*${num}`).exec(s);
   const dp = new RegExp(`(?:down\\s*payment|downpayment|d\\.?\\s*p\\.?)\\s*[:=]?\\s*${num}`).exec(s);
   const inst = new RegExp(`(?:installments?|remain\\w*)\\s*[:=]?\\s*${num}`).exec(s) || new RegExp(`${num}\\s*installments?`).exec(s);
   if (!dp || !inst) return null;
-  const down = figure(dp[1]);
-  const remaining = figure(inst[1]);
+  const down = amountWithUnit(dp[1], dp[2]);
+  const remaining = amountWithUnit(inst[1], inst[2]);
   if (!down || !remaining) return null;
-  const stated = total ? figure(total[1]) : null;
+  const stated = total ? amountWithUnit(total[1], total[2]) : null;
   if (total && stated === null) return null; // a total that cannot be read is held, not worked out
   return { price_value: stated ?? down + remaining, down_payment_value: down, remaining_amount: remaining };
 }

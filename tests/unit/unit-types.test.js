@@ -112,9 +112,17 @@ describe("the sheet's own wording (from the rejected-rows file)", () => {
     expect(out.errors).not.toContain("price_value");
   });
 
-  test("an installment plan with a total or down payment that cannot be read is held", () => {
-    expect(Mixed.installmentOf("total 7,200,00M / Dp 6,780,700 M  installments 219,300 till 2024")).toBeNull();
-    expect(Mixed.installmentOf("toral price 8,100,000 /downpayment 6 M / installments 2,100,000 till April 2024")).toBeNull();
+  test("an installment plan: \"M\" is millions; a total that is written oddly is read as written; a missing figure is held", () => {
+    expect(Mixed.installmentOf("total 7,200,00M / Dp 6,780,700 M  installments 219,300 till 2024")).toEqual({ price_value: 720000, down_payment_value: 6780700, remaining_amount: 219300 });
+    expect(Mixed.installmentOf("toral price 8,100,000 /downpayment 6 M / installments 2,100,000 till April 2024")).toEqual({ price_value: 8100000, down_payment_value: 6000000, remaining_amount: 2100000 });
+    expect(Mixed.installmentOf("total 3,000,000 / dp x / installments 515,000")).toBeNull();
+  });
+
+  test("a bare rent figure under 1,000 is thousands", () => {
+    const out = SheetImport.rowToDraft({ code: "TX-6", listing_type: "rent", property_type: "apartment", price_value: "50", area_value: "150" });
+    expect(out.draft.price_value).toBe(50000);
+    const sale = SheetImport.rowToDraft({ code: "TX-7", listing_type: "sale", property_type: "apartment", price_value: "50", area_value: "150" });
+    expect(sale.draft.price_value).toBe(50);
   });
 
   test("text with no price is left as it is, so the row is reported", () => {
