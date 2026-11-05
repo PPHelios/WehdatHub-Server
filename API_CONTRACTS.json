@@ -745,6 +745,7 @@
     "lib/notifications.js": {
       "brokersWithRoles": ["pool", "agencyId", "roles"],
       "KINDS": "Array",
+      "CHANNELS": "Array",
       "KINDS_BY_ROLE": "Object",
       "kindsFor": ["broker"],
       "dailyKindsFor": ["broker"],
@@ -1650,6 +1651,7 @@
       "deadlineFor": ["db", "agencyId", "now"],
       "setAway": ["pool", "manager", "brokerId", "day", "params"],
       "setSwitches": ["pool", "manager", "brokerId", "off"],
+      "setNotifyOptions": ["pool", "manager", "brokerId", "params"],
       "nextBroker": ["db", "agencyId", "params"],
       "nextStep": ["db", "lead", "params"],
       "advanceRotation": ["db", "agencyId", "brokerId"],
@@ -1904,13 +1906,24 @@
       "SOURCES": "Array",
       "conditions": ["viewer", "f", "now"],
       "list": ["pool", "viewer", "f", "params"],
-      "withLeadRights": ["pool", "viewer", "r"]
+      "withLeadRights": ["pool", "viewer", "r"],
+      "summary": ["pool", "viewer", "params"]
     },
     "services/linkCleanup.js": {
       "BATCH": "Number",
       "REVOKED_KEEP_DAYS": "Number",
       "cleanup": ["pool", "params"],
       "cleanupJob": []
+    },
+    "services/linkPicker.js": {
+      "SESSION": "String",
+      "TTL_MIN": "Number",
+      "buttons": ["lang"],
+      "offer": ["pool", "broker", "listing"],
+      "pending": ["pool", "broker"],
+      "handleButton": ["pool", "broker", "id", "params"],
+      "handleInput": ["pool", "broker", "message", "params"],
+      "attach": ["pool", "broker", "s", "params", "params"]
     },
     "services/targets.js": {
       "monthOf": ["now"],
