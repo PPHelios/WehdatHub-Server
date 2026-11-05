@@ -504,7 +504,8 @@ CREATE TABLE IF NOT EXISTS public.projects (
   sheet_sync jsonb DEFAULT '{}'::jsonb NOT NULL,
   plans_draft jsonb,
   lat double precision,
-  lng double precision
+  lng double precision,
+  plan_rules jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_sessions (
@@ -922,7 +923,8 @@ CREATE TABLE IF NOT EXISTS public.project_plans (
   extra_fees jsonb DEFAULT '[]'::jsonb NOT NULL,
   position smallint DEFAULT 0 NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  exception_status text DEFAULT 'none'::text NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.project_materials (
@@ -1673,6 +1675,7 @@ ALTER TABLE project_phases ADD CONSTRAINT project_phases_name_check CHECK (((len
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_discount_pct_check CHECK (((discount_pct >= (0)::numeric) AND (discount_pct <= (100)::numeric)));
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_down_payment_pct_check CHECK (((down_payment_pct >= (0)::numeric) AND (down_payment_pct <= (100)::numeric)));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_exception_status_check CHECK ((exception_status = ANY (ARRAY['none'::text, 'needs_approval'::text, 'approved'::text])));
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_frequency_check CHECK ((frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_maintenance_due_check CHECK (((maintenance_due IS NULL) OR (maintenance_due = ANY (ARRAY['delivery'::text, 'installments'::text, 'contract'::text]))));
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_maintenance_pct_check CHECK (((maintenance_pct IS NULL) OR ((maintenance_pct >= (0)::numeric) AND (maintenance_pct <= (30)::numeric))));
