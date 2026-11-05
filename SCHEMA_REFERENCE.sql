@@ -1893,6 +1893,7 @@ CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree 
 CREATE INDEX idx_credit_requests_status ON public.credit_requests USING btree (status, created_at);
 CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id, broker_id);
 CREATE INDEX idx_deals_agency_closed ON public.deals USING btree (agency_id, closed_at DESC);
+CREATE INDEX idx_deals_agency_closer_closed ON public.deals USING btree (agency_id, closing_broker_id, closed_at DESC);
 CREATE INDEX idx_deals_lead ON public.deals USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX demo_requests_created_idx ON public.demo_requests USING btree (created_at DESC);
 CREATE UNIQUE INDEX uq_developers_agency_name ON public.developers USING btree (agency_id, lower(btrim(name)));

@@ -2233,6 +2233,13 @@
     },
     "web/routes/adminBoard.js": {
       "register": ["web", "params"]
+    },
+    "services/planRules.js": {
+      "FREQUENCIES": "Array",
+      "DUE": "Array",
+      "cleanRules": ["input"],
+      "saveRules": ["db", "actor", "projectId", "input"],
+      "checkPlan": ["rules", "plan"]
     }
   },
   "invariant_variable_names": {

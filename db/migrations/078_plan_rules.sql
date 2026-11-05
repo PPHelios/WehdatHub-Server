@@ -1,4 +1,4 @@
--- 077: plan rules per project and the exception flag on a payment plan (custom plan calculator, step 1).
+-- 078: plan rules per project and the exception flag on a payment plan (custom plan calculator, step 1).
 -- projects.plan_rules holds the developer's limits as data: lowest down payment, longest term, allowed frequencies,
 -- highest discount, maintenance, and optional fees (garage, club...) each with an amount and when it is due.
 -- Every field is optional; a project with no rules shows "no rules set" in the calculator.
