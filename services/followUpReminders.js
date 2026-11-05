@@ -26,7 +26,10 @@ const en = (b) => b?.preferred_lang === "en";
 const L = (b, ar, eng) => (en(b) ? eng : ar);
 const latin = (s) => (s && !/[؀-ۿ]/.test(s) ? s : null);
 const time = (d, b) => new Date(d).toLocaleTimeString(en(b) ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
-const dedupe = (prefix, rows, field) => `${prefix}:${crypto.createHash("sha1").update(rows.map((r) => `${r.id}@${new Date(r[field]).toISOString()}`).sort().join(",")).digest("hex").slice(0, 20)}`;
+// A reminder's key: the lead and the moment it is for (the follow-up time and the lead times sent with it), so each lead time
+// of one follow-up is its own message, and the same one is never sent twice.
+const reminderKeyOf = (r) => (r.reminder_key ? r.reminder_key : new Date(r.next_follow_up_at).toISOString());
+const dedupe = (prefix, rows, field) => `${prefix}:${crypto.createHash("sha1").update(rows.map((r) => `${r.id}@${field === "reminder_key" ? reminderKeyOf(r) : new Date(r[field]).toISOString()}`).sort().join(",")).digest("hex").slice(0, 20)}`;
 
 /** "📍 Mivida، New Cairo": where a viewing is. */
 function placeLine(listing, broker) {
@@ -97,6 +100,8 @@ async function tellBrokers(pool, byBroker, build, prefix, field, now) {
         if (m.id === broker.id) continue;
         const msg = build(m, leads);
         const title = `${msg.title} · ${L(m, `بدل ${broker.name} (إجازة)`, `for ${broker.name} (away)`)}`;
+        // The body names the broker too: the manager reads whose lead this is.
+        msg.body = `${L(m, "الوسيط", "Broker")}: ${broker.name}\n${msg.body}`;
         await Notifications.notifyBroker(pool, m, { kind: "follow_up", dedupeKey: `${dedupe(prefix, leads, field)}:${broker.id}`, ...msg, title, buttons: null, now });
       }
       told++;
@@ -119,20 +124,34 @@ const groupByBroker = (rows) => {
   return out;
 };
 
-/** Claims and reminds the due follow-ups. → { reminded, brokers } */
+/** How far ahead of a follow-up the job looks: the longest lead time anyone can pick. */
+const LOOK_AHEAD_MIN = 120;
+
+/** Claims and reminds the due follow-ups, one reminder per lead time the broker asked for. → { reminded, brokers } */
 async function remindDue(pool, { now = new Date(), limit = BATCH } = {}) {
   const claimed = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
-      `SELECT id FROM leads
-        WHERE ${Vis.leads("leads")} AND follow_up_status = 'open' AND next_follow_up_at <= $1 AND follow_up_reminded_at IS NULL
-          AND assigned_broker_id IS NOT NULL AND stage NOT IN ('won', 'lost')
-        ORDER BY next_follow_up_at, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
-      [now.toISOString(), limit]
+      `SELECT leads.*, b.notify_prefs AS broker_prefs FROM leads
+         JOIN brokers b ON b.id = leads.assigned_broker_id
+        WHERE ${Vis.leads("leads")} AND leads.follow_up_status = 'open' AND leads.next_follow_up_at <= $1
+          AND leads.assigned_broker_id IS NOT NULL AND leads.stage NOT IN ('won', 'lost')
+        ORDER BY leads.next_follow_up_at, leads.id LIMIT $2 FOR UPDATE OF leads SKIP LOCKED`,
+      [new Date(now.getTime() + LOOK_AHEAD_MIN * 60000).toISOString(), limit]
     );
-    if (!rows.length) return [];
-    // The claim is not an edit: version and updated_at stay, so an open lead page doesn't conflict.
-    const upd = await client.query("UPDATE leads SET follow_up_reminded_at = $2 WHERE id = ANY($1::uuid[]) RETURNING *", [rows.map((r) => r.id), now.toISOString()]);
-    return upd.rows;
+    const out = [];
+    for (const r of rows) {
+      const sent = r.follow_up_reminded_steps || [];
+      const minutes = Notifications.prefsOf({ notify_prefs: r.broker_prefs }).reminderMinutes;
+      const at = new Date(r.next_follow_up_at).getTime();
+      // The lead times whose moment has come and that were not sent yet. A follow-up booked late gets all of them in one message.
+      const passed = minutes.filter((m) => !sent.includes(m) && at - m * 60000 <= now.getTime());
+      if (!passed.length) continue;
+      const steps = [...new Set([...sent, ...passed])].sort((a, b) => a - b);
+      await client.query("UPDATE leads SET follow_up_reminded_steps = $2::int[], follow_up_reminded_at = $3 WHERE id = $1", [r.id, steps, now.toISOString()]);
+      delete r.broker_prefs;
+      out.push({ ...r, reminder_key: `${new Date(r.next_follow_up_at).toISOString()}#${passed.join("-")}` });
+    }
+    return out;
   });
   if (!claimed.length) return { reminded: 0, brokers: 0 };
   const unitIds = [...new Set(claimed.map((l) => l.follow_up_listing_id).filter(Boolean))];
@@ -140,7 +159,7 @@ async function remindDue(pool, { now = new Date(), limit = BATCH } = {}) {
   const byId = new Map(units.map((u) => [u.id, u]));
   for (const l of claimed) l.listing = byId.get(l.follow_up_listing_id) || null;
   claimed.sort((a, b) => new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at));
-  const brokers = await tellBrokers(pool, groupByBroker(claimed), reminderMessage, "fu", "next_follow_up_at", now);
+  const brokers = await tellBrokers(pool, groupByBroker(claimed), reminderMessage, "fu", "reminder_key", now);
   return { reminded: claimed.length, brokers };
 }
 

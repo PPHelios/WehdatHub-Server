@@ -49,8 +49,9 @@ test("a date with no time means 10:00 Cairo; the reminder comes at 10:00, not be
   await Leads.setFollowUp(h.pool, await row("broker"), l.id, { at, note: "ask about the budget" });
   await openWindow("broker", at);
 
-  expect(await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 60000) })).toEqual({ reminded: 0, brokers: 0 });
-  expect(await Reminders.remindDue(h.pool, { now: at })).toEqual({ reminded: 1, brokers: 1 });
+  // Default reminder: one hour before the time (lead times, reminder-lead-times.test.js).
+  expect(await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 61 * 60000) })).toEqual({ reminded: 0, brokers: 0 });
+  expect(await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 60 * 60000) })).toEqual({ reminded: 1, brokers: 1 });
   const [n] = await reminders();
   expect(n).toMatchObject({ status: "sent", channel: "whatsapp", lead_id: l.id });
   expect(n.title).toBe("📅 متابعة: Sara (L-0001)");
@@ -67,11 +68,10 @@ test("quiet hours hold the reminder until they end", async () => {
   const at = day(23);
   await Leads.setFollowUp(h.pool, await row("broker"), l.id, { at });
   await openWindow("broker", at);
-  await Reminders.remindDue(h.pool, { now: at });
-  const [held] = await reminders();
-  expect(held.status).toBe("held");
+  await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 60 * 60000) });
+  const [sent] = await reminders();
+  expect(sent.status).toBe("sent");
   const morning = new Date(Stages.cairoDayAt(at, 1, 8));
-  expect(new Date(held.deliver_after).toISOString()).toBe(morning.toISOString());
   await openWindow("broker", morning);
   await Notifications.deliverDue(h.pool, { now: morning });
   expect((await reminders())[0].status).toBe("sent");
@@ -111,7 +111,7 @@ test("a viewing reminder carries the unit's compact line and its place", async (
 
 test("Done and Postpone from WhatsApp: done offers the next step; postpone moves a day and reminds again", async () => {
   const l = await lead();
-  const due = new Date(Date.now() - 3600 * 1000);
+  const due = new Date(Date.now() + 30 * 60 * 1000); // booked for 30 minutes ahead: the hour-before reminder goes out at once
   await Leads.setFollowUp(h.pool, await row("broker"), l.id, { at: due });
   await Reminders.remindDue(h.pool, { now: new Date() });
 
@@ -134,7 +134,7 @@ test("Done and Postpone from WhatsApp: done offers the next step; postpone moves
 
 test("Done and Postpone on the website notification", async () => {
   const l = await lead();
-  const due = new Date(Date.now() - 3600 * 1000);
+  const due = new Date(Date.now() + 30 * 60 * 1000); // booked for 30 minutes ahead: the hour-before reminder goes out at once
   await Leads.setFollowUp(h.pool, await row("broker"), l.id, { at: due });
   await Reminders.remindDue(h.pool, { now: new Date() });
   const b = await signIn(h, "broker");

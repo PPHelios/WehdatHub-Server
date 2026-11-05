@@ -755,6 +755,7 @@
       "DEFAULT_QUIET": "Object",
       "MERGE_WINDOW_MS": "Number",
       "prefsOf": ["broker", "params"],
+      "REMINDER_MINUTES": "Array",
       "inQuietHours": ["prefs", "now"],
       "quietEnd": ["prefs", "now"],
       "isWindowOpen": ["pool", "broker", "now"],
