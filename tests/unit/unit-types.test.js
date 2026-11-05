@@ -66,7 +66,8 @@ describe("the sheet's own wording (from the rejected-rows file)", () => {
     ["apaerment(cleo)", "apartment"],
     ["apatrment with garden", "apartment"],
     ["douplex with garden", "duplex"],
-    ["twin houes", "twinhouse"],
+    ["twin houes", "twin_villa"],
+    ["twin house", "twin_villa"],
   ])("%s is %s", (text, key) => {
     expect(SheetImport.propertyType(text)).toBe(key);
   });
@@ -209,8 +210,8 @@ describe("search by type", () => {
     expect(scope("تريبلكس روف").order).toEqual(["triplex_roof", "triplex"]);
   });
 
-  test("a plain triplex search is not widened", () => {
-    expect(scope("triplex").types).toEqual(["triplex"]);
+  test("a plain triplex search returns triplex first, then triplex with roof", () => {
+    expect(scope("triplex")).toEqual({ types: expect.arrayContaining(["triplex", "triplex_roof"]), order: ["triplex", "triplex_roof"] });
   });
 
   test("a new type with an underscore is searched under its own key", () => {

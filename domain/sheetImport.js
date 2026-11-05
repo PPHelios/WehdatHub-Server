@@ -111,7 +111,7 @@ function emptyRequired(rows = []) {
 const TYPE_LOOKUP = new Map(
   Object.entries({ ...TYPE_TERMS, villa: [...TYPE_TERMS.villa, "standalone villa"] }).flatMap(([key, words]) => words.map((w) => [normalizeSearch(w), key]))
 );
-const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twinhouse"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"], ["triplex", "triplex"], ["basement", "basement"], ["mazonette", "mazonette"], ["maisonette", "maisonette"], ["skyloft", "sky_loft"]];
+const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twin_villa"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"], ["triplex", "triplex"], ["basement", "basement"], ["mazonette", "mazonette"], ["maisonette", "maisonette"], ["skyloft", "sky_loft"]];
 /** Garden anywhere in the type cell ("apartment with garden", "ground with garden"): the unit gets the private-garden feature. */
 const gardenIn = (v) => /garden/.test(normalizeSearch(v));
 /** Words after a type that say where the unit is or what it has ("apartment 4th floor", "town house corner", "studio with roof"). */

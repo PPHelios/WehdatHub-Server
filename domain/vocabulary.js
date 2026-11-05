@@ -20,11 +20,12 @@ const TYPE_TERMS = {
   studio: ["استوديو", "استديو", "studio"],
   // i_villa and twin_villa are listed before villa: "i villa" and "twin villa" contain "villa".
   i_villa: ["i villa", "i-villa", "ivilla", "آي فيلا", "اي فيلا"],
-  twin_villa: ["twin villa", "twinvilla", "توين فيلا"],
+  // "twin house" is a twin villa: there is no separate twin house type in search or import.
+  twin_villa: ["twin villa", "twinvilla", "توين فيلا", "twin house", "twinhouse", "توين هاوس", "توين"],
   maisonette: ["maisonette", "maisonnette", "ميزونيت"],
   villa: ["فيلا", "فيلات", "فيلا مستقلة", "villa", "villas", "standalone", "stand alone"],
   townhouse: ["تاون هاوس", "تاون", "townhouse", "town house"],
-  twinhouse: ["توين هاوس", "توين", "twin house", "twinhouse"],
+  twinhouse: [],
   office: ["مكتب", "مكاتب", "مكتب اداري", "office", "offices"],
   shop: ["محل تجاري", "محل", "محلات", "shop", "retail"],
   clinic: ["عيادة", "عيادات", "clinic"],

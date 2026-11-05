@@ -169,7 +169,7 @@ function canonical(f) {
  */
 const TYPE_FAMILIES = [
   { members: ["villa", "twin_villa", "i_villa", "townhouse", "maisonette"], from: ["villa", "twin_villa", "i_villa", "townhouse", "maisonette"] },
-  { members: ["triplex_roof", "triplex"], from: ["triplex_roof"] },
+  { members: ["triplex", "triplex_roof"], from: ["triplex", "triplex_roof"] },
 ];
 
 /** The unit types a search asks for, and the order to show them in. A standalone search (exact) is not widened. */
