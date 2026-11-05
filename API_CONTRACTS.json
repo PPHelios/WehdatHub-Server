@@ -750,8 +750,26 @@
       "hintLevel": ["state"],
       "usage": ["pool", "agencyId", "params"]
     },
+    "lib/notificationPolicy.js": {
+      "URGENT_KINDS": "Array",
+      "FREQUENCIES": "Array",
+      "CHANNELS": "Array",
+      "LOCKERS": "Array",
+      "KNOWN_KINDS": "Array",
+      "isUrgent": ["kind"],
+      "cleanEntry": ["e"],
+      "policyOf": ["agency"],
+      "mayChange": ["actor", "current"],
+      "merge": ["policy", "actor", "changes"],
+      "resolve": ["policy", "mine", "kind"],
+      "nextBatchAt": ["frequency", "now"],
+      "describe": ["entry"],
+      "getConfig": []
+    },
     "lib/notifications.js": {
       "brokersWithRoles": ["pool", "agencyId", "roles"],
+      "ownChoiceOf": ["broker", "kind"],
+      "effectiveFor": ["pool", "broker", "kind"],
       "KINDS": "Array",
       "CHANNELS": "Array",
       "KINDS_BY_ROLE": "Object",
@@ -1491,6 +1509,7 @@
       "num": ["v"],
       "listDevelopers": ["db", "actor"],
       "listDevelopersPage": ["db", "actor", "params"],
+      "listProjectsPage": ["db", "actor", "params"],
       "getDeveloper": ["db", "actor", "id"],
       "saveDeveloper": ["db", "actor", "input"],
       "developerByName": ["db", "actor", "name"],
@@ -1668,7 +1687,6 @@
       "deadlineFor": ["db", "agencyId", "now"],
       "setAway": ["pool", "manager", "brokerId", "day", "params"],
       "setSwitches": ["pool", "manager", "brokerId", "off"],
-      "setNotifyOptions": ["pool", "manager", "brokerId", "params"],
       "nextBroker": ["db", "agencyId", "params"],
       "nextStep": ["db", "lead", "params"],
       "advanceRotation": ["db", "agencyId", "brokerId"],
@@ -2248,7 +2266,9 @@
       "DUE": "Array",
       "cleanRules": ["input"],
       "saveRules": ["db", "actor", "projectId", "input"],
-      "checkPlan": ["rules", "plan"]
+      "checkPlan": ["rules", "plan"],
+      "feeFeatureKey": ["label"],
+      "visibleFees": ["fees", "unitKeys"]
     }
   },
   "invariant_variable_names": {

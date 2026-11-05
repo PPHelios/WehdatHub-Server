@@ -23,3 +23,12 @@ test("checkPlan flags a plan outside the limits and passes one inside", () => {
 test("a project with no rules has no exceptions", () => {
   expect(R.checkPlan({}, { down_payment_pct: 0, years: 20, frequency: "monthly" }).exception).toEqual(false);
 });
+
+test("a fee shows only when some unit in the project has its feature", () => {
+  const R2 = require("../../services/planRules");
+  expect(R2.feeFeatureKey("Garage")).toEqual("parking");
+  expect(R2.feeFeatureKey("نادي")).toEqual("club_membership");
+  expect(R2.feeFeatureKey("Maintenance")).toBeNull();
+  const fees = [{ label: "Garage" }, { label: "Club" }, { label: "Admin fee" }];
+  expect(R2.visibleFees(fees, new Set(["parking"])).map((f) => f.label)).toEqual(["Garage", "Admin fee"]);
+});

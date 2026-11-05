@@ -162,9 +162,10 @@ describe("Team and rules page", () => {
     const away = await agent.post(`/app/team/${h.BROKERS.colleague.id}/away`).type("form").send({ _csrf: csrf, until: back });
     expect(away.status).toBe(200);
     expect(away.text).toContain("data-away");
-    const sw = await agent.post(`/app/team/${h.BROKERS.colleague.id}/notify`).type("form").send({ _csrf: csrf, sent: "1", on: ["follow_up", "match"] });
+    // Notifications are set for the whole team on the policy card (the per-person panel is gone).
+    const sw = await agent.post("/app/team/policy").type("form").send({ _csrf: csrf, on_match: "0", on_assignment: "1" });
     expect(sw.status).toBe(200);
-    expect((await row("colleague")).notify_prefs.off).toContain("assignment");
+    expect((await h.query("SELECT notify_policy FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].notify_policy.match).toEqual({ on: false });
 
     const admin = await row("admin");
     await Team.deactivate(h.pool, admin, h.BROKERS.colleague.id, { now: new Date(Date.now() - 10 * 24 * 3600 * 1000) });

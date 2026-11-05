@@ -22,8 +22,6 @@ const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h) => `${String(h).padStart(2, "0")}:00`;
-/** The name of a channel a manager fixed for this person (shown on their Settings page). */
-const managedLabel = (c, lang) => (({ both: [L(lang, "تليجرام والموقع", "Telegram and website")], telegram: [L(lang, "تليجرام بس", "Telegram only")], web: [L(lang, "الموقع", "Website")], whatsapp: [L(lang, "واتساب", "WhatsApp")] })[c] || [c])[0];
 
 async function loadBroker(pool, broker) {
   const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id, draft_style, quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
@@ -45,6 +43,29 @@ function brandSection(lang, agency, notice) {
 </section>`;
 }
 
+/** One notification's row: on/off, channel and frequency. A setting the owner or a manager locked is shown and not editable. */
+function notifyRow(k, policy, broker, lang, tgOn) {
+  const Policy = require("../../lib/notificationPolicy");
+  const eff = Policy.resolve(policy, Notifications.ownChoiceOf(broker, k), k);
+  const urgent = Policy.isUrgent(k);
+  const by = eff.locked === "owner" ? L(lang, "المالك", "the owner") : L(lang, "المدير", "your manager");
+  // A person who has not chosen a channel sees the default their notifications use (Telegram and website when linked).
+  const shownChannel = eff.channel || Notifications.prefsOf(broker, { telegramLinked: Boolean(broker.telegram_chat_id) }).channels[k];
+  const lockNote = eff.locked ? html` <span class="muted small" data-locked-by="${eff.locked}">🔒 ${L(lang, `اتقفلت من ${by}`, `set by ${by}`)}</span>` : "";
+  const fixed = (f) => eff.lockedFields.includes(f);
+  const chOpts = [
+    ["both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)"), tgOn],
+    ["telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)"), tgOn],
+    ["web", L(lang, "الموقع (ببلاش)", "Website (free)"), true],
+    ["whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"), true]
+  ].filter(([, , show]) => show);
+  return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
+  ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`<label>${L(lang, "تشغيل", "On")} <select name="on_${k}" data-kind="${k}"${fixed("on") ? html` disabled` : ""}><option value="1"${eff.enabled ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${eff.enabled ? "" : html` selected`}>${L(lang, "مقفول", "Off")}</option></select></label>`}
+  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
+  ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
+</div>`;
+}
+
 function register(web, { pool, page }) {
   web.get("/settings", async (req, res) => {
     const lang = langOf(req);
@@ -59,6 +80,7 @@ function register(web, { pool, page }) {
     const crm = isCrmOwner(broker); // the CRM owner is no agency member: no logo, no client-message style
     const manager = isManager(broker) && !crm;
     const kinds = Notifications.kindsFor(broker);
+    const policy = require("../../lib/notificationPolicy").policyOf((await pool.query("SELECT notify_policy FROM agencies WHERE id = $1", [broker.agency_id])).rows[0]);
     const dataEntry = isDataEntry(broker) || crm;
     const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
     const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. ارفع PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ الرفع فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
@@ -82,12 +104,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
     "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الوكالة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
     "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
   )}</p>
-  ${kinds.map(
-    (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${prefs.off.includes(k) ? html` <span class="muted" data-switched-off>(${L(lang, "مقفولة من المدير؛ في 🔔 بس", "switched off by your manager; in 🔔 only")})</span>` : ""}
-    ${prefs.managed?.[k] ? html`<span class="muted small" data-managed-by-owner>(${L(lang, "مقفولة من المدير على «" + managedLabel(prefs.managed[k], lang) + "»", "set by your manager to " + managedLabel(prefs.managed[k], lang))})</span>` : ""}
-    <select name="ch_${k}" data-kind="${k}"${prefs.managed?.[k] ? html` disabled` : ""}>${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
-  </label>`
-  )}
+  ${kinds.map((k) => notifyRow(k, policy, broker, lang, tgOn))}
 ` : ""}
   <h2>⏰ ${L(lang, "تذكير المكالمات والمعاينات", "Reminders for calls and viewings")}</h2>
   <p class="muted">${L(lang, "ابعتلي تذكير قبل الميعاد بكام؟ الاختيار واحد أو أكتر. الافتراضي ساعة. التذكير بيوصل حتى لو في ساعات الهدوء.", "Remind me this long before: one or more. Default one hour. Reminders arrive even during quiet hours.")}</p>
@@ -140,8 +157,16 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
     const { broker } = req.session;
     const channels = {};
     for (const k of Notifications.kindsFor(broker)) channels[k] = req.body[`ch_${k}`];
+    const on = {};
+    const frequency = {};
+    for (const k of Notifications.kindsFor(broker)) {
+      if (req.body[`on_${k}`] === "0" || req.body[`on_${k}`] === "1") on[k] = req.body[`on_${k}`] === "1";
+      if (["immediate", "hourly", "daily"].includes(req.body[`fq_${k}`])) frequency[k] = req.body[`fq_${k}`];
+    }
     await Notifications.savePrefs(pool, await loadBroker(pool, broker), {
       channels,
+      on,
+      frequency,
       quiet: { enabled: req.body.quiet_on === "1", start: req.body.quiet_start, end: req.body.quiet_end },
       reminderMinutes: [30, 60, 120].filter((m) => req.body[`rm_${m}`] === "1")
     });
