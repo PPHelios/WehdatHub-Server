@@ -82,7 +82,7 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
     expect(card).toMatch(/غرفة مربية/);
     // Review is the only place warnings appear.
     expect(card).toMatch(/⚠️ موعد التسليم \(أو استلام فوري\) غير مسجل/);
-    expect(buttonsOf(review)).toContain("draft_owner_keep");
+    expect(buttonsOf(review)).not.toContain("draft_owner_keep"); // an owner is saved and linked on confirm, with no question
 
     await keepOwner();
     const saved = await h.tap("broker", "draft_confirm");
@@ -378,8 +378,8 @@ describe("Installments are asked, not assumed", () => {
     await h.text("broker", "townhouse hyde park 15M requested 13M");
     answerExtraction(gapOnly());
     const pending = await h.text("broker", "done");
-    expect(buttonsOf(pending)).toContain("draft_owner_keep");
-    const review = await keepOwner();
+    expect(buttonsOf(pending)).not.toContain("draft_owner_keep"); // no owner question: the review is shown at once
+    const review = pending;
     expect(textOf(review)).toMatch(/الباقي 2 مليون أقساط/);
     expect(buttonsOf(review)).toEqual(expect.arrayContaining(["draft_inst_yes", "draft_inst_no", "draft_cancel"]));
 
