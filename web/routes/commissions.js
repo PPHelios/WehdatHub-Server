@@ -1,22 +1,50 @@
-// web/routes/commissions.js — The developer commission tracker on the web (Release A, C8). Managers: every commission
-// by state (overdue first), one commission's moves (claimable, claim with invoice number and link, payments, client
-// registration, expected amount, cancel), a statement per developer (also as Excel), and each project's commission
-// terms (termsSection on the project page). Brokers: their own share and the state, read only.
+// web/routes/commissions.js — The commissions tab on the web. Two lists: Resale (the commission on each deal, from the
+// deals' own money) and Developers (the developer commission tracker, Release A, C8). Both can be narrowed to a period
+// (month, week or all, Cairo calendar), and managers can narrow them to one broker or to a team. Paged 20 at a time.
+// Managers: every commission by state (overdue first), one commission's moves (claimable, claim with invoice number and
+// link, payments, client registration, expected amount, cancel), a statement per developer (also as Excel), and each
+// project's commission terms (termsSection on the project page). Brokers: their own share and the state, read only.
 "use strict";
 
 const Stages = require("../../domain/leadStages");
 const Commissions = require("../../services/commissions");
+const Deals = require("../../services/deals");
 const C = require("../../domain/commissionTracker");
 const Commission = require("../../domain/commission");
+const P = require("../../domain/commissionPeriod");
 const { isManager } = require("../../lib/authz");
+const { isId } = require("../../lib/dealScope");
 const { html } = require("../html");
 const { dealsSwitch } = require("../views/tabs");
 
+const PAGE = 20;
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const money = (n, lang) => (n === null || n === undefined ? "—" : Commission.money(Number(n), lang));
 const day = (d) => (d ? C.isoDay(d) : "—");
 const dealLabel = (ref) => `D-${String(ref).padStart(4, "0")}`;
+
+/** A query string from the filters that have a value; the first page is left out. */
+const qs = (o) => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(o)) if (v !== null && v !== undefined && v !== "" && !(k === "page" && Number(v) === 0)) p.set(k, String(v));
+  const s = p.toString();
+  return s ? `?${s}` : "";
+};
+
+/** The brokers and the teams (a team lead and their brokers) a manager can narrow the tab to. */
+async function commissionPeople(db, agencyId) {
+  const brokers = (await db.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId])).rows;
+  const teams = (
+    await db.query(
+      `SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active
+         AND (role = 'team_lead' OR id IN (SELECT team_lead_id FROM brokers WHERE agency_id = $1 AND team_lead_id IS NOT NULL))
+       ORDER BY name`,
+      [agencyId]
+    )
+  ).rows;
+  return { brokers, teams };
+}
 
 const ERRORS = {
   invoice_no: ["اكتب رقم الفاتورة.", "Enter the invoice number."],
@@ -75,29 +103,93 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const actor = req.session.broker;
     const manager = isManager(actor);
-    const status = C.STATUSES.includes(req.query.status) ? req.query.status : null;
-    const overdue = req.query.overdue === "1";
-    const rows = await Commissions.listCommissions(pool, actor, { status, overdue });
-    const t = manager ? Commissions.totals(rows) : null;
-    const devs = manager ? [...new Map(rows.filter((r) => r.developer_id).map((r) => [r.developer_id, r.developer_name])).entries()] : [];
+    const kind = req.query.kind === "developers" ? "developers" : "resale";
+    const range = P.periodRange(req.query.period, req.query.at);
+    const brokerId = manager && isId(req.query.broker) ? req.query.broker : null;
+    const teamLeadId = manager && !brokerId && isId(req.query.team) ? req.query.team : null;
+    const status = kind === "developers" && C.STATUSES.includes(req.query.status) ? req.query.status : null;
+    const overdue = kind === "developers" && req.query.overdue === "1";
+    const pageNo = Math.max(0, parseInt(req.query.page, 10) || 0);
+    const scope = { brokerId, teamLeadId, from: range.from, to: range.to };
+
+    let rows;
+    let totals;
+    if (kind === "resale") {
+      ({ rows, totals } = await Deals.resaleCommissions(pool, actor, scope));
+    } else {
+      rows = await Commissions.listCommissions(pool, actor, { status, overdue, ...scope });
+      totals = manager ? Commissions.totals(rows) : null;
+    }
+    const total = rows.length;
+    const shown = rows.slice(pageNo * PAGE, pageNo * PAGE + PAGE);
+    const people = manager ? await commissionPeople(pool, actor.agency_id) : { brokers: [], teams: [] };
+    const f = { kind, period: range.period, at: range.at, broker: brokerId, team: teamLeadId, status, overdue: overdue ? "1" : null };
+    const link = (over) => `/app/commissions${qs({ ...f, page: pageNo, ...over })}`;
+    const amountLabel = !manager
+      ? L(lang, "نصيبك", "Your share")
+      : brokerId || teamLeadId
+        ? L(lang, "نصيب المختار", "Share in view")
+        : L(lang, "العمولة", "Commission");
+    const periodName = { month: L(lang, "شهر", "Month"), week: L(lang, "أسبوع", "Week"), all: L(lang, "الكل", "All time") };
+    const pager = total > PAGE
+      ? html`<p class="row" data-pager>${pageNo > 0 ? html`<a href="${link({ page: pageNo - 1 })}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} <span class="muted">${pageNo + 1} / ${Math.ceil(total / PAGE)}</span> ${pageNo < Math.ceil(total / PAGE) - 1 ? html`<a href="${link({ page: pageNo + 1 })}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
+      : "";
+
+    const filters = html`<form method="get" action="/app/commissions" class="card row" data-commission-filter>
+  <input type="hidden" name="kind" value="${kind}">${status ? html`<input type="hidden" name="status" value="${status}">` : ""}${overdue ? html`<input type="hidden" name="overdue" value="1">` : ""}
+  <label>${L(lang, "الفترة", "Period")} <select name="period">${["month", "week", "all"].map((v) => html`<option value="${v}"${v === range.period ? " selected" : ""}>${periodName[v]}</option>`)}</select></label>
+  <label>${L(lang, "في اليوم", "Day in it")} <input type="date" name="at" dir="ltr" value="${range.at}"></label>
+  ${manager
+    ? html`<label>${L(lang, "الزميل", "Broker")} <select name="broker"><option value="">${L(lang, "الكل", "All")}</option>${people.brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId ? " selected" : ""}>${b.name}</option>`)}</select></label>
+  <label>${L(lang, "الفريق", "Team")} <select name="team"><option value="">${L(lang, "الكل", "All")}</option>${people.teams.map((t) => html`<option value="${t.id}"${t.id === teamLeadId ? " selected" : ""}>${t.name}</option>`)}</select></label>`
+    : ""}
+  <button type="submit" class="secondary">${L(lang, "اعرض", "Show")}</button>
+</form>`;
+
+    const kindNav = html`<nav class="row" data-commission-kind>
+  <a class="btn ${kind === "resale" ? "" : "secondary"}" href="${link({ kind: "resale", status: null, overdue: null, page: 0 })}">🤝 ${L(lang, "إعادة البيع", "Resale")}</a>
+  <a class="btn ${kind === "developers" ? "" : "secondary"}" href="${link({ kind: "developers", page: 0 })}">🏗️ ${L(lang, "المطورين", "Developers")}</a>
+</nav>`;
+    const periodNav = html`<nav class="row" data-commission-period>
+  ${["month", "week", "all"].map((v) => html`<a class="btn ${v === range.period ? "" : "secondary"}" href="${link({ period: v, page: 0 })}">${periodName[v]}</a>`)}
+  ${range.period !== "all"
+    ? html`<a href="${link({ at: range.prevAt, page: 0 })}">←</a> <span dir="ltr">${range.fromDay} – ${range.toDay}</span> <a href="${link({ at: range.nextAt, page: 0 })}">→</a>`
+    : ""}
+</nav>`;
+
+    const resaleBody = html`${totals ? html`<section class="card row" data-deal-totals>
+  <span>${L(lang, "صفقات", "Deals")}: <strong>${totals.deals}</strong></span>
+  <span>${L(lang, "حجم المبيعات", "Volume")}: <strong>${money(totals.volume, lang)}</strong></span>
+  <span>${amountLabel}: <strong>${money(totals.amount, lang)}</strong></span>
+</section>` : ""}
+<section class="card">${shown.length
+  ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الصفقة", "Deal")}</th><th>${L(lang, "التاريخ", "Closed")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "العميل", "Client")}</th>${manager ? html`<th>${L(lang, "اللي قفل", "Closed by")}</th>` : ""}<th>${L(lang, "السعر", "Price")}</th><th>${amountLabel}</th></tr></thead>
+  <tbody>${shown.map((r) => html`<tr data-deal-commission="${r.id}"><td><a href="/app/deals/${Deals.refLabel(r.ref)}">${Deals.refLabel(r.ref)}</a></td><td dir="ltr">${day(r.closed_at)}</td><td dir="ltr">${r.unit_code || "—"}</td><td>${r.client_name || "—"}</td>${manager ? html`<td>${r.closing_broker_name || "—"}</td>` : ""}<td>${money(r.price, lang)}</td><td data-deal-amount>${money(r.amount, lang)}</td></tr>`)}</tbody></table></div>${pager}`
+  : html`<p class="muted">${L(lang, "مفيش صفقات في الفترة دي.", "No deals in this period.")}</p>`}</section>`;
+
+    const developersBody = html`${manager ? html`<section class="card row" data-commission-totals>
+  <span>${L(lang, "متوقع", "Expected")}: <strong>${money(totals.expected, lang)}</strong></span>
+  <span>${L(lang, "متطالب بيه", "Claimed")}: <strong>${money(totals.claimed, lang)}</strong></span>
+  <span>${L(lang, "اتدفع", "Paid")}: <strong>${money(totals.paid, lang)}</strong></span>
+  <span>${L(lang, "الباقي", "Outstanding")}: <strong>${money(totals.outstanding, lang)}</strong></span>
+  ${totals.overdue ? html`<a class="notice bad" href="${link({ overdue: "1", page: 0 })}">⏰ ${L(lang, `${totals.overdue} متأخرة`, `${totals.overdue} overdue`)}</a>` : ""}
+</section>` : ""}
+<nav class="row">${[null, ...C.STATUSES].map((s) => html`<a class="btn ${s === status ? "" : "secondary"}" href="${link({ status: s, page: 0 })}">${s ? Commissions.statusWord(s, lang) : L(lang, "الكل", "All")}</a>`)}</nav>
+${manager && rows.length ? html`<p class="muted">${L(lang, "كشف حساب:", "Statements:")} ${[...new Map(rows.filter((r) => r.developer_id).map((r) => [r.developer_id, r.developer_name])).entries()].map(([id, name], i) => html`${i ? " · " : ""}<a href="/app/commissions/developers/${id}">${name}</a>`)}</p>` : ""}
+<section class="card">${shown.length
+  ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الصفقة", "Deal")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "المطور", "Developer")}</th><th>${manager ? L(lang, "العمولة", "Commission") : L(lang, "نصيبك", "Your share")}</th><th>${L(lang, "الحالة", "Status")}</th>${manager ? html`<th>${L(lang, "ميعاد الدفع", "Due")}</th>` : ""}</tr></thead>
+  <tbody>${shown.map((c) => html`<tr data-commission="${c.id}"><td>${manager ? html`<a href="/app/commissions/${c.id}">${dealLabel(c.deal_ref)}</a>` : dealLabel(c.deal_ref)}</td><td dir="ltr">${c.unit_code || "—"}</td><td>${c.developer_name || "—"}</td><td>${manager ? html`${money(c.expected_amount, lang)}${c.paid_amount ? html`<br><span class="muted">${L(lang, "اتدفع", "paid")} ${money(c.paid_amount, lang)}</span>` : ""}` : html`<span data-my-share>${money(c.my_share, lang)}</span>`}</td><td>${badge(c, lang)}</td>${manager ? html`<td dir="ltr">${day(c.due_on)}</td>` : ""}</tr>`)}</tbody></table></div>${pager}`
+  : html`<p class="muted">${L(lang, "مفيش عمولات مطورين في الفترة دي. أي صفقة على وحدة من الكتالوج بتظهر هنا.", "No developer commissions in this period. Any deal on a catalogue unit shows up here.")}</p>`}</section>`;
+
     return page(req, res, {
       title: L(lang, "العمولات", "Commissions"),
       nav: "deals",
-      body: html`<h1>💸 ${L(lang, "عمولات المطورين", "Developer commissions")}</h1>
+      body: html`<h1>💸 ${L(lang, "العمولات", "Commissions")}</h1>
 ${dealsSwitch(lang, "/app/commissions")}
-${manager ? html`<section class="card row" data-commission-totals>
-  <span>${L(lang, "متوقع", "Expected")}: <strong>${money(t.expected, lang)}</strong></span>
-  <span>${L(lang, "متطالب بيه", "Claimed")}: <strong>${money(t.claimed, lang)}</strong></span>
-  <span>${L(lang, "اتدفع", "Paid")}: <strong>${money(t.paid, lang)}</strong></span>
-  <span>${L(lang, "الباقي", "Outstanding")}: <strong>${money(t.outstanding, lang)}</strong></span>
-  ${t.overdue ? html`<a class="notice bad" href="/app/commissions?overdue=1">⏰ ${L(lang, `${t.overdue} متأخرة`, `${t.overdue} overdue`)}</a>` : ""}
-</section>` : ""}
-<nav class="row">${[null, ...C.STATUSES].map((s) => html`<a class="btn ${s === status ? "" : "secondary"}" href="/app/commissions${s ? `?status=${s}` : ""}">${s ? Commissions.statusWord(s, lang) : L(lang, "الكل", "All")}</a>`)}</nav>
-${devs.length ? html`<p class="muted">${L(lang, "كشف حساب:", "Statements:")} ${devs.map(([id, name], i) => html`${i ? " · " : ""}<a href="/app/commissions/developers/${id}">${name}</a>`)}</p>` : ""}
-<section class="card">${rows.length
-  ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الصفقة", "Deal")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "المطور", "Developer")}</th><th>${manager ? L(lang, "العمولة", "Commission") : L(lang, "نصيبك", "Your share")}</th><th>${L(lang, "الحالة", "Status")}</th>${manager ? html`<th>${L(lang, "ميعاد الدفع", "Due")}</th>` : ""}</tr></thead>
-  <tbody>${rows.map((c) => html`<tr data-commission="${c.id}"><td>${manager ? html`<a href="/app/commissions/${c.id}">${dealLabel(c.deal_ref)}</a>` : dealLabel(c.deal_ref)}</td><td dir="ltr">${c.unit_code || "—"}</td><td>${c.developer_name || "—"}</td><td>${manager ? html`${money(c.expected_amount, lang)}${c.paid_amount ? html`<br><span class="muted">${L(lang, "اتدفع", "paid")} ${money(c.paid_amount, lang)}</span>` : ""}` : html`<span data-my-share>${money(c.my_share, lang)}</span>`}</td><td>${badge(c, lang)}</td>${manager ? html`<td dir="ltr">${day(c.due_on)}</td>` : ""}</tr>`)}</tbody></table></div>`
-  : html`<p class="muted">${L(lang, "لسه مفيش عمولات مطورين. أي صفقة على وحدة من الكتالوج بتظهر هنا.", "No developer commissions yet. Any deal on a catalogue unit shows up here.")}</p>`}</section>`
+${kindNav}
+${periodNav}
+${filters}
+${kind === "resale" ? resaleBody : developersBody}`
     });
   });
 
@@ -117,7 +209,7 @@ ${devs.length ? html`<p class="muted">${L(lang, "كشف حساب:", "Statements:
       title: st.developer.name,
       nav: "deals",
       body: html`<h1>📄 ${L(lang, "كشف عمولات", "Commission statement")}: ${st.developer.name}</h1>
-<p class="row"><a href="/app/commissions">${L(lang, "رجوع للعمولات", "Back to commissions")}</a> <a class="btn secondary" href="/app/commissions/developers/${st.developer.id}?format=xlsx" data-statement-xlsx>⬇️ Excel</a></p>
+<p class="row"><a href="/app/commissions?kind=developers">${L(lang, "رجوع للعمولات", "Back to commissions")}</a> <a class="btn secondary" href="/app/commissions/developers/${st.developer.id}?format=xlsx" data-statement-xlsx>⬇️ Excel</a></p>
 <section class="card row" data-statement-totals="${st.totals.outstanding}">
   <span>${L(lang, "متوقع", "Expected")}: <strong>${money(st.totals.expected, lang)}</strong></span>
   <span>${L(lang, "اتدفع", "Paid")}: <strong>${money(st.totals.paid, lang)}</strong></span>
@@ -158,7 +250,7 @@ ${notice}
   ${form("expected", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" value="${c.expected_amount}">`, `✏️ ${L(lang, "عدّل المتوقع", "Correct the expected amount")}`)}
   ${c.status === "cancelled" ? form("reopen", "", L(lang, "رجّعها", "Reopen")) : c.status !== "paid" ? form("cancel", "", `❌ ${L(lang, "إلغاء", "Cancel")}`) : ""}
 </section>
-<p><a href="/app/commissions">${L(lang, "رجوع للعمولات", "Back to commissions")}</a>${c.developer_id ? html` · <a href="/app/commissions/developers/${c.developer_id}">${L(lang, "كشف المطور", "Developer statement")}</a>` : ""}</p>`
+<p><a href="/app/commissions?kind=developers">${L(lang, "رجوع للعمولات", "Back to commissions")}</a>${c.developer_id ? html` · <a href="/app/commissions/developers/${c.developer_id}">${L(lang, "كشف المطور", "Developer statement")}</a>` : ""}</p>`
     }, status);
   };
 

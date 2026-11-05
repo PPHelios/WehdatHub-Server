@@ -122,7 +122,7 @@ describe("the pages", () => {
     const { project, dev, deal } = await seed();
     await deal("BD-1", "01011111111");
     const { agent, csrf } = await signIn(h, "admin");
-    const list = (await agent.get("/app/commissions")).text;
+    const list = (await agent.get("/app/commissions?kind=developers")).text;
     expect(list).toMatch(/data-commission-totals/);
     expect(list).toMatch(/300,000/);
     const id = (await comm("BD-1")).id;
@@ -143,10 +143,57 @@ describe("the pages", () => {
 
     // The colleague shares 40% of the agency's 200,000 deal commission: 80,000; the developer's numbers stay hidden.
     const b = await signIn(h, "colleague");
-    const mine = (await b.agent.get("/app/commissions")).text;
+    const mine = (await b.agent.get("/app/commissions?kind=developers")).text;
     expect(mine).toMatch(/data-my-share>80,000/);
     expect(mine).not.toMatch(/300,000|INV-1|data-commission-totals/);
     expect((await b.agent.get(`/app/commissions/${id}`)).status).toBe(403);
     expect((await b.agent.get(`/app/catalogue/projects/${project.id}`)).text).not.toMatch(/commission-terms/);
+  });
+
+  test("resale tab: the commission on each deal, narrowed by broker, team and period; paged; brokers see their share", async () => {
+    const { admin, broker, deal } = await seed();
+    const colleague = await row("colleague");
+    await deal("BD-1", "01011111111"); // 10M at 2%: 200,000, 40% to the colleague
+    // A resale deal with no unit, closed by the colleague: 1M at 2% = 20,000.
+    const lead2 = (await Leads.captureLead(h.pool, broker, { phones: "01022222222", name: "Second" })).lead;
+    expect((await Deals.createDeal(h.pool, admin, { leadKey: lead2.ref, price: 1000000, mode: "pct", pct: 2, closingBrokerId: colleague.id })).ok).toBe(true);
+
+    const { agent } = await signIn(h, "admin");
+    const all = (await agent.get("/app/commissions")).text;
+    expect(all).toMatch(/data-deal-totals[\s\S]*?Deals: <strong>2<\/strong>/);
+    expect(all).toMatch(/Commission: <strong>220,000/);
+
+    const byBroker = (await agent.get(`/app/commissions?broker=${colleague.id}`)).text;
+    expect(byBroker).toMatch(/Share in view: <strong>100,000/); // 80,000 from BD-1 + 20,000 closed by the colleague
+
+    await h.query("UPDATE brokers SET team_lead_id = $2 WHERE id = $1", [colleague.id, broker.id]);
+    const byTeam = (await agent.get(`/app/commissions?team=${broker.id}`)).text;
+    expect(byTeam).toMatch(/Share in view: <strong>220,000/); // the team lead's 120,000 + the colleague's 80,000 + 20,000
+
+    const oldMonth = (await agent.get("/app/commissions?period=month&at=2020-01-15")).text;
+    expect(oldMonth).toMatch(/No deals in this period/);
+    expect(oldMonth).toMatch(/2020-01-01 – 2020-01-31/);
+
+    const developers = (await agent.get(`/app/commissions?kind=developers&team=${broker.id}`)).text;
+    expect(developers).toMatch(/data-commission="/); // BD-1's developer commission is in the team's scope
+
+    const colleagueView = (await signIn(h, "colleague")).agent;
+    const mine = (await colleagueView.get("/app/commissions")).text;
+    expect(mine).toMatch(/data-deal-totals[\s\S]*?<strong>100,000/); // the colleague's share, in their language (Arabic)
+    expect(mine).not.toMatch(/data-deal-amount>200,000/);
+  });
+
+  test("resale tab pages 20 at a time", async () => {
+    const { admin, broker } = await seed();
+    for (let i = 1; i <= 21; i++) {
+      const lead = (await Leads.captureLead(h.pool, broker, { phones: `01033${String(i).padStart(6, "0")}`, name: `Client ${i}` })).lead;
+      expect((await Deals.createDeal(h.pool, admin, { leadKey: lead.ref, price: 1000000, mode: "pct", pct: 1, closingBrokerId: broker.id })).ok).toBe(true);
+    }
+    const { agent } = await signIn(h, "admin");
+    const first = (await agent.get("/app/commissions?period=all")).text;
+    expect((first.match(/data-deal-commission=/g) || []).length).toBe(20);
+    expect(first).toMatch(/data-pager/);
+    const second = (await agent.get("/app/commissions?period=all&page=1")).text;
+    expect((second.match(/data-deal-commission=/g) || []).length).toBe(1);
   });
 });

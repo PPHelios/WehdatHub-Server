@@ -6,6 +6,7 @@
 
 const ExcelJS = require("exceljs");
 const { isManager } = require("../lib/authz");
+const { scopeIds, inScopeSql } = require("../lib/dealScope");
 const C = require("../domain/commissionTracker");
 const Stages = require("../domain/leadStages");
 const Vis = require("../lib/visibility");
@@ -121,12 +122,17 @@ const LIST_SQL = `SELECT c.*, d.ref AS deal_ref, d.unit_code, d.price, d.client_
     LEFT JOIN projects p ON p.id = c.project_id LEFT JOIN developers v ON v.id = c.developer_id
     LEFT JOIN brokers b ON b.id = d.closing_broker_id`;
 
-/** Managers: every commission (filters: status, developer, overdue). Brokers: those they share in, with their share. */
-async function listCommissions(db, actor, { status = null, developerId = null, overdue = false, now = new Date() } = {}) {
+/**
+ * Managers: every commission, narrowed by status, developer, overdue, broker or team (the broker or the team lead's team),
+ * and the deal's closing date (from, to: instants, to exclusive). Brokers: those they share in, with their share.
+ * Paging is done by the caller.
+ */
+async function listCommissions(db, actor, { status = null, developerId = null, overdue = false, brokerId = null, teamLeadId = null, from = null, to = null, now = new Date() } = {}) {
   await syncAgency(db, actor.agency_id);
-  const params = [actor.agency_id, actor.id];
+  const ids = await scopeIds(db, actor, { brokerId, teamLeadId });
+  const params = [actor.agency_id, actor.id, ids];
   const where = ["c.agency_id = $1"];
-  if (!isManager(actor)) where.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
+  where.push(`($3::uuid[] IS NULL OR ${inScopeSql(3)})`); // $3 is always referenced, so Postgres can type it when it is null
   if (C.STATUSES.includes(status)) {
     params.push(status);
     where.push(`c.status = $${params.length}`);
@@ -139,7 +145,11 @@ async function listCommissions(db, actor, { status = null, developerId = null, o
     params.push(today(now));
     where.push(`c.status IN ('claimed', 'partly_paid') AND c.due_on < $${params.length}::date`);
   }
-  const { rows } = await db.query(`${LIST_SQL} WHERE ${where.join(" AND ")} ORDER BY c.due_on NULLS LAST, d.closed_at DESC LIMIT 300`, params);
+  if (from && to) {
+    params.push(from, to);
+    where.push(`d.closed_at >= $${params.length - 1} AND d.closed_at < $${params.length}`);
+  }
+  const { rows } = await db.query(`${LIST_SQL} WHERE ${where.join(" AND ")} ORDER BY c.due_on NULLS LAST, d.closed_at DESC`, params);
   const day = today(now);
   return rows.map((r) => shape(r, actor, day));
 }
