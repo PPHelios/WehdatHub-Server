@@ -660,7 +660,8 @@
       "parseCsv": ["text", "limitRows"],
       "decodeText": ["buffer"],
       "mapTable": ["rows", "params"],
-      "xlsxRows": ["buffer"]
+      "xlsxRows": ["buffer"],
+      "xlsxSheets": ["buffer"]
     },
     "services/imports.js": {
       "describeChanges": ["listing", "patch", "lang"],

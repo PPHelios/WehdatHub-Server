@@ -25,16 +25,21 @@ async function projectOf(db, actor, projectId) {
 async function sheetPage(file) {
   let rows;
   try {
-    if (/\.csv$/i.test(file.originalname || "") || /csv|text\/plain/.test(file.mimetype || "")) rows = Sheets.parseCsv(Sheets.decodeText(file.buffer)).map((r) => r.values);
-    else rows = (await Sheets.xlsxRows(file.buffer)).map((r) => r.values);
+    if (/\.csv$/i.test(file.originalname || "") || /csv|text\/plain/.test(file.mimetype || "")) rows = Sheets.parseCsv(Sheets.decodeText(file.buffer)).map((r) => ({ values: r.values }));
+    else rows = null;
   } catch (e) {
     return { error: e.code || "NOT_XLSX" };
   }
-  const text = rows
-    .map((v) => (v || []).slice(1).map((c) => (c instanceof Date ? c.toISOString().slice(0, 10) : c ?? "")).join("\t").trim())
-    .filter(Boolean)
-    .join("\n")
-    .slice(0, MAX_SHEET_CHARS);
+  // Step 4: every tab of a workbook, each under its tab name (developers often split plans across tabs).
+  const tabs = rows ? [{ name: "", rows }] : await Sheets.xlsxSheets(file.buffer);
+  const lines = [];
+  for (const tab of tabs) {
+    const body = tab.rows
+      .map((r) => (r.values || []).slice(1).map((c) => (c instanceof Date ? c.toISOString().slice(0, 10) : c ?? "")).join("\t").trim())
+      .filter(Boolean);
+    if (body.length) lines.push(...(tab.name ? [`# ${tab.name}`] : []), ...body);
+  }
+  const text = lines.join("\n").slice(0, MAX_SHEET_CHARS);
   if (!text) return { error: "NO_PLANS" };
   const fingerprint = `${P.VERSION}:sheet:${crypto.createHash("sha256").update(text).digest("hex")}`;
   return { list: [{ label: 1, mime: "text/plain", data: Buffer.from(text, "utf8"), fingerprint }], pdf: null };

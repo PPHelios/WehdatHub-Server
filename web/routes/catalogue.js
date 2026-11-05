@@ -332,6 +332,7 @@ ${prices || ""}
     <button type="submit" class="secondary">${L(lang, "إضافة مرحلة", "Add phase")}</button></form>` : ""}
 </section>
 
+<p class="row"><a class="btn secondary" href="${base}/present" data-present-link>${L(lang, "عرض للعميل", "Client presentation")}</a> <a class="btn secondary" href="${base}/calculator" data-calc-link>${L(lang, "حاسبة الأنظمة", "Payment calculator")}</a></p>
 <section class="card" id="plans">
   <h2>💳 ${L(lang, "أنظمة السداد", "Payment plans")}</h2>
   <p class="muted">${L(lang, "النظام بيتطبق على كل وحدات المشروع (أو المرحلة) تلقائي، إلا الوحدة اللي ليها أنظمتها الخاصة.", "A plan applies to every unit of the project (or phase) automatically, except a unit with its own plans.")}</p>
@@ -478,6 +479,76 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   web.get("/catalogue/developers/:id", (req, res) => showDeveloper(req, res));
   web.post("/catalogue/developers/:id", write((req) => Catalogue.saveDeveloper(pool, actorOf(req), { ...req.body, id: req.params.id }), { show: showDeveloper, done: (req) => `/app/catalogue/developers/${req.params.id}?saved=1` }));
 
+  // Step 6: the payment schedule of the calculator's plan as an Excel file (same inputs as the calculator page).
+  web.get("/catalogue/projects/:id/calculator.xlsx", async (req, res) => {
+    const lang = langOf(req);
+    const actor = req.session.broker;
+    const data = await Catalogue.getProject(pool, actor, req.params.id);
+    if (!data) return notFound(req, res);
+    const rules = data.project.plan_rules || {};
+    const unit = data.units.find((u) => u.code === req.query.unit) || null;
+    if (!unit || !(Number(unit.price_value) > 0)) return res.status(404).send("no priced unit");
+    const frequency = PlanRules.FREQUENCIES.includes(req.query.freq) ? req.query.freq : "quarterly";
+    const down = Math.min(100, Math.max(0, Number(req.query.down ?? 10) || 0));
+    const years = Math.min(20, Math.max(0, Number(req.query.years ?? 8) || 0));
+    const plan = { down_payment_pct: down, years, frequency, discount_pct: 0, maintenance_pct: rules.maintenance_pct, maintenance_due: rules.maintenance_due };
+    const out = F.generateDetailedSchedule(Number(unit.price_value), plan, new Date());
+    const ExcelJS = require("exceljs");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(lang === "en" ? "Schedule" : "الجدول");
+    ws.views = [{ rightToLeft: lang !== "en" }];
+    ws.addRow([lang === "en" ? "Unit" : "الوحدة", unit.code, lang === "en" ? "Project" : "المشروع", data.project.name]);
+    ws.addRow([lang === "en" ? "Price" : "السعر", Math.round(Number(unit.price_value)), lang === "en" ? "Down payment %" : "المقدم %", down, lang === "en" ? "Years" : "السنين", years]);
+    ws.addRow([]);
+    ws.addRow([lang === "en" ? "No." : "م", lang === "en" ? "Due date" : "التاريخ", lang === "en" ? "Type" : "النوع", lang === "en" ? "Amount" : "المبلغ", lang === "en" ? "Maintenance" : "الصيانة", lang === "en" ? "Total" : "الإجمالي"]);
+    for (const r of out.rows) {
+      ws.addRow([r.period, r.due_date ? new Date(r.due_date) : "", r.type, Math.round(r.amount || 0), Math.round(r.maintenance_amount || 0), Math.round(r.total_outflow || 0)]);
+    }
+    ws.getColumn(2).numFmt = "dd/mm/yyyy";
+    const buf = await wb.xlsx.writeBuffer();
+    return res.set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="schedule-${unit.code}.xlsx"` }).send(Buffer.from(buf));
+  });
+
+  // Step 3: the project presentation a broker shows a client (phone first). Only client-visible files, approved plans
+  // and the unit types with a price. Developer contact and internal notes never appear here.
+  web.get("/catalogue/projects/:id/present", async (req, res) => {
+    const lang = langOf(req);
+    const actor = req.session.broker;
+    const data = await Catalogue.getProject(pool, actor, req.params.id);
+    if (!data) return notFound(req, res);
+    const p = data.project;
+    const money = (n) => Math.round(Number(n) || 0).toLocaleString(lang === "en" ? "en-US" : "ar-EG") + (lang === "en" ? " EGP" : " ج.م");
+    const types = new Map();
+    for (const u of data.units.filter((x) => Number(x.price_value) > 0)) {
+      const key = `${u.property_type || "other"}|${u.bedrooms ?? ""}`;
+      const t = types.get(key) || { type: u.property_type || "other", bedrooms: u.bedrooms, count: 0, from: Infinity, areaMin: Infinity, areaMax: 0 };
+      t.count += 1;
+      t.from = Math.min(t.from, Number(u.price_value));
+      if (Number(u.area_value) > 0) { t.areaMin = Math.min(t.areaMin, Number(u.area_value)); t.areaMax = Math.max(t.areaMax, Number(u.area_value)); }
+      types.set(key, t);
+    }
+    const unitTypes = [...types.values()].sort((a, b) => a.from - b.from);
+    const plans = data.plans.filter((pl) => pl.exception_status !== "needs_approval");
+    const files = data.materials.filter((m) => m.client_visible && m.kind !== "price_sheet" && m.check_status !== "broken");
+    const delivery = p.delivery_year ? `${p.delivery_quarter ? `Q${p.delivery_quarter} ` : ""}${p.delivery_year}` : null;
+    const body = html`<section class="card stack" id="presentation" data-presentation>
+  <h1>${lang === "en" ? p.name_en || p.name : p.name}</h1>
+  <p class="muted">${data.developer?.name || ""}${delivery ? ` · ${L(lang, "التسليم", "Delivery")} ${delivery}` : ""}</p>
+  ${unitTypes.length ? html`<div class="stack"><h2>${L(lang, "الوحدات المتاحة", "Available units")}</h2>
+    ${unitTypes.map((t) => html`<div class="card"><strong>${t.type}${t.bedrooms ? ` · ${t.bedrooms} ${L(lang, "غرف", "bed")}` : ""}</strong>
+      <p>${L(lang, "من", "From")} ${money(t.from)} · ${t.count} ${L(lang, "وحدة", "units")}${t.areaMax ? ` · ${Math.round(t.areaMin)}–${Math.round(t.areaMax)} m²` : ""}</p></div>`)}
+  </div>` : ""}
+  ${plans.length ? html`<div class="stack"><h2>${L(lang, "أنظمة السداد", "Payment plans")}</h2>
+    ${plans.map((pl) => html`<div class="card"><strong>${pl.name}</strong><p>${L(lang, "المقدم", "Down payment")} ${Number(pl.down_payment_pct)}%${Number(pl.years) ? ` · ${Number(pl.years)} ${L(lang, "سنين", "years")}` : ""} · ${label2(FREQ, pl.frequency, lang)}</p></div>`)}
+  </div>` : ""}
+  ${files.length ? html`<div class="stack"><h2>${L(lang, "ملفات ولينكات", "Files and links")}</h2>
+    <ul>${files.map((m) => html`<li><a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a> · ${label2(KIND, m.kind, lang)}</li>`)}</ul></div>` : ""}
+  <p><a class="btn" href="/app/catalogue/projects/${p.id}/calculator">${L(lang, "احسب نظام سداد", "Calculate a payment plan")}</a></p>
+  <p><a href="/app/catalogue/projects/${p.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
+</section>`;
+    return page(req, res, { title: `${lang === "en" ? p.name_en || p.name : p.name} · ${L(lang, "عرض", "Presentation")}`, nav: "catalogue", body });
+  });
+
   // Step 2: the payment calculator for one project unit. Inputs are GET fields so the page works without script; a
   // static script submits it on each change. Rule checks come from the project's plan rules.
   web.get("/catalogue/projects/:id/calculator", async (req, res) => {
@@ -509,6 +580,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     ${fees.length ? html`<fieldset><legend>${L(lang, "مصاريف اختيارية", "Optional fees")}</legend>${fees.map((f) => html`<label><input type="checkbox" name="fee${f.i}" value="1"${f.on ? " checked" : ""}> ${f.label}: ${money(f.amount)}</label>`)}</fieldset>` : ""}
     <noscript><button type="submit">${L(lang, "احسب", "Calculate")}</button></noscript>
   </form>
+  ${summary ? html`<p><a href="/app/catalogue/projects/${data.project.id}/calculator.xlsx?unit=${encodeURIComponent(unit.code)}&down=${down}&years=${years}&freq=${frequency}" data-excel-link>${L(lang, "حمّل الجدول (إكسيل)", "Download schedule (Excel)")}</a></p>` : ""}
   ${summary ? html`<div class="stack">
     <p><strong>${L(lang, "سعر الوحدة", "Unit price")}:</strong> ${money(price)}</p>
     <p><strong>${L(lang, "المقدم", "Down payment")}:</strong> ${money(summary.down_payment)}</p>
