@@ -36,6 +36,27 @@ test("the form has payment tabs and the photo preview hook", async () => {
   expect(page.text).toContain("data-photo-preview");
 });
 
+test("a new unit's stepped form names its per-step check address", async () => {
+  const { agent } = await signIn(h, "broker");
+  const page = await agent.get("/app/units/new?lang=en");
+  expect(page.text).toContain('data-check="/app/units/step-check"');
+});
+
+test("Next's check returns the blockers as JSON and saves nothing", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  const before = (await h.query("SELECT count(*)::int AS n FROM listings"))[0].n;
+  const empty = await agent.post("/app/units/step-check").field("_csrf", csrf).field("listing_type", "sale").field("property_type", "apartment");
+  expect(empty.status).toBe(200);
+  expect(Array.isArray(empty.body.blockers)).toBe(true);
+  expect(empty.body.blockers.map((b) => b.field)).toEqual(expect.arrayContaining(["area_value", "price_value"]));
+  let filled = agent.post("/app/units/step-check").field("_csrf", csrf);
+  for (const [k, v] of Object.entries(FIELDS)) filled = filled.field(k, v);
+  const ok = await filled;
+  expect(ok.status).toBe(200);
+  expect(ok.body.blockers.map((b) => b.field)).not.toContain("area_value");
+  expect((await h.query("SELECT count(*)::int AS n FROM listings"))[0].n).toBe(before);
+});
+
 test("owner lead code: unknown codes are refused, a known one is kept as L-0042 and linked from the unit page", async () => {
   const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
   const lead = await Leads.captureLead(h.pool, broker, { phones: ["01011112222"], name: "Mona Saeed" });

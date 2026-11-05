@@ -116,6 +116,7 @@ function pickPrice(raw, rule) {
   const parts = clean(raw).split(/\s*(?:\/|;|\+|\s-\s|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   const cands = parts.map((part) => ({ part, v: amountOf(part) })).filter((c) => c.v && !DAILY.test(c.part));
   if (rule === "first") return cands[0]?.v ?? null;
+  // The long-term price first, else the monthly one.
   if (rule === "long") return (cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part)) || cands.find((c) => MONTH.test(c.part)))?.v ?? null;
   return null;
 }
@@ -128,4 +129,26 @@ function dollars(raw) {
   return v > 0 ? v : null;
 }
 
-module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN };
+/**
+ * The price a price cell means, by the owner's rules: a cell with several prices takes the long-term or monthly one
+ * (else the first, never a daily one); a dollar amount stays in dollars; a cell with dollars and an EGP price takes the EGP.
+ * → { value, usd } where value is the raw cell when nothing is read (the caller then reports it).
+ */
+function cellPrice(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return { value: raw, usd: false };
+  const usd = dollars(text);
+  if (usd !== null) return { value: usd, usd: true };
+  if (!FOREIGN.test(text)) {
+    if (priceText(text)?.ambiguous !== true) return { value: raw, usd: false };
+    const v = pickPrice(text, "long") ?? pickPrice(text, "first");
+    return { value: v ?? raw, usd: false };
+  }
+  const egp = pickPrice(text, "long");
+  if (egp) return { value: egp, usd: false };
+  const seg = clean(text).split(/\s*(?:\/|;|\+)\s*/).find((p) => FOREIGN.test(p));
+  const d = seg ? dollars(seg) : null;
+  return d !== null ? { value: d, usd: true } : { value: raw, usd: false };
+}
+
+module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN, cellPrice };

@@ -200,12 +200,12 @@ describe("status words, dates, duplicates and remembered choices", () => {
 
   test("a type word picked once comes back pre-selected, never applied on its own", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const odd = (i, prefix) => [...unitRow(i, prefix).slice(0, 2), "mazonette", ...unitRow(i, prefix).slice(3)];
+    const odd = (i, prefix) => [...unitRow(i, prefix).slice(0, 2), "hyde park", ...unitRow(i, prefix).slice(3)];
     const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [odd(1, "VR")])] });
-    await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "mazonette", value: "duplex" });
+    await agent.post(`${a.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "hyde park", value: "duplex" });
     const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [odd(1, "MI")])] });
     const page = await agent.get(b.body.url);
-    expect(page.text).toMatch(/data-type-word="mazonette"/);
+    expect(page.text).toMatch(/data-type-word="hyde park"/);
     expect(page.text).toMatch(/<option value="duplex" selected data-remembered>/);
     expect(page.text).toMatch(/data-kind="invalid"/);
   });
@@ -235,7 +235,7 @@ describe("status words, dates, duplicates and remembered choices", () => {
 describe("preferences learned from edits, and no bulk import on phones", () => {
   test("a type word fixed by hand in the review is suggested on the next upload", async () => {
     const { agent, csrf } = await signIn(h, "manager");
-    const odd = (i, prefix) => [...unitRow(i, prefix).slice(0, 2), "sky loft", ...unitRow(i, prefix).slice(3)];
+    const odd = (i, prefix) => [...unitRow(i, prefix).slice(0, 2), "hyde park", ...unitRow(i, prefix).slice(3)];
     const a = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", [odd(1, "VR")])] });
     await agent.post(`${a.body.url}/edit/1`).type("form").send({ _csrf: csrf, c_property_type: "penthouse" });
     const b = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Mivida", [odd(1, "MI")])] });
@@ -293,14 +293,14 @@ describe("unknown types and unreadable cells", () => {
   test("a type word the app does not know is mapped once for every row; a bad price says what the cell said", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const data = [unitRow(1, "VR"), unitRow(2, "VR"), unitRow(3, "VR", "wait price")];
-    data[0][2] = "triplex";
-    data[1][2] = "Triplex ";
+    data[0][2] = "bytshatab";
+    data[1][2] = "Bytshatab ";
     const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", data)] });
     let page = await agent.get(r.body.url);
-    expect(page.text).toMatch(/data-type-word="triplex"/);
+    expect(page.text).toMatch(/data-type-word="bytshatab"/);
     expect(page.text).toMatch(/×2/);
     expect(page.text).toMatch(/«wait price»/);
-    await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "triplex", value: "duplex" });
+    await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "bytshatab", value: "duplex" });
     page = await agent.get(r.body.url);
     expect(page.text).not.toMatch(/data-type-word=/);
     await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "2"] });

@@ -200,10 +200,12 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
     remembered = await importPrefs(pool, broker.agency_id);
     await applyCodePatterns(pool, broker.agency_id, sheet);
   }
-  // A price in dollars is kept in dollars (saved with its currency, like a unit added by voice or text); search converts it.
+  // A cell with several prices takes the long-term or monthly one; a price in dollars is kept in dollars (saved with its
+  // currency, like a unit added by voice or text); search converts it.
   const parsed = sheet.rows.map((r) => {
-    const usd = Mixed.dollars(cellText(r, "price_value"));
-    const row = SheetImport.rowToDraft(usd ? { ...r.cells, price_value: usd } : r.cells);
+    const price = Mixed.cellPrice(r.cells.price_value);
+    const usd = price.usd ? price.value : null;
+    const row = SheetImport.rowToDraft(price.value === r.cells.price_value ? r.cells : { ...r.cells, price_value: price.value });
     if (usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
     return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd), hint: SheetImport.statusHint(r.cells) };
   });
@@ -514,7 +516,7 @@ function unknownTypes(rows) {
   }
   return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([value, count]) => ({ value, count }));
 }
-const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "twinhouse", "office", "shop", "clinic", "commercial", "land"];
+const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "twinhouse", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "commercial", "land"];
 
 /** How many rows each batch action would touch, for the review page. */
 function batchStats(payload) {

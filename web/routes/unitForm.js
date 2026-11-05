@@ -31,7 +31,7 @@ const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const upload = uploads([PHOTO, VOICE]);
 
-for (const re of [/^\/units\/new$/, /^\/units\/extract$/, /^\/units\/review$/, /^\/units\/[^/]+\/edit$/]) Session.allowMultipart(re);
+for (const re of [/^\/units\/new$/, /^\/units\/extract$/, /^\/units\/review$/, /^\/units\/step-check$/, /^\/units\/[^/]+\/edit$/]) Session.allowMultipart(re);
 
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
 const ctxOf = (pool, req) => ({ pool, broker: req.session.broker, agency: req.session.agency, lang: langOf(req) });
@@ -169,6 +169,15 @@ function register(web, { pool, page, assets }) {
       ? await Store.findCatalogueMatch(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }).catch(() => null)
       : null;
     return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate, catalogue })));
+  });
+
+  // ➡️ Next on a stepped new-unit form: the field rules for the form as it stands, as JSON. Nothing is saved; the page
+  // shows the blockers that belong to the step on screen. The duplicate, owner and lead checks stay on the final save.
+  web.post("/units/step-check", upload, async (req, res) => {
+    const lang = langOf(req);
+    const form = Form.unitFromForm(req.body);
+    const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length });
+    return res.json({ blockers: ev.blockers.map((b) => ({ field: b.field, label: b.label })) });
   });
 
   // ✅ Create: the field table must pass; insert-only (a used code is refused, never overwritten).

@@ -20,7 +20,15 @@ const TYPE_LABELS = {
   shop: ["محل", "Shop"],
   clinic: ["عيادة", "Clinic"],
   commercial: ["وحدة تجارية", "Commercial unit"],
-  land: ["أرض", "Land"]
+  land: ["أرض", "Land"],
+  triplex: ["تريبلكس", "Triplex"],
+  triplex_roof: ["تريبلكس روف", "Triplex with roof"],
+  sky_loft: ["سكاي لوفت", "Sky loft"],
+  basement: ["بدروم", "Basement"],
+  mazonette: ["مازونيت", "Mazonette"],
+  i_villa: ["آي فيلا", "I Villa"],
+  twin_villa: ["توين فيلا", "Twin villa"],
+  maisonette: ["ميزونيت", "Maisonette"]
 };
 
 const FINISHING_LABELS = {

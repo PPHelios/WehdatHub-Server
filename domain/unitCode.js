@@ -4,6 +4,14 @@
 
 const TYPE_LETTER = {
   apartment: "A",
+  triplex: "X",
+  triplex_roof: "E",
+  sky_loft: "K",
+  basement: "B",
+  mazonette: "M",
+  i_villa: "I",
+  twin_villa: "W",
+  maisonette: "N",
   villa: "V",
   townhouse: "T",
   twinhouse: "T",

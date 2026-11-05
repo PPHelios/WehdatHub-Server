@@ -106,7 +106,8 @@ describe("one cell, several facts", () => {
     expect(SheetImport.propertyType("apatment")).toBe("apartment");
     expect(SheetImport.propertyType("penthous")).toBe("penthouse");
     expect(SheetImport.propertyType("twon house")).toBe("townhouse");
-    expect(SheetImport.propertyType("triplex")).toBeNull();
+    expect(SheetImport.propertyType("triplex")).toBe("triplex");
+    expect(SheetImport.propertyType("zebra")).toBeNull();
     expect(SheetImport.columnFor("descibation ")).toBe("description");
     expect(SheetImport.columnFor("deatils")).toBe("details_text");
     expect(SheetImport.rowToDraft({ code: "MVICr 128" }).code).toBe("MVICR128");

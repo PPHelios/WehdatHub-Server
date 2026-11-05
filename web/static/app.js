@@ -536,9 +536,16 @@
     var next = document.createElement("button");
     next.type = "button"; next.textContent = form.getAttribute("data-next") || "Next";
     next.setAttribute("data-tg-main", "");
+    var spin = document.createElement("span");
+    spin.className = "spin"; spin.setAttribute("aria-hidden", "true");
+    next.appendChild(spin);
     nav.appendChild(prev); nav.appendChild(next);
+    var stepErr = document.createElement("p");
+    stepErr.className = "error step-err"; stepErr.setAttribute("role", "alert"); stepErr.hidden = true;
     form.insertBefore(bar, form.firstChild.nextSibling);
+    form.appendChild(stepErr);
     form.appendChild(nav);
+    var checkUrl = form.getAttribute("data-check");
     var at = 1;
     function show(n) {
       at = Math.max(1, Math.min(names.length, n));
@@ -552,13 +559,41 @@
       }
       prev.hidden = at === 1;
       next.hidden = at === names.length;
+      stepErr.hidden = true;
       window.scrollTo(0, 0);
       document.dispatchEvent(new CustomEvent("steps:change"));
+    }
+    // Next: the browser's own checks first; then, when the form has a check address, the server's field rules for this
+    // step (a spinner shows while they run). A blocker on a field of this step keeps the step open with its message.
+    // If the check cannot be reached, Next still moves on: the final save checks everything.
+    function busy(on) {
+      next.disabled = on;
+      next.classList.toggle("is-busy", on);
     }
     next.addEventListener("click", function () {
       var fields = form.querySelectorAll('[data-step="' + at + '"] input, [data-step="' + at + '"] select, [data-step="' + at + '"] textarea');
       for (var i = 0; i < fields.length; i++) if (fields[i].willValidate && !fields[i].checkValidity()) { fields[i].reportValidity(); return; }
-      show(at + 1);
+      if (!checkUrl || !window.fetch || !window.FormData) { show(at + 1); return; }
+      var here = at;
+      busy(true);
+      fetch(checkUrl, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          busy(false);
+          if (here !== at) return;
+          var shown = [];
+          var blockers = (j && j.blockers) || [];
+          for (var b = 0; b < blockers.length; b++) {
+            var input = form.querySelector('[data-step="' + here + '"] [name="' + blockers[b].field + '"]');
+            if (input) shown.push(blockers[b]);
+          }
+          if (!shown.length) { show(here + 1); return; }
+          stepErr.textContent = shown.map(function (x) { return x.label; }).join(" · ");
+          stepErr.hidden = false;
+          var first = form.querySelector('[data-step="' + here + '"] [name="' + shown[0].field + '"]');
+          if (first) first.focus();
+        })
+        .catch(function () { busy(false); show(here + 1); });
     });
     prev.addEventListener("click", function () { show(at - 1); });
     // A required field left empty on an earlier step: jump back to it instead of a silent failed submit.

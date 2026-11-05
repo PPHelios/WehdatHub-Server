@@ -111,16 +111,31 @@ function emptyRequired(rows = []) {
 const TYPE_LOOKUP = new Map(
   Object.entries({ ...TYPE_TERMS, villa: [...TYPE_TERMS.villa, "standalone villa"] }).flatMap(([key, words]) => words.map((w) => [normalizeSearch(w), key]))
 );
-const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twinhouse"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"]];
+const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twinhouse"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"], ["triplex", "triplex"], ["basement", "basement"], ["mazonette", "mazonette"], ["maisonette", "maisonette"], ["skyloft", "sky_loft"]];
+/** Garden anywhere in the type cell ("apartment with garden", "ground with garden"): the unit gets the private-garden feature. */
+const gardenIn = (v) => /garden/.test(normalizeSearch(v));
+/** Words after a type that say where the unit is or what it has ("apartment 4th floor", "town house corner", "studio with roof"). */
+const TYPE_NOISE = /\b(ground|floor|corner|middle|roof|with|without|garden|first|use|type|single|and|for|both|[a-e]|\d+\w{0,2})\b/g;
+/** The type a normalized text names: an exact term, else a term it contains. */
+function typeIn(t) {
+  if (TYPE_LOOKUP.has(t)) return TYPE_LOOKUP.get(t);
+  for (const [w, key] of TYPE_LOOKUP) if (w.length >= 4 && t.includes(w)) return key;
+  return null;
+}
 function propertyType(v) {
   const t = normalizeSearch(v);
   if (!t) return null;
-  if (TYPE_LOOKUP.has(t)) return TYPE_LOOKUP.get(t);
-  for (const [w, key] of TYPE_LOOKUP) if (w.length >= 4 && t.includes(w)) return key;
-  // A typo ("apatment", "penthous", "twon house") is still the type it was meant to be.
-  const first = t.split(/[\s,/]+/).filter(Boolean);
-  for (const word of [first[0], first.slice(0, 2).join("")].filter((x) => x && /^[a-z]{6,12}$/.test(x))) {
-    for (const [w, key] of TYPE_WORDS) if (editDistance(w, word) <= (w.length >= 8 ? 2 : 1)) return key;
+  const direct = typeIn(t);
+  if (direct) return direct;
+  const core = t.replace(TYPE_NOISE, " ").replace(/\s+/g, " ").trim();
+  const fromCore = core && core !== t ? typeIn(core) : null;
+  if (fromCore) return fromCore;
+  // A typo ("apatment", "apaerment(cleo)", "twon house") is still the type it was meant to be.
+  for (const text of [t, core]) {
+    const words = text.split(/[\s,/()]+/).map((x) => x.replace(/[^a-z]/g, "")).filter(Boolean);
+    for (const word of [words[0], words.slice(0, 2).join("")].filter((x) => x && /^[a-z]{6,12}$/.test(x))) {
+      for (const [w, key] of TYPE_WORDS) if (editDistance(w, word) <= (w.length >= 8 ? 2 : 1)) return key;
+    }
   }
   return null;
 }
@@ -299,6 +314,7 @@ function rowToDraft(input = {}) {
     draft.feature_keys = keys;
     draft.features_other = other;
   }
+  if (has("property_type") && gardenIn(cells.property_type)) draft.feature_keys = [...new Set([...(draft.feature_keys || []), "private_garden"])];
   // A description that states the finishing or features ("fully finished / kitchen / ACs") is read with the app's own
   // vocabulary, but only when the sheet has no column for them; a stated column always wins.
   if (has("description") && !has("features") && !has("orientation")) {
