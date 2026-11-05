@@ -130,8 +130,11 @@ function memberTools(b, lang, today) {
     ${b.away_until ? html`<button type="submit" name="until" value="" class="secondary">${L(lang, "رجع", "Back now")}</button>` : ""}
   </form>
   <form method="post" action="/app/team/${b.id}/notify" class="stack">
-    <p class="muted">${L(lang, "الإشعارات اللي هتتقفل بتفضل في صندوقه بس من غير ما تتبعت.", "Switched-off notifications stay in their inbox only, never sent.")}</p>
-    ${[...Notifications.kindsFor(b), ...Notifications.dailyKindsFor(b)].map((k) => html`<label><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}> ${label(k)}</label>`)}
+    <p class="muted">${L(lang, "لكل إشعار: اقفله (بيفضل في صندوقه بس)، واختار القناة لو عايزها تبقى ثابتة لهذا الشخص. لو سايبها «هو يختار»، بيختار من إعداداته.", "For each notification: switch it off (it stays in their inbox only), and choose the channel if you want it fixed for this person. Leave it on \"they choose\" and their own setting applies.")}</p>
+    <table class="notify-options"><thead><tr><th>${L(lang, "الإشعار", "Notification")}</th><th>${L(lang, "القناة", "Channel")}</th><th>${L(lang, "شغّال", "On")}</th></tr></thead><tbody>
+    ${Notifications.kindsFor(b).map((k) => html`<tr data-notify-row="${k}"><td>${label(k)}</td><td><select name="ch_${k}" aria-label="${label(k)}">${[["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تليجرام والموقع", "Telegram and website")], ["telegram", L(lang, "تليجرام بس", "Telegram only")], ["web", L(lang, "الموقع", "Website")], ["whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (credits)")]].map(([v, text]) => html`<option value="${v}"${((b.notify_prefs?.manager_channels || {})[k] || "") === v ? html` selected` : ""}>${text}</option>`)}</select></td><td><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}></td></tr>`)}
+    ${Notifications.dailyKindsFor(b).map((k) => html`<tr data-notify-row="${k}"><td>${label(k)}</td><td><span class="muted">${L(lang, "تليجرام", "Telegram")}</span></td><td><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}></td></tr>`)}
+    </tbody></table>
     <input type="hidden" name="sent" value="1">
     <button type="submit" class="secondary">${L(lang, "احفظ الإشعارات", "Save notifications")}</button>
   </form>
@@ -308,8 +311,11 @@ function register(web, { pool, page }) {
   web.post("/team/:id/notify", async (req, res) => {
     const lang = langOf(req);
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
+    // Per person: which kinds stay on (the rest go to the inbox only) and the channel the manager fixes for each kind.
     const on = [].concat(req.body.on ?? []);
-    const r = await LeadRules.setSwitches(pool, req.session.broker, req.params.id, LeadRules.SWITCHABLE.filter((k) => !on.includes(k)));
+    const channels = {};
+    for (const k of LeadRules.SWITCHABLE) if (typeof req.body[`ch_${k}`] === "string") channels[k] = req.body[`ch_${k}`];
+    const r = await LeadRules.setNotifyOptions(pool, req.session.broker, req.params.id, { on, channels });
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
     return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `إشعارات ${r.broker.name} اتحفظت.`, `${r.broker.name}'s notifications saved.`)}</p>` });
   });

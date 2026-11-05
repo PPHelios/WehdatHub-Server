@@ -46,6 +46,7 @@ const COMMANDS = [
   { id: "export", group: "search", ar: ["اكسيل"], en: ["excel"], help: ["المخزون كله في شيت إكسيل", "All the inventory in an Excel sheet"] },
   { id: "lead", group: "leads", ar: ["ليد"], en: ["lead"], arg: "…", help: ["عميل جديد: الكلمة ومعاها رسالة العميل أو فويس", "New lead: the word with the client's message or a voice note"] },
   { id: "my_leads", group: "leads", ar: ["عملائي"], en: ["leads"], help: ["عملائك", "Your leads"] },
+  { id: "links", group: "leads", ar: ["روابط"], en: ["links"], help: ["الروابط اللي اتبعتت للعملاء: اتفتحت ولا لأ، ولينك الصفحة الكاملة", "Links sent to clients: opened or not, and the full page link"] },
   { id: "followups", group: "leads", ar: ["متابعات"], en: ["followups"], help: ["متابعاتك", "Your follow-ups"] },
   { id: "request", group: "leads", ar: ["طلب"], en: ["request"], arg: "L-0042 …", help: ["احفظ اللي العميل عايزه وتتبلغ لما تنزل وحدة تناسبه", "Save what the client wants; you hear when a unit fits"] },
   { id: "assign", group: "leads", ar: ["حول"], en: ["assign"], arg: "L-0042 لـ سارة", argEn: "L-0042 to Sara", manager: true, help: ["حوّل عميل لبروكر", "Hand a lead to a broker"] },

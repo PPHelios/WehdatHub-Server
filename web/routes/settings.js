@@ -22,6 +22,8 @@ const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h) => `${String(h).padStart(2, "0")}:00`;
+/** The name of a channel a manager fixed for this person (shown on their Settings page). */
+const managedLabel = (c, lang) => (({ both: [L(lang, "تليجرام والموقع", "Telegram and website")], telegram: [L(lang, "تليجرام بس", "Telegram only")], web: [L(lang, "الموقع", "Website")], whatsapp: [L(lang, "واتساب", "WhatsApp")] })[c] || [c])[0];
 
 async function loadBroker(pool, broker) {
   const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id, draft_style, quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
@@ -82,7 +84,8 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   )}</p>
   ${kinds.map(
     (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${prefs.off.includes(k) ? html` <span class="muted" data-switched-off>(${L(lang, "مقفولة من المدير؛ في 🔔 بس", "switched off by your manager; in 🔔 only")})</span>` : ""}
-    <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
+    ${prefs.managed?.[k] ? html`<span class="muted small" data-managed-by-owner>(${L(lang, "مقفولة من المدير على «" + managedLabel(prefs.managed[k], lang) + "»", "set by your manager to " + managedLabel(prefs.managed[k], lang))})</span>` : ""}
+    <select name="ch_${k}" data-kind="${k}"${prefs.managed?.[k] ? html` disabled` : ""}>${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
   </label>`
   )}
 ` : ""}

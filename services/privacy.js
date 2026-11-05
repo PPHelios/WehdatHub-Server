@@ -127,6 +127,9 @@ async function eraseInTx(client, agencyId, lead, { byBrokerId = null, now = new 
     );
   }
   await client.query("UPDATE deals SET client_name = NULL, client_phone = NULL, lead_id = NULL, updated_at = $3 WHERE agency_id = $1 AND lead_id = $2", [agencyId, lead.id, now.toISOString()]);
+  // Unit links sent to this client: the unit link stays (it holds no client data), but who it went to and every open of it go.
+  await client.query("DELETE FROM share_link_opens WHERE token_hash IN (SELECT token_hash FROM share_links WHERE agency_id = $1 AND lead_id = $2)", [agencyId, lead.id]);
+  await client.query("UPDATE share_links SET lead_id = NULL, recipient_phone = NULL WHERE agency_id = $1 AND lead_id = $2", [agencyId, lead.id]);
   // Notifications about the client: their own rows go; grouped ones that name the client lose their text.
   await client.query("DELETE FROM notifications WHERE agency_id = $1 AND lead_id = $2", [agencyId, lead.id]);
   const label = Card.refLabel(lead.ref);

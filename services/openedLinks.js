@@ -101,4 +101,30 @@ async function withLeadRights(pool, viewer, r) {
   return { ...r, lead: { ref: r.lead_ref, name: r.lead_name, phone: r.lead_phone, hidden: false } };
 }
 
-module.exports = { PAGE, STATUSES, CHANNELS, SOURCES, conditions, list, withLeadRights };
+/**
+ * The short summary the bot's "links" command shows: how many of the viewer's links (same scope as the page) were sent in
+ * the last 7 days, opened in the last 48 hours, never opened after 2 days, and opened more than once.
+ */
+async function summary(pool, viewer, { now = new Date() } = {}) {
+  if (Authz.isDataEntry(viewer)) return { sent7: 0, opened48: 0, never: 0, repeat: 0, total: 0 };
+  const { where, args } = conditions(viewer, {}, now);
+  const t7 = args.push(new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString());
+  const t48 = args.push(new Date(now.getTime() - 48 * 3600 * 1000).toISOString());
+  const t2d = args.push(new Date(now.getTime() - 2 * 24 * 3600 * 1000).toISOString());
+  const { rows } = await pool.query(
+    `SELECT count(*) FILTER (WHERE s.created_at > $${t7})::int AS sent7,
+            count(*) FILTER (WHERE s.last_opened_at > $${t48})::int AS opened48,
+            count(*) FILTER (WHERE s.open_count = 0 AND s.created_at < $${t2d})::int AS never,
+            count(*) FILTER (WHERE s.open_count >= 2)::int AS repeat,
+            count(*)::int AS total
+       FROM share_links s
+       JOIN listings l ON l.id = s.listing_id AND l.agency_id = s.agency_id
+       LEFT JOIN brokers sb ON sb.id = s.broker_id
+       LEFT JOIN leads ld ON ld.id = s.lead_id AND ${Vis.leads("ld")}
+      WHERE ${Vis.units("l")} AND ${where.join(" AND ")}`,
+    args
+  );
+  return rows[0];
+}
+
+module.exports = { PAGE, STATUSES, CHANNELS, SOURCES, conditions, list, withLeadRights, summary };

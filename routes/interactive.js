@@ -265,7 +265,17 @@ async function handleInteractive(broker, message, ctx) {
     const listing = rows[0];
     const copyText = await ShareLinks.clientCopyWithLink(pool, broker, listing, lang, T.formatClientListingText(listing, broker, lang));
     await replyForClient(broker, copyText, { lang });
+    // Telegram: who is this for? (number, lead ID, contact, or skip). WhatsApp keeps the copy alone (three buttons at most).
+    if (broker.channel === "telegram") {
+      const picker = await require("../services/linkPicker").offer(pool, broker, listing);
+      if (picker) await replyButtons(broker, lang === "en" ? `👤 Who is this for? (${listing.code})` : `👤 الرابط ده لمين؟ (${listing.code})`, picker);
+    }
     return "done";
+  }
+
+  // Telegram link picker (services/linkPicker.js): lk:num | lk:id | lk:contact | lk:skip.
+  if (replyId.startsWith("lk:")) {
+    return await require("../services/linkPicker").handleButton(pool, broker, replyId, { reply, lang });
   }
 
   // 8. ON-DEMAND BROCHURE GENERATION (DEL-01)

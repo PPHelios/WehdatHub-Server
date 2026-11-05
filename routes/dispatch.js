@@ -77,6 +77,11 @@ async function dispatchMessage(broker, message, ctx) {
     if (note) setTurnNote(note.text, note.onDelivered);
   }
 
+  // Telegram: a number, lead ID or contact answering the "who is this for?" choice after a client copy.
+  if (broker.channel === "telegram" && (message.type === "text" || message.type === "contacts")) {
+    if (await require("../services/linkPicker").handleInput(poolInstance, broker, message, { reply, lang })) return "done";
+  }
+
   switch (message.type) {
     case "interactive":
       return await handleInteractive(broker, message, ctx);
