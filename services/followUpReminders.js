@@ -103,7 +103,8 @@ async function tellBrokers(pool, byBroker, build, prefix, field, now) {
       continue;
     }
     const m = build(broker, leads);
-    await Notifications.notifyBroker(pool, broker, { kind: "follow_up", dedupeKey: dedupe(prefix, leads, field), ...m, now });
+    // Calls and viewings are not held by quiet hours: a reminder for 08:00 must not wait for the morning message.
+    await Notifications.notifyBroker(pool, broker, { kind: "follow_up", dedupeKey: dedupe(prefix, leads, field), ...m, now, urgent: true });
     told++;
   }
   return told;
