@@ -50,7 +50,7 @@ async function capture(pool, actor, text, { now = new Date() } = {}) {
       dedupeKey: `portal:${enquiry.id}:${m.id}`,
       title: m.preferred_lang === "en" ? `📩 New ${parsed.portal} enquiry` : `📩 استفسار جديد من ${parsed.portal}`,
       body: parsed.name || "",
-      url: "/app/portal-enquiries",
+      url: "/app/leads?tab=portal",
       now
     });
   }

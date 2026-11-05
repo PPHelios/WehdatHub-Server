@@ -23,5 +23,5 @@ test("off unless both settings are present", () => {
 });
 
 test("only the four views can be chosen", () => {
-  expect(TestRole.ROLES).toEqual(["owner", "manager", "broker", "data_entry"]);
+  expect(TestRole.ROLES).toEqual(["owner", "manager", "team_lead", "broker", "data_entry"]);
 });

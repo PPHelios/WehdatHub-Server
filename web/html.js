@@ -118,7 +118,6 @@ const NAV = [
   { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work", desktop: true },
   { key: "dashboard", href: "/app/dashboard", ar: "لوحة الوكالة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },
   { key: "sources", href: "/app/sources", ar: "مصادر العملاء وتكلفتها", en: "Lead sources and cost", icon: "chart", group: "agency", who: "manager" },
-  { key: "portal", href: "/app/portal-enquiries", ar: "استفسارات البوابات", en: "Portal enquiries", icon: "chart", group: "agency", who: "manager" },
   { key: "winloss", href: "/app/winloss", ar: "المكسب والخسارة", en: "Win and loss", icon: "chart", group: "agency", who: "manager" },
   { key: "insights", href: "/app/insights", ar: "أسعار المتر", en: "Price per m²", icon: "chart", group: "agency" },
   { key: "usage", href: "/app/usage", ar: "استخدامي والحصص", en: "My usage and limits", icon: "gauge", group: "agency" },
@@ -191,7 +190,7 @@ function tabBar(broker, tab, lang) {
 function testRoleForm(broker, lang) {
   const en = lang === "en";
   const TestRole = require("../lib/testRole");
-  const names = { owner: en ? "Owner" : "مالك", manager: en ? "Manager" : "مدير", broker: en ? "Broker" : "بروكر", data_entry: en ? "Data entry" : "مدخل بيانات" };
+  const names = { owner: en ? "Owner" : "مالك", manager: en ? "Manager" : "مدير", team_lead: en ? "Team lead" : "قايد فريق", broker: en ? "Broker" : "بروكر", data_entry: en ? "Data entry" : "مدخل بيانات" };
   return html`<form method="post" action="/app/test-role" class="test-role" data-test-role><label><span class="sr-only">${en ? "Test role" : "دور التجربة"}</span><select name="role" data-autosubmit>${TestRole.ROLES.map((r) => html`<option value="${r}"${r === broker.role ? raw(" selected") : ""}>${names[r]}</option>`)}</select></label><noscript><button type="submit">✓</button></noscript></form>`;
 }
 
@@ -204,7 +203,7 @@ function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
   ${broker
     ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
-  <a class="iconbtn" href="/app/more" aria-label="${en ? "More" : "المزيد"}"${tab === "more" ? raw(' aria-current="page"') : ""}>${icon("more")}</a>`
+  <a class="iconbtn" href="${tab === "more" ? "/app/" : "/app/more"}" aria-label="${tab === "more" ? (en ? "Close menu" : "إغلاق القائمة") : (en ? "More" : "المزيد")}"${tab === "more" ? raw(' aria-current="page" data-menu-close') : ""}>${icon("more")}</a>`
     : html`<a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
 </header>`;
 }

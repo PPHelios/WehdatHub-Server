@@ -113,3 +113,11 @@ test("html escapes every interpolated value unless it is trusted markup", () => 
   expect(String(html`${raw("<b>ok</b>")}${null}${false}${0}`)).toBe("<b>ok</b>0");
   expect(escapeHtml("`'")).toBe("&#96;&#39;");
 });
+
+test("the More button closes the menu while it is open", async () => {
+  const a = await signIn(h, "admin");
+  const more = (await a.agent.get("/app/more?lang=en")).text;
+  expect(more).toMatch(/href="\/app\/"[^>]*aria-label="Close menu"[^>]*data-menu-close/);
+  const other = (await a.agent.get("/app/leads?lang=en")).text;
+  expect(other).toMatch(/href="\/app\/more"[^>]*aria-label="More"/);
+});

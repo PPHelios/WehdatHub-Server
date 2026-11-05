@@ -171,3 +171,15 @@ describe("agency owner: managers and role changes", () => {
     expect(managerPage).not.toContain("/role");
   });
 });
+
+test("Add member: a manager can add a team lead; the form says Add member and offers Team lead", async () => {
+  const a = await signIn(h, "admin");
+  const page = await a.agent.get("/app/team?lang=en");
+  expect(page.text).toMatch(/Add member/);
+  expect(page.text).not.toMatch(/Invite a broker/);
+  expect(page.text).toMatch(/<option value="team_lead">Team lead<\/option>/);
+  const r = await a.agent.post("/app/team/invite").type("form").send({ _csrf: a.csrf, name: "Lead Lina", phone: "01099887755", role: "team_lead", lang: "en" });
+  expect(r.status).toBe(200);
+  const [b] = await h.query("SELECT role, agency_id, is_active FROM brokers WHERE phone_normalized = '201099887755'");
+  expect(b).toMatchObject({ role: "team_lead", agency_id: h.AGENCY_A, is_active: true });
+});

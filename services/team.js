@@ -12,6 +12,8 @@ const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const { getConfig } = require("../config");
 
 const INVITE_ROLES = ["broker", "manager", "data_entry"];
+/** Roles a manager can add a member as (a team lead too; changeRole keeps INVITE_ROLES: a team lead is made through setTeamLeadRole). */
+const ADD_ROLES = [...INVITE_ROLES, "team_lead"];
 const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCase());
 const TOP_ROLES = ["admin", "owner"];
 /** A manager may act on brokers and managers; only an admin or owner may act on an admin or owner. */
@@ -57,7 +59,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
   if (!isManager(manager)) return { error: "forbidden" };
   const name = String(input.name || "").trim().slice(0, 80);
   const digits = Phone.normalizePhone(input.phone);
-  const role = INVITE_ROLES.includes(String(input.role || "broker")) ? String(input.role || "broker") : null;
+  const role = ADD_ROLES.includes(String(input.role || "broker")) ? String(input.role || "broker") : null;
   if (!name) return { error: "name" };
   if (!digits || !Phone.isEgyptMobile(digits)) return { error: "phone" };
   if (!role) return { error: "role" };
@@ -73,7 +75,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
   if (!found[0]?.is_active && !(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
   if (found[0]) {
     // One of ours: bring them back; an admin or owner keeps their role.
-    const keep = !INVITE_ROLES.includes(String(found[0].role || "").toLowerCase());
+    const keep = !ADD_ROLES.includes(String(found[0].role || "").toLowerCase());
     await pool.query("UPDATE brokers SET name = $2, role = CASE WHEN $4 THEN role ELSE $3 END, is_active = true, deactivated_at = NULL WHERE id = $1", [found[0].id, name, role, keep]);
     brokerId = found[0].id;
   } else {
@@ -167,4 +169,4 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
   return { ok: true };
 }
 
-module.exports = { INVITE_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText, changeRole, setTeamLeadRole, setTeam };
+module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText, changeRole, setTeamLeadRole, setTeam };
