@@ -768,6 +768,7 @@
       "agencyLog": ["pool", "manager", "params"],
       "people": ["pool", "manager"],
       "savePrefs": ["pool", "broker", "params"],
+      "recentOfKind": ["pool", "broker", "kind", "limit"],
       "savePushSubscription": ["pool", "broker", "sub", "userAgent"],
       "removePushSubscription": ["pool", "broker", "endpoint"],
       "pushCount": ["pool", "broker"]

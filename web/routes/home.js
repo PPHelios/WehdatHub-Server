@@ -73,10 +73,7 @@ ${groups.map(([g, label]) => {
   async function crmHome(req, res) {
     const { broker } = req.session;
     const en = broker.preferred_lang === "en";
-    const { rows: alerts } = await pool.query(
-      "SELECT id, title, created_at FROM notifications WHERE broker_id = $1 AND kind = 'system_alert' ORDER BY created_at DESC LIMIT 8",
-      [broker.id]
-    );
+    const alerts = await require("../../lib/notifications").recentOfKind(pool, broker, "system_alert", 8);
     const when = (d) => new Date(d).toLocaleString(en ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" });
     return page(req, res, {
       title: en ? "App" : "التطبيق",
