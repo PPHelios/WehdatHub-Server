@@ -268,9 +268,9 @@
     var el = document.querySelector("[data-search-url]");
     if (el && window.history && history.replaceState) history.replaceState(null, "", el.getAttribute("data-search-url"));
   });
-  // ← Back: the previous page when it is ours, else the link's own address.
+  // ← Back (and the open menu button): the previous page when it is ours, else the link's own address.
   document.addEventListener("click", function (e) {
-    var a = e.target.closest && e.target.closest("a[data-back]");
+    var a = e.target.closest && e.target.closest("a[data-back], a[data-menu-close]");
     if (!a) return;
     var ours = false;
     try { ours = document.referrer && new URL(document.referrer).origin === location.origin; } catch (err) { ours = false; }

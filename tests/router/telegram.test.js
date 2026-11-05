@@ -369,6 +369,34 @@ describe("free messages (step 5)", () => {
     expect((page2.text.match(/^\d+\. /gm) || []).length).toBe(2);
   });
 
+  test("a Telegram search offers the sold units for the same search; Back returns to the available ones", async () => {
+    await h.insertListing({ code: "AV-1", price_value: 5000000 });
+    await h.insertListing({ code: "SO-1", price_value: 5100000, status: "sold" });
+    await h.insertListing({ code: "SO-2", price_value: 5200000, status: "sold" });
+    await h.tgLink("broker");
+    const first = await h.tgText("broker", "شقة");
+    const page = first.find((e) => e.method === "sendMessage" && /AV-1/.test(e.text || ""));
+    expect(page.text).not.toMatch(/SO-1/);
+    const sold = page.keyboard.flat().find((b) => /SEARCH_STATUS|مباعة \(2\)/.test(b.callback_data) || /\(2\)/.test(b.text));
+    expect(sold).toBeDefined();
+    const list = await h.tgTap("broker", sold.callback_data);
+    const soldPage = list.find((e) => e.method === "sendMessage" && /SO-1/.test(e.text || ""));
+    expect(soldPage.text).toMatch(/SO-2/);
+    expect(soldPage.text).not.toMatch(/AV-1/);
+    const back = soldPage.keyboard.flat().find((b) => /رجوع للمتاحة|Back to available/.test(b.text));
+    expect(back).toBeDefined();
+    const again = await h.tgTap("broker", back.callback_data);
+    expect(again.find((e) => e.method === "sendMessage" && /AV-1/.test(e.text || ""))).toBeDefined();
+  });
+
+  test("no Sold button when nothing sold fits the search", async () => {
+    await h.insertListing({ code: "AV-2", price_value: 5000000 });
+    await h.tgLink("broker");
+    const first = await h.tgText("broker", "شقة");
+    const page = first.find((e) => e.method === "sendMessage" && /AV-2/.test(e.text || ""));
+    expect(page.keyboard.flat().some((b) => /\(\d+\)/.test(b.text))).toBe(false);
+  });
+
   test("WhatsApp searches keep 5 a message", async () => {
     for (let i = 1; i <= 7; i++) await h.insertListing({ code: `WS-${i}` });
     const out = await h.text("broker", "شقة");

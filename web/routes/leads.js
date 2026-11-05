@@ -6,6 +6,7 @@
 "use strict";
 
 const Leads = require("../../services/leads");
+const Portal = require("./portalEnquiries");
 const LeadRules = require("../../services/leadRules");
 const IntakeUrls = require("../../services/leadIntake");
 const Leases = require("../../services/leases");
@@ -47,7 +48,7 @@ const clientLangOf = (lead, lang) => (lead.lang === "en" || lead.lang === "ar" ?
 // The time picker's hours (Cairo) and a safe datetime-local value from a query string.
 const PICK_HOURS = [9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21];
 const validPicked = (v) => (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(v || "")) ? Stages.fromCairoLocal(v) : null);
-const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step", "private"];
+const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step", "private", "portal"];
 const upload = uploads([VOICE]);
 
 Session.allowMultipart(/^\/leads\/extract$/);
@@ -201,7 +202,7 @@ ${rows.length
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
-    const tab = TABS.includes(req.query.tab) && (req.query.tab !== "private" || isAgencyOwner(broker)) ? req.query.tab : req.query.overdue === "1" ? "overdue" : "all";
+    const tab = TABS.includes(req.query.tab) && (req.query.tab !== "private" || isAgencyOwner(broker)) && (req.query.tab !== "portal" || manager) ? req.query.tab : req.query.overdue === "1" ? "overdue" : "all";
     const n = Math.max(0, parseInt(req.query.page, 10) || 0);
     const f = {
       q: String(req.query.q || "").slice(0, 80),
@@ -216,7 +217,8 @@ ${rows.length
       limit: PAGE,
       offset: n * PAGE
     };
-    const { rows, more } = await Leads.listLeads(pool, broker, f);
+    const { rows, more } = tab === "portal" ? { rows: [], more: false } : await Leads.listLeads(pool, broker, f);
+    const portalHtml = tab === "portal" ? await Portal.panel(pool, broker, lang, { notice: Portal.noticeFor(lang, req.query) }) : "";
     const pipe = manager ? await Leads.pipeline(pool, broker) : null;
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
@@ -228,13 +230,13 @@ ${rows.length
       return `/app/leads${s ? `?${s}` : ""}`;
     };
     const tabLabel = (t) =>
-      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "⭐ VIP", "⭐ VIP") : Stages.stageLabel(t, lang);
+      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "⭐ VIP", "⭐ VIP") : t === "portal" ? L(lang, "📩 استفسارات البوابات", "📩 Portal enquiries") : Stages.stageLabel(t, lang);
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
       body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row">${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
 ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
-<form method="get" action="/app/leads" class="stack">
+${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">
   <div class="searchbox">${icon("search", 20)}<input name="q" value="${f.q}" aria-label="${L(lang, "بحث في العملاء", "Search leads")}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
   <details class="card sheet"${req.query.kind || f.source || (manager && req.query.broker) ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length ? html` <span class="chip">${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length}</span>` : ""}</summary>
@@ -247,14 +249,14 @@ ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notic
   </div>
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
   </details>
-</form>
-<ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.filter((t) => t !== "private" || isAgencyOwner(broker)).map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
+</form>`}
+<ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.filter((t) => (t !== "private" || isAgencyOwner(broker)) && (t !== "portal" || manager)).map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
 ${pipe && pipe.overdue.length
   ? html`<details class="card notice warn"><summary>${L(lang, "متابعات متأخرة لكل وسيط", "Overdue follow-ups per broker")}: ${pipe.overdue.reduce((a, o) => a + Number(o.n), 0)}</summary><ul class="rows">${pipe.overdue.map(
       (o) => html`<li data-overdue-broker="${o.broker_id || "none"}"><a class="listrow" href="${qs({ tab: "overdue", broker: o.broker_id || "none" })}">${o.name || L(lang, "مش متسلم", "Unassigned")}<b>${o.n}</b></a></li>`
     )}</ul></details>`
   : ""}
-${rows.length
+${tab === "portal" ? portalHtml : rows.length
   ? html`<ol class="results">${rows.map((r) => V.leadRow(r, lang, { manager }))}</ol>
 <p class="row between">${n > 0 ? html`<a class="btn secondary" href="${qs({ page: n - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${more ? html`<a class="btn secondary" href="${qs({ page: n + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>`
   : html`<div class="card empty"><p>${f.q || tab !== "all"

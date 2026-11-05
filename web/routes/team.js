@@ -19,7 +19,7 @@ const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
-const ROLE_LABEL = { data_entry: ["مدخل بيانات", "Data entry"] };
+const ROLE_LABEL = { data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قايد فريق", "Team lead"] };
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };
 const LINKS = { limit: 30, windowSec: 24 * 3600 };
@@ -27,7 +27,7 @@ const LINKS = { limit: 30, windowSec: 24 * 3600 };
 const ERRORS = {
   name: ["اكتب الاسم.", "Enter the name."],
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
-  role: ["الدور لازم يبقى بروكر أو مدير.", "The role must be broker or manager."],
+  role: ["الدور مش مظبوط.", "The role isn't valid."],
   phone_taken: ["الرقم ده مسجل مع وكالة تانية.", "This number is registered with another agency."],
   not_found: ["الوسيط مش موجود.", "Broker not found."],
   inactive: ["الوسيط موقوف؛ رجّعه الأول.", "The broker is deactivated; bring them back first."],
@@ -131,7 +131,7 @@ function memberTools(b, lang, today) {
   </form>
   <form method="post" action="/app/team/${b.id}/notify" class="stack">
     <p class="muted">${L(lang, "الإشعارات اللي هتتقفل بتفضل في صندوقه بس من غير ما تتبعت.", "Switched-off notifications stay in their inbox only, never sent.")}</p>
-    ${LeadRules.SWITCHABLE.map((k) => html`<label><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}> ${label(k)}</label>`)}
+    ${[...Notifications.kindsFor(b), ...Notifications.dailyKindsFor(b)].map((k) => html`<label><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}> ${label(k)}</label>`)}
     <input type="hidden" name="sent" value="1">
     <button type="submit" class="secondary">${L(lang, "احفظ الإشعارات", "Save notifications")}</button>
   </form>
@@ -166,7 +166,7 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
     <div><dt>${L(lang, "سرعة الرد", "Speed to lead")}</dt><dd data-speed>${speedCell(speed.get(b.id), lang)}</dd></div>
   </dl>
   <div class="row m-actions">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
-  ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/invite"><input type="hidden" name="name" value="${b.name}"><input type="hidden" name="phone" value="${b.phone_number}"><input type="hidden" name="role" value="${["broker", "manager"].includes(b.role) ? b.role : "broker"}"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Bring back")}</button></form>`}</div>
+  ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/invite"><input type="hidden" name="name" value="${b.name}"><input type="hidden" name="phone" value="${b.phone_number}"><input type="hidden" name="role" value="${["broker", "manager", "team_lead", "data_entry"].includes(b.role) ? b.role : "broker"}"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Bring back")}</button></form>`}</div>
   ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager"].includes(b.role) ? roleForm(b, lang) : ""}
   ${b.is_active && b.id !== viewer?.id && MANAGER_ROLES.includes(String(viewer?.role || "").toLowerCase()) ? teamLeadForm(b, lang, teamLeads) : ""}
   ${memberTools(b, lang, today)}
@@ -182,11 +182,11 @@ ${notice}
 ${link || ""}
 ${tabs("team_tab", [
   [L(lang, `الفريق (${active})`, `Team (${active})`), html`<details class="card invite"${team.length <= 1 ? html` open` : ""}>
-  <summary>➕ ${L(lang, "ضيف بروكر", "Invite a broker")}</summary>
+  <summary>➕ ${L(lang, "إضافة عضو", "Add member")}</summary>
   <form method="post" action="/app/team/invite" class="stack">
   <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80"></label>
   <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>
-  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
+  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="team_lead">${L(lang, "قايد فريق", "Team lead")}</option><option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
   <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en">English</option></select></label>
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>

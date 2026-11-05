@@ -83,7 +83,7 @@ function createTelegramIngress({ pool, tapGuard, runTurn }) {
       holdTap(tap);
       message = TgIngress.buttonMessage(norm, id);
       // "More" is used once: its button leaves the earlier results (the next page comes as a new message).
-      if (norm.messageId && (id === "MORE_SEARCH" || id.startsWith("search_more:"))) {
+      if (norm.messageId && (id === "MORE_SEARCH" || id.startsWith("search_more:") || id.startsWith("SEARCH_STATUS:"))) {
         TG.call("editMessageReplyMarkup", { chat_id: norm.ids.chatId, message_id: norm.messageId, reply_markup: { inline_keyboard: [] } }).catch(() => {});
       }
     }

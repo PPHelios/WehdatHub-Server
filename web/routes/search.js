@@ -14,7 +14,7 @@ const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
 const { uploads, VOICE } = require("../uploads");
 const AiBlock = require("../../lib/aiBlock");
-const { isAgencyOwner, isDataEntry } = require("../../lib/authz");
+const { isAgencyOwner, isDataEntry, canEdit } = require("../../lib/authz");
 const Vis = require("../../lib/visibility");
 const { html, raw } = require("../html");
 const { icon } = require("../icons");
@@ -32,11 +32,21 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const stripStars = (s) => String(s || "").replace(/\*/g, "");
 
 /** Runs canonical filters for the agency: strict, then relaxed; the page comes from the id snapshot. */
-async function runFilters(pool, agencyId, filters, page, { ask = false } = {}) {
-  const res = await Search.runSearch(pool, agencyId, { filters }, { pageSize: WEB_PAGE_SIZE, ask });
+async function runFilters(pool, agencyId, filters, page, { ask = false, status = "active" } = {}) {
+  const res = await Search.runSearch(pool, agencyId, { filters }, { pageSize: WEB_PAGE_SIZE, ask, status });
   const offset = (page - 1) * WEB_PAGE_SIZE;
-  const rows = offset === 0 ? res.rows : await Search.pageByIds(pool, agencyId, res.ids, offset, WEB_PAGE_SIZE);
+  const rows = offset === 0 ? res.rows : await Search.pageByIds(pool, agencyId, res.ids, offset, WEB_PAGE_SIZE, { status });
   return { ...res, rows, offset };
+}
+
+const STATUS_LABEL = { active: ["متاحة", "Available"], sold: ["مباعة", "Sold"], archived: ["مؤرشفة", "Archived"] };
+
+/** Available · Sold · Archived for the same search, each with how many units fit. The current one is not a link. */
+function statusSwitch({ token, st, counts, lang, sl = null }) {
+  const href = (s) => `/app/search?f=${token}${s === "active" ? "" : `&st=${s}`}${sl ? `&sl=${sl}` : ""}`;
+  return html`<nav class="seg" aria-label="${L(lang, "الحالة", "Status")}" data-status-switch>${["active", "sold", "archived"].map(
+    (s) => html`<a href="${href(s)}" data-status="${s}"${s === st ? html` aria-current="page"` : ""}>${L(lang, STATUS_LABEL[s][0], STATUS_LABEL[s][1])} (${counts[s]})</a>`
+  )}</nav>`;
 }
 
 function searchBox(q, lang, { voice = false } = {}) {
@@ -49,10 +59,10 @@ function searchBox(q, lang, { voice = false } = {}) {
 `;
 }
 
-function pager(token, page, total, lang, sl = null) {
+function pager(token, page, total, lang, sl = null, st = "active") {
   const pages = Math.ceil(Math.min(total, Search.SNAPSHOT_MAX) / WEB_PAGE_SIZE);
   if (pages <= 1) return "";
-  const link = (p) => `/app/search?f=${token}&page=${p}${sl ? `&sl=${sl}` : ""}`;
+  const link = (p) => `/app/search?f=${token}&page=${p}${st !== "active" ? `&st=${st}` : ""}${sl ? `&sl=${sl}` : ""}`;
   return html`<nav class="row" aria-label="pages">
   ${page > 1 ? html`<a class="btn secondary" href="${link(page - 1)}">${L(lang, "→ السابق", "← Previous")}</a>` : ""}
   <span class="muted">${page} / ${pages}</span>
@@ -106,15 +116,16 @@ function askCard({ ask, filters, q, lang, understood, logId }) {
 </div>`;
 }
 
-function resultsSection({ res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null }) {
+function resultsSection({ res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null, st = "active", switcher = "", restorable = new Set() }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
-    return html`${understood}<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p>
-${filters.code || isDataEntry(Vis.viewer()) ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
+    return html`${understood}${switcher}<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p>
+${filters.code || st !== "active" || isDataEntry(Vis.viewer()) ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
   }
   return html`<section id="results">
   ${understood}
+  ${switcher}
   ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : ""}
   ${res.rateMissing?.length ? html`<p class="card" role="status">⚠️ ${L(lang, "سعر الدولار/اليورو مش متسجل: حدده من «الاستخدام» عشان أسعار الوحدات بالعملة دي تتطابق.", "The dollar/euro rate is not set: set it under Usage so those prices match.")}</p>` : ""}
   <div class="row between"><p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
@@ -126,8 +137,8 @@ ${filters.code || isDataEntry(Vis.viewer()) ? "" : html`<p><a class="btn seconda
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { ask: asks.get(r.id) || null, back: `/app/search?f=${token}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
-  ${pager(token, page, res.total, lang, sl)}
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
+  ${pager(token, page, res.total, lang, sl, st)}
 </section>`;
 }
 
@@ -180,7 +191,9 @@ function register(web, { pool, page }) {
     if (filters) {
       const token = SearchLink.encodeFilters(filters);
       const noDrop = Boolean(parse) && !req.query.drop;
-      const out = await runFilters(pool, broker.agency_id, filters, pageNo, { ask: noDrop });
+      // Available is the default; Sold and Archived are the same search for those units (?st=).
+      const st = ["sold", "archived"].includes(req.query.st) ? req.query.st : "active";
+      const out = await runFilters(pool, broker.agency_id, filters, pageNo, { ask: noDrop, status: st });
       // The AI could not answer and a number was left unplaced: ask first, never search as if it were not there.
       const numbers = noDrop && parse.source === "fallback" ? parse.local?.meta?.leftover_numbers || [] : [];
       if (numbers.length) out.ask = { terms: out.ask?.terms || [], numbers, aiDown: true, withoutTotal: out.ask ? out.ask.withoutTotal : out.total };
@@ -210,10 +223,16 @@ function register(web, { pool, page }) {
         canAsk: Boolean(parse) && parse.source !== "ai",
         ignored: out.ignoredTerms || []
       });
+      let switcher = "";
+      if (!out.ask) {
+        const counts = { active: 0, sold: 0, archived: 0, [st]: out.total };
+        for (const other of Search.SEARCH_STATUSES.filter((s) => s !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, { filters }, other);
+        switcher = statusSwitch({ token, st, counts, lang, sl: logId });
+      }
       results = out.ask
         ? askCard({ ask: out.ask, filters, q, lang, understood, logId })
-        : resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId });
-      searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
+        : resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
+      searchUrl = `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,
         broker_id: broker.id,

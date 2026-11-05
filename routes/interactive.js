@@ -711,6 +711,10 @@ async function handleInteractive(broker, message, ctx) {
   if (replyId === "MORE_SEARCH" || replyId.startsWith("search_more:")) {
     return await S.handleMore(broker, ctx);
   }
+  // Telegram: the sold units for the search just made, and back to the available ones.
+  if (replyId.startsWith("SEARCH_STATUS:")) {
+    return await S.handleStatus(broker, replyId.slice("SEARCH_STATUS:".length), ctx);
+  }
 
   // F5: a numbered search result → that unit's album and card (as sending its code does).
   if (replyId.startsWith("open:")) {

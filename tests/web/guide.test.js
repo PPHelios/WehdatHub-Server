@@ -26,7 +26,9 @@ test("signed out: the guide opens in Arabic by default and in English with ?lang
   const en = await request(h.app.app).get("/app/guide?lang=en");
   expect(en.status).toBe(200);
   expect(en.text).toContain("Quick guide");
-  for (const s of Guide.SECTIONS) expect(en.text).toContain(`id="${s.id}"`);
+  // Signed out sees the general sections; the app owner's own section shows only to them.
+  for (const s of Guide.SECTIONS.filter((x) => x.who !== "crm")) expect(en.text).toContain(`id="${s.id}"`);
+  expect(en.text).not.toContain('id="crm"');
   expect((en.text.match(/<details>/g) || []).length).toBe(Guide.FAQ.length);
 });
 
@@ -36,4 +38,16 @@ test("the bot's help reply ends with the guide link", async () => {
   expect(last.text).toMatch(/📘 الدليل السريع والأسئلة الشائعة: https?:\/\/\S+\/app\/guide$/);
   await h.text("admin", "help");
   expect(h.WA.outbox.filter((m) => m.type === "text").pop().text).toMatch(/Quick guide and FAQ: \S+\/app\/guide\?lang=en$/);
+});
+
+test("signed in, the guide shows each role only what it can use", async () => {
+  const { signIn } = require("../harness/web");
+  const broker = await signIn(h, "broker");
+  const bk = (await broker.agent.get("/app/guide?lang=en")).text;
+  expect(bk).toContain('id="clients"');
+  expect(bk).not.toContain('id="managers"');
+  const admin = await signIn(h, "admin");
+  expect((await admin.agent.get("/app/guide?lang=en")).text).toContain('id="managers"');
+  // Signed out sees the general sections plus the managers' one is hidden only for signed-in non-managers.
+  expect((await request(h.app.app).get("/app/guide?lang=en")).text).toContain('id="start"');
 });

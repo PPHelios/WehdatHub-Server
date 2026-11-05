@@ -1,6 +1,7 @@
-// web/routes/portalEnquiries.js — "Portal enquiries" (/app/portal-enquiries): managers and the owner. Each enquiry from
+// web/routes/portalEnquiries.js — "Portal enquiries", a tab of Leads (/app/leads?tab=portal): managers and the owner. Each enquiry from
 // Bayut, Dubizzle or Nawy: link to the unit (once per listing number), add the phone, assign a broker (becomes a lead).
-// The owner can mute the alerts for himself only; managers always hear. Brokers never see this page.
+// The owner can mute the alerts for himself only; managers always hear. Brokers never see it. The old address
+// /app/portal-enquiries redirects to the tab; the forms still post here and come back to it.
 "use strict";
 
 const Authz = require("../../lib/authz");
@@ -53,9 +54,9 @@ function enquiryRow(e, brokers, lang) {
     <td>${linked}</td><td>${action}</td></tr>`;
 }
 
-function enquiriesPage({ rows, brokers, lang, owner, alertsOn, notice }) {
+/** The tab's content (inside the Leads page): the intro, the owner's mute and the table. */
+function enquiriesPanel({ rows, brokers, lang, owner, alertsOn, notice }) {
   return html`${notice || ""}
-<h1>📩 ${L(lang, "استفسارات البوابات", "Portal enquiries")}</h1>
 <p class="muted">${L(lang, "استفسارات Bayut وDubizzle وNawy. الاسم والرابط بس. لما تضيف الرقم وتحوّل للوسيط، الاستفسار بيبقى عميل.", "Enquiries from Bayut, Dubizzle and Nawy: name and link only. Add the phone and assign a broker, and it becomes a lead.")}</p>
 ${owner ? html`<form method="post" action="/app/portal-enquiries/alerts" class="card stack"><label><input type="checkbox" name="on" value="1" ${alertsOn ? "checked" : ""}> ${L(lang, "تنبيهات الاستفسارات ليا (إنت المالك بس)", "Enquiry alerts for me (the owner only)")}</label><button type="submit">${L(lang, "حفظ", "Save")}</button></form>` : ""}
 ${rows.length
@@ -64,54 +65,64 @@ ${rows.length
   : html`<p class="card muted">${L(lang, "مفيش استفسارات لسه.", "No enquiries yet.")}</p>`}`;
 }
 
-function register(web, { pool, page }) {
-  const render = async (req, res, extra = {}, status = 200) => {
-    const lang = langOf(req);
-    const actor = req.session.broker;
-    if (!Authz.isManager(actor)) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const [rows, brokers, me] = await Promise.all([
-      Enquiries.list(pool, actor),
-      pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [actor.agency_id]).then((r) => r.rows),
-      pool.query("SELECT notify_prefs FROM brokers WHERE id = $1", [actor.id]).then((r) => r.rows[0] || {})
-    ]);
-    const alertsOn = !Enquiries.isMuted({ ...actor, notify_prefs: me.notify_prefs });
-    const body = enquiriesPage({ rows, brokers, lang, owner: Authz.isAgencyOwner(actor), alertsOn, ...extra });
-    return page(req, res, { title: L(lang, "استفسارات البوابات", "Portal enquiries"), body }, status);
-  };
-  const notice = (lang, key, ok = true) => html`<p class="card notice ${ok ? "ok" : "bad"}" role="status">${L(lang, NOTICES[key][0], NOTICES[key][1])}</p>`;
-  const errNotice = (lang, code) => html`<p class="card notice bad" role="alert">${L(lang, ERRORS[code]?.[0] || NOTICES.error[0], ERRORS[code]?.[1] || NOTICES.error[1])}</p>`;
+/** Loads and renders the tab for a manager. */
+async function panel(pool, actor, lang, extra = {}) {
+  const [rows, brokers, me] = await Promise.all([
+    Enquiries.list(pool, actor),
+    pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [actor.agency_id]).then((r) => r.rows),
+    pool.query("SELECT notify_prefs FROM brokers WHERE id = $1", [actor.id]).then((r) => r.rows[0] || {})
+  ]);
+  const alertsOn = !Enquiries.isMuted({ ...actor, notify_prefs: me.notify_prefs });
+  return enquiriesPanel({ rows, brokers, lang, owner: Authz.isAgencyOwner(actor), alertsOn, ...extra });
+}
 
-  web.get("/portal-enquiries", (req, res) => {
+/** The notice for ?done= / ?error= on the tab's address. */
+function noticeFor(lang, query = {}) {
+  const key = query.done;
+  if (key && NOTICES[key]) return html`<p class="card notice ok" role="status">${L(lang, NOTICES[key][0], NOTICES[key][1])}</p>`;
+  if (query.error) return html`<p class="card notice bad" role="alert">${L(lang, ERRORS[query.error]?.[0] || NOTICES.error[0], ERRORS[query.error]?.[1] || NOTICES.error[1])}</p>`;
+  return "";
+}
+
+const TAB = "/app/leads?tab=portal";
+const back = (qs) => `${TAB}&${qs}`;
+
+function register(web, { pool }) {
+  const managersOnly = (req, res) => {
     const lang = langOf(req);
+    if (Authz.isManager(req.session.broker)) return true;
+    res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
+    return false;
+  };
+
+  // The old address: the tab inside Leads.
+  web.get("/portal-enquiries", (req, res) => {
+    if (!managersOnly(req, res)) return undefined;
     const key = req.query.done;
-    return render(req, res, key && NOTICES[key] ? { notice: notice(lang, key) } : {});
+    return res.redirect(303, key && NOTICES[key] ? back(`done=${encodeURIComponent(key)}`) : TAB);
   });
 
   web.post("/portal-enquiries/:id/assign", async (req, res) => {
-    const lang = langOf(req);
-    const actor = req.session.broker;
-    if (!Authz.isManager(actor)) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const r = await Enquiries.assign(pool, actor, req.params.id, { phone: req.body.phone, brokerId: req.body.broker_id });
-    if (r.error) return render(req, res, { notice: errNotice(lang, r.error) }, 400);
+    if (!managersOnly(req, res)) return undefined;
+    const r = await Enquiries.assign(pool, req.session.broker, req.params.id, { phone: req.body.phone, brokerId: req.body.broker_id });
+    if (r.error) return res.redirect(303, back(`error=${encodeURIComponent(r.error)}`));
     const done = r.outcome === "created" ? "assigned" : r.outcome === "colleague" ? "colleague" : "merged";
-    return res.redirect(303, `/app/portal-enquiries?done=${done}`);
+    return res.redirect(303, back(`done=${done}`));
   });
 
   web.post("/portal-enquiries/:id/link", async (req, res) => {
-    const lang = langOf(req);
-    const actor = req.session.broker;
-    if (!Authz.isManager(actor)) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const r = await Enquiries.linkUnit(pool, actor, req.params.id, req.body.unit_code);
-    if (r.error) return render(req, res, { notice: errNotice(lang, r.error) }, 400);
-    return res.redirect(303, "/app/portal-enquiries?done=linked");
+    if (!managersOnly(req, res)) return undefined;
+    const r = await Enquiries.linkUnit(pool, req.session.broker, req.params.id, req.body.unit_code);
+    if (r.error) return res.redirect(303, back(`error=${encodeURIComponent(r.error)}`));
+    return res.redirect(303, back("done=linked"));
   });
 
   web.post("/portal-enquiries/alerts", async (req, res) => {
     const lang = langOf(req);
     const r = await Enquiries.setAlerts(pool, req.session.broker, req.body.on === "1");
     if (r.error) return res.status(403).type("text/plain").send(L(lang, "للمالك بس", "Owner only"));
-    return res.redirect(303, "/app/portal-enquiries?done=saved");
+    return res.redirect(303, back("done=saved"));
   });
 }
 
-module.exports = { register };
+module.exports = { register, panel, noticeFor };

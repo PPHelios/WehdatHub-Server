@@ -574,6 +574,7 @@ module.exports = {
   cleanSummary,
   TYPE_LABELS,
   FINISHING_LABELS,
+  FURNISHING_LABELS,
   FREQUENCY_LABELS,
   money,
   typeLabel,

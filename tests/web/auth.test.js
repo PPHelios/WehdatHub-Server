@@ -123,7 +123,7 @@ describe("sessions and CSRF", () => {
     expect((await request(web()).post("/app/leads/new").set("Referer", "https://evil.example/app/x")).status).toBe(401);
   });
 
-  test("F25: the More page shows Dashboard to managers and App tracking to the owner only", async () => {
+  test("F25: the More page shows Dashboard to managers and App tracking to the CRM owner only (their menu has no agency pages)", async () => {
     const nav = (text) => (text.match(/<h1>[^<]*<\/h1>([\s\S]*?)<\/main>/) || [])[1] || "";
     const broker = nav((await (await signIn(h, "broker")).agent.get("/app/more")).text);
     expect(broker).toContain("/app/catalogue");
@@ -134,11 +134,18 @@ describe("sessions and CSRF", () => {
     resetConfig();
     try {
       const admin = nav((await (await signIn(h, "admin")).agent.get("/app/more")).text);
-      expect(admin).toContain("/app/dashboard");
-      expect(admin).toContain("/app/owner");
+      expect(admin).toContain(`href="/app/owner"`);
+      expect(admin).not.toContain("/app/dashboard");
+      expect(admin).not.toContain("/app/deals");
     } finally {
       delete process.env.OWNER_BROKER_IDS;
       resetConfig();
+    }
+    // Without the CRM owner setting, the same account is an ordinary manager.
+    {
+      const admin = nav((await (await signIn(h, "admin")).agent.get("/app/more")).text);
+      expect(admin).toContain("/app/dashboard");
+      expect(admin).not.toContain(`href="/app/owner"`);
     }
   });
 

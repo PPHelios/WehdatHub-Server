@@ -15,7 +15,7 @@ const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCas
 
 /** The product owner: a broker whose id is listed in OWNER_BROKER_IDS. Nobody else, managers included. */
 function isOwner(broker, config = getConfig()) {
-  return Boolean(broker?.id) && config.owner.brokerIds.includes(String(broker.id).toLowerCase());
+  return require("../lib/authz").isCrmOwner(broker, config);
 }
 
 const periodOf = (days) => (PERIODS.includes(Number(days)) ? Number(days) : 30);

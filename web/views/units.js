@@ -9,7 +9,7 @@ const stripMarkdown = (s) => String(s || "").replace(/[*`_]/g, "");
 
 /** A unit card (search results, My units): code and price first, then size, payment and delivery as chips, and the
  * features on a copper strip. `selectable` adds a tick box for the bulk bar. */
-function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "" } = {}) {
+function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "", badge = "", restore = false } = {}) {
   const en = lang === "en";
   const loc = en ? l.compound_en || l.details?.compound_en || l.compound || l.district : l.compound || l.compound_en || l.district;
   const size = [Describe.areaLabel(l, lang), Describe.bedsLabel(l, lang), Describe.bathsLabel(l, lang)].filter(Boolean).join(" · ");
@@ -20,12 +20,13 @@ function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "" 
   return html`<li class="card result unitcard" data-code="${l.code}">
   ${selectable ? html`<input class="pick" type="checkbox" name="code" value="${l.code}" form="bulk" aria-label="${l.code}">` : ""}
   <a class="uc-main" href="${href}">
-    <span class="uc-top"><b class="code" dir="ltr">${l.code}</b><b class="uc-price">${stripMarkdown(Describe.priceLabel(l, lang) || "")}</b></span>
+    <span class="uc-top"><b class="code" dir="ltr">${l.code}</b>${badge ? html` <span class="badge" data-status-badge>${badge}</span>` : ""}<b class="uc-price">${stripMarkdown(Describe.priceLabel(l, lang) || "")}</b></span>
     <span class="uc-sub">${[Describe.typeLabel(l, lang), loc].filter(Boolean).join(" · ")}</span>
     ${size ? html`<span class="uc-size">${stripMarkdown(size)}</span>` : ""}
   </a>
   ${pay || delivery ? html`<ul class="tags">${pay ? html`<li>${stripMarkdown(pay)}</li>` : ""}${delivery ? html`<li class="chip good">${stripMarkdown(delivery)}</li>` : ""}</ul>` : ""}
   ${tags.length ? html`<ul class="uc-feat">${tags.map((t) => html`<li>${t}</li>`)}</ul>` : ""}
+  ${restore ? html`<form method="post" action="/app/units/bulk" class="row"><input type="hidden" name="code" value="${l.code}"><input type="hidden" name="action" value="available"><button type="submit" class="secondary small" data-mark-available>🟢 ${en ? "Mark available again" : "رجّعها متاحة"}</button></form>` : ""}
   ${ask === "ask"
     ? html`<form method="post" action="${href}/access" class="row"><input type="hidden" name="back" value="${back}"><button type="submit" class="secondary small" data-ask-details>🔒 ${en ? "Ask for private details" : "اطلب البيانات الخاصة"}</button></form>`
     : ask === "pending"

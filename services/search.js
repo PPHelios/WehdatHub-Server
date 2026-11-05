@@ -12,6 +12,7 @@ const Vocab = require("./searchVocab");
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
 const TG_PAGE_SIZE = 10;
+const SEARCH_STATUSES = ["active", "sold", "archived"];
 const SNAPSHOT_MAX = 100; // ids remembered for "more" (B1)
 const STEP_MONTHS_SQL = `CASE p->>'frequency' WHEN 'monthly' THEN 1 WHEN 'semi_annual' THEN 6 WHEN 'annual' THEN 12 ELSE 3 END`;
 
@@ -138,9 +139,11 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
  * Builds the search SQL. Every condition is agency-scoped and active-only.
  * relaxed widens price/area ±15%, bedrooms ±1 and drops finishing/furnishing/floor/bathrooms.
  */
-function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, offset = 0, relaxed = false, onlyIds = null, fx = {} } = {}) {
+function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, offset = 0, relaxed = false, onlyIds = null, fx = {}, status = "active" } = {}) {
   const f = Q.ensureFilters(parsedOrFilters?.filters ? parsedOrFilters : { filters: parsedOrFilters || {} });
-  const where = ["l.agency_id = $1", "l.status = 'active'"];
+  // Available is the default; Sold and Archived are looked at on purpose (never by the match sweep or client links).
+  // The status is one of three fixed words (never user text), so it is written into the SQL and the parameters keep their numbers.
+  const where = ["l.agency_id = $1", `l.status = '${SEARCH_STATUSES.includes(status) ? status : "active"}'`];
   const params = [agencyId];
   const add = (v) => {
     params.push(v);
@@ -212,7 +215,12 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       if (f.floor_min !== null) where.push(`(l.floor_level IS NULL OR l.floor_level >= ${add(f.floor_min)})`);
       if (f.floor_max !== null) where.push(`(l.floor_level IS NULL OR l.floor_level <= ${add(f.floor_max)})`);
       // A blank finishing or furnishing matches both sides of the filter (only the special fields stay strict).
-      if (f.finishing.length) where.push(`(l.finishing IS NULL OR l.finishing = ANY(${add(f.finishing)}::text[]))`);
+      if (f.finishing.length) {
+        const fin = add(f.finishing);
+        where.push(`(l.finishing IS NULL OR l.finishing = ANY(${fin}::text[]))`);
+        // Exact finishing first, then the units whose finishing is blank (an unmapped old entry became blank).
+        exactFirst += `CASE WHEN l.finishing = ANY(${fin}::text[]) THEN 0 ELSE 1 END, `;
+      }
       if (f.furnishing) {
         where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
         // Exact status first, then the units whose status is blank (Haytham 2026-11-04).
@@ -291,7 +299,7 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
  * "search without it" choice) the search is repeated without those words and `ignoredTerms` says which were left out.
  * @returns {Promise<{ rows, ids, total, relaxed, dbMs, ask }>} rows = first page, ids = snapshot for "more"
  */
-async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = false } = {}) {
+async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = false, status = "active" } = {}) {
   const t0 = Date.now();
   let relaxed = false;
   // A word that is an approved compound name (lib/placeNames.js) searches in both its languages.
@@ -299,10 +307,10 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
     parsed.filters.place_terms = await PlaceNames.widenSearchTerms(pool, parsed.filters.place_terms);
   }
   const fx = await Fx.loadRates(pool, agencyId);
-  let { sql, params } = buildSearchQuery(agencyId, parsed, { fx });
+  let { sql, params } = buildSearchQuery(agencyId, parsed, { fx, status });
   let { rows } = await pool.query(sql, params);
   if (!rows.length && !parsed.filters.code) {
-    ({ sql, params } = buildSearchQuery(agencyId, parsed, { relaxed: true, fx }));
+    ({ sql, params } = buildSearchQuery(agencyId, parsed, { relaxed: true, fx, status }));
     ({ rows } = await pool.query(sql, params));
     relaxed = rows.length > 0;
   }
@@ -320,11 +328,11 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
     let restRelaxed = relaxed;
     if (!rows.length || soft.length) {
       if (Q.hasAnyFilter(rest)) {
-        ({ sql, params } = buildSearchQuery(agencyId, rest, { fx }));
+        ({ sql, params } = buildSearchQuery(agencyId, rest, { fx, status }));
         ({ rows: restRows } = await pool.query(sql, params));
         restRelaxed = false;
         if (!restRows.length) {
-          ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true, fx }));
+          ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true, fx, status }));
           ({ rows: restRows } = await pool.query(sql, params));
           restRelaxed = restRows.length > 0;
         }
@@ -350,18 +358,29 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
 
 /**
  * Next page from an id snapshot (B1): stable order and no repeats even if inventory changed.
- * Units sold or archived since are skipped.
+ * Units whose status changed since (sold or archived while looking at Available) are skipped.
  */
-async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE) {
+async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE, { status = "active" } = {}) {
   const slice = ids.slice(offset, offset + pageSize);
   if (!slice.length) return [];
   const { rows } = await pool.query(
     `SELECT l.* FROM listings l
-     WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.status = 'active' AND l.id = ANY($2::uuid[])
+     WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.status = '${SEARCH_STATUSES.includes(status) ? status : "active"}' AND l.id = ANY($2::uuid[])
      ORDER BY array_position($2::uuid[], l.id)`,
     [agencyId, slice]
   );
   return rows;
+}
+
+/**
+ * How many units of one status fit the same filters (strict pass only): the number on the "Sold" button. 0 when none.
+ * The filters are the ones the available results were built with, so words that were left out stay left out.
+ */
+async function countByStatus(pool, agencyId, parsed, status) {
+  if (!SEARCH_STATUSES.includes(status)) return 0;
+  const { sql, params } = buildSearchQuery(agencyId, parsed, { status, limit: 1, fx: await Fx.loadRates(pool, agencyId) });
+  const { rows } = await pool.query(sql, params);
+  return rows.length ? Number(rows[0].total_count) : 0;
 }
 
 /**
@@ -387,7 +406,9 @@ module.exports = {
   SNAPSHOT_MAX,
   SEARCH_PROMPT,
   parseRequest,
+  SEARCH_STATUSES,
   buildSearchQuery,
+  countByStatus,
   runSearch,
   pageByIds,
   search

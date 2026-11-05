@@ -83,9 +83,16 @@ test("the owner's mute is for himself only: managers still hear; only the owner 
   const { agent: brokerAgent } = await signIn(h, "broker");
   expect((await brokerAgent.get("/app/portal-enquiries")).status).toBe(403);
   const { agent, csrf } = await signIn(h, "admin");
-  const page = await agent.get("/app/portal-enquiries");
+  // The old address redirects into the tab of Leads; the tab holds the enquiries.
+  const old = await agent.get("/app/portal-enquiries");
+  expect(old.status).toBe(303);
+  expect(old.headers.location).toBe("/app/leads?tab=portal");
+  const page = await agent.get("/app/leads?tab=portal");
   expect(page.status).toBe(200);
   expect(page.text).toMatch(/Silent/);
+  expect(page.text).toMatch(/data-stage|class="chipbar"/);
   expect(page.text).not.toMatch(/Enquiry alerts for me/); // the mute is the owner's own: managers don't see it
+  // Brokers never get the tab: it falls back to their ordinary lead list.
+  expect((await brokerAgent.get("/app/leads?tab=portal")).text).not.toMatch(/Silent/);
   expect((await agent.post("/app/portal-enquiries/alerts").set("X-CSRF-Token", csrf).type("form").send("on=1")).status).toBe(403);
 });
