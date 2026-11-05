@@ -228,29 +228,36 @@ async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0 
 
 /**
  * The resale commissions of the commissions tab: the deals in the period and scope (cancelled left out), newest first,
- * each with the amount in scope (the whole commission, or the shares of the brokers in scope), and the totals.
- * @returns {Promise<{ rows, totals: { deals, volume, amount } }>}
+ * each with the amount in scope (the whole commission, or the shares of the brokers in scope). Totals and one page are
+ * computed in the database.
+ * @returns {Promise<{ rows, total, totals: { deals, volume, amount } }>}
  */
-async function resaleCommissions(pool, actor, { brokerId = null, teamLeadId = null, from = null, to = null } = {}) {
+async function resaleCommissions(pool, actor, { brokerId = null, teamLeadId = null, from = null, to = null, page = 0, size = PAGE } = {}) {
   const ids = await scopeIds(pool, actor, { brokerId, teamLeadId });
   const params = [actor.agency_id, ids];
-  const where = ["d.agency_id = $1", "d.status <> 'cancelled'"];
-  if (ids) where.push(inScopeSql(2));
+  const where = ["d.agency_id = $1", "d.status <> 'cancelled'", `($2::uuid[] IS NULL OR ${inScopeSql(2)})`];
   if (from && to) {
     params.push(from, to);
     where.push(`d.closed_at >= $${params.length - 1} AND d.closed_at < $${params.length}`);
   }
+  const fromWhere = `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
+      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`;
+  const t = await pool.query(
+    `SELECT count(*)::int AS deals, COALESCE(SUM(d.price), 0)::numeric AS volume, COALESCE(SUM(${scopeAmountSql(2)}), 0)::numeric AS amount ${fromWhere}`,
+    params
+  );
+  const totals = { deals: t.rows[0].deals, volume: Number(t.rows[0].volume), amount: Number(t.rows[0].amount) };
   const { rows } = await pool.query(
     `SELECT d.id, d.ref, d.unit_code, d.deal_type, d.price, d.status, d.closed_at, d.client_name, d.closing_broker_id,
             d.commission_total, d.external_share, b.name AS closing_broker_name, l.ref AS lead_ref, ${scopeAmountSql(2)} AS amount
        FROM deals d LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
        LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
-      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")} ORDER BY d.closed_at DESC, d.ref DESC`,
+      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}
+      ORDER BY d.closed_at DESC, d.ref DESC LIMIT ${Math.floor(size)} OFFSET ${Math.max(0, Math.floor(Number(page)) || 0) * Math.floor(size)}`,
     params
   );
   const out = rows.map((r) => ({ ...r, price: Number(r.price), amount: Number(r.amount), commission_total: Number(r.commission_total), external_share: Number(r.external_share) }));
-  const totals = out.reduce((t, r) => ({ deals: t.deals + 1, volume: t.volume + r.price, amount: t.amount + r.amount }), { deals: 0, volume: 0, amount: 0 });
-  return { rows: out, totals };
+  return { rows: out, total: totals.deals, totals };
 }
 
 /** Per Cairo month (cancelled deals left out): managers get the agency's totals, a broker their own share. */

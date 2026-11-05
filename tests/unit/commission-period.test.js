@@ -1,5 +1,5 @@
 // tests/unit/commission-period.test.js — The commissions tab's period filter follows the Cairo calendar: a month runs
-// from its 1st to the next 1st, a week from Monday to Monday, and "all" has no bounds.
+// from its 1st to the next 1st, a week from Saturday to Saturday, and "all" has no bounds.
 "use strict";
 
 const { periodRange } = require("../../domain/commissionPeriod");
@@ -12,10 +12,12 @@ describe("periodRange", () => {
     expect(r.to).toBe("2026-11-30T22:00:00.000Z");
   });
 
-  test("week: Monday to Monday, whatever day the anchor is", () => {
-    expect(periodRange("week", "2026-11-05")).toMatchObject({ fromDay: "2026-11-02", toDay: "2026-11-08", prevAt: "2026-10-29", nextAt: "2026-11-12" });
-    expect(periodRange("week", "2026-11-08")).toMatchObject({ fromDay: "2026-11-02", toDay: "2026-11-08" });
-    expect(periodRange("week", "2026-11-09")).toMatchObject({ fromDay: "2026-11-09", toDay: "2026-11-15" });
+  test("week: Saturday to Friday, whatever day the anchor is", () => {
+    // 2026-11-05 is a Thursday: its week starts Saturday 2026-10-31.
+    expect(periodRange("week", "2026-11-05")).toMatchObject({ fromDay: "2026-10-31", toDay: "2026-11-06", prevAt: "2026-10-29", nextAt: "2026-11-12" });
+    expect(periodRange("week", "2026-11-07")).toMatchObject({ fromDay: "2026-11-07", toDay: "2026-11-13" }); // a Saturday starts its own week
+    expect(periodRange("week", "2026-11-13")).toMatchObject({ fromDay: "2026-11-07", toDay: "2026-11-13" }); // a Friday ends it
+    expect(periodRange("week", "2026-11-08")).toMatchObject({ fromDay: "2026-11-07", toDay: "2026-11-13" }); // a Sunday is in the week that began Saturday
   });
 
   test("all: no bounds; unknown periods fall back to the month; a bad day falls back to today", () => {

@@ -183,6 +183,23 @@ describe("the pages", () => {
     expect(mine).not.toMatch(/data-deal-amount>200,000/);
   });
 
+  test("a team lead sees their team's shares, and can narrow to one of their brokers", async () => {
+    const { admin, broker, deal } = await seed();
+    const colleague = await row("colleague");
+    await deal("BD-1", "01011111111"); // closed by the broker (60%), the colleague has 40%: 200,000 in total
+    await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [broker.id]);
+    await h.query("UPDATE brokers SET team_lead_id = $2 WHERE id = $1", [colleague.id, broker.id]);
+
+    const lead = (await signIn(h, "broker")).agent;
+    const team = (await lead.get("/app/commissions")).text;
+    expect(team).toMatch(/data-deal-totals[\s\S]*?<strong>200,000/); // 120,000 (the lead) + 80,000 (the colleague)
+    expect(team).toMatch(/data-deal-commission=/);
+    expect(team).not.toMatch(/name="team"/); // no team picker for a team lead
+
+    const oneBroker = (await lead.get(`/app/commissions?broker=${colleague.id}`)).text;
+    expect(oneBroker).toMatch(/data-deal-totals[\s\S]*?<strong>80,000/);
+  });
+
   test("resale tab pages 20 at a time", async () => {
     const { admin, broker } = await seed();
     for (let i = 1; i <= 21; i++) {

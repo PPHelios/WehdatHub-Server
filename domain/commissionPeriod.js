@@ -1,5 +1,5 @@
 // domain/commissionPeriod.js — The period filter of the commissions tab. Periods follow the Cairo calendar: a month
-// runs from its 1st to the next 1st, a week from Monday to Monday. `at` is any day inside the period (default: today),
+// runs from its 1st to the next 1st, a week from Saturday to Saturday. `at` is any day inside the period (default: today),
 // and prev/next step the period by one month or one week.
 "use strict";
 
@@ -19,9 +19,10 @@ const addMonths = (day, n) => {
   d.setUTCMonth(d.getUTCMonth() + n);
   return d.toISOString().slice(0, 10);
 };
-const monday = (day) => {
+// The week starts on Saturday (Egypt's working week): Saturday → itself, Friday → six days back.
+const saturday = (day) => {
   const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
-  return addDays(day, dow === 0 ? -6 : 1 - dow);
+  return addDays(day, -((dow + 1) % 7));
 };
 /** The Cairo midnight that starts a calendar day, as an instant. */
 const cairoStart = (day) => {
@@ -39,7 +40,7 @@ function periodRange(period, at, now = new Date()) {
   const p = PERIODS.includes(period) ? period : "month";
   const anchor = isDay(at) ? at : Stages.cairoDay(now);
   if (p === "all") return { period: p, at: anchor, from: null, to: null, fromDay: null, toDay: null, prevAt: null, nextAt: null };
-  const fromDay = p === "week" ? monday(anchor) : `${anchor.slice(0, 8)}01`;
+  const fromDay = p === "week" ? saturday(anchor) : `${anchor.slice(0, 8)}01`;
   const endDay = p === "week" ? addDays(fromDay, 7) : addMonths(anchor, 1);
   const step = (n) => (p === "week" ? addDays(anchor, 7 * n) : addMonths(anchor, n));
   return {
