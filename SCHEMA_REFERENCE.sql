@@ -129,6 +129,20 @@ BEGIN
   RETURN NEW;
 END $function$;
 
+CREATE OR REPLACE FUNCTION public.leads_reset_reminder_steps()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NEW.next_follow_up_at IS DISTINCT FROM OLD.next_follow_up_at OR NEW.follow_up_status IS DISTINCT FROM OLD.follow_up_status
+     OR NEW.assigned_broker_id IS DISTINCT FROM OLD.assigned_broker_id THEN
+    NEW.follow_up_reminded_steps := '{}';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.leads_same_agency()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -724,7 +738,8 @@ CREATE TABLE IF NOT EXISTS public.leads (
   is_private boolean DEFAULT false NOT NULL,
   flagged_at timestamp with time zone,
   flag_note text,
-  flagged_by uuid
+  flagged_by uuid,
+  follow_up_reminded_steps integer[] DEFAULT '{}'::integer[] NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -1993,6 +2008,7 @@ CREATE CONSTRAINT TRIGGER trg_deal_shares_balance AFTER INSERT OR DELETE OR UPDA
 CREATE TRIGGER trg_deal_splits_same_agency BEFORE INSERT OR UPDATE ON public.deal_splits FOR EACH ROW EXECUTE FUNCTION deal_splits_same_agency();
 CREATE CONSTRAINT TRIGGER trg_deal_total_balance AFTER INSERT OR UPDATE OF commission_total, external_share ON public.deals DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION deal_shares_balance();
 CREATE TRIGGER trg_deals_same_agency BEFORE INSERT OR UPDATE OF agency_id, lead_id, listing_id, closing_broker_id ON public.deals FOR EACH ROW EXECUTE FUNCTION deals_same_agency();
+CREATE TRIGGER trg_leads_reset_reminder_steps BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION leads_reset_reminder_steps();
 CREATE TRIGGER trg_leads_same_agency BEFORE INSERT OR UPDATE OF agency_id, assigned_broker_id, created_by_broker_id, follow_up_listing_id ON public.leads FOR EACH ROW EXECUTE FUNCTION leads_same_agency();
 CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
 CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();

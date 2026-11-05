@@ -89,6 +89,9 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   </label>`
   )}
 ` : ""}
+  <h2>⏰ ${L(lang, "تذكير المكالمات والمعاينات", "Reminders for calls and viewings")}</h2>
+  <p class="muted">${L(lang, "ابعتلي تذكير قبل الميعاد بكام؟ الاختيار واحد أو أكتر. الافتراضي ساعة. التذكير بيوصل حتى لو في ساعات الهدوء.", "Remind me this long before: one or more. Default one hour. Reminders arrive even during quiet hours.")}</p>
+  <div class="row">${[30, 60, 120].map((m) => html`<label class="check"><input type="checkbox" name="rm_${m}" value="1"${(prefs.reminderMinutes || [60]).includes(m) ? html` checked` : ""}> ${m === 30 ? L(lang, "نص ساعة", "30 min") : m === 60 ? L(lang, "ساعة", "1 hour") : L(lang, "ساعتين", "2 hours")}</label>`)}</div>
   <h2>🌙 ${L(lang, "ساعات الهدوء (بتوقيت القاهرة)", "Quiet hours (Cairo time)")}</h2>
   <label class="check"><input type="checkbox" name="quiet_on" value="1"${prefs.quiet.enabled ? html` checked` : ""}> ${L(lang, "متبعتليش تنبيهات في الوقت ده (بتتجمع وتوصل بعده)", "Hold alerts during these hours (they arrive together after)")}</label>
   <div class="row">
@@ -139,7 +142,8 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
     for (const k of Notifications.kindsFor(broker)) channels[k] = req.body[`ch_${k}`];
     await Notifications.savePrefs(pool, await loadBroker(pool, broker), {
       channels,
-      quiet: { enabled: req.body.quiet_on === "1", start: req.body.quiet_start, end: req.body.quiet_end }
+      quiet: { enabled: req.body.quiet_on === "1", start: req.body.quiet_start, end: req.body.quiet_end },
+      reminderMinutes: [30, 60, 120].filter((m) => req.body[`rm_${m}`] === "1")
     });
     const lang = req.body.lang === "en" ? "en" : "ar";
     if (lang !== broker.preferred_lang) {
