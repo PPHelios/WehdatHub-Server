@@ -4,6 +4,7 @@
 "use strict";
 
 const Catalogue = require("../../services/catalogue");
+const PlanRules = require("../../services/planRules");
 const Commission = require("../../domain/commission");
 const { isManager } = require("../../lib/authz");
 const PriceSheets = require("../../services/priceSheets");
@@ -257,6 +258,33 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
+/** Plan rules (step 1): the developer's limits for this project. Every field is optional. */
+function rulesForm(lang, p, base) {
+  const r = p.plan_rules || {};
+  const fees = [...(r.optional_fees || []), {}, {}].slice(0, 4);
+  const freqs = PlanRules.FREQUENCIES;
+  return html`<details class="card" id="plan-rules" data-plan-rules><summary>📏 ${L(lang, "قواعد الأنظمة (حدود المطور)", "Plan rules (developer limits)")}</summary>
+  <form method="post" action="${base}/rules" class="stack">
+    <p class="muted">${L(lang, "كل الخانات اختيارية. النظام اللي بره الحدود بيتعلّم عليه ومحتاج مراجعة.", "All fields are optional. A plan outside these limits is marked for review.")}</p>
+    <div class="row">
+      <label>${L(lang, "أقل مقدم %", "Lowest down payment %")} <input name="min_down_payment_pct" inputmode="decimal" dir="ltr" size="4" value="${val(r.min_down_payment_pct)}"></label>
+      <label>${L(lang, "أطول مدة (سنين)", "Longest term (years)")} <input name="max_years" inputmode="decimal" dir="ltr" size="3" value="${val(r.max_years)}"></label>
+      <label>${L(lang, "أقصى خصم %", "Highest discount %")} <input name="max_discount_pct" inputmode="decimal" dir="ltr" size="4" value="${val(r.max_discount_pct)}"></label>
+    </div>
+    <fieldset><legend>${L(lang, "الأقساط المسموحة", "Allowed installment frequencies")}</legend>
+      ${freqs.map((f) => html`<label><input type="checkbox" name="frequencies" value="${f}"${(r.frequencies || []).includes(f) ? " checked" : ""}> ${label2(FREQ, f, lang)}</label>`)}
+    </fieldset>
+    <div class="row">
+      <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_pct" inputmode="decimal" dir="ltr" size="4" value="${val(r.maintenance_pct)}"></label>
+      <label>${L(lang, "تتدفع", "Due")} <select name="maintenance_due">${Catalogue.MAINTENANCE_DUE.map((d) => html`<option value="${d}"${sel((r.maintenance_due || "delivery") === d)}>${label2(DUE, d, lang)}</option>`)}</select></label>
+    </div>
+    <fieldset><legend>${L(lang, "مصاريف اختيارية (جراج، نادي...)", "Optional fees (garage, club...)")}</legend>
+      ${fees.map((f) => html`<div class="row"><input name="fee_label" maxlength="60" placeholder="${L(lang, "البند", "Item")}" value="${f.label || ""}" aria-label="${L(lang, "البند", "Item")}"><input name="fee_amount" inputmode="numeric" dir="ltr" size="9" placeholder="${L(lang, "المبلغ ج.م", "Amount EGP")}" value="${val(f.amount)}" aria-label="${L(lang, "المبلغ", "Amount")}"><select name="fee_due" aria-label="${L(lang, "تتدفع", "Due")}">${Catalogue.MAINTENANCE_DUE.map((d) => html`<option value="${d}"${sel((f.due || "delivery") === d)}>${label2(DUE, d, lang)}</option>`)}</select></div>`)}
+    </fieldset>
+    <button type="submit">${L(lang, "حفظ القواعد", "Save rules")}</button>
+  </form></details>`;
+}
+
 function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null, gallery = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
@@ -295,6 +323,7 @@ ${prices || ""}
   <p class="muted">${L(lang, "النظام بيتطبق على كل وحدات المشروع (أو المرحلة) تلقائي، إلا الوحدة اللي ليها أنظمتها الخاصة.", "A plan applies to every unit of the project (or phase) automatically, except a unit with its own plans.")}</p>
   ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
 </section>
+${manager ? rulesForm(lang, p, base) : ""}
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
 ${plansRead || ""}
 
@@ -457,6 +486,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_saved=${r.saved}${failed}#plans`);
   });
   web.post("/catalogue/projects/:id/plans/draft/discard", write((req) => PlanReading.discard(pool, actorOf(req), req.params.id), { show: showProject, done: (req) => `/app/catalogue/projects/${req.params.id}#plans` }));
+  web.post("/catalogue/projects/:id/rules", write((req) => PlanRules.saveRules(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#plans` }));
   web.post("/catalogue/projects/:id/plans/:planId/delete", write((req) => Catalogue.deletePlan(pool, actorOf(req), req.params.id, req.params.planId), { show: showProject, done: (req) => `${projectUrl(req)}#plans` }));
   web.get("/catalogue/projects/:id/plans/:planId", async (req, res) => {
     const lang = langOf(req);
