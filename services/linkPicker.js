@@ -70,7 +70,7 @@ async function handleButton(pool, broker, id, { reply, lang }) {
  * The broker's next text or contact while a choice is waiting. Returns false when nothing is waiting (or the text is not an
  * answer yet), so the message goes on to the usual handlers.
  */
-async function handleInput(pool, broker, message, { reply, lang }) {
+async function handleInput(pool, broker, message, { reply, lang, replyClient }) {
   const en = lang === "en";
   const s = await pending(pool, broker);
   if (!s) return false;
@@ -82,18 +82,18 @@ async function handleInput(pool, broker, message, { reply, lang }) {
       return true;
     }
     if (s.step === "choose" || !s.step) return false;
-    return attach(pool, broker, s, { text }, { reply, lang });
+    return attach(pool, broker, s, { text }, { reply, lang, replyClient });
   }
   if (message.type === "contacts") {
     const phone = message.contacts?.[0]?.phones?.[0]?.phone;
     if (!phone) return false;
     const digits = Phone.normalizePhone(phone);
-    return attach(pool, broker, s, { text: digits ? `+${digits}` : String(phone) }, { reply, lang });
+    return attach(pool, broker, s, { text: digits ? `+${digits}` : String(phone) }, { reply, lang, replyClient });
   }
   return false;
 }
 
-async function attach(pool, broker, s, { text }, { reply, lang }) {
+async function attach(pool, broker, s, { text }, { reply, lang, replyClient }) {
   const en = lang === "en";
   const r = await Recipients.resolveRecipient(pool, broker, text);
   if (r.error) {
@@ -107,8 +107,10 @@ async function attach(pool, broker, s, { text }, { reply, lang }) {
   await clearSession(pool, broker.id);
   const wa = r.phone ? Phone.waMeUrl(r.phone) : null;
   const who = r.phone ? Phone.displayPhone(r.phone) : en ? "no number" : "من غير رقم";
-  const tail = wa ? (en ? `\nSend it on WhatsApp: ${wa}` : `\nابعته على واتساب: ${wa}`) : "";
-  await reply(broker, en ? `✅ Linked to ${who} (${s.code}).${tail}` : `✅ اتربط بـ ${who} (${s.code}).${tail}`);
+  const body = en ? `✅ Linked to ${who} (${s.code}).` : `✅ اتربط بـ ${who} (${s.code}).`;
+  // Telegram: a "📤 Send on WhatsApp" button opens the chat instead of a raw link.
+  if (replyClient && wa) await replyClient(broker, body, { phone: r.phone, lang, url: wa });
+  else await reply(broker, body);
   return true;
 }
 

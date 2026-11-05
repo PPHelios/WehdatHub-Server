@@ -1942,6 +1942,13 @@
       "handleInput": ["pool", "broker", "message", "params"],
       "attach": ["pool", "broker", "s", "params", "params"]
     },
+    "services/portalPicker.js": {
+      "SESSION": "String",
+      "TTL_MIN": "Number",
+      "offer": ["pool", "broker", "enquiryId"],
+      "pending": ["pool", "broker"],
+      "handleInput": ["pool", "broker", "message", "params"]
+    },
     "services/targets.js": {
       "monthOf": ["now"],
       "setTarget": ["db", "manager", "brokerId", "params"],

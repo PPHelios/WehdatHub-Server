@@ -25,7 +25,7 @@ describe("Forwarded portal enquiry replies (routes/dispatch.js)", () => {
     const replies = await h.text("manager", enquiry());
     expect(textOf(replies)).toMatch(/اتسجل استفسار Bayut/);
     expect(textOf(replies)).not.toMatch(FALLBACK_AR);
-    expect(replies.filter((r) => /استفسار/.test(r.text || ""))).toHaveLength(1);
+    expect(replies.filter((r) => /اتسجل استفسار/.test(r.text || ""))).toHaveLength(1);
   });
 
   test("the manager's next texts add the phone and broker, and the enquiry becomes a lead", async () => {

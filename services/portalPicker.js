@@ -6,6 +6,7 @@
 
 const Phone = require("../domain/phone");
 const PortalEnquiries = require("./portalEnquiries");
+const PortalParse = require("../domain/portalEnquiry");
 
 const SESSION = "portal_pick";
 const TTL_MIN = 10;
@@ -52,6 +53,8 @@ async function handleInput(pool, broker, message, { reply, lang }) {
   if (!s) return false;
   const en = lang === "en";
   const text = String(message.text?.body || "").trim();
+  // A new forwarded enquiry is not a phone: let the portal branch save it (it starts a fresh phone step).
+  if (PortalParse.parse(text)) return false;
 
   if (/^(?:تخطي|skip)$/i.test(text)) {
     await clearSession(pool, broker.id);
