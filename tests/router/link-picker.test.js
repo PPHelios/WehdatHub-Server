@@ -34,9 +34,15 @@ test("a client copy offers who it is for; a typed number attaches it to that lin
   const buttons = await copyFor("TP-1");
   expect(buttons.map((b) => b.callback_data).sort()).toEqual(["lk:contact", "lk:id", "lk:num", "lk:skip"]);
   await h.tgTap("broker", "lk:num");
-  const out = await h.tgText("broker", "01012345678");
+  const asked = await h.tgText("broker", "01012345678");
+  expect(textOf(asked)).toMatch(/اسم العميل|client's name/);
+  expect(await linkRows()).toEqual([{ recipient_phone: null, lead_id: null, source: "bot" }]);
+  const out = await h.tgText("broker", "Nour");
   expect(textOf(out)).toMatch(/201012345678|01012345678/);
-  expect(await linkRows()).toEqual([{ recipient_phone: "201012345678", lead_id: null, source: "bot" }]);
+  const [row] = await linkRows();
+  expect(row).toMatchObject({ recipient_phone: "201012345678", source: "bot" });
+  expect(row.lead_id).not.toBeNull();
+  expect(await h.query("SELECT name, phone_e164, assigned_broker_id FROM leads")).toEqual([{ name: "Nour", phone_e164: "+201012345678", assigned_broker_id: h.BROKERS.broker.id }]);
 });
 
 test("a lead ID attaches the lead and its number", async () => {
@@ -51,7 +57,10 @@ test("a shared contact attaches its number", async () => {
   await copyFor("TP-3");
   await h.tgTap("broker", "lk:contact");
   await h.tg("broker", { contact: { phone_number: "+201066600011", first_name: "Sara", user_id: 555 } });
-  expect(await linkRows()).toEqual([{ recipient_phone: "201066600011", lead_id: null, source: "bot" }]);
+  const [row] = await linkRows();
+  expect(row).toMatchObject({ recipient_phone: "201066600011", source: "bot" });
+  expect(row.lead_id).not.toBeNull();
+  expect(await h.query("SELECT name FROM leads")).toEqual([{ name: "Sara" }]);
 });
 
 test("skip leaves the link with no recipient, and the choice is cleared", async () => {
@@ -71,5 +80,7 @@ test("an invalid number is refused and the choice stays open for another try", a
   expect(textOf(bad)).toMatch(/مش صحيح|isn't a valid/);
   expect(await linkRows()).toEqual([{ recipient_phone: null, lead_id: null, source: "bot" }]);
   await h.tgText("broker", "01012345678");
-  expect(await linkRows()).toEqual([{ recipient_phone: "201012345678", lead_id: null, source: "bot" }]);
+  await h.tgText("broker", "skip");
+  expect(await linkRows()).toEqual([{ recipient_phone: "201012345678", lead_id: expect.anything(), source: "bot" }]);
+  expect(await h.query("SELECT name FROM leads")).toEqual([{ name: "+201012345678" }]);
 });

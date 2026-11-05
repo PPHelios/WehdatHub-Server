@@ -1,12 +1,13 @@
 // services/linkPicker.js — Telegram: after a client copy (the bot's unit text with its link), the broker picks who it is for:
-// a number, a lead ID (L-0042) or a shared contact, or skips. Skipping leaves the link with no recipient. The choice waits
-// 10 minutes in broker_sessions; the broker's next text or contact completes it. Only the link the copy just made is
-// attached (the newest bot link of that unit by this broker). Services on WhatsApp keep the copy without the picker: its
-// buttons are limited to three.
+// a number, a lead ID (L-0042) or a shared contact, or skips. A number that is not a lead yet is added as a new lead: the
+// bot asks the client's name (skip makes the number the name), and the sending broker is its assignee. A shared contact
+// brings its name. Skipping the whole choice leaves the link with no recipient. The choice waits 10 minutes in
+// broker_sessions. Only the link the copy just made is attached. WhatsApp keeps the copy alone (its buttons are limited).
 "use strict";
 
 const Phone = require("../domain/phone");
 const Recipients = require("./linkRecipients");
+const Leads = require("./leads");
 
 const SESSION = "link_pick";
 const TTL_MIN = 10;
@@ -46,7 +47,7 @@ async function offer(pool, broker, listing) {
     [broker.agency_id, broker.id, listing.id, new Date(Date.now() - RECENT_MS).toISOString()]
   );
   if (!rows[0]) return null;
-  await saveSession(pool, broker.id, { tokenHash: rows[0].token_hash, code: listing.code, step: "choose" });
+  await saveSession(pool, broker.id, { tokenHash: rows[0].token_hash, code: listing.code, rent: listing.listing_type === "rent", step: "choose" });
   return buttons(broker.preferred_lang);
 }
 
@@ -76,6 +77,8 @@ async function handleInput(pool, broker, message, { reply, lang }) {
   if (!s) return false;
   if (message.type === "text") {
     const text = String(message.text?.body || "").trim();
+    // In the name step, skip means "the number is the name"; everywhere else skip ends the choice.
+    if (s.step === "name") return finishName(pool, broker, s, text, { reply, lang });
     if (/^(?:تخطي|skip)$/i.test(text)) {
       await clearSession(pool, broker.id);
       await reply(broker, en ? `✅ Sent with no recipient (${s.code}).` : `✅ اتسجل من غير مستلم (${s.code}).`);
@@ -85,24 +88,48 @@ async function handleInput(pool, broker, message, { reply, lang }) {
     return attach(pool, broker, s, { text }, { reply, lang });
   }
   if (message.type === "contacts") {
-    const phone = message.contacts?.[0]?.phones?.[0]?.phone;
+    const c = message.contacts?.[0];
+    const phone = c?.phones?.[0]?.phone;
     if (!phone) return false;
     const digits = Phone.normalizePhone(phone);
-    return attach(pool, broker, s, { text: digits ? `+${digits}` : String(phone) }, { reply, lang });
+    const name = [c?.name?.first_name, c?.name?.last_name].filter(Boolean).join(" ") || c?.name?.formatted_name || null;
+    return attach(pool, broker, s, { text: digits ? `+${digits}` : String(phone), name }, { reply, lang });
   }
   return false;
 }
 
-async function attach(pool, broker, s, { text }, { reply, lang }) {
+/** A number that is not a lead yet: the name the broker types (skip = the number itself), then the lead is created. */
+async function finishName(pool, broker, s, text, { reply, lang }) {
+  const name = /^(?:تخطي|skip)$/i.test(text) || !text ? null : text.slice(0, 80);
+  return attach(pool, broker, { ...s, step: "choose" }, { text: `+${s.phone}`, name: name || `+${s.phone}` }, { reply, lang });
+}
+
+async function attach(pool, broker, s, { text, name = undefined }, { reply, lang }) {
   const en = lang === "en";
   const r = await Recipients.resolveRecipient(pool, broker, text);
   if (r.error) {
     await reply(broker, r.error === "lead_not_found" ? (en ? "No lead with that ID. Send another, or type *skip*." : "مفيش عميل بالرقم ده. ابعت رقم تاني، أو اكتب *تخطي*.") : en ? "That isn't a valid mobile number. Send it again, or type *skip*." : "الرقم مش صحيح. ابعته تاني، أو اكتب *تخطي*.");
     return true;
   }
+  let leadId = r.leadId;
+  // A number that is no lead yet: ask its name first (a shared contact already has one), then add it as a lead.
+  if (!leadId && r.phone && name === undefined) {
+    await saveSession(pool, broker.id, { ...s, step: "name", phone: r.phone });
+    await reply(broker, en ? "👤 The client's name? Type it, or *skip* (the number becomes the name)." : "👤 اسم العميل؟ اكتبه، أو *تخطي* (الرقم يبقى الاسم).");
+    return true;
+  }
+  if (!leadId && r.phone) {
+    const out = await Leads.captureLead(pool, broker, { phones: `+${r.phone}`, name: name || `+${r.phone}`, kind: s.rent ? "tenant" : "buyer" }, { quiet: true });
+    if (out.outcome === "erased_before") {
+      await clearSession(pool, broker.id);
+      await reply(broker, en ? "This client asked not to be contacted, so the link was not attached." : "العميل ده طلب مايتكلمش معاه، فالرابط ماتسجلش.");
+      return true;
+    }
+    if (out.lead && (out.outcome === "created" || out.outcome === "merged")) leadId = out.lead.id;
+  }
   await pool.query(
     "UPDATE share_links SET recipient_phone = $3, lead_id = $4 WHERE token_hash = $1 AND agency_id = $2 AND broker_id = $5",
-    [s.tokenHash, broker.agency_id, r.phone, r.leadId, broker.id]
+    [s.tokenHash, broker.agency_id, r.phone, leadId, broker.id]
   );
   await clearSession(pool, broker.id);
   const wa = r.phone ? Phone.waMeUrl(r.phone) : null;
