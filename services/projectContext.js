@@ -11,7 +11,7 @@ async function load(db, agencyId, projectId) {
   const project = rows[0];
   if (!project) return null;
   const [dev, phases, plans, units, materials, sheet] = await Promise.all([
-    project.developer_id ? db.query("SELECT name FROM developers WHERE id = $1", [project.developer_id]) : { rows: [] },
+    project.developer_id ? db.query("SELECT name, about, past_projects, delivery_record, usual_payment_terms, warnings, updated_at FROM developers WHERE id = $1", [project.developer_id]) : { rows: [] },
     db.query("SELECT name, status, delivery_year, delivery_quarter, created_at FROM project_phases WHERE project_id = $1 ORDER BY created_at", [project.id]),
     db.query("SELECT name, down_payment_pct, years, frequency, discount_pct, maintenance_pct, updated_at FROM project_plans WHERE project_id = $1 ORDER BY position, created_at", [project.id]),
     db.query("SELECT property_type, price_value, area_value, bedrooms, status, details, updated_at FROM listings WHERE " + Vis.units("listings") + " AND project_id = $1 AND agency_id = $2", [project.id, agencyId]),
@@ -29,6 +29,7 @@ async function load(db, agencyId, projectId) {
     materials: materials.rows.map((m) => ({ ...m, url: require("../lib/supabase").photoUrl(m.url) })),
     priceSheet: sheet.rows[0] || null,
     unitsKey: key(units.rows, "updated_at"),
+    developerKey: dev.rows[0] ? `${dev.rows[0].updated_at ? new Date(dev.rows[0].updated_at).getTime() : 0}` : "0",
     plansKey: key(plans.rows, "updated_at"),
     phasesKey: key(phases.rows, "created_at"),
     materialsKey: `${key(materials.rows, "created_at")}:${materials.rows.map((m) => `${m.client_visible ? 1 : 0}${m.check_status || ""}`).join("")}`

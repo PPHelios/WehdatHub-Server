@@ -660,7 +660,8 @@
       "parseCsv": ["text", "limitRows"],
       "decodeText": ["buffer"],
       "mapTable": ["rows", "params"],
-      "xlsxRows": ["buffer"]
+      "xlsxRows": ["buffer"],
+      "xlsxSheets": ["buffer"]
     },
     "services/imports.js": {
       "describeChanges": ["listing", "patch", "lang"],
@@ -1489,6 +1490,7 @@
       "MAINTENANCE_DUE": "Array",
       "num": ["v"],
       "listDevelopers": ["db", "actor"],
+      "listDevelopersPage": ["db", "actor", "params"],
       "getDeveloper": ["db", "actor", "id"],
       "saveDeveloper": ["db", "actor", "input"],
       "developerByName": ["db", "actor", "name"],

@@ -40,6 +40,23 @@ const bad = (field) => ({ error: "invalid", field });
 /* Developers                                                              */
 /* ---------------------------------------------------------------------- */
 
+/** One page of developers with a name search: { items, total, page, pages }. 20 per page. */
+async function listDevelopersPage(db, actor, { q = "", page = 1 } = {}) {
+  const PER = 20;
+  const term = String(q || "").trim().slice(0, 80);
+  const pattern = term ? `%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
+  const p = Math.max(1, Math.floor(Number(page) || 1));
+  const { rows } = await db.query(
+    `SELECT d.*, (SELECT count(*)::int FROM projects p WHERE p.developer_id = d.id AND p.archived_at IS NULL) AS projects, count(*) OVER()::int AS total
+     FROM developers d WHERE d.agency_id = $1 AND ($2::text IS NULL OR d.name ILIKE $2 OR d.name_en ILIKE $2)
+     ORDER BY lower(d.name) LIMIT $3 OFFSET $4`,
+    [actor.agency_id, pattern, PER, (p - 1) * PER]
+  );
+  const total = rows[0]?.total ?? 0;
+  const items = rows.map((d) => (isManager(actor) ? d : publicDeveloper(d)));
+  return { items, total, page: p, pages: Math.max(1, Math.ceil(total / PER)) };
+}
+
 async function listDevelopers(db, actor) {
   const { rows } = await db.query(
     `SELECT d.*, (SELECT count(*)::int FROM projects p WHERE p.developer_id = d.id AND p.archived_at IS NULL) AS projects
@@ -50,7 +67,8 @@ async function listDevelopers(db, actor) {
 }
 
 /** What a broker (not a manager) may see of a developer: no sales contact, no notes. */
-const publicDeveloper = (d) => d && { id: d.id, agency_id: d.agency_id, name: d.name, name_en: d.name_en, projects: d.projects };
+const PROFILE_FIELDS = ["about", "past_projects", "delivery_record", "usual_payment_terms", "warnings"];
+const publicDeveloper = (d) => d && { id: d.id, agency_id: d.agency_id, name: d.name, name_en: d.name_en, projects: d.projects, ...Object.fromEntries(PROFILE_FIELDS.map((k) => [k, d[k] ?? null])) };
 
 async function getDeveloper(db, actor, id) {
   if (!isId(id)) return null;
@@ -70,7 +88,12 @@ function developerFields(input) {
       name_en: text(input.name_en, 120),
       contact_name: text(input.contact_name, 120),
       contact_phone: phone ? normalizeArabicDigits(phone) : null,
-      notes: text(input.notes, 1000)
+      notes: text(input.notes, 1000),
+      about: text(input.about, 2000),
+      past_projects: text(input.past_projects, 2000),
+      delivery_record: text(input.delivery_record, 2000),
+      usual_payment_terms: text(input.usual_payment_terms, 2000),
+      warnings: text(input.warnings, 2000)
     }
   };
 }
@@ -85,15 +108,17 @@ async function saveDeveloper(db, actor, input = {}) {
     if (input.id) {
       if (!isId(input.id)) return { error: "not_found" };
       const { rows } = await db.query(
-        `UPDATE developers SET name = $3, name_en = $4, contact_name = $5, contact_phone = $6, notes = $7, updated_at = now()
+        `UPDATE developers SET name = $3, name_en = $4, contact_name = $5, contact_phone = $6, notes = $7,
+           about = $8, past_projects = $9, delivery_record = $10, usual_payment_terms = $11, warnings = $12, updated_at = now()
          WHERE id = $1 AND agency_id = $2 RETURNING *`,
-        [input.id, actor.agency_id, f.name, f.name_en, f.contact_name, f.contact_phone, f.notes]
+        [input.id, actor.agency_id, f.name, f.name_en, f.contact_name, f.contact_phone, f.notes, f.about, f.past_projects, f.delivery_record, f.usual_payment_terms, f.warnings]
       );
       return rows[0] ? { ok: true, developer: rows[0] } : { error: "not_found" };
     }
     const { rows } = await db.query(
-      `INSERT INTO developers (agency_id, name, name_en, contact_name, contact_phone, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [actor.agency_id, f.name, f.name_en, f.contact_name, f.contact_phone, f.notes]
+      `INSERT INTO developers (agency_id, name, name_en, contact_name, contact_phone, notes, about, past_projects, delivery_record, usual_payment_terms, warnings)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [actor.agency_id, f.name, f.name_en, f.contact_name, f.contact_phone, f.notes, f.about, f.past_projects, f.delivery_record, f.usual_payment_terms, f.warnings]
     );
     return { ok: true, developer: rows[0] };
   } catch (e) {
@@ -746,6 +771,7 @@ module.exports = {
   MAINTENANCE_DUE,
   num,
   listDevelopers,
+  listDevelopersPage,
   getDeveloper,
   saveDeveloper,
   developerByName,
