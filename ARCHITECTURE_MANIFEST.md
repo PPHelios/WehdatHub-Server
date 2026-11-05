@@ -98,6 +98,7 @@
   | `075_soft_delete.sql` | Deleted units: `listings.status` may be `deleted` (kept 10 days, with `deleted_at` and `deleted_by`); `unit_reference` keeps a unit's price, area, type and place after its purge. |
   | `076_link_recipients.sql` | Unit links carry the recipient number, the source (bot, web, lead) and an optional note; each counted open is one `share_link_opens` row with its device class and a per-link visitor hash (no address stored). |
   | `077_follow_up_reminder_steps.sql` | `leads.follow_up_reminded_steps`: the lead times (minutes before a call or viewing) already sent for the current follow-up time; cleared by a trigger when the time or status changes. |
+  | `078_notify_policy.sql` | `agencies.notify_policy`: the agency's notification policy per kind (on, channel, frequency, lock by owner or manager); the notification reasons `batched` and `policy_off` added. |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.

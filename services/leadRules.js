@@ -69,31 +69,6 @@ async function setAway(pool, manager, brokerId, day, { now = new Date() } = {}) 
   return rows[0] ? { ok: true, broker: rows[0] } : { error: "not_found" };
 }
 
-/**
- * The managers' per-person options (all kinds the person receives): `channels` maps a kind to a channel the manager sets
- * ("" or missing = the person chooses); `off` lists the kinds kept in the inbox only. Daily kinds only switch on or off.
- */
-async function setNotifyOptions(pool, manager, brokerId, { on = [], channels = {} } = {}) {
-  if (!isManager(manager)) return { error: "forbidden" };
-  const { rows } = await pool.query("SELECT id, name, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
-  if (!rows[0]) return { error: "not_found" };
-  const kinds = [...Notifications.kindsFor(rows[0]), ...Notifications.dailyKindsFor(rows[0])];
-  const mine = new Set(Notifications.kindsFor(rows[0]));
-  // Off = the kinds this person receives that are not switched on in the form.
-  const onSet = new Set([].concat(on ?? []));
-  const offClean = kinds.filter((k) => !onSet.has(k));
-  const managed = {};
-  for (const k of mine) if (Notifications.CHANNELS.includes(channels[k])) managed[k] = channels[k];
-  await pool.query(
-    `UPDATE brokers SET notify_prefs = notify_prefs
-       || jsonb_build_object('off', $3::jsonb)
-       || jsonb_build_object('manager_channels', $4::jsonb)
-     WHERE id = $1 AND agency_id = $2`,
-    [brokerId, manager.agency_id, JSON.stringify(offClean), JSON.stringify(managed)]
-  );
-  return { ok: true, broker: rows[0], off: offClean, channels: managed };
-}
-
 /** The managers' switches: kinds a broker gets in the inbox only (never sent). */
 async function setSwitches(pool, manager, brokerId, off) {
   if (!isManager(manager)) return { error: "forbidden" };
@@ -415,7 +390,7 @@ async function speedToLead(pool, agencyId, { days = 30, now = new Date(), waitMi
   return out;
 }
 
-module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, setNotifyOptions, nextBroker, nextStep, advanceRotation,
+module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, nextBroker, nextStep, advanceRotation,
   routingOf,
   saveRouting,
   routingList, moveOverdue, responseJob, unassignedDigest, unassignedJob, speedToLead, cairoMidnight };

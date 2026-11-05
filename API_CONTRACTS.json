@@ -751,6 +751,8 @@
     },
     "lib/notifications.js": {
       "brokersWithRoles": ["pool", "agencyId", "roles"],
+      "ownChoiceOf": ["broker", "kind"],
+      "effectiveFor": ["pool", "broker", "kind"],
       "KINDS": "Array",
       "CHANNELS": "Array",
       "KINDS_BY_ROLE": "Object",
@@ -1666,7 +1668,6 @@
       "deadlineFor": ["db", "agencyId", "now"],
       "setAway": ["pool", "manager", "brokerId", "day", "params"],
       "setSwitches": ["pool", "manager", "brokerId", "off"],
-      "setNotifyOptions": ["pool", "manager", "brokerId", "params"],
       "nextBroker": ["db", "agencyId", "params"],
       "nextStep": ["db", "lead", "params"],
       "advanceRotation": ["db", "agencyId", "brokerId"],
