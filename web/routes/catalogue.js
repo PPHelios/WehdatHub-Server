@@ -20,6 +20,7 @@ const PlanReading = require("../../services/planReading");
 const PR = require("../../domain/planReading");
 const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
+const { tabs } = require("../views/tabs");
 const { uploads } = require("../uploads");
 const Session = require("../session");
 
@@ -310,10 +311,7 @@ function projectPage(lang, manager, data, developers, { notice = null, prices = 
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
-  return html`<p><a href="/app/catalogue">‹ ${L(lang, "الكتالوج", "Catalogue")}</a></p>
-<h1>🏗️ ${lang === "en" ? p.name_en || p.name : p.name}</h1>
-${notice || ""}
-<section class="card stack" id="details" data-project-status="${p.status}">
+  const overviewTab = html`<section class="card stack" id="details" data-project-status="${p.status}">
   <p>${label2(STATUS, p.status, lang)} · ${L(lang, "الاستلام", "Delivery")}: <span dir="ltr">${deliveryText(p, lang)}</span> · ${L(lang, "الصيانة", "Maintenance")}: ${pctText(p.maintenance_pct)}${p.archived_at ? html` · <strong>${L(lang, "مؤرشف", "Archived")}</strong>` : ""}</p>
   ${[p.district, p.city].filter(Boolean).length ? html`<p>📍 ${[p.district, p.city].filter(Boolean).join("، ")}</p>` : ""}
   <p>🏢 ${d ? d.name : "—"}${manager && d?.contact_name ? ` · ${d.contact_name}` : ""}${manager && d?.contact_phone ? html` · <a href="tel:${d.contact_phone}" dir="ltr" data-developer-contact>${d.contact_phone}</a>` : ""}</p>
@@ -340,7 +338,8 @@ ${prices || ""}
 </section>
 
 <p class="row"><a class="btn secondary" href="${base}/present" data-present-link>${L(lang, "عرض للعميل", "Client presentation")}</a> <a class="btn secondary" href="${base}/calculator" data-calc-link>${L(lang, "حاسبة الأنظمة", "Payment calculator")}</a></p>
-<section class="card" id="plans">
+`;
+  const plansTab = html`<section class="card" id="plans">
   <h2>💳 ${L(lang, "أنظمة السداد", "Payment plans")}</h2>
   <p class="muted">${L(lang, "النظام بيتطبق على كل وحدات المشروع (أو المرحلة) تلقائي، إلا الوحدة اللي ليها أنظمتها الخاصة.", "A plan applies to every unit of the project (or phase) automatically, except a unit with its own plans.")}</p>
   ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
@@ -349,7 +348,8 @@ ${manager ? rulesForm(lang, p, base) : ""}
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
 ${plansRead || ""}
 
-<h2 id="client-files">📤 ${L(lang, "ملفات ولينكات للعملاء", "Files and links for clients")}</h2>
+`;
+  const filesTab = html`<h2 id="client-files">📤 ${L(lang, "ملفات ولينكات للعملاء", "Files and links for clients")}</h2>
 <p class="muted">${L(lang, "اللي بيتبعت للعميل لينك. المساعد مش بيقرا الملفات دي: اللي بيقراه بيتحط فوق (البروشور وقايمة الأسعار وأنظمة السداد). العميل بياخد بس اللي عليه \"يظهر للعميل\".", "What is sent to clients as links. Ask does not read these files: what it reads is added above (brochure, price list, payment plans). A client gets only the ones marked \"Show to clients\".")}</p>
 ${gallery || ""}
 <section class="card" id="materials">
@@ -384,7 +384,8 @@ ${gallery || ""}
 ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة (للمديرين بس)", "Commission (managers only)")}</h2>
 <p class="muted">${L(lang, "سري: مش بيظهر للوسطاء ولا للعملاء ولا للمساعد.", "Secret: never shown to brokers, clients or Ask.")}</p>${commissionTerms}` : ""}
 
-<section class="card" id="units">
+`;
+  const unitsTab = html`<section class="card" id="units">
   <h2>🏠 ${L(lang, "وحدات المشروع", "Project units")} (${units.length})</h2>
   ${units.length ? html`<ul>${units.map((u) => html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a>${u.developer_unit_code ? ` · ${u.developer_unit_code}` : ""}${u.phase_id ? ` · ${phaseName(u.phase_id) || ""}` : ""} · ${u.status}${manager ? html` <form method="post" action="${base}/units/${u.id}/unlink" class="inline"><button type="submit" class="link">${L(lang, "شيلها من المشروع", "Remove from project")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش وحدات مربوطة بالمشروع.", "No units linked yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/units" class="stack" data-link-units>
@@ -392,6 +393,16 @@ ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة
     ${phases.length ? html`<label>${L(lang, "المرحلة", "Phase")} <select name="phase_id"><option value="">—</option>${phases.map((ph) => html`<option value="${ph.id}">${ph.name}</option>`)}</select></label>` : ""}
     <button type="submit" class="secondary">${L(lang, "ربط", "Link")}</button></form>` : ""}
 </section>`;
+  const phaseTabs = [
+    [L(lang, "نظرة عامة", "Overview"), overviewTab],
+    [L(lang, "أنظمة السداد", "Payment plans"), plansTab],
+    [L(lang, "ملفات للعملاء", "Client files"), filesTab],
+    [L(lang, "الوحدات", "Units"), unitsTab]
+  ];
+return html`<p><a href="/app/catalogue">‹ ${L(lang, "الكتالوج", "Catalogue")}</a></p>
+<h1>🏗️ ${lang === "en" ? p.name_en || p.name : p.name}</h1>
+${notice || ""}
+${tabs("proj-tabs", phaseTabs)}`;
 }
 
 function register(web, { pool, page }) {
