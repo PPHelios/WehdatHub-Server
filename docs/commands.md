@@ -43,6 +43,7 @@ Generated from `domain/commandWords.js` (F15). Arabic words work in any spelling
 |---|---|
 | **ليد** … / **lead** … | New lead: the word with the client's message or a voice note |
 | **عملائي** / **leads** | Your leads |
+| **روابط** / **links** | Links sent to clients: opened or not, and the full page link |
 | **متابعات** / **followups** | Your follow-ups |
 | **طلب** L-0042 … / **request** L-0042 … | Save what the client wants; you hear when a unit fits |
 | **حول** L-0042 لـ سارة / **assign** L-0042 to Sara | Hand a lead to a broker (managers) |
