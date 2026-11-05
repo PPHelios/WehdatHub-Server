@@ -49,6 +49,8 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   const eff = Policy.resolve(policy, Notifications.ownChoiceOf(broker, k), k);
   const urgent = Policy.isUrgent(k);
   const by = eff.locked === "owner" ? L(lang, "المالك", "the owner") : L(lang, "المدير", "your manager");
+  // A person who has not chosen a channel sees the default their notifications use (Telegram and website when linked).
+  const shownChannel = eff.channel || Notifications.prefsOf(broker, { telegramLinked: Boolean(broker.telegram_chat_id) }).channels[k];
   const lockNote = eff.locked ? html` <span class="muted small" data-locked-by="${eff.locked}">🔒 ${L(lang, `اتقفلت من ${by}`, `set by ${by}`)}</span>` : "";
   const fixed = (f) => eff.lockedFields.includes(f);
   const chOpts = [
@@ -59,7 +61,7 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   ].filter(([, , show]) => show);
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
   ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`<label>${L(lang, "تشغيل", "On")} <select name="on_${k}" data-kind="${k}"${fixed("on") ? html` disabled` : ""}><option value="1"${eff.enabled ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${eff.enabled ? "" : html` selected`}>${L(lang, "مقفول", "Off")}</option></select></label>`}
-  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${eff.channel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
+  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
   ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
 </div>`;
 }

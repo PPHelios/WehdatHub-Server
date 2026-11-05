@@ -749,6 +749,22 @@
       "hintLevel": ["state"],
       "usage": ["pool", "agencyId", "params"]
     },
+    "lib/notificationPolicy.js": {
+      "URGENT_KINDS": "Array",
+      "FREQUENCIES": "Array",
+      "CHANNELS": "Array",
+      "LOCKERS": "Array",
+      "KNOWN_KINDS": "Array",
+      "isUrgent": ["kind"],
+      "cleanEntry": ["e"],
+      "policyOf": ["agency"],
+      "mayChange": ["actor", "current"],
+      "merge": ["policy", "actor", "changes"],
+      "resolve": ["policy", "mine", "kind"],
+      "nextBatchAt": ["frequency", "now"],
+      "describe": ["entry"],
+      "getConfig": []
+    },
     "lib/notifications.js": {
       "brokersWithRoles": ["pool", "agencyId", "roles"],
       "ownChoiceOf": ["broker", "kind"],
