@@ -68,7 +68,7 @@ function register(web, { pool, page }) {
       title: L(lang, "المُلّاك", "Owners"),
       nav: "units",
       body: html`<h1>👤 ${L(lang, "المُلّاك", "Owners")}</h1>
-<form method="get" action="/app/owners" class="row"><input name="q" value="${q}" placeholder="${L(lang, "اسم أو موبايل", "Name or mobile")}" aria-label="${L(lang, "بحث", "Search")}"><button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button></form>
+<form method="get" action="/app/owners" class="row"><input id="owner-q" hx-preserve="true" hx-get="/app/owners" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="innerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${q}" placeholder="${L(lang, "اسم أو موبايل", "Name or mobile")}" aria-label="${L(lang, "بحث", "Search")}"><button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button></form>
 ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/data-entry" class="row" data-data-entry-owners><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="on" value="${dataEntryOn ? "0" : "1"}"><button type="submit" class="secondary">${dataEntryOn ? L(lang, "🔒 قفل: مدخل البيانات مش هيشوف المُلّاك", "🔒 Turn off: data entry cannot see owners") : L(lang, "🔓 فتح: مدخل البيانات يشوف ويعدّل المُلّاك (ما عدا VIP)", "🔓 Turn on: data entry sees and edits owners (not VIP)")}</button></form>` : ""}
 ${isAgencyOwner(broker) ? html`<p><a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/owners?private=${onlyPrivate ? "" : "1"}">⭐ ${L(lang, "VIP", "VIP")}</a></p>` : ""}
 ${list.rows.length

@@ -184,7 +184,7 @@ ${notice || ""}
 <form method="get" action="/app/units" class="stack" data-unit-filters>
   <input type="hidden" name="status" value="${status}">
   ${mine ? html`<input type="hidden" name="mine" value="1">` : ""}${onlyPrivate ? html`<input type="hidden" name="private" value="1">` : ""}
-  <div class="searchbox">${icon("search", 20)}<input name="q" value="${q}" dir="ltr" aria-label="${L(lang, "بحث بكود الوحدة", "Search by unit code")}" placeholder="${L(lang, "كود الوحدة", "Unit code")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
+  <div class="searchbox">${icon("search", 20)}<input id="unit-q" hx-preserve="true" hx-get="/app/units" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="innerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${q}" dir="ltr" aria-label="${L(lang, "بحث بكود الوحدة", "Search by unit code")}" placeholder="${L(lang, "كود الوحدة", "Unit code")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
   <details class="card sheet"${active ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${active ? html` <span class="chip">${active}</span>` : ""}</summary>
   <div class="grid two">
     <label>${L(lang, "الكمبوند", "Compound")}<input name="compound" list="unit-compounds" value="${compound}" autocomplete="off" placeholder="${L(lang, "اكتب للبحث", "Type to search")}"><datalist id="unit-compounds">${compounds.map((c) => html`<option value="${c.compound}">${c.n}</option>`)}</datalist></label>

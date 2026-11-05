@@ -530,3 +530,4 @@ details.sheet { padding-block: 4px; }
 .is-busy .spin { display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+.search-icon { display: inline-flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
