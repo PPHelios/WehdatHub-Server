@@ -9,6 +9,7 @@ const BugReports = require("../lib/bugReports");
 const LeadIntake = require("../lib/leadIntake");
 const PortalEnquiries = require("../services/portalEnquiries");
 const PortalParse = require("../domain/portalEnquiry");
+const PortalPicker = require("../services/portalPicker");
 const Authz = require("../lib/authz");
 const DealsWA = require("../lib/deals");
 const { reply, replyButtons, setTurnNote } = require("../lib/dispatcher");
@@ -81,6 +82,9 @@ async function dispatchMessage(broker, message, ctx) {
   if (broker.channel === "telegram" && (message.type === "text" || message.type === "contacts")) {
     if (await require("../services/linkPicker").handleInput(poolInstance, broker, message, { reply, lang })) return "done";
   }
+
+  // A saved portal enquiry waiting for its phone and broker (services/portalPicker.js) takes the next text.
+  if (await PortalPicker.handleInput(poolInstance, broker, message, { reply, lang })) return "done";
 
   switch (message.type) {
     case "interactive":
@@ -176,9 +180,10 @@ async function dispatchMessage(broker, message, ctx) {
         const en = broker.preferred_lang === "en";
         if (r.outcome === "created") {
           const who = r.enquiry.client_name ? ` (${r.enquiry.client_name})` : "";
-          reply(broker, en ? `📩 Saved the ${r.enquiry.portal} enquiry${who}. Add the phone and assign a broker in Portal enquiries on the website.${r.unit ? ` Unit: ${r.unit.code}.` : ""}` : `📩 اتسجل استفسار ${r.enquiry.portal}${who}. ضيف الرقم وحوّله لوسيط من «استفسارات البوابات» على الموقع.${r.unit ? ` الوحدة: ${r.unit.code}.` : ""}`);
+          await PortalPicker.offer(ctx.pool, broker, r.enquiry.id);
+          await reply(broker, en ? `📩 Saved the ${r.enquiry.portal} enquiry${who}. Send the client's phone to make it a lead, or type *skip*.${r.unit ? ` Unit: ${r.unit.code}.` : ""}` : `📩 اتسجل استفسار ${r.enquiry.portal}${who}. ابعت رقم العميل عشان يبقى عميل، أو اكتب *تخطي*.${r.unit ? ` الوحدة: ${r.unit.code}.` : ""}`);
         } else if (r.outcome === "repeat") {
-          reply(broker, en ? "This enquiry was already saved in the last 24 hours." : "الاستفسار ده اتسجل قبل كده في آخر 24 ساعة.");
+          await reply(broker, en ? "This enquiry was already saved in the last 24 hours." : "الاستفسار ده اتسجل قبل كده في آخر 24 ساعة.");
         }
         return "done";
       }

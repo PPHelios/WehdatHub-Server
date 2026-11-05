@@ -49,6 +49,7 @@ Generated from `domain/commandWords.js` (F15). Arabic words work in any spelling
 | **حول** L-0042 لـ سارة / **assign** L-0042 to Sara | Hand a lead to a broker (managers) |
 | `L-0042` | The lead ref alone: the lead's card |
 | `01012345678` | A phone number alone: who is calling? |
+| `Bayut` | A Bayut, Dubizzle or Nawy enquiry: paste the portal's message, then send the phone and the broker (managers) |
 
 ## ⚙️ General
 
