@@ -222,7 +222,8 @@ function expand(input) {
     }
   };
 
-  if (!blank("price_value") && !CURRENCY.test(String(cells.price_value)) && money(cells.price_value) === null) {
+  const plan = blank("price_value") ? null : Mixed.installmentOf(cells.price_value);
+  if (!blank("price_value") && !plan && !CURRENCY.test(String(cells.price_value)) && money(cells.price_value) === null) {
     const p = Mixed.priceText(cells.price_value);
     if (p?.ambiguous) errors.push("price_value");
     else if (p?.price_value) {
@@ -275,7 +276,17 @@ function rowToDraft(input = {}) {
   }
   if (has("listing_type")) draft.listing_type = listingType(cells.listing_type);
   if (has("market")) draft.market = market(cells.market);
+  // A price that states an installment plan: total, down payment and installments; the whole text goes to the description.
+  const plan = has("price_value") ? Mixed.installmentOf(cells.price_value) : null;
+  if (plan) {
+    draft.price_value = plan.price_value;
+    draft.down_payment_value = plan.down_payment_value;
+    draft.remaining_amount = plan.remaining_amount;
+    draft.market = "resale";
+    descParts.push(String(cells.price_value).trim());
+  }
   for (const k of ["price_value", "down_payment_value", "remaining_amount", "installment_value"]) {
+    if (plan && k !== "installment_value") continue;
     if (has(k)) {
       // A price in dollars or euros is not guessed at: the row is held back until someone fixes the cell.
       if (CURRENCY.test(String(cells[k]))) {

@@ -100,6 +100,23 @@ describe("the sheet's own wording (from the rejected-rows file)", () => {
     expect(Mixed.cellPrice("long 80k/1600$")).toEqual({ value: 80000, usd: false });
   });
 
+  test("an installment plan in the price cell: total, down payment and installments; the text goes to the description", () => {
+    const text = "total 3,000,000 / down payment 2,485,000 / installments 515,000 till Feb 2026";
+    expect(Mixed.installmentOf(text)).toEqual({ price_value: 3000000, down_payment_value: 2485000, remaining_amount: 515000 });
+    const out = SheetImport.rowToDraft({ code: "TX-5", property_type: "apartment", price_value: text, area_value: "150" });
+    expect(out.draft.market).toBe("resale");
+    expect(out.draft.price_value).toBe(3000000);
+    expect(out.draft.down_payment_value).toBe(2485000);
+    expect(out.draft.remaining_amount).toBe(515000);
+    expect(out.draft.details.clean_summary).toContain("till Feb 2026");
+    expect(out.errors).not.toContain("price_value");
+  });
+
+  test("an installment plan with a total or down payment that cannot be read is held", () => {
+    expect(Mixed.installmentOf("total 7,200,00M / Dp 6,780,700 M  installments 219,300 till 2024")).toBeNull();
+    expect(Mixed.installmentOf("toral price 8,100,000 /downpayment 6 M / installments 2,100,000 till April 2024")).toBeNull();
+  });
+
   test("text with no price is left as it is, so the row is reported", () => {
     expect(Mixed.cellPrice("wait price").value).toBe("wait price");
     expect(Mixed.cellPrice("wait price").usd).toBe(false);

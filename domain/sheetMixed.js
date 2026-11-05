@@ -151,4 +151,32 @@ function cellPrice(raw) {
   return d !== null ? { value: d, usd: true } : { value: raw, usd: false };
 }
 
-module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN, cellPrice };
+/** A figure written with separators: "3,000,000", "1.200.000", "7.326,000", "1,338,355.2". Any other shape → null (held). */
+function figure(raw) {
+  const stripped = String(raw).trim().replace(/[.,](?=\d{3}(?!\d))/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(stripped)) return null;
+  const n = Number(stripped);
+  return n >= 1000 ? n : null;
+}
+
+/**
+ * A resale price cell that states an installment plan: "total 3,000,000 / down payment 2,485,000 / installments 515,000
+ * till Feb 2026". → { price_value, down_payment_value, remaining_amount } or null when the three figures are not all read.
+ * The whole text is kept by the caller (it goes into the description with the dates and months).
+ */
+function installmentOf(raw) {
+  const s = clean(raw).toLowerCase();
+  const num = "([\\d][\\d.,]*)";
+  const total = new RegExp(`total(?:\\s*price)?\\s*[:=]?\\s*${num}`).exec(s);
+  const dp = new RegExp(`(?:down\\s*payment|downpayment|d\\.?\\s*p\\.?)\\s*[:=]?\\s*${num}`).exec(s);
+  const inst = new RegExp(`(?:installments?|remain\\w*)\\s*[:=]?\\s*${num}`).exec(s) || new RegExp(`${num}\\s*installments?`).exec(s);
+  if (!dp || !inst) return null;
+  const down = figure(dp[1]);
+  const remaining = figure(inst[1]);
+  if (!down || !remaining) return null;
+  const stated = total ? figure(total[1]) : null;
+  if (total && stated === null) return null; // a total that cannot be read is held, not worked out
+  return { price_value: stated ?? down + remaining, down_payment_value: down, remaining_amount: remaining };
+}
+
+module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN, cellPrice, installmentOf };

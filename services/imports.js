@@ -203,7 +203,8 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   // A cell with several prices takes the long-term or monthly one; a price in dollars is kept in dollars (saved with its
   // currency, like a unit added by voice or text); search converts it.
   const parsed = sheet.rows.map((r) => {
-    const price = Mixed.cellPrice(r.cells.price_value);
+    // An installment plan in the price cell is read whole by the importer (not as one of several prices).
+    const price = Mixed.installmentOf(r.cells.price_value) ? { value: r.cells.price_value, usd: false } : Mixed.cellPrice(r.cells.price_value);
     const usd = price.usd ? price.value : null;
     const row = SheetImport.rowToDraft(price.value === r.cells.price_value ? r.cells : { ...r.cells, price_value: price.value });
     if (usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
