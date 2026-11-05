@@ -186,7 +186,9 @@ describe("role scoping and tenant isolation", () => {
     expect(page1.more).toBe(true);
     expect((await Leads.listLeads(h.pool, B.broker, { offset: 20 })).rows).toHaveLength(2);
     expect((await Leads.listLeads(h.pool, B.broker, { kind: "tenant", limit: 100 })).rows).toHaveLength(11);
-    await Leads.setFollowUp(h.pool, B.broker, "L-0001", { at: new Date(now.getTime() - 3600e3) });
+    // An overdue follow-up is made by moving a planned one into the past in the database (the service refuses past times).
+    await Leads.setFollowUp(h.pool, B.broker, "L-0001", { at: new Date(now.getTime() + 3600e3) });
+    await h.pool.query("UPDATE leads SET next_follow_up_at = $2 WHERE agency_id = $1 AND ref = 1", [B.broker.agency_id, new Date(now.getTime() - 3600e3).toISOString()]);
     await Leads.setFollowUp(h.pool, B.broker, "L-0002", { at: new Date(now.getTime() + 3600e3) });
     await Leads.setStage(h.pool, B.broker, "L-0003", { stage: "won" });
     expect((await Leads.listLeads(h.pool, B.broker, { overdue: true })).rows.map((r) => r.ref)).toEqual([1]);
@@ -206,7 +208,7 @@ describe("role scoping and tenant isolation", () => {
     const r = await capture("broker", { phones: "01012345678" });
     await expect(h.query("UPDATE leads SET assigned_broker_id = $1 WHERE id = $2", [B.rival.id, r.lead.id])).rejects.toThrow(/another agency/);
     const unit = await h.insertListing({ agency_id: B.rival.agency_id, broker_id: B.rival.id, code: "RV-1" });
-    expect((await Leads.setFollowUp(h.pool, B.broker, r.lead.id, { at: new Date(), kind: "viewing", listingId: unit.id })).error).toBe("unit_not_found");
+    expect((await Leads.setFollowUp(h.pool, B.broker, r.lead.id, { at: new Date(Date.now() + 3600e3), kind: "viewing", listingId: unit.id })).error).toBe("unit_not_found");
   });
 });
 
@@ -237,10 +239,10 @@ describe("changes, versions and undo", () => {
     expect(c.lead.stage).toBe("contacted");
     expect(c.lead.last_contact_at).toBeTruthy();
     const unit = await h.insertListing({ code: "VIL-08" });
-    await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-01T08:00:00Z" });
-    const v = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-02T15:00:00Z", kind: "viewing", listingId: unit.id, note: "bring keys" });
+    await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-20T08:00:00Z" });
+    const v = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-21T15:00:00Z", kind: "viewing", listingId: unit.id, note: "bring keys" });
     expect(v.lead).toMatchObject({ follow_up_kind: "viewing", follow_up_listing_id: unit.id, follow_up_status: "open" });
-    expect(new Date(v.lead.next_follow_up_at).toISOString()).toBe("2026-11-02T15:00:00.000Z");
+    expect(new Date(v.lead.next_follow_up_at).toISOString()).toBe("2026-11-21T15:00:00.000Z");
     expect((await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "soon" })).error).toBe("follow_up_time");
     expect((await Leads.completeFollowUp(h.pool, B.broker, lead.id)).lead.follow_up_status).toBe("done");
     expect((await Leads.completeFollowUp(h.pool, B.broker, lead.id)).error).toBe("no_open_follow_up");
@@ -255,7 +257,7 @@ describe("changes, versions and undo", () => {
     expect(u.lead).toMatchObject({ stage: "new", lost_reason: null });
     expect((await Leads.undo(h.pool, B.broker, s.eventId)).error).toBe("already_undone");
 
-    const f = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-01T08:00:00Z", now: t0 });
+    const f = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-20T08:00:00Z", now: t0 });
     expect((await Leads.undo(h.pool, B.broker, f.eventId, { now: new Date(t0.getTime() + 11 * 60e3) })).error).toBe("undo_expired");
     const fu = await Leads.undo(h.pool, B.broker, f.eventId, { now: t0 });
     expect(fu.lead).toMatchObject({ follow_up_status: null, next_follow_up_at: null });

@@ -162,13 +162,13 @@ describe("the lead page", () => {
     expect(s.status).toBe(303);
     expect(s.headers.location).toMatch(/done=stage&undo=\d+/);
     v = versionOf((await agent.get(s.headers.location)).text);
-    const f = await form(agent, "/app/leads/L-0001/follow-up", csrf, { version: v, at: "2026-11-02T15:00", kind: "viewing", unit: "vil-08", note: "keys" });
+    const f = await form(agent, "/app/leads/L-0001/follow-up", csrf, { version: v, at: "2026-11-21T15:00", kind: "viewing", unit: "vil-08", note: "keys" });
     expect(f.status).toBe(303);
     const lead = await leadRow();
     expect(lead).toMatchObject({ stage: "viewing", follow_up_kind: "viewing", follow_up_listing_id: unit.id, follow_up_note: "keys", follow_up_status: "open" });
-    expect(new Date(lead.next_follow_up_at).toISOString()).toBe("2026-11-02T13:00:00.000Z");
+    expect(new Date(lead.next_follow_up_at).toISOString()).toBe("2026-11-21T13:00:00.000Z");
     const page = await agent.get(f.headers.location);
-    expect(page.text).toContain('value="2026-11-02T15:00"');
+    expect(page.text).toContain('value="2026-11-21T15:00"');
     expect(page.text).toContain('value="VIL-08"');
     const undoId = f.headers.location.match(/undo=(\d+)/)[1];
     expect((await form(agent, "/app/leads/L-0001/undo", csrf, { event: undoId })).status).toBe(303);

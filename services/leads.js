@@ -609,6 +609,8 @@ async function markContacted(pool, actor, key, { version = null, now = new Date(
 async function setFollowUp(pool, actor, key, { at, kind = "call", listingId = null, note = null, version = null, now = new Date() } = {}) {
   const when = at instanceof Date ? at : new Date(at);
   if (!at || Number.isNaN(when.getTime())) return { error: "follow_up_time" };
+  // A call or viewing is planned ahead: a time that has already passed is refused.
+  if (when.getTime() <= now.getTime()) return { error: "follow_up_past" };
   if (!Stages.FOLLOW_UP_KINDS.includes(kind)) return { error: "follow_up_kind" };
   if (listingId) {
     const u = await pool.query("SELECT 1 FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [listingId, actor.agency_id]);
