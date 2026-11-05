@@ -63,4 +63,24 @@ function checkPlan(rules = {}, plan = {}) {
   return { exception: reasons.length > 0, reasons };
 }
 
-module.exports = { FREQUENCIES, DUE, cleanRules, saveRules, checkPlan };
+/**
+ * The unit feature a fee stands for (garage, club, nanny room), or null when the fee has none. A fee with a feature is
+ * shown only when some available unit in the project has that feature (the data decides which filters exist).
+ */
+function feeFeatureKey(label = "") {
+  const t = String(label).toLowerCase();
+  if (/جراج|جاراج|موقف|garage|parking/.test(t)) return "parking";
+  if (/نادي|النادي|club/.test(t)) return "club_membership";
+  if (/مربي|nanny/.test(t)) return "nanny_room";
+  return null;
+}
+
+/** The fee options that apply: a fee with no matching unit feature is hidden. unitKeys = Set of feature keys. */
+function visibleFees(fees = [], unitKeys = new Set()) {
+  return fees.filter((f) => {
+    const key = feeFeatureKey(f.label);
+    return key === null || unitKeys.has(key);
+  });
+}
+
+module.exports = { FREQUENCIES, DUE, cleanRules, saveRules, checkPlan, feeFeatureKey, visibleFees };

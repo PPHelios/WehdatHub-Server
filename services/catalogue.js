@@ -289,7 +289,7 @@ async function getProject(db, actor, id) {
     db.query("SELECT * FROM project_materials WHERE project_id = $1 ORDER BY created_at", [id]).then((r) => r.rows),
     db
       .query(
-        `SELECT id, code, property_type, area_value, bedrooms, price_value, status, phase_id, developer_unit_code, inventory_type, details
+        `SELECT id, code, property_type, area_value, bedrooms, price_value, status, phase_id, developer_unit_code, inventory_type, details, feature_keys
          FROM listings WHERE ${Vis.units("listings")} AND project_id = $1 AND agency_id = $2 ORDER BY status, code LIMIT 200`,
         [id, actor.agency_id]
       )

@@ -536,12 +536,15 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
       types.set(key, t);
     }
     const unitTypes = [...types.values()].sort((a, b) => a.from - b.from);
+    // Features only appear when some available unit has them (the data decides the filters).
+    const featureChips = [...new Set(data.units.flatMap((u) => u.feature_keys || []))].map((k) => require("../../domain/features").featureLabel(k, lang));
     const plans = data.plans.filter((pl) => pl.exception_status !== "needs_approval");
     const files = data.materials.filter((m) => m.client_visible && m.kind !== "price_sheet" && m.check_status !== "broken");
     const delivery = p.delivery_year ? `${p.delivery_quarter ? `Q${p.delivery_quarter} ` : ""}${p.delivery_year}` : null;
     const body = html`<section class="card stack" id="presentation" data-presentation>
   <h1>${lang === "en" ? p.name_en || p.name : p.name}</h1>
   <p class="muted">${data.developer?.name || ""}${delivery ? ` · ${L(lang, "التسليم", "Delivery")} ${delivery}` : ""}</p>
+  ${featureChips.length ? html`<p class="row">${featureChips.map((c) => html`<span class="chip">${c}</span>`)}</p>` : ""}
   ${unitTypes.length ? html`<div class="stack"><h2>${L(lang, "الوحدات المتاحة", "Available units")}</h2>
     ${unitTypes.map((t) => html`<div class="card"><strong>${t.type}${t.bedrooms ? ` · ${t.bedrooms} ${L(lang, "غرف", "bed")}` : ""}</strong>
       <p>${L(lang, "من", "From")} ${money(t.from)} · ${t.count} ${L(lang, "وحدة", "units")}${t.areaMax ? ` · ${Math.round(t.areaMin)}–${Math.round(t.areaMax)} m²` : ""}</p></div>`)}
@@ -570,11 +573,25 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     const frequency = PlanRules.FREQUENCIES.includes(req.query.freq) ? req.query.freq : "quarterly";
     const down = Math.min(100, Math.max(0, Number(req.query.down ?? 10) || 0));
     const years = Math.min(20, Math.max(0, Number(req.query.years ?? 8) || 0));
-    const fees = (rules.optional_fees || []).map((f, i) => ({ ...f, i, on: req.query[`fee${i}`] === "1" }));
+    // Fees show only when some available unit in the project has the feature they stand for (the data decides).
+    const unitKeys = new Set(units.flatMap((u) => u.feature_keys || []));
+    const fees = PlanRules.visibleFees((rules.optional_fees || []).map((f, i) => ({ ...f, i, on: req.query[`fee${i}`] === "1" })), unitKeys);
     const verdict = PlanRules.checkPlan(rules, { down_payment_pct: down, years, frequency, discount_pct: 0 });
     const price = unit ? Math.round(Number(unit.price_value)) : 0;
     const summary = price ? F.calculatePlanSummary(price, { down_payment_pct: down, years, frequency, discount_pct: 0, maintenance_pct: rules.maintenance_pct, maintenance_due: rules.maintenance_due }) : null;
     const extra = fees.filter((f) => f.on).reduce((sum, f) => sum + f.amount, 0);
+    // The same numbers as JSON, for the page to update in place when an input changes.
+    if (req.query.format === "json") {
+      return res.json({
+        price,
+        down_payment: summary ? Math.round(summary.down_payment) : 0,
+        installment: summary ? Math.round(summary.installment_amount) : 0,
+        installments: summary ? summary.total_installments_count : 0,
+        extra,
+        exception: verdict.exception,
+        reasons: verdict.reasons
+      });
+    }
     const money = (n) => Math.round(Number(n) || 0).toLocaleString(lang === "en" ? "en-US" : "ar-EG") + (lang === "en" ? " EGP" : " ج.م");
     const body = html`<section class="card stack" id="calculator" data-calculator>
   <h1>🧮 ${L(lang, "حاسبة الأنظمة", "Payment calculator")} · ${data.project.name}</h1>
@@ -591,10 +608,10 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   ${summary ? html`<p><a href="/app/catalogue/projects/${data.project.id}/calculator.xlsx?unit=${encodeURIComponent(unit.code)}&down=${down}&years=${years}&freq=${frequency}" data-excel-link>${L(lang, "حمّل الجدول (إكسيل)", "Download schedule (Excel)")}</a></p>` : ""}
   ${summary ? html`<div class="stack">
     <p><strong>${L(lang, "سعر الوحدة", "Unit price")}:</strong> ${money(price)}</p>
-    <p><strong>${L(lang, "المقدم", "Down payment")}:</strong> ${money(summary.down_payment)}</p>
-    <p><strong>${L(lang, "القسط", "Installment")}:</strong> ${money(summary.installment_amount)} × ${summary.total_installments_count}</p>
-    ${extra ? html`<p><strong>${L(lang, "مصاريف اختيارية", "Optional fees")}:</strong> ${money(extra)}</p>` : ""}
-    ${verdict.exception ? html`<p class="notice" role="status">⚠️ ${L(lang, "النظام ده برا حدود المطور. محتاج مراجعة مدير.", "This plan is outside the developer's limits and needs a manager's review.")}</p>` : html`<p class="muted">${L(lang, "النظام داخل حدود المطور.", "Within the developer's limits.")}</p>`}
+    <p><strong>${L(lang, "المقدم", "Down payment")}:</strong> <span data-out="down_payment">${money(summary.down_payment)}</span></p>
+    <p><strong>${L(lang, "القسط", "Installment")}:</strong> <span data-out="installment">${money(summary.installment_amount)}</span> × <span data-out="installments">${summary.total_installments_count}</span></p>
+    ${extra ? html`<p><strong>${L(lang, "مصاريف اختيارية", "Optional fees")}:</strong> <span data-out="extra">${money(extra)}</span></p>` : ""}
+    ${verdict.exception ? html`<p class="notice" role="status" data-out="warning">⚠️ ${L(lang, "النظام ده برا حدود المطور. محتاج مراجعة مدير.", "This plan is outside the developer's limits and needs a manager's review.")}</p>` : html`<p class="muted">${L(lang, "النظام داخل حدود المطور.", "Within the developer's limits.")}</p>`}
   </div>` : html`<p class="muted">${L(lang, "مفيش وحدات بسعر في المشروع.", "No priced units in this project.")}</p>`}
   <p><a href="/app/catalogue/projects/${data.project.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
   <script src="/app/static/calculator.js" defer></script>
