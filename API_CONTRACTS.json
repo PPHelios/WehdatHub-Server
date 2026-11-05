@@ -1906,6 +1906,12 @@
       "list": ["pool", "viewer", "f", "params"],
       "withLeadRights": ["pool", "viewer", "r"]
     },
+    "services/linkCleanup.js": {
+      "BATCH": "Number",
+      "REVOKED_KEEP_DAYS": "Number",
+      "cleanup": ["pool", "params"],
+      "cleanupJob": []
+    },
     "services/targets.js": {
       "monthOf": ["now"],
       "setTarget": ["db", "manager", "brokerId", "params"],
