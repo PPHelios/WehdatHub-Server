@@ -265,8 +265,8 @@ async function handleCommand(broker, text, ctx) {
 
       const promptBody =
         lang === "en"
-          ? `⚠️ Are you sure you want to permanently delete unit #${listing.code}? Media and brochures will be unlinked.`
-          : `⚠️ هل أنت متأكد من رغبتك في حذف الوحدة #${listing.code} نهائياً؟ سيتم مسح كافة ملفات البروشور والوسائط.`;
+          ? `⚠️ Delete unit #${listing.code}? A manager can restore it for 10 days; after that its photos are removed.`
+          : `⚠️ تحذف الوحدة #${listing.code}؟ المدير يقدر يرجعها لمدة ١٠ أيام؛ بعدها الصور بتتمسح.`;
 
       await replyButtons(broker, promptBody, [
         {

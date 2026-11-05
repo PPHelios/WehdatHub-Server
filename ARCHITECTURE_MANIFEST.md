@@ -95,6 +95,8 @@
   | `071_search_compare_log.sql` | `search_log`: how the quick reader and the AI differed (`disagree`), close spellings accepted (`guesses`), unknown words the bot asked about (`asked`) and why the AI read failed (`ai_error`). |
   | `073_furnishing_status.sql` | `listings.furnishing`: "kitchen and AC" is a status (`kitchen_and_ac`); units with both features and no status get it. |
   | `074_finishing_status.js` | `listings.finishing` is one of five fixed values: old free text is matched to one (also from `details`), what does not match becomes blank. |
+  | `075_soft_delete.sql` | Deleted units: `listings.status` may be `deleted` (kept 10 days, with `deleted_at` and `deleted_by`); `unit_reference` keeps a unit's price, area, type and place after its purge. |
+  | `076_link_recipients.sql` | Unit links carry the recipient number, the source (bot, web, lead) and an optional note; each counted open is one `share_link_opens` row with its device class and a per-link visitor hash (no address stored). |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.

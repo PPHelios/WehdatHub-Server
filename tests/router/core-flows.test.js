@@ -161,13 +161,13 @@ describe("Lifecycle & deletion (LFC, DEL)", () => {
     expect(l.status).toBe("sold");
   });
 
-  test("delete asks for confirmation, then removes the unit (DEL-01/02)", async () => {
+  test("delete asks for confirmation, then moves the unit to Recently deleted for 10 days (DEL-01/02, soft delete)", async () => {
     const listing = await h.insertListing({ code: "HP-201" });
     const prompt = await h.text("broker", "حذف HP-201");
     const confirmId = prompt.flatMap((r) => r.buttons || []).find((b) => b.id.startsWith("del_confirm:"))?.id;
     expect(confirmId).toBe(`del_confirm:${listing.id}:HP-201`);
     await h.tap("broker", confirmId);
-    expect(await h.query("SELECT 1 FROM listings WHERE id = $1", [listing.id])).toHaveLength(0);
+    expect(await h.query("SELECT status FROM listings WHERE id = $1", [listing.id])).toEqual([{ status: "deleted" }]);
   });
 
   test("Part 2 C: the delete prompt must not also trigger the fallback bubble", async () => {

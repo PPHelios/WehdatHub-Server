@@ -144,7 +144,7 @@ async function sendToClient(pool, actor, leadKey, listing, { lang = "ar", now = 
   const clientLang = lead.lang || lang;
   const T = require("../lib/text");
   const ShareLinks = require("../lib/shareLinks");
-  const { url } = await ShareLinks.createShareLink(pool, actor, listing, { channel: "whatsapp", lang: clientLang, leadId: lead.id });
+  const { url } = await ShareLinks.createShareLink(pool, actor, listing, { channel: "whatsapp", lang: clientLang, leadId: lead.id, source: "lead", recipient: { phone: Phone.normalizePhone(lead.phone_e164), leadId: lead.id } });
   const text = `${T.formatClientListingText(listing, actor, clientLang)}\n\n🔗 ${clientLang === "en" ? "Photos and details" : "الصور والتفاصيل"}: ${url}`;
   const wa = Phone.waMeUrl(lead.phone_e164, text);
   await pool.query("UPDATE lead_matches SET status = 'sent_to_client' WHERE agency_id = $1 AND lead_id = $2 AND listing_id = $3", [actor.agency_id, lead.id, listing.id]);

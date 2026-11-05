@@ -23,8 +23,10 @@ CREATE SEQUENCE IF NOT EXISTS public.operation_logs_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.payments_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.price_read_log_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.push_subscriptions_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.share_link_opens_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_access_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_owner_events_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.unit_reference_id_seq;
 
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
  RETURNS trigger
@@ -400,7 +402,9 @@ CREATE TABLE IF NOT EXISTS public.listings (
   phase_id uuid,
   is_private boolean DEFAULT false NOT NULL,
   owner_id uuid,
-  portal_listing_no text
+  portal_listing_no text,
+  deleted_at timestamp with time zone,
+  deleted_by uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -632,7 +636,10 @@ CREATE TABLE IF NOT EXISTS public.share_links (
   first_opened_at timestamp with time zone,
   last_opened_at timestamp with time zone,
   last_alert_at timestamp with time zone,
-  lead_id uuid
+  lead_id uuid,
+  recipient_phone text,
+  source text,
+  note text
 );
 
 CREATE TABLE IF NOT EXISTS public.crm_jobs (
@@ -1380,6 +1387,38 @@ CREATE TABLE IF NOT EXISTS public.fixed_costs (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.unit_reference (
+  id bigint DEFAULT nextval('unit_reference_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  code text NOT NULL,
+  listing_type text,
+  market text,
+  property_type text,
+  compound text,
+  compound_en text,
+  district text,
+  city text,
+  area_value numeric,
+  bedrooms integer,
+  bathrooms integer,
+  price_value numeric,
+  currency text,
+  finishing text,
+  furnishing text,
+  delivery_year integer,
+  created_at timestamp with time zone,
+  deleted_at timestamp with time zone NOT NULL,
+  purged_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.share_link_opens (
+  id bigint DEFAULT nextval('share_link_opens_id_seq'::regclass) NOT NULL,
+  token_hash text NOT NULL,
+  opened_at timestamp with time zone DEFAULT now() NOT NULL,
+  device text DEFAULT 'other'::text NOT NULL,
+  visitor text NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1448,12 +1487,14 @@ ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_pkey PRIMARY KEY (id);
 ALTER TABLE search_log ADD CONSTRAINT search_log_pkey PRIMARY KEY (id);
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_pkey PRIMARY KEY (id);
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_pkey PRIMARY KEY (kind, key);
+ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_pkey PRIMARY KEY (id);
 ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMARY KEY (token_hash);
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
+ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_pkey PRIMARY KEY (id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_pkey PRIMARY KEY (id);
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
@@ -1595,7 +1636,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing
 ALTER TABLE listings ADD CONSTRAINT listings_market_check CHECK ((market = ANY (ARRAY['resale'::text, 'primary'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((payment_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_portal_listing_no_check CHECK (((portal_listing_no IS NULL) OR ((length(portal_listing_no) >= 4) AND (length(portal_listing_no) <= 20))));
-ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text, 'deleted'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
@@ -1647,8 +1688,11 @@ ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_source_check CHECK ((so
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_status_check CHECK ((status = ANY (ARRAY['open'::text, 'fixed'::text, 'dismissed'::text])));
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
+ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_device_check CHECK ((device = ANY (ARRAY['iphone'::text, 'android'::text, 'mac'::text, 'windows'::text, 'linux'::text, 'other'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
+ALTER TABLE share_links ADD CONSTRAINT share_links_note_length CHECK (((note IS NULL) OR (char_length(note) <= 200)));
+ALTER TABLE share_links ADD CONSTRAINT share_links_source_check CHECK (((source IS NULL) OR (source = ANY (ARRAY['bot'::text, 'web'::text, 'lead'::text]))));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_client_note_check CHECK (((client_note IS NULL) OR (length(client_note) <= 300)));
@@ -1734,6 +1778,7 @@ ALTER TABLE listings ADD CONSTRAINT fk_listings_agency FOREIGN KEY (agency_id) R
 ALTER TABLE listings ADD CONSTRAINT fk_listings_broker FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
+ALTER TABLE listings ADD CONSTRAINT listings_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
@@ -1783,6 +1828,7 @@ ALTER TABLE search_log ADD CONSTRAINT search_log_rerun_of_fkey FOREIGN KEY (reru
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_search_log_id_fkey FOREIGN KEY (search_log_id) REFERENCES search_log(id) ON DELETE CASCADE;
+ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_token_hash_fkey FOREIGN KEY (token_hash) REFERENCES share_links(token_hash) ON DELETE CASCADE;
 ALTER TABLE share_links ADD CONSTRAINT share_links_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE share_links ADD CONSTRAINT share_links_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE share_links ADD CONSTRAINT share_links_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
@@ -1798,6 +1844,7 @@ ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_broker_id_fkey FO
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE CASCADE;
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -1879,6 +1926,7 @@ CREATE INDEX idx_listings_unit_check ON public.listings USING btree (agency_id, 
 CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id, lower(code));
 CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);
 CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
+CREATE INDEX listings_deleted_idx ON public.listings USING btree (agency_id, deleted_at) WHERE (status = 'deleted'::text);
 CREATE INDEX listings_location_keywords_gin ON public.listings USING gin (location_keywords);
 CREATE INDEX listings_owner ON public.listings USING btree (owner_id) WHERE (owner_id IS NOT NULL);
 CREATE UNIQUE INDEX listings_portal_no_idx ON public.listings USING btree (agency_id, portal_listing_no) WHERE (portal_listing_no IS NOT NULL);
@@ -1924,14 +1972,17 @@ CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id,
 CREATE INDEX search_log_disagree ON public.search_log USING btree (created_at DESC) WHERE (cardinality(disagree) > 0);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
+CREATE INDEX share_link_opens_token_idx ON public.share_link_opens USING btree (token_hash, opened_at DESC);
 CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
+CREATE INDEX share_links_recipient_idx ON public.share_links USING btree (agency_id, recipient_phone) WHERE (recipient_phone IS NOT NULL);
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);
 CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USING btree (broker_id);
 CREATE INDEX unit_access_requests_listing ON public.unit_access_requests USING btree (agency_id, listing_id, broker_id, created_at DESC);
 CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (owner_id, created_at DESC, id DESC);
 CREATE INDEX unit_owners_agency ON public.unit_owners USING btree (agency_id, created_at DESC);
 CREATE INDEX unit_owners_phones ON public.unit_owners USING gin (phones);
+CREATE INDEX unit_reference_agency_idx ON public.unit_reference USING btree (agency_id, purged_at DESC);
 CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
 CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree (broker_id, created_at DESC);

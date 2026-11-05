@@ -343,7 +343,7 @@ function mountPublic(app, { pool, assets }) {
     if (!ctx) return undefined;
     const sent = req.query.sent === "1";
     if (!sent) {
-      await Share.recordOpen(pool, ctx.resolved, { userAgent: req.get("user-agent"), viewerAgencyId: req.session?.agency?.id || null }).catch((e) =>
+      await Share.recordOpen(pool, ctx.resolved, { userAgent: req.get("user-agent"), viewerAgencyId: req.session?.agency?.id || null, ip: req.ip }).catch((e) =>
         console.warn("Share open record failed:", e.message)
       );
     }

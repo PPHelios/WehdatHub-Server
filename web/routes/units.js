@@ -31,6 +31,11 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const STATUSES = ["active", "sold", "archived"];
 const UNITS_PAGE = 20;
 const { PROPERTY_TYPES } = require("../../domain/fieldRules");
+const UnitDelete = require("../../services/unitDelete");
+const Recipients = require("../../services/linkRecipients");
+const Phone = require("../../domain/phone");
+const DAY_MS = 24 * 3600 * 1000;
+const deletedDaysLeft = (r) => Math.max(0, Math.ceil((new Date(r.deleted_at).getTime() + UnitDelete.RETENTION_DAYS * DAY_MS - Date.now()) / DAY_MS));
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../../domain/furnishingStatus");
 
 async function imagesOf(pool, listing) {
@@ -120,7 +125,8 @@ function register(web, { pool, page }) {
   async function unitsList(req, res, { notice = null, code = 200 } = {}) {
     const lang = langOf(req);
     const { broker } = req.session;
-    const status = STATUSES.includes(req.query.status) ? req.query.status : "active";
+    // Recently deleted (soft delete, services/unitDelete.js) is for managers and the owner only.
+    const status = req.query.status === "deleted" && Authz.isManager(broker) ? "deleted" : STATUSES.includes(req.query.status) ? req.query.status : "active";
     const mine = req.query.mine === "1";
     const onlyPrivate = req.query.private === "1" && Authz.isAgencyOwner(broker);
     // Filters: fixed lists (type, furnishing, finishing), the agency's own compounds, and a search on the code.
@@ -173,7 +179,7 @@ function register(web, { pool, page }) {
       body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a><a class="btn secondary small" href="/app/owners">👤 ${L(lang, "المُلّاك", "Owners")}</a></div>
 ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
-  ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}
+  ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}${Authz.isManager(broker) ? tab("deleted", L(lang, "🗑️ المحذوفة", "🗑️ Recently deleted")) : ""}
 </nav>
 <form method="get" action="/app/units" class="stack" data-unit-filters>
   <input type="hidden" name="status" value="${status}">
@@ -196,7 +202,9 @@ ${notice || ""}
 </p>
 ${rows.length
   ? html`<p class="muted small" data-total="${total}">${L(lang, `${total} وحدة${pages > 1 ? ` · صفحة ${pageNo + 1} من ${pages}` : ""} · علّم الوحدات عشان تغيّر حالتها مرة واحدة.`, `${total} unit(s)${pages > 1 ? ` · page ${pageNo + 1} of ${pages}` : ""} · tick units to change them together.`)}</p>
-<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>
+${status === "deleted"
+  ? html`<ol class="results">${rows.map((r) => html`<li class="card result" data-deleted-code="${r.code}"><div class="row between"><span><b dir="ltr">${r.code}</b> <span class="muted">${Describe.typeLabel(r, lang)}${r.compound ? ` · ${r.compound}` : ""}</span></span><span class="muted small">${L(lang, `تتمسح بعد ${deletedDaysLeft(r)} يوم`, `purged in ${deletedDaysLeft(r)} day(s)`)}</span></div><form method="post" action="/app/units/${encodeURIComponent(r.code)}/restore" class="row"><button type="submit" class="secondary small" data-restore>↩️ ${L(lang, "رجّعها", "Restore")}</button></form></li>`)}</ol>`
+  : html`<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`}
 ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn secondary" href="${link({ page: pageNo - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${pageNo + 1 < pages ? html`<a class="btn secondary" href="${link({ page: pageNo + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>` : ""}
 <form id="bulk" method="post" action="/app/units/bulk" class="bulkbar">
   <select name="action" aria-label="${L(lang, "للمختار", "Selected")}">
@@ -210,6 +218,27 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     }, code);
   }
   web.get("/units", (req, res) => unitsList(req, res));
+
+  // Soft delete from the unit page (keeps 10 days); restore for managers and the owner.
+  web.post("/units/:code/delete", async (req, res) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return res.status(404).type("text/plain").send("Not found");
+    const out = await UnitDelete.softDelete(pool, broker, listing.id);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 400).type("text/plain").send(out.error);
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: "unit_soft_delete", metadata: {} });
+    return res.redirect(303, "/app/units?status=deleted");
+  });
+
+  web.post("/units/:code/restore", async (req, res) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing) return res.status(404).type("text/plain").send("Not found");
+    const out = await UnitDelete.restore(pool, broker, listing.id);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 400).type("text/plain").send(out.error);
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: "unit_restore", metadata: {} });
+    return res.redirect(303, `/app/units/${encodeURIComponent(out.code)}`);
+  });
 
   /* Bulk edit from the units list: the answer shows on the list itself. */
   web.post("/units/bulk", async (req, res) => {
@@ -246,15 +275,20 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   <h2>🔗 ${L(lang, "رابط للعميل", "Link for a client")}</h2>
   ${fresh
     ? html`<p class="share-url" data-share-url>${fresh.url}</p>
-  <p><a class="btn" href="https://wa.me/?text=${encodeURIComponent(copy)}" rel="noopener">${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>`
+  <p><a class="btn" href="${(fresh.recipientPhone && Phone.waMeUrl(fresh.recipientPhone, copy)) || `https://wa.me/?text=${encodeURIComponent(copy)}`}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>`
     : ""}
-  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="row">
-    <select name="lang"><option value="ar">عربي</option><option value="en">English</option></select>
-    <button type="submit" class="secondary">${L(lang, "رابط جديد", "New link")}</button>
+  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="stack" data-share-form>
+    <label>${L(lang, "لمين؟ رقم العميل أو رقم العميل في النظام (L-0042). اختياري.", "To whom? Client's number or lead reference (L-0042). Optional.")}
+      <input name="to" dir="ltr" inputmode="tel" maxlength="40" placeholder="01xxxxxxxxx · L-0042" autocomplete="off"></label>
+    <label>${L(lang, "ملاحظة (اختياري)", "Note (optional)")} <input name="note" maxlength="200"></label>
+    <div class="row">
+      <select name="lang"><option value="ar">عربي</option><option value="en">English</option></select>
+      <button type="submit" class="secondary">${L(lang, "رابط جديد", "New link")}</button>
+    </div>
   </form>
   ${links.length
     ? html`<ul class="muted">${links.map(
-        (k) => html`<li data-link-opens="${k.open_count}">${new Date(k.created_at).toISOString().slice(0, 10)} · ${k.channel} · ${L(lang, `اتفتح ${k.open_count} مرة`, `opened ${k.open_count} time(s)`)}</li>`
+        (k) => html`<li data-link-opens="${k.open_count}">${new Date(k.created_at).toISOString().slice(0, 10)} · ${k.channel}${k.recipient_phone ? html` · <span dir="ltr">${k.recipient_phone}</span>` : html` · ${L(lang, "من غير مستلم", "no recipient")}`} · ${L(lang, `اتفتح ${k.open_count} مرة`, `opened ${k.open_count} time(s)`)}${k.devices > 1 ? html` · ${L(lang, `من ${k.devices} أجهزة`, `from ${k.devices} devices`)}` : ""}${k.note ? html` · ${k.note}` : ""}</li>`
       )}</ul>`
     : ""}
   <p class="muted">${L(lang, "الصفحة بتظهر للعميل الصور والمواصفات بس — مفيش بيانات داخلية. هيوصلك تنبيه لما يفتحها.", "The page shows clients the photos and facts only — nothing internal. You get an alert when it is opened.")}</p>
@@ -267,7 +301,12 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing || !Authz.canView(broker, listing) || listing.status !== "active") return next();
     const linkLang = req.body.lang === "en" ? "en" : "ar";
-    const fresh = await Share.createShareLink(pool, broker, listing, { channel: "web", lang: linkLang });
+    const recipient = await Recipients.resolveRecipient(pool, broker, req.body.to);
+    if (recipient.error) {
+      const msg = recipient.error === "lead_not_found" ? L(lang, "العميل ده مش موجود عندك.", "No lead with that reference.") : L(lang, "رقم مش مظبوط (01xxxxxxxxx أو L-0042).", "That number isn't valid (01xxxxxxxxx or L-0042).");
+      return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1><p class="card notice bad" role="alert">❌ ${msg}</p>${await shareSection(broker, listing, lang)}` }, 400);
+    }
+    const fresh = await Share.createShareLink(pool, broker, listing, { channel: "web", lang: linkLang, recipient, source: "web", note: String(req.body.note || "").trim() || null });
     return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1>${await shareSection(broker, listing, lang, { ...fresh, lang: linkLang })}<p><a href="/app/units/${encodeURIComponent(listing.code)}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>` });
   });
 
@@ -434,7 +473,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const images = await imagesOf(pool, listing);
     const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
     const [project, prices] = await Promise.all([Catalogue.projectForUnit(pool, listing), PriceSheets.history(pool, listing)]);
-    const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
+    const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived"), deleted: L(lang, "🗑️ محذوفة", "🗑️ Deleted") }[listing.status] || listing.status;
     const linkable = !listing.details?.catalogue && listing.market === "resale" && listing.status === "active" && Authz.canEdit(broker, listing);
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     const view = await Privacy.forBroker(pool, broker, listing);
@@ -454,6 +493,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
+    ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
     ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}

@@ -115,6 +115,7 @@ const NAV = [
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
   { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", who: "manager" },
   { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
+  { key: "links", href: "/app/links", ar: "الروابط المفتوحة", en: "Opened links", icon: "pin", group: "work" },
   { key: "import", href: "/app/import", ar: "استيراد وحدات", en: "Import units", icon: "import", group: "work", desktop: true },
   { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work", desktop: true },
   { key: "dashboard", href: "/app/dashboard", ar: "لوحة الوكالة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },

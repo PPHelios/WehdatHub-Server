@@ -19,6 +19,7 @@ const PRIVATE = [
   require("./notifications"),
   require("./activityLog"),
   require("./owners"),
+  require("./openedLinks"),
   require("./settings"),
   require("./passkeys"),
   require("./usage"),
