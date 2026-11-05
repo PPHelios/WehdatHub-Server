@@ -908,7 +908,12 @@ CREATE TABLE IF NOT EXISTS public.developers (
   contact_phone text,
   notes text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  about text,
+  past_projects text,
+  delivery_record text,
+  usual_payment_terms text,
+  warnings text
 );
 
 CREATE TABLE IF NOT EXISTS public.project_phases (
@@ -1610,11 +1615,16 @@ ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_lang_check CHECK (((lang 
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_name_check CHECK (((length(name) >= 1) AND (length(name) <= 80)));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_phone_e164_check CHECK ((length(phone_e164) <= 20));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_team_size_check CHECK (((team_size IS NULL) OR ((team_size >= 1) AND (team_size <= 1000))));
+ALTER TABLE developers ADD CONSTRAINT developers_about_check CHECK (((about IS NULL) OR (length(about) <= 2000)));
 ALTER TABLE developers ADD CONSTRAINT developers_contact_name_check CHECK (((contact_name IS NULL) OR (length(contact_name) <= 120)));
 ALTER TABLE developers ADD CONSTRAINT developers_contact_phone_check CHECK (((contact_phone IS NULL) OR (length(contact_phone) <= 30)));
+ALTER TABLE developers ADD CONSTRAINT developers_delivery_record_check CHECK (((delivery_record IS NULL) OR (length(delivery_record) <= 2000)));
 ALTER TABLE developers ADD CONSTRAINT developers_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 120)));
 ALTER TABLE developers ADD CONSTRAINT developers_name_en_check CHECK (((name_en IS NULL) OR (length(name_en) <= 120)));
 ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
+ALTER TABLE developers ADD CONSTRAINT developers_past_projects_check CHECK (((past_projects IS NULL) OR (length(past_projects) <= 2000)));
+ALTER TABLE developers ADD CONSTRAINT developers_usual_payment_terms_check CHECK (((usual_payment_terms IS NULL) OR (length(usual_payment_terms) <= 2000)));
+ALTER TABLE developers ADD CONSTRAINT developers_warnings_check CHECK (((warnings IS NULL) OR (length(warnings) <= 2000)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_amount_egp_check CHECK ((amount_egp >= (0)::numeric));
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_label_check CHECK (((length(label) >= 1) AND (length(label) <= 120)));
