@@ -268,6 +268,11 @@
     var el = document.querySelector("[data-search-url]");
     if (el && window.history && history.replaceState) history.replaceState(null, "", el.getAttribute("data-search-url"));
   });
+  // Search: pressing Enter or Search shows a spinner at once (the AI reading can take a moment), until the page answers.
+  document.addEventListener("submit", function (e) {
+    var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
+    if (f) f.classList.add("is-busy");
+  });
   // ← Back (and the open menu button): the previous page when it is ours, else the link's own address.
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest("a[data-back], a[data-menu-close]");

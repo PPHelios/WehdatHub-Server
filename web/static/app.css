@@ -524,3 +524,11 @@ details.sheet { padding-block: 4px; }
 .kind-tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 8px 12px; min-height: 40px; border-radius: 10px; background: var(--soft); color: var(--ink); font-weight: 600; text-decoration: none; }
 .kind-tab.on { background: var(--brand); color: #fff; }
 .kind-count { font-variant-numeric: tabular-nums; opacity: 0.85; }
+
+/* Search feedback: a spinner shows while a search is running (typing, or Enter with the AI), so the press is seen. */
+.spin { display: none; width: 14px; height: 14px; margin-inline-start: 6px; border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+.htmx-request .spin, .is-busy .spin { display: inline-block; }
+.search-go { min-height: 40px; padding: 0 14px; border-radius: 999px; }
+.searchbox.is-busy .search-go, .searchbox.htmx-request .search-go { opacity: 0.7; pointer-events: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }

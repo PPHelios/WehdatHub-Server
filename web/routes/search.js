@@ -50,10 +50,10 @@ function statusSwitch({ token, st, counts, lang, sl = null }) {
 }
 
 function searchBox(q, lang, { voice = false } = {}) {
-  return html`<form method="get" action="/app/search" class="searchbox" role="search">
-  ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
+  return html`<form method="get" action="/app/search" class="searchbox" role="search" data-search-form>
+  ${icon("search", 20)}<input name="q" value="${q}" hx-get="/app/search" hx-vals='{"live":"1"}' hx-select="#search-results" hx-target="#search-results" hx-swap="outerHTML" hx-trigger="input changed delay:350ms, search" hx-indicator="[data-search-form]" hx-push-url="false" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
   <button type="button" class="mic" data-ai="voice_search" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
-  <button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button>
+  <button type="submit" class="search-go" data-search-go>${L(lang, "بحث", "Search")}<span class="spin" aria-hidden="true"></span></button>
 </form>
 <p class="row between small"><span class="muted">${L(lang, "اكتب أو اتكلم زي ما بتكلم البوت.", "Type or speak as you would to the bot.")}</span><a href="/app/searches">${icon("star", 16)} ${L(lang, "البحث المحفوظ", "Saved searches")}</a></p>
 `;
@@ -164,7 +164,9 @@ function register(web, { pool, page }) {
     if (q && !req.query.f) {
       const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
       if (!gate.allowed) return page(req, res, { title: L(lang, "بحث", "Search"), nav: "search", body: html`${searchBox(q, lang)}<p class="card notice bad">⏳ ${L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.")}</p>` }, 429);
-      const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req), forceAi, aiAllowed: await aiAllowed(req) });
+      // ?live=1 is the search while typing: the local reader only (Enter sends the full search, with the AI when it is unsure).
+      const live = req.query.live === "1";
+      const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req), forceAi, aiAllowed: await aiAllowed(req), localOnly: live });
       parse = parsed;
       source = parsed.source;
       const intent = Q.classifyIntent(parsed.parsed);
@@ -199,7 +201,7 @@ function register(web, { pool, page }) {
       if (numbers.length) out.ask = { terms: out.ask?.terms || [], numbers, aiDown: true, withoutTotal: out.ask ? out.ask.withoutTotal : out.total };
       // A new search is logged; a link back to one (Back, a page, a reload) shows the earlier log row's reading.
       let logId = logRow?.id || null;
-      if (!req.query.f) {
+      if (!req.query.f && req.query.live !== "1") {
         logId = await SearchLog.record(pool, {
           broker,
           channel: req.query.voice === "1" ? "voice" : "web",
@@ -250,7 +252,7 @@ function register(web, { pool, page }) {
       body: html`${searchUrl ? html`<span data-search-url="${searchUrl}" hidden></span>` : ""}${searchBox(q, lang, { voice: req.query.voice === "1" })}
 ${refineForm(filters || {}, lang)}
 ${message ? html`<p class="card notice">${message}${message.startsWith("📝") ? html` <a href="/app/units/new">${L(lang, "إضافة وحدة", "Add a unit")}</a>` : ""}</p>` : ""}
-${results}`
+<div id="search-results">${results}</div>`
     });
   });
 

@@ -99,11 +99,13 @@ async function underAiFirstCap(pool) {
  * `aiError` says why. A read the broker asked for ("Search with AI") or one the quick reader is unsure of is charged as before.
  * @returns {Promise<{ parsed, source: "parser"|"ai"|"fallback", modelUsed, usage, ms, local, ai, reasons, disagree, aiError }>}
  */
-async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true } = {}) {
+async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true, localOnly = false } = {}) {
   const t0 = Date.now();
   if (ctx.pool) await Vocab.ensureLoaded(ctx.pool);
   const local = Q.fallbackParse(text);
   const reasons = local.meta?.reasons || [];
+  // While typing (the live search): the local reader only, never the AI, so no credit is spent per keystroke.
+  if (localOnly) return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, disagree: [] };
   // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).
   if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
   const charged = forceAi || Boolean(local.meta?.unsure);
