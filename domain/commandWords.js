@@ -52,6 +52,7 @@ const COMMANDS = [
   { id: "assign", group: "leads", ar: ["حول"], en: ["assign"], arg: "L-0042 لـ سارة", argEn: "L-0042 to Sara", manager: true, help: ["حوّل عميل لبروكر", "Hand a lead to a broker"] },
   { id: "lead_ref", group: "leads", ar: [], en: [], example: "L-0042", help: ["رقم العميل لوحده: كارت العميل", "The lead ref alone: the lead's card"] },
   { id: "phone", group: "leads", ar: [], en: [], example: "01012345678", help: ["رقم تليفون لوحده: مين بيتصل؟", "A phone number alone: who is calling?"] },
+  { id: "portal_enquiry", group: "leads", ar: [], en: [], manager: true, example: "Bayut", help: ["استفسار من Bayut أو Dubizzle أو Nawy: الصق الرسالة الجاية من البوابة، وبعدين ابعت الرقم والوسيط", "A Bayut, Dubizzle or Nawy enquiry: paste the portal's message, then send the phone and the broker"] },
   { id: "help", group: "general", ar: ["مساعدة"], en: ["help"], help: ["الأوامر دي", "These commands"] },
   { id: "cancel", group: "general", ar: ["إلغاء"], en: ["cancel"], help: ["إلغاء اللي شغال", "Cancel what's open"] },
   { id: "lang_ar", group: "general", ar: ["عربي"], en: [], enHint: "lang ar", to: "العربية", help: ["البوت بالعربي", "The bot in Arabic"] },

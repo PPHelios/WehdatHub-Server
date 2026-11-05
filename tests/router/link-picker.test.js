@@ -38,7 +38,8 @@ test("a client copy offers who it is for; a typed number attaches it to that lin
   expect(textOf(asked)).toMatch(/اسم العميل|client's name/);
   expect(await linkRows()).toEqual([{ recipient_phone: null, lead_id: null, source: "bot" }]);
   const out = await h.tgText("broker", "Nour");
-  expect(textOf(out)).toMatch(/201012345678|01012345678/);
+  expect(textOf(out)).toMatch(/اتربط|Linked/);
+  expect(JSON.stringify(out)).toMatch(/wa\.me\/201012345678/);
   const [row] = await linkRows();
   expect(row).toMatchObject({ recipient_phone: "201012345678", source: "bot" });
   expect(row.lead_id).not.toBeNull();

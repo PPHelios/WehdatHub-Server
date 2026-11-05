@@ -71,21 +71,21 @@ async function handleButton(pool, broker, id, { reply, lang }) {
  * The broker's next text or contact while a choice is waiting. Returns false when nothing is waiting (or the text is not an
  * answer yet), so the message goes on to the usual handlers.
  */
-async function handleInput(pool, broker, message, { reply, lang }) {
+async function handleInput(pool, broker, message, { reply, lang, replyClient }) {
   const en = lang === "en";
   const s = await pending(pool, broker);
   if (!s) return false;
   if (message.type === "text") {
     const text = String(message.text?.body || "").trim();
     // In the name step, skip means "the number is the name"; everywhere else skip ends the choice.
-    if (s.step === "name") return finishName(pool, broker, s, text, { reply, lang });
+    if (s.step === "name") return finishName(pool, broker, s, text, { reply, lang, replyClient });
     if (/^(?:تخطي|skip)$/i.test(text)) {
       await clearSession(pool, broker.id);
       await reply(broker, en ? `✅ Sent with no recipient (${s.code}).` : `✅ اتسجل من غير مستلم (${s.code}).`);
       return true;
     }
     if (s.step === "choose" || !s.step) return false;
-    return attach(pool, broker, s, { text }, { reply, lang });
+    return attach(pool, broker, s, { text }, { reply, lang, replyClient });
   }
   if (message.type === "contacts") {
     const c = message.contacts?.[0];
@@ -93,18 +93,18 @@ async function handleInput(pool, broker, message, { reply, lang }) {
     if (!phone) return false;
     const digits = Phone.normalizePhone(phone);
     const name = [c?.name?.first_name, c?.name?.last_name].filter(Boolean).join(" ") || c?.name?.formatted_name || null;
-    return attach(pool, broker, s, { text: digits ? `+${digits}` : String(phone), name }, { reply, lang });
+    return attach(pool, broker, s, { text: digits ? `+${digits}` : String(phone), name }, { reply, lang, replyClient });
   }
   return false;
 }
 
 /** A number that is not a lead yet: the name the broker types (skip = the number itself), then the lead is created. */
-async function finishName(pool, broker, s, text, { reply, lang }) {
+async function finishName(pool, broker, s, text, { reply, lang, replyClient }) {
   const name = /^(?:تخطي|skip)$/i.test(text) || !text ? null : text.slice(0, 80);
-  return attach(pool, broker, { ...s, step: "choose" }, { text: `+${s.phone}`, name: name || `+${s.phone}` }, { reply, lang });
+  return attach(pool, broker, { ...s, step: "choose" }, { text: `+${s.phone}`, name: name || `+${s.phone}` }, { reply, lang, replyClient });
 }
 
-async function attach(pool, broker, s, { text, name = undefined }, { reply, lang }) {
+async function attach(pool, broker, s, { text, name = undefined }, { reply, lang, replyClient }) {
   const en = lang === "en";
   const r = await Recipients.resolveRecipient(pool, broker, text);
   if (r.error) {
@@ -134,8 +134,10 @@ async function attach(pool, broker, s, { text, name = undefined }, { reply, lang
   await clearSession(pool, broker.id);
   const wa = r.phone ? Phone.waMeUrl(r.phone) : null;
   const who = r.phone ? Phone.displayPhone(r.phone) : en ? "no number" : "من غير رقم";
-  const tail = wa ? (en ? `\nSend it on WhatsApp: ${wa}` : `\nابعته على واتساب: ${wa}`) : "";
-  await reply(broker, en ? `✅ Linked to ${who} (${s.code}).${tail}` : `✅ اتربط بـ ${who} (${s.code}).${tail}`);
+  const body = en ? `✅ Linked to ${who} (${s.code}).` : `✅ اتربط بـ ${who} (${s.code}).`;
+  // Telegram: a "📤 Send on WhatsApp" button opens the chat instead of a raw link.
+  if (replyClient && wa) await replyClient(broker, body, { phone: r.phone, lang, url: wa });
+  else await reply(broker, body);
   return true;
 }
 
