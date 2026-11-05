@@ -398,6 +398,15 @@ async function savePlan(db, actor, projectId, input = {}) {
     );
     plan = rows[0];
   }
+  // Step 2: a plan outside the project's rules is an exception (broker sees it; a manager approves it later).
+  // An approved plan stays approved unless its terms change.
+  const { checkPlan } = require("./planRules");
+  const verdict = checkPlan(project.plan_rules || {}, plan);
+  const status = verdict.exception ? (plan.exception_status === "approved" ? "approved" : "needs_approval") : "none";
+  if (status !== plan.exception_status) {
+    const { rows } = await db.query("UPDATE project_plans SET exception_status = $2 WHERE id = $1 RETURNING *", [plan.id, status]);
+    plan = rows[0] || plan;
+  }
   await syncUnits(db, project.id);
   return { ok: true, plan };
 }

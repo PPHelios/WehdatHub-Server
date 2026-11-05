@@ -5,6 +5,7 @@
 
 const Catalogue = require("../../services/catalogue");
 const PlanRules = require("../../services/planRules");
+const F = require("../../lib/financials");
 const Commission = require("../../domain/commission");
 const { isManager } = require("../../lib/authz");
 const PriceSheets = require("../../services/priceSheets");
@@ -460,6 +461,49 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   web.get("/catalogue/developers/:id", (req, res) => showDeveloper(req, res));
   web.post("/catalogue/developers/:id", write((req) => Catalogue.saveDeveloper(pool, actorOf(req), { ...req.body, id: req.params.id }), { show: showDeveloper, done: (req) => `/app/catalogue/developers/${req.params.id}?saved=1` }));
 
+  // Step 2: the payment calculator for one project unit. Inputs are GET fields so the page works without script; a
+  // static script submits it on each change. Rule checks come from the project's plan rules.
+  web.get("/catalogue/projects/:id/calculator", async (req, res) => {
+    const lang = langOf(req);
+    const actor = req.session.broker;
+    const data = await Catalogue.getProject(pool, actor, req.params.id);
+    if (!data) return notFound(req, res);
+    const rules = data.project.plan_rules || {};
+    const units = data.units.filter((u) => Number(u.price_value) > 0);
+    const unit = units.find((u) => u.code === req.query.unit) || units[0] || null;
+    const frequency = PlanRules.FREQUENCIES.includes(req.query.freq) ? req.query.freq : "quarterly";
+    const down = Math.min(100, Math.max(0, Number(req.query.down ?? 10) || 0));
+    const years = Math.min(20, Math.max(0, Number(req.query.years ?? 8) || 0));
+    const fees = (rules.optional_fees || []).map((f, i) => ({ ...f, i, on: req.query[`fee${i}`] === "1" }));
+    const verdict = PlanRules.checkPlan(rules, { down_payment_pct: down, years, frequency, discount_pct: 0 });
+    const price = unit ? Math.round(Number(unit.price_value)) : 0;
+    const summary = price ? F.calculatePlanSummary(price, { down_payment_pct: down, years, frequency, discount_pct: 0, maintenance_pct: rules.maintenance_pct, maintenance_due: rules.maintenance_due }) : null;
+    const extra = fees.filter((f) => f.on).reduce((sum, f) => sum + f.amount, 0);
+    const money = (n) => Math.round(Number(n) || 0).toLocaleString(lang === "en" ? "en-US" : "ar-EG") + (lang === "en" ? " EGP" : " ج.م");
+    const body = html`<section class="card stack" id="calculator" data-calculator>
+  <h1>🧮 ${L(lang, "حاسبة الأنظمة", "Payment calculator")} · ${data.project.name}</h1>
+  <form method="get" action="/app/catalogue/projects/${data.project.id}/calculator" class="stack" data-calc>
+    <label>${L(lang, "الوحدة", "Unit")} <select name="unit">${units.map((u) => html`<option value="${u.code}"${u.code === (unit && unit.code) ? " selected" : ""}>${u.code} · ${money(u.price_value)}</option>`)}</select></label>
+    <div class="row">
+      <label>${L(lang, "المقدم %", "Down payment %")} <input name="down" type="number" min="0" max="100" step="0.5" value="${down}" dir="ltr"></label>
+      <label>${L(lang, "السنين", "Years")} <input name="years" type="number" min="0" max="20" step="0.5" value="${years}" dir="ltr"></label>
+      <label>${L(lang, "القسط", "Installments")} <select name="freq">${PlanRules.FREQUENCIES.map((f) => html`<option value="${f}"${f === frequency ? " selected" : ""}>${f}</option>`)}</select></label>
+    </div>
+    ${fees.length ? html`<fieldset><legend>${L(lang, "مصاريف اختيارية", "Optional fees")}</legend>${fees.map((f) => html`<label><input type="checkbox" name="fee${f.i}" value="1"${f.on ? " checked" : ""}> ${f.label}: ${money(f.amount)}</label>`)}</fieldset>` : ""}
+    <noscript><button type="submit">${L(lang, "احسب", "Calculate")}</button></noscript>
+  </form>
+  ${summary ? html`<div class="stack">
+    <p><strong>${L(lang, "سعر الوحدة", "Unit price")}:</strong> ${money(price)}</p>
+    <p><strong>${L(lang, "المقدم", "Down payment")}:</strong> ${money(summary.down_payment)}</p>
+    <p><strong>${L(lang, "القسط", "Installment")}:</strong> ${money(summary.installment_amount)} × ${summary.total_installments_count}</p>
+    ${extra ? html`<p><strong>${L(lang, "مصاريف اختيارية", "Optional fees")}:</strong> ${money(extra)}</p>` : ""}
+    ${verdict.exception ? html`<p class="notice" role="status">⚠️ ${L(lang, "النظام ده برا حدود المطور. محتاج مراجعة مدير.", "This plan is outside the developer's limits and needs a manager's review.")}</p>` : html`<p class="muted">${L(lang, "النظام داخل حدود المطور.", "Within the developer's limits.")}</p>`}
+  </div>` : html`<p class="muted">${L(lang, "مفيش وحدات بسعر في المشروع.", "No priced units in this project.")}</p>`}
+  <p><a href="/app/catalogue/projects/${data.project.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
+  <script src="/app/static/calculator.js" defer></script>
+</section>`;
+    return page(req, res, { title: `${L(lang, "حاسبة", "Calculator")} · ${data.project.name}`, nav: "catalogue", body });
+  });
   web.get("/catalogue/projects/:id", (req, res) => showProject(req, res));
   web.post("/catalogue/projects/:id", write((req) => Catalogue.saveProject(pool, actorOf(req), { ...req.body, id: req.params.id }), { show: showProject, done: (req) => projectUrl(req) }));
   web.post("/catalogue/projects/:id/archive", write((req) => Catalogue.archiveProject(pool, actorOf(req), req.params.id, req.body.archived === "1"), { show: showProject, done: (req) => projectUrl(req) }));
