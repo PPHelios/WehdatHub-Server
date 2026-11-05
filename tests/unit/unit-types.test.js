@@ -186,14 +186,40 @@ describe("the import draft", () => {
 });
 
 describe("search by type", () => {
-  const typesOf = (text) => Q.normalizeAiSearch(Q.fallbackParse(text)).filters.property_types;
+  const scope = (text) => {
+    const f = Q.normalizeAiSearch(Q.fallbackParse(text)).filters;
+    return { types: f.property_types, order: f.property_type_order };
+  };
 
-  test("a villa search returns every villa kind", () => {
-    expect(typesOf("فيلا")).toEqual(expect.arrayContaining(["villa", "i_villa", "twin_villa"]));
-    expect(typesOf("villa")).not.toContain("townhouse");
+  test("a villa search returns the villa family: villa, twin villa, i villa, townhouse, maisonette, in that order", () => {
+    expect(scope("فيلا")).toEqual({ types: expect.arrayContaining(["villa", "twin_villa", "i_villa", "townhouse", "maisonette"]), order: ["villa", "twin_villa", "i_villa", "townhouse", "maisonette"] });
+  });
+
+  test("a twin villa search puts twin villas first, then the other kinds", () => {
+    expect(scope("twin villa").order).toEqual(["twin_villa", "villa", "i_villa", "townhouse", "maisonette"]);
+  });
+
+  test("a standalone search returns villa only", () => {
+    expect(scope("stand alone").types).toEqual(["villa"]);
+    expect(scope("standalone villa").types).toEqual(["villa"]);
+  });
+
+  test("a triplex roof search returns triplex with roof first, then plain triplex", () => {
+    expect(scope("triplex roof")).toEqual({ types: expect.arrayContaining(["triplex_roof", "triplex"]), order: ["triplex_roof", "triplex"] });
+    expect(scope("تريبلكس روف").order).toEqual(["triplex_roof", "triplex"]);
+  });
+
+  test("a plain triplex search is not widened", () => {
+    expect(scope("triplex").types).toEqual(["triplex"]);
   });
 
   test("a new type with an underscore is searched under its own key", () => {
-    expect(typesOf("sky loft")).toEqual(["sky_loft"]);
+    expect(scope("sky loft").types).toEqual(["sky_loft"]);
+  });
+
+  test("the searched type is listed first in the query", () => {
+    const f = Q.normalizeAiSearch(Q.fallbackParse("twin villa")).filters;
+    const sql = require("../../services/search").buildSearchQuery("00000000-0000-0000-0000-000000000000", f).sql;
+    expect(sql).toMatch(/ORDER BY\s+CASE l\.property_type WHEN \$\d+ THEN 0/);
   });
 });

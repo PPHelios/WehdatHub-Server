@@ -152,6 +152,7 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
   // The match sweep: the same filters, restricted to the units that changed (step 7).
   if (onlyIds) where.push(`l.id = ANY(${add(onlyIds)}::uuid[])`);
   let rank = "";
+  let typeRank = "";
   let exactFirst = "";
 
   if (f.code) {
@@ -162,6 +163,11 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     if (f.listing_type) where.push(`l.listing_type = ${add(f.listing_type)}`);
     if (f.market) where.push(`l.market = ${add(f.market)}`);
     if (f.property_types.length) where.push(`l.property_type = ANY(${add(f.property_types)}::text[])`);
+    // The searched type first, then the rest of its family (domain/searchQuery.js TYPE_FAMILIES).
+    if ((f.property_type_order || []).length > 1) {
+      const whens = f.property_type_order.map((t, i) => `WHEN ${add(t)} THEN ${i}`).join(" ");
+      typeRank = `CASE l.property_type ${whens} ELSE ${f.property_type_order.length} END, `;
+    }
 
     // Places: resolved keys use the indexed key columns; free place words use the search document.
     if (f.places.length) {
@@ -287,7 +293,7 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     SELECT l.*, COUNT(*) OVER() AS total_count
     FROM listings l
     WHERE ${Vis.units("l")} AND ${where.join("\n      AND ")}
-    ORDER BY ${rank} ${exactFirst} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
+    ORDER BY ${rank} ${typeRank} ${exactFirst} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
     LIMIT ${add(limit)} OFFSET ${add(offset)}`;
   return { sql, params };
 }
