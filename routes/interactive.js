@@ -24,6 +24,7 @@ const CatalogueBot = require("../lib/catalogueBot");
 const DealsWA = require("../lib/deals");
 const Describe = require("../domain/describe");
 const Vis = require("../lib/visibility");
+const { withTransaction } = require("../lib/db");
 
 /**
  * Non-blocking operational telemetry logging helper.
@@ -222,95 +223,24 @@ async function handleInteractive(broker, message, ctx) {
 
   // 6. DELETION CONFIRMATION WITH 64-BIT ADVISORY LOCK (DEL-02)
   if (replyId.startsWith("del_confirm:")) {
-    const parts = replyId.split(":");
-    const listingId = parts[1];
-    const listingCode = parts[2] ? parts[2].toUpperCase() : "";
-
-    const client = await pool.connect();
-    let imagesToPurge = [];
-
-    try {
-      await client.query("BEGIN");
-
-      // SEC-03: Acquire 64-bit transactional advisory lock
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), listingCode]
-      );
-
-      // Verify row lock & ownership
-      const { rows } = await client.query(
-        "SELECT id, broker_id, code FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2 FOR UPDATE",
-        [listingId, broker.agency_id]
-      );
-
-      if (rows.length === 0) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? "⚠️ Listing was already deleted."
-            : "⚠️ هذه الوحدة محذوفة بالفعل أو غير متاحة."
-        );
-        return "done";
-      }
-
-      const listing = rows[0];
-      if (!canEdit(broker, listing)) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? "⛔ You do not have permission to delete this listing."
-            : "⛔ ليس لديك صلاحية لحذف هذه الوحدة."
-        );
-        return "done";
-      }
-
-      // Collect storage file paths for asynchronous deletion
-      const { rows: imgRows } = await client.query(
-        "SELECT url FROM listing_images WHERE listing_id = $1",
-        [listingId]
-      );
-      imagesToPurge = imgRows.map((r) => r.url);
-
-      // Cascading row deletion
-      await client.query("DELETE FROM listings WHERE " + Vis.units("listings") + " AND id = $1", [listingId]);
-      await client.query("COMMIT");
-
-      // Asynchronous, non-blocking storage cleanup (SEC-04)
-      if (imagesToPurge.length > 0) {
-        setImmediate(async () => {
-          try {
-            const Supabase = require("../lib/supabase");
-            await Supabase.deleteStorageFiles(imagesToPurge);
-          } catch (storageErr) {
-            console.error("Non-blocking storage file purge error:", storageErr);
-          }
-        });
-      }
-
-      logInteractiveOp(pool, {
-        agency_id: broker.agency_id,
-        broker_id: broker.id,
-        listing_code: listingCode,
-        operation_type: "listing_delete",
-        total_duration_ms: Date.now() - startTime
-      });
-
-      await reply(
-        broker,
-        lang === "en"
-          ? `🗑️ Unit #${listingCode} and its media assets have been permanently deleted.`
-          : `🗑️ تم حذف الوحدة #${listingCode} نهائياً ومسح كافة وسائطها وملفاتها من السيرفر.`
-      );
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
+    // Soft delete (services/unitDelete.js): the unit stays 10 days, restorable by managers and the owner.
+    const listingId = replyId.split(":")[1];
+    // The unit's advisory lock is held for the whole change (the same lock every listing mutation takes).
+    const out = await withTransaction(pool, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))", [String(broker.agency_id), listingId]);
+      return require("../services/unitDelete").softDelete(pool, broker, listingId, { client });
+    });
+    if (out.error) {
+      await reply(broker, out.error === "already_deleted" ? (lang === "en" ? "⚠️ This unit is already deleted." : "⚠️ الوحدة دي محذوفة بالفعل.") : lang === "en" ? "⛔ You can't delete this unit." : "⛔ مش مسموح تحذف الوحدة دي.");
+      return "done";
     }
-
+    const day = out.restoreUntil.toISOString().slice(0, 10);
+    await reply(
+      broker,
+      lang === "en"
+        ? `🗑️ Unit #${out.code} is deleted. A manager can restore it until ${day}; after that its photos are removed.`
+        : `🗑️ الوحدة #${out.code} اتحذفت. المدير يقدر يرجعها لحد ${day}؛ بعدها الصور بتتمسح.`
+    );
     return "done";
   }
 

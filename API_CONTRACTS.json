@@ -696,6 +696,8 @@
       "HOT_OPENS": "Number",
       "BOT_UA": "Object",
       "isBot": ["ua"],
+      "deviceOf": ["ua"],
+      "visitorOf": ["tokenHash", "ip", "ua"],
       "createShareLink": ["pool", "broker", "listing", "params"],
       "resolveShareLink": ["pool", "slug", "code", "token"],
       "recordOpen": ["pool", "resolved", "params"],
@@ -798,6 +800,10 @@
       "PAGE": "Number",
       "list": ["pool", "viewer", "params"],
       "describe": ["row", "lang"]
+    },
+    "web/routes/openedLinks.js": {
+      "register": ["web", "params"],
+      "linkRow": ["r", "lang"]
     },
     "web/routes/owners.js": {
       "register": ["web", "params"],
@@ -1879,6 +1885,26 @@
       "recipients": ["pool"],
       "run": ["pool", "params"],
       "alertJob": []
+    },
+    "services/unitDelete.js": {
+      "RETENTION_DAYS": "Number",
+      "softDelete": ["pool", "actor", "listingId", "params"],
+      "restore": ["pool", "actor", "listingId", "params"],
+      "listDeleted": ["pool", "actor", "params"],
+      "purgeDue": ["pool", "params"],
+      "purgeJob": []
+    },
+    "services/linkRecipients.js": {
+      "resolveRecipient": ["pool", "actor", "text"]
+    },
+    "services/openedLinks.js": {
+      "PAGE": "Number",
+      "STATUSES": "Array",
+      "CHANNELS": "Array",
+      "SOURCES": "Array",
+      "conditions": ["viewer", "f", "now"],
+      "list": ["pool", "viewer", "f", "params"],
+      "withLeadRights": ["pool", "viewer", "r"]
     },
     "services/targets.js": {
       "monthOf": ["now"],

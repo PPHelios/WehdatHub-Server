@@ -28,7 +28,7 @@ async function bulkUpdate(pool, broker, { codes = [], action, pct = null }) {
   for (const code of list) {
     const res = await Edits.withCodeLock(pool, broker.agency_id, code, async (client) => {
       const listing = await Store.findByCode(client, broker.agency_id, code, { forUpdate: true });
-      if (!listing) return { rollback: true, outcome: "missing" };
+      if (!listing || listing.status === "deleted") return { rollback: true, outcome: "missing" };
       if (!Authz.canEdit(broker, listing)) return { rollback: true, outcome: "forbidden" };
       let patch;
       if (action === "price_pct") {
