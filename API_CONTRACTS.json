@@ -1489,6 +1489,7 @@
       "MAINTENANCE_DUE": "Array",
       "num": ["v"],
       "listDevelopers": ["db", "actor"],
+      "listDevelopersPage": ["db", "actor", "params"],
       "getDeveloper": ["db", "actor", "id"],
       "saveDeveloper": ["db", "actor", "input"],
       "developerByName": ["db", "actor", "name"],

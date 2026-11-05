@@ -14,8 +14,8 @@ const stamp = (d) => (d ? new Date(d).toISOString() : "-");
 const typeLabel = (t) => (Describe.TYPE_LABELS?.[t] ? Describe.TYPE_LABELS[t][1] : t || "unit");
 
 /** The key that changes when anything the context is built from changes. */
-function sourceKey({ project, unitsKey = "", plansKey = "", phasesKey = "", materialsKey = "", priceSheet = null }) {
-  const parts = [stamp(project.updated_at), stamp(project.prices_updated_at), stamp(project.highlights_at), stamp(project.brochure?.read_at), unitsKey, plansKey, phasesKey, materialsKey, stamp(priceSheet?.applied_at), stamp(project.plans_draft?.applied?.applied_at)];
+function sourceKey({ project, unitsKey = "", plansKey = "", phasesKey = "", materialsKey = "", priceSheet = null, developerKey = "0" }) {
+  const parts = [developerKey, stamp(project.updated_at), stamp(project.prices_updated_at), stamp(project.highlights_at), stamp(project.brochure?.read_at), unitsKey, plansKey, phasesKey, materialsKey, stamp(priceSheet?.applied_at), stamp(project.plans_draft?.applied?.applied_at)];
   return crypto.createHash("sha1").update(parts.join("|")).digest("hex");
 }
 
@@ -54,6 +54,19 @@ const planLine = (p) =>
  * The context: { summary, facts } where facts = { name, name_en, developer, location, status, delivery, phases,
  * plans, prices: { as_of, ranges }, materials, highlights, brochure: { as_of, facts } }.
  */
+/** The developer's free-text profile for Ask (only the filled-in parts). */
+function developerProfile(d) {
+  if (!d) return null;
+  const parts = {
+    about: d.about || null,
+    past_projects: d.past_projects || null,
+    delivery_record: d.delivery_record || null,
+    usual_payment_terms: d.usual_payment_terms || null,
+    warnings: d.warnings || null
+  };
+  return Object.values(parts).some(Boolean) ? parts : null;
+}
+
 function build({ project: p, developer = null, phases = [], plans = [], units = [], materials = [], priceSheet = null }) {
   const delivery = p.delivery_year ? `${p.delivery_quarter ? `Q${p.delivery_quarter} ` : ""}${p.delivery_year}` : p.delivery_raw || null;
   const ranges = priceRanges(units);
@@ -61,6 +74,7 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
     name: p.name,
     name_en: p.name_en || null,
     developer: developer?.name || p.developer_name || null,
+    developer_profile: developerProfile(developer),
     location: [p.district, p.city].filter(Boolean).join(", ") || null,
     status: p.status || null,
     delivery,

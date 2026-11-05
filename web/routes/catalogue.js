@@ -193,12 +193,19 @@ function developerForm(lang, d = {}, action = "/app/catalogue/developers") {
   <p class="muted">🔒 ${L(lang, "بيانات التواصل للمديرين بس، وعمرها ما بتظهر للعميل.", "The contact is for managers only and never shown to clients.")}</p>
   <label>${L(lang, "مسؤول المبيعات", "Sales contact")} <input name="contact_name" maxlength="120" value="${d.contact_name || ""}"></label>
   <label>${L(lang, "تليفونه", "Phone")} <input name="contact_phone" maxlength="30" dir="ltr" inputmode="tel" value="${d.contact_phone || ""}"></label>
+  <fieldset><legend>${L(lang, "معلومات عامة (اختياري، كلها نص حر)", "General information (optional, free text)")}</legend>
+    <label>${L(lang, "عن الشركة", "About the company")} <textarea name="about" maxlength="2000" rows="2">${d.about || ""}</textarea></label>
+    <label>${L(lang, "مشروعات سابقة (سطر لكل مشروع)", "Previous projects (one per line)")} <textarea name="past_projects" maxlength="2000" rows="3">${d.past_projects || ""}</textarea></label>
+    <label>${L(lang, "سجل التسليم والسمعة", "Delivery record and reputation")} <textarea name="delivery_record" maxlength="2000" rows="2">${d.delivery_record || ""}</textarea></label>
+    <label>${L(lang, "أنظمة السداد المعتادة", "Usual payment terms")} <textarea name="usual_payment_terms" maxlength="2000" rows="2">${d.usual_payment_terms || ""}</textarea></label>
+    <label>${L(lang, "تحذيرات للوسطاء", "Warnings for brokers")} <textarea name="warnings" maxlength="2000" rows="2">${d.warnings || ""}</textarea></label>
+  </fieldset>
   <label>${L(lang, "ملاحظات داخلية للمديرين (المساعد مش بيقراها)", "Internal notes, managers only (Ask does not read them)")} <textarea name="notes" maxlength="1000" rows="2">${d.notes || ""}</textarea></label>
   <button type="submit">${d.id ? L(lang, "حفظ المطور", "Save developer") : L(lang, "إضافة المطور", "Add developer")}</button>
 </form>`;
 }
 
-function listPage(lang, manager, { projects, developers, archived, notice }) {
+function listPage(lang, manager, { projects, developers, devPage, dq = "", archived, notice }) {
   return html`<h1>🏗️ ${L(lang, "كتالوج المطورين", "Developer catalogue")}</h1>
 ${notice || ""}
 <nav class="row">${manager ? html`<a class="btn" href="/app/catalogue/updates" data-quick-updates>⚡ ${L(lang, "تحديث سريع", "Quick update")}</a>` : ""}<a class="btn secondary" href="/app/catalogue${archived ? "" : "?archived=1"}">${archived ? L(lang, "المشاريع الحالية", "Current projects") : L(lang, "المشاريع المؤرشفة", "Archived projects")}</a></nav>
@@ -212,9 +219,15 @@ ${notice || ""}
 ${manager && !archived ? html`<details class="card"><summary>➕ ${L(lang, "مشروع جديد", "New project")}</summary>${projectForm(lang, developers)}</details>` : ""}
 <section class="card">
   <h2>${L(lang, "المطورين", "Developers")}</h2>
-  ${developers.length
-    ? html`<ul>${developers.map((d) => html`<li data-developer="${d.id}">${manager ? html`<a href="/app/catalogue/developers/${d.id}">${d.name}</a>` : d.name}${d.name_en ? ` · ${d.name_en}` : ""} · ${d.projects} ${L(lang, "مشروع", "projects")}${manager && d.contact_phone ? html` · <span dir="ltr">${d.contact_phone}</span>` : ""}</li>`)}</ul>`
-    : html`<p class="muted">${L(lang, "لسه مفيش مطورين.", "No developers yet.")}</p>`}
+  <form method="get" action="/app/catalogue" class="row" role="search">
+    <label>${L(lang, "ابحث باسم المطور", "Search by developer name")} <input name="dq" list="developer-names" value="${dq}" autocomplete="off"></label>
+    <datalist id="developer-names">${developers.map((d) => html`<option value="${d.name}"></option>`)}</datalist>
+    <button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button>
+  </form>
+  ${devPage.items.length
+    ? html`<ul>${devPage.items.map((d) => html`<li data-developer="${d.id}">${manager ? html`<a href="/app/catalogue/developers/${d.id}">${d.name}</a>` : d.name}${d.name_en ? ` · ${d.name_en}` : ""} · ${d.projects} ${L(lang, "مشروع", "projects")}</li>`)}</ul>
+      <nav class="row" aria-label="${L(lang, "صفحات المطورين", "Developer pages")}">${devPage.page > 1 ? html`<a href="/app/catalogue?dq=${encodeURIComponent(dq)}&dp=${devPage.page - 1}">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${devPage.page} / ${devPage.pages}</span>${devPage.page < devPage.pages ? html`<a href="/app/catalogue?dq=${encodeURIComponent(dq)}&dp=${devPage.page + 1}">${L(lang, "التالي", "Next")}</a>` : ""}</nav>`
+    : html`<p class="muted">${dq ? L(lang, "مفيش مطور بالاسم ده.", "No developer matches that name.") : L(lang, "لسه مفيش مطورين.", "No developers yet.")}</p>`}
 </section>
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "مطور جديد", "New developer")}</summary>${developerForm(lang)}</details>` : ""}`;
 }
@@ -390,8 +403,12 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const actor = req.session.broker;
     const archived = req.query.archived === "1";
-    const [projects, developers] = await Promise.all([Catalogue.listProjects(pool, actor, { archived }), Catalogue.listDevelopers(pool, actor)]);
-    return page(req, res, { title: title(lang), nav: "catalogue", body: listPage(lang, isManager(actor), { projects, developers, archived, notice: notice || savedNotice(req) }) }, status);
+    const [projects, developers, devPage] = await Promise.all([
+      Catalogue.listProjects(pool, actor, { archived }),
+      Catalogue.listDevelopers(pool, actor),
+      Catalogue.listDevelopersPage(pool, actor, { q: req.query.dq, page: req.query.dp })
+    ]);
+    return page(req, res, { title: title(lang), nav: "catalogue", body: listPage(lang, isManager(actor), { projects, developers, devPage, dq: req.query.dq || "", archived, notice: notice || savedNotice(req) }) }, status);
   };
 
   const showProject = async (req, res, notice = null, status = 200) => {
