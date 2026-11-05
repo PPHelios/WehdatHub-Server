@@ -346,3 +346,29 @@ describe("website: inbox, log, settings, usage, push", () => {
     ]);
   });
 });
+
+describe("settings list only the kinds a role receives", () => {
+  const { signIn } = require("../harness/web");
+  const kindsOnPage = (text) => [...text.matchAll(/data-kind="([a-z_]+)"/g)].map((m) => m[1]);
+
+  test("kindsFor: brokers, team leads, managers and data entry", () => {
+    const N = require("../../lib/notifications");
+    expect(N.kindsFor({ role: "broker" })).toEqual(["assignment", "follow_up", "match", "share_opened", "hot_client"]);
+    expect(N.kindsFor({ role: "team_lead" })).toContain("team_activity");
+    expect(N.kindsFor({ role: "team_lead" })).not.toContain("manager_alert");
+    expect(N.kindsFor({ role: "manager" })).toContain("manager_alert");
+    expect(N.kindsFor({ role: "manager" })).not.toContain("team_activity");
+    expect(N.kindsFor({ role: "data_entry" })).toEqual([]);
+    expect(N.dailyKindsFor({ role: "data_entry" })).toEqual(["onboarding"]);
+  });
+
+  test("the settings page matches the role", async () => {
+    const broker = await signIn(h, "broker");
+    const bk = kindsOnPage((await broker.agent.get("/app/settings?lang=en")).text);
+    expect(bk).toContain("match");
+    expect(bk).not.toContain("manager_alert");
+    expect(bk).not.toContain("team_activity");
+    const admin = await signIn(h, "admin");
+    expect(kindsOnPage((await admin.agent.get("/app/settings?lang=en")).text)).toContain("manager_alert");
+  });
+});

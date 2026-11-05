@@ -7,7 +7,7 @@ const { getConfig } = require("../../config");
 const { html } = require("../html");
 const Passkeys = require("../../services/passkeys");
 const { passkeySection } = require("./passkeys");
-const { isManager } = require("../../lib/authz");
+const { isManager, isDataEntry } = require("../../lib/authz");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
 const { uploads } = require("../uploads");
@@ -55,6 +55,8 @@ function register(web, { pool, page }) {
     const saved = req.query.saved === "1";
     const pushed = req.query.test;
     const manager = isManager(broker);
+    const kinds = Notifications.kindsFor(broker);
+    const dataEntry = isDataEntry(broker);
     const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
     const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. ارفع PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ الرفع فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
     const passkeyNotice = { on: ["✅ اتفتحت. ضيف Passkey على الجهاز ده.", "✅ On. Add a passkey on this device."], off: ["اتقفلت، والـ Passkeys اتمسحت.", "Off; your passkeys were removed."], removed: ["الـ Passkey اتمسحت.", "Passkey removed."] }[req.query.passkey];
@@ -71,17 +73,18 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   <label>${L(lang, "لغة الموقع ورسايل البوت", "Website and bot language")}
     <select name="lang"><option value="ar"${lang === "ar" ? html` selected` : ""}>العربية</option><option value="en"${lang === "en" ? html` selected` : ""}>English</option></select>
   </label>
-  <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
+  ${kinds.length ? html`  <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
   <p class="muted">${L(
     lang,
     "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الوكالة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
     "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
   )}</p>
-  ${Notifications.KINDS.map(
+  ${kinds.map(
     (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${prefs.off.includes(k) ? html` <span class="muted" data-switched-off>(${L(lang, "مقفولة من المدير؛ في 🔔 بس", "switched off by your manager; in 🔔 only")})</span>` : ""}
     <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
   </label>`
   )}
+` : ""}
   <h2>🌙 ${L(lang, "ساعات الهدوء (بتوقيت القاهرة)", "Quiet hours (Cairo time)")}</h2>
   <label class="check"><input type="checkbox" name="quiet_on" value="1"${prefs.quiet.enabled ? html` checked` : ""}> ${L(lang, "متبعتليش تنبيهات في الوقت ده (بتتجمع وتوصل بعده)", "Hold alerts during these hours (they arrive together after)")}</label>
   <div class="row">
@@ -91,17 +94,17 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
 ${manager ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : ""}
-<form method="post" action="/app/settings/quiet-line" class="card stack" id="quiet-line">
+${dataEntry ? "" : html`<form method="post" action="/app/settings/quiet-line" class="card stack" id="quiet-line">
   <h2>⏳ ${L(lang, "سطر «بقالك 60 يوم مكلمتوش»", "The \"60 days since you spoke\" line")}</h2>
   <label class="check"><input type="checkbox" name="on" value="1"${broker.quiet_line !== false ? html` checked` : ""}> ${L(lang, "في تنبيه الوحدات المناسبة، قولي لو العميل بقاله 60 يوم أو أكتر من غير مكالمة", "In match alerts, tell me when I haven't spoken to the client for 60 days or more")}</label>
   <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
-</form>
-<form method="post" action="/app/settings/draft-style" class="card stack" id="draft-style">
+</form>`}
+${dataEntry ? "" : html`<form method="post" action="/app/settings/draft-style" class="card stack" id="draft-style">
   <h2>✍️ ${L(lang, "أسلوبك في رسايل العملاء", "Your style for client messages")}</h2>
   <p class="muted">${L(lang, "اختياري: الصق رسالة أو اتنين من اللي بتبعتها للعملاء، ورسايل المتابعة اللي البوت بيكتبها هتبقى بنفس أسلوبك.", "Optional: paste one or two messages you send to clients, and the follow-up drafts will sound like you.")}</p>
   <textarea name="style" rows="3" maxlength="600">${broker.draft_style || ""}</textarea>
   <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
-</form>
+</form>`}
 ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await Passkeys.list(pool, broker), lang, notice: passkeyNotice ? L(lang, ...passkeyNotice) : null })}
 <section class="card" id="push" data-vapid="${key}" data-push-count="${pushes}">
   <h2>📲 ${L(lang, "إشعارات الموقع على الجهاز ده", "Website notifications on this device")}</h2>
@@ -129,8 +132,8 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
   web.post("/settings", async (req, res) => {
     const { broker } = req.session;
     const channels = {};
-    for (const k of Notifications.KINDS) channels[k] = req.body[`ch_${k}`];
-    await Notifications.savePrefs(pool, broker, {
+    for (const k of Notifications.kindsFor(broker)) channels[k] = req.body[`ch_${k}`];
+    await Notifications.savePrefs(pool, await loadBroker(pool, broker), {
       channels,
       quiet: { enabled: req.body.quiet_on === "1", start: req.body.quiet_start, end: req.body.quiet_end }
     });

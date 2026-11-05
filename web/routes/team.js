@@ -131,7 +131,7 @@ function memberTools(b, lang, today) {
   </form>
   <form method="post" action="/app/team/${b.id}/notify" class="stack">
     <p class="muted">${L(lang, "الإشعارات اللي هتتقفل بتفضل في صندوقه بس من غير ما تتبعت.", "Switched-off notifications stay in their inbox only, never sent.")}</p>
-    ${LeadRules.SWITCHABLE.map((k) => html`<label><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}> ${label(k)}</label>`)}
+    ${[...Notifications.kindsFor(b), ...Notifications.dailyKindsFor(b)].map((k) => html`<label><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}> ${label(k)}</label>`)}
     <input type="hidden" name="sent" value="1">
     <button type="submit" class="secondary">${L(lang, "احفظ الإشعارات", "Save notifications")}</button>
   </form>

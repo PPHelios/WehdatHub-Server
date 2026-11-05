@@ -5,6 +5,7 @@
 
 const { html } = require("../html");
 const Words = require("../../domain/commandWords");
+const Authz = require("../../lib/authz");
 
 const T = (lang, pair) => pair[lang === "en" ? 1 : 0];
 
@@ -56,6 +57,7 @@ const SECTIONS = [
   },
   {
     id: "clients",
+    who: "leads",
     title: ["👤 العملاء", "👤 Clients"],
     items: [
       ["ابعت «ليد» ومعاه رسالة العميل أو فويس، أو حوّل رسالته، أو ابعت رقمه. البوت يعمل كارت العميل بعد ما تأكد.", "Send \"lead\" with the client's message or a voice note, forward their message, or send their number. The bot makes the client's card once you confirm."],
@@ -71,6 +73,7 @@ const SECTIONS = [
   },
   {
     id: "daily",
+    who: "leads",
     title: ["⏰ رسايل اليوم", "⏰ Daily messages"],
     items: [
       ["الصبح (٩–١٢): ملخص متابعاتك وعملائك الجداد.", "Morning (9–12): your follow-ups and new clients."],
@@ -80,6 +83,7 @@ const SECTIONS = [
   },
   {
     id: "managers",
+    who: "manager",
     title: ["👥 للمديرين", "👥 For managers"],
     items: [
       ["«فريقي»: ضيف وسيط، اعمله لينك تيليجرام، أو أوقفه (عملاؤه بيرجعوا للمديرين).", "\"My team\": add a broker, make their Telegram link, or deactivate them (their clients come back to the managers)."],
@@ -127,15 +131,27 @@ function commandWords(c, lang) {
   return words.length ? html`${words.map((x, i) => html`${i ? " / " : ""}${x}`)}` : html`<code dir="auto">${example}</code>`;
 }
 
-function guidePage(lang) {
+/** Sections and commands a signed-in role can use: managers' pages for managers, clients for everyone but data entry. Signed out: the general ones. */
+function visibleSections(broker) {
+  return SECTIONS.filter((s) => !s.who || (s.who === "manager" ? !broker || Authz.isManager(broker) : !Authz.isDataEntry(broker)));
+}
+function visibleGroups(broker) {
+  return Words.grouped()
+    .filter((g) => !(g.id === "leads" && Authz.isDataEntry(broker)))
+    .map((g) => ({ ...g, commands: g.commands.filter((c) => !c.manager || !broker || Authz.isManager(broker)) }))
+    .filter((g) => g.commands.length);
+}
+
+function guidePage(lang, broker = null) {
+  const sections = visibleSections(broker);
   return html`<h1>📘 ${T(lang, ["دليل سريع", "Quick guide"])}</h1>
-<nav class="card row" aria-label="${T(lang, ["المحتوى", "Contents"])}"><a href="#commands">📖 ${T(lang, ["الأوامر", "Commands"])}</a>${SECTIONS.map((s) => html`<a href="#${s.id}">${T(lang, s.title)}</a>`)}<a href="#faq">❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</a></nav>
+<nav class="card row" aria-label="${T(lang, ["المحتوى", "Contents"])}"><a href="#commands">📖 ${T(lang, ["الأوامر", "Commands"])}</a>${sections.map((s) => html`<a href="#${s.id}">${T(lang, s.title)}</a>`)}<a href="#faq">❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</a></nav>
 <section class="card" id="commands">
   <h2>📖 ${T(lang, ["أوامر البوت", "Bot commands"])}</h2>
   <p class="muted">${T(lang, ["العربي بأي طريقة كتابة (أ/ا، ة/ه، ى/ي زي بعض) والإنجليزي كابيتال أو سمول.", "English words work in any case. Arabic words work in any spelling (switch the guide to Arabic to see them)."])}</p>
-  ${Words.grouped().map((g) => html`<h3>${T(lang, g.title)}</h3><div class="scroll"><table data-commands="${g.id}"><tbody>${g.commands.map((c) => html`<tr><td>${commandWords(c, lang)}</td><td>${T(lang, c.help)}${c.manager ? T(lang, [" (للمديرين)", " (managers)"]) : ""}</td></tr>`)}</tbody></table></div>`)}
+  ${visibleGroups(broker).map((g) => html`<h3>${T(lang, g.title)}</h3><div class="scroll"><table data-commands="${g.id}"><tbody>${g.commands.map((c) => html`<tr><td>${commandWords(c, lang)}</td><td>${T(lang, c.help)}${c.manager ? T(lang, [" (للمديرين)", " (managers)"]) : ""}</td></tr>`)}</tbody></table></div>`)}
 </section>
-${SECTIONS.map(
+${sections.map(
   (s) => html`<section class="card" id="${s.id}">
   <h2>${T(lang, s.title)}</h2>
   <ul>${s.items.map((i) => html`<li>${T(lang, i)}</li>`)}</ul>
@@ -148,7 +164,7 @@ ${SECTIONS.map(
 }
 
 function register(web, { page }) {
-  web.get("/guide", (req, res) => page(req, res, { title: T(req.lang, ["دليل سريع", "Quick guide"]), langSwitch: true, body: guidePage(req.lang) }));
+  web.get("/guide", (req, res) => page(req, res, { title: T(req.lang, ["دليل سريع", "Quick guide"]), langSwitch: true, body: guidePage(req.lang, req.session?.broker || null) }));
 }
 
 module.exports = { register, SECTIONS, FAQ };
