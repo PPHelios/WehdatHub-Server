@@ -1509,6 +1509,7 @@
       "num": ["v"],
       "listDevelopers": ["db", "actor"],
       "listDevelopersPage": ["db", "actor", "params"],
+      "listProjectsPage": ["db", "actor", "params"],
       "getDeveloper": ["db", "actor", "id"],
       "saveDeveloper": ["db", "actor", "input"],
       "developerByName": ["db", "actor", "name"],
@@ -2258,7 +2259,9 @@
       "DUE": "Array",
       "cleanRules": ["input"],
       "saveRules": ["db", "actor", "projectId", "input"],
-      "checkPlan": ["rules", "plan"]
+      "checkPlan": ["rules", "plan"],
+      "feeFeatureKey": ["label"],
+      "visibleFees": ["fees", "unitKeys"]
     }
   },
   "invariant_variable_names": {
