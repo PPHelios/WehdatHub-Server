@@ -30,11 +30,14 @@ afterAll(async () => {
 
 const barOf = (text) => (text.match(/<nav class="tabbar[^"]*"[\s\S]*?<\/nav>/) || [""])[0];
 
-test("the CRM owner starts on app tracking and has their own bar and menu", async () => {
+test("the CRM owner starts on their own home and has their own bar and menu", async () => {
   const crm = await signIn(h, "admin");
-  const home = await crm.agent.get("/app/");
-  expect(home.status).toBe(303);
-  expect(home.headers.location).toBe("/app/owner");
+  const home = await crm.agent.get("/app/?lang=en");
+  expect(home.status).toBe(200);
+  expect(home.text).toMatch(/href="\/app\/owner"/);
+  expect(home.text).toMatch(/href="\/app\/owner\/board"/);
+  expect(home.text).toMatch(/Latest app alerts/);
+  expect(home.text).not.toMatch(/Needs you now|Follow-ups today/);
   const bar = barOf((await crm.agent.get("/app/owner?lang=en")).text);
   expect(bar).toMatch(/Tracking/);
   expect(bar).toMatch(/Board/);

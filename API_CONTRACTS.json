@@ -275,6 +275,7 @@
       "isManager": ["broker"],
       "isAgencyOwner": ["broker"],
       "isDataEntry": ["broker"],
+      "isCrmOwner": ["broker", "config"],
       "isTeamLead": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],

@@ -26,7 +26,9 @@ test("signed out: the guide opens in Arabic by default and in English with ?lang
   const en = await request(h.app.app).get("/app/guide?lang=en");
   expect(en.status).toBe(200);
   expect(en.text).toContain("Quick guide");
-  for (const s of Guide.SECTIONS) expect(en.text).toContain(`id="${s.id}"`);
+  // Signed out sees the general sections; the app owner's own section shows only to them.
+  for (const s of Guide.SECTIONS.filter((x) => x.who !== "crm")) expect(en.text).toContain(`id="${s.id}"`);
+  expect(en.text).not.toContain('id="crm"');
   expect((en.text.match(/<details>/g) || []).length).toBe(Guide.FAQ.length);
 });
 

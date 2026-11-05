@@ -70,12 +70,35 @@ ${groups.map(([g, label]) => {
 </div>`
     });
   });
+  async function crmHome(req, res) {
+    const { broker } = req.session;
+    const en = broker.preferred_lang === "en";
+    const { rows: alerts } = await pool.query(
+      "SELECT id, title, created_at FROM notifications WHERE broker_id = $1 AND kind = 'system_alert' ORDER BY created_at DESC LIMIT 8",
+      [broker.id]
+    );
+    const when = (d) => new Date(d).toLocaleString(en ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" });
+    return page(req, res, {
+      title: en ? "App" : "التطبيق",
+      body: html`<h1>${en ? "WehdatHub app" : "تطبيق WehdatHub"}</h1>
+<div class="tiles">
+  <a class="tile-link" href="/app/owner">${icon("chart", 28)}<span><b>${en ? "Tracking" : "المتابعة"}</b><span class="muted">${en ? "Agencies, plans, credits, payments" : "الوكالات والباقات والرصيد والمدفوعات"}</span></span></a>
+  <a class="tile-link" href="/app/owner/board">${icon("gauge", 28)}<span><b>${en ? "Board" : "اللوحة"}</b><span class="muted">${en ? "Money, AI, performance, search, operations" : "الفلوس والذكاء الاصطناعي والأداء والبحث والتشغيل"}</span></span></a>
+</div>
+<section class="card" data-app-alerts>
+  <h2>🚨 ${en ? "Latest app alerts" : "آخر تنبيهات التطبيق"}</h2>
+  ${alerts.length
+    ? html`<ul class="rows">${alerts.map((a) => html`<li><a class="listrow" href="/app/notifications"><span>${a.title}</span><span class="muted" dir="ltr">${when(a.created_at)}</span></a></li>`)}</ul>`
+    : html`<p class="muted">${en ? "Nothing to report." : "مفيش حاجة تستدعي الانتباه."}</p>`}
+</section>`
+    });
+  }
   // Open pages refresh their CSRF token from here (web/static/app.js) so a form left open still saves.
   web.get("/csrf", (req, res) => res.json({ csrf: req.session.csrf }));
   web.get("/", async (req, res) => {
     const { broker, agency } = req.session;
-    // The CRM owner has no agency work to start the day with: their first page is the app's tracking.
-    if (require("../../lib/authz").isCrmOwner(broker)) return res.redirect(303, "/app/owner");
+    // The CRM owner has no agency work to start the day with: their first page is the app's tracking and its alerts.
+    if (require("../../lib/authz").isCrmOwner(broker)) return crmHome(req, res);
     const en = broker.preferred_lang === "en";
     const now = new Date();
     const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(() => null)]);
