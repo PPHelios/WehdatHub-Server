@@ -6,6 +6,7 @@
 
 const ExcelJS = require("exceljs");
 const { isManager } = require("../lib/authz");
+const { scopeIds, inScopeSql } = require("../lib/dealScope");
 const C = require("../domain/commissionTracker");
 const Stages = require("../domain/leadStages");
 const Vis = require("../lib/visibility");
@@ -13,6 +14,7 @@ const Vis = require("../lib/visibility");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v) => UUID_RE.test(String(v || ""));
 const today = (now = new Date()) => Stages.toCairoLocal(now).slice(0, 10);
+const PAGE_SIZE = 20;
 const httpsOnly = (u) => (/^https?:\/\/[^\s"'<>]+$/.test(String(u || "").trim()) ? String(u).trim().slice(0, 500) : null);
 
 /* ---------------------------------------------------------------------- */
@@ -121,12 +123,14 @@ const LIST_SQL = `SELECT c.*, d.ref AS deal_ref, d.unit_code, d.price, d.client_
     LEFT JOIN projects p ON p.id = c.project_id LEFT JOIN developers v ON v.id = c.developer_id
     LEFT JOIN brokers b ON b.id = d.closing_broker_id`;
 
-/** Managers: every commission (filters: status, developer, overdue). Brokers: those they share in, with their share. */
-async function listCommissions(db, actor, { status = null, developerId = null, overdue = false, now = new Date() } = {}) {
-  await syncAgency(db, actor.agency_id);
-  const params = [actor.agency_id, actor.id];
-  const where = ["c.agency_id = $1"];
-  if (!isManager(actor)) where.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
+/**
+ * The WHERE of a commission list. Every placeholder it names is always in the query (the viewer $2, the scope $3, today
+ * $4), so Postgres can type them even when a filter is off.
+ */
+function commissionQuery(actor, { status = null, developerId = null, overdue = false, from = null, to = null, now = new Date() } = {}, ids = null) {
+  const day = today(now);
+  const params = [actor.agency_id, actor.id, ids, day];
+  const where = ["c.agency_id = $1", "$2::uuid IS NOT NULL", "($3::uuid[] IS NULL OR " + inScopeSql(3) + ")"];
   if (C.STATUSES.includes(status)) {
     params.push(status);
     where.push(`c.status = $${params.length}`);
@@ -135,13 +139,50 @@ async function listCommissions(db, actor, { status = null, developerId = null, o
     params.push(developerId);
     where.push(`c.developer_id = $${params.length}`);
   }
-  if (overdue) {
-    params.push(today(now));
-    where.push(`c.status IN ('claimed', 'partly_paid') AND c.due_on < $${params.length}::date`);
+  where.push(overdue ? "c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date" : "$4::date IS NOT NULL");
+  if (from && to) {
+    params.push(from, to);
+    where.push(`d.closed_at >= $${params.length - 1} AND d.closed_at < $${params.length}`);
   }
-  const { rows } = await db.query(`${LIST_SQL} WHERE ${where.join(" AND ")} ORDER BY c.due_on NULLS LAST, d.closed_at DESC LIMIT 300`, params);
-  const day = today(now);
-  return rows.map((r) => shape(r, actor, day));
+  return { params, where: where.join(" AND "), day };
+}
+
+/**
+ * Every commission that matches (managers: the agency's, narrowed by the filters; a team lead: their team's; others: the
+ * ones they share in). Used for a developer's statement; lists use pageCommissions.
+ */
+async function listCommissions(db, actor, opts = {}) {
+  await syncAgency(db, actor.agency_id);
+  const ids = await scopeIds(db, actor, opts);
+  const q = commissionQuery(actor, opts, ids);
+  const { rows } = await db.query(`${LIST_SQL} WHERE ${q.where} ORDER BY c.due_on NULLS LAST, d.closed_at DESC`, q.params);
+  return rows.map((r) => shape(r, actor, q.day));
+}
+
+/**
+ * One page of the commission list, with the totals of all the matching commissions (cancelled left out), both computed
+ * in the database. @returns {Promise<{ rows, total, totals }>}
+ */
+async function pageCommissions(db, actor, opts = {}) {
+  await syncAgency(db, actor.agency_id);
+  const ids = await scopeIds(db, actor, opts);
+  const q = commissionQuery(actor, opts, ids);
+  const size = Math.floor(opts.size || PAGE_SIZE);
+  const offset = (Math.max(0, Math.floor(Number(opts.page)) || 0)) * size;
+  const t = await db.query(
+    `SELECT count(*) FILTER (WHERE c.status <> 'cancelled')::int AS count, count(*)::int AS listed,
+            COALESCE(SUM(c.expected_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS expected,
+            COALESCE(SUM(c.paid_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS paid,
+            COALESCE(SUM(c.expected_amount - c.paid_amount) FILTER (WHERE c.status IN ('claimed', 'partly_paid')), 0)::numeric AS claimed,
+            COALESCE(SUM(GREATEST(c.expected_amount - c.paid_amount, 0)) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS outstanding,
+            count(*) FILTER (WHERE c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date)::int AS overdue
+       FROM commissions c JOIN deals d ON d.id = c.deal_id WHERE ${q.where}`,
+    q.params
+  );
+  const sum = t.rows[0];
+  const totals = { count: sum.count, expected: Number(sum.expected), claimed: Number(sum.claimed), paid: Number(sum.paid), outstanding: Number(sum.outstanding), overdue: sum.overdue };
+  const { rows } = await db.query(`${LIST_SQL} WHERE ${q.where} ORDER BY c.due_on NULLS LAST, d.closed_at DESC LIMIT ${size} OFFSET ${offset}`, q.params);
+  return { rows: rows.map((r) => shape(r, actor, q.day)), total: sum.listed, totals };
 }
 
 function shape(r, actor, day) {
@@ -306,4 +347,4 @@ async function briefItems(db, agencyId, { now = new Date() } = {}) {
   };
 }
 
-module.exports = { getTerms, saveTerms, ensureForDeal, onDealChanged, syncAgency, listCommissions, getCommission, totals, statement, statementWorkbook, statusWord, move, briefItems };
+module.exports = { getTerms, saveTerms, ensureForDeal, onDealChanged, syncAgency, listCommissions, pageCommissions, getCommission, totals, statement, statementWorkbook, statusWord, move, briefItems };

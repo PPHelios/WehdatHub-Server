@@ -269,6 +269,13 @@
       "asSystem": ["fn"],
       "viewer": []
     },
+    "lib/dealScope.js": {
+      "scopeIds": ["db", "actor", "params"],
+      "teamIds": ["db", "agencyId", "leadId"],
+      "inScopeSql": ["n"],
+      "scopeAmountSql": ["n"],
+      "isId": ["v"]
+    },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
       "DATA_ENTRY_ROLE": "String",
@@ -1030,6 +1037,11 @@
       "checkUpdate": ["u", "params"],
       "summaryLines": ["u", "lead", "lang", "params"]
     },
+    "domain/commissionPeriod.js": {
+      "PERIODS": "Array",
+      "periodRange": ["period", "at", "now"],
+      "isDay": ["s"]
+    },
     "domain/commission.js": {
       "compute": ["params"],
       "parsePct": ["text"],
@@ -1045,6 +1057,7 @@
       "createDeal": ["pool", "actor", "input", "params"],
       "getDeal": ["pool", "actor", "key"],
       "listDeals": ["pool", "actor", "params"],
+      "resaleCommissions": ["pool", "actor", "params"],
       "monthlyTotals": ["pool", "actor", "params"],
       "updateDeal": ["pool", "actor", "key", "change", "params"]
     },
@@ -1618,7 +1631,8 @@
       "ensureForDeal": ["db", "deal"],
       "onDealChanged": ["db", "deal"],
       "syncAgency": ["db", "agencyId"],
-      "listCommissions": ["db", "actor", "params"],
+      "listCommissions": ["db", "actor", "opts"],
+      "pageCommissions": ["db", "actor", "opts"],
       "getCommission": ["db", "actor", "id"],
       "totals": ["rows"],
       "statement": ["db", "actor", "developerId", "params"],

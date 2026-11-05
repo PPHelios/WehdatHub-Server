@@ -61,9 +61,10 @@ Every message the bot sends you costs the agency 1 credit from its monthly balan
 Fine on WhatsApp: one quick search, a quick update, one client copy, forwarding a client, a voice note. *Tip:* send the details in one message, not five.
 
 *🤝 Deals and commission*
-• WhatsApp: *deal L-0042 VIL-08 8.5M commission 2%* (add *split 60/40* to share with the unit's broker, or *split 60/40 with Mona*). Review, then *✅ Confirm*.
+• Telegram: *deal L-0042 VIL-08 8.5M commission 2%* (add *split 60/40* to share with the unit's broker, or *split 60/40 with Mona*). Review, then *✅ Confirm*.
 • Website: the client's page → *🤝 Record deal*, or *🤝 Deals*.
 • Confirming marks the client *won* and your unit *sold* together. You see your own share; managers see the whole commission and can correct it.
+• *💸 Deals → Commissions* has two lists: *Resale* (the commission on each deal) and *Developers* (developer commissions). Filter by *month* or *week* (weeks run Saturday to Friday), and page through them. Managers can filter by broker or team; a team lead sees their team, and can narrow it to one of their brokers.
 
 *👀 Who sees what*
 • Units: the whole agency.

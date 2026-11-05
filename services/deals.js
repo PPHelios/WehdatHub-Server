@@ -1,5 +1,5 @@
 // services/deals.js — Deals and commission (Release 3 step 10, Q10). A deal is entered by its closing broker (a manager
-// may enter it for a broker and correct it later); recording it marks the lead won and, when ticked, the unit sold in
+// may enter it for a broker and correct it later), in Telegram or on the website; recording it marks the lead won and, when ticked, the unit sold in
 // the same transaction (a unit changed since the review refuses the whole deal). A double tap saves once (idem_key).
 // Reads are role-scoped: a broker sees the deals they closed or share in, and only their own share; managers see all.
 "use strict";
@@ -11,6 +11,7 @@ const Commission = require("../domain/commission");
 const Stages = require("../domain/leadStages");
 const { withTransaction } = require("../lib/db");
 const Vis = require("../lib/visibility");
+const { scopeIds, inScopeSql, scopeAmountSql } = require("../lib/dealScope");
 
 const STATUSES = ["pending", "signed", "paid", "cancelled"];
 const STATUS_LABELS = {
@@ -42,7 +43,7 @@ async function activeBroker(db, agencyId, id) {
 }
 
 /**
- * Checks a deal and works out the money, without writing anything (the WhatsApp review card and the web form).
+ * Checks a deal and works out the money, without writing anything (the Telegram review card and the web form).
  * @param {Object} input - { leadKey, unitCode, price, mode, pct, amount, external: { pct|amount, name }, splits: [{ brokerId, pct }],
  *                          dealType, status, markSold (true/false/undefined = when the broker may), notes, closingBrokerId }
  * @returns {Promise<{ draft } | { error, ...details }>}
@@ -225,6 +226,40 @@ async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0 
   return { rows: rows.slice(0, limit).map((r) => ({ ...r, my_share: r.my_share == null ? null : Number(r.my_share) })), more: rows.length > limit };
 }
 
+/**
+ * The resale commissions of the commissions tab: the deals in the period and scope (cancelled left out), newest first,
+ * each with the amount in scope (the whole commission, or the shares of the brokers in scope). Totals and one page are
+ * computed in the database.
+ * @returns {Promise<{ rows, total, totals: { deals, volume, amount } }>}
+ */
+async function resaleCommissions(pool, actor, { brokerId = null, teamLeadId = null, from = null, to = null, page = 0, size = PAGE } = {}) {
+  const ids = await scopeIds(pool, actor, { brokerId, teamLeadId });
+  const params = [actor.agency_id, ids];
+  const where = ["d.agency_id = $1", "d.status <> 'cancelled'", `($2::uuid[] IS NULL OR ${inScopeSql(2)})`];
+  if (from && to) {
+    params.push(from, to);
+    where.push(`d.closed_at >= $${params.length - 1} AND d.closed_at < $${params.length}`);
+  }
+  const fromWhere = `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
+      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`;
+  const t = await pool.query(
+    `SELECT count(*)::int AS deals, COALESCE(SUM(d.price), 0)::numeric AS volume, COALESCE(SUM(${scopeAmountSql(2)}), 0)::numeric AS amount ${fromWhere}`,
+    params
+  );
+  const totals = { deals: t.rows[0].deals, volume: Number(t.rows[0].volume), amount: Number(t.rows[0].amount) };
+  const { rows } = await pool.query(
+    `SELECT d.id, d.ref, d.unit_code, d.deal_type, d.price, d.status, d.closed_at, d.client_name, d.closing_broker_id,
+            d.commission_total, d.external_share, b.name AS closing_broker_name, l.ref AS lead_ref, ${scopeAmountSql(2)} AS amount
+       FROM deals d LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
+       LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
+      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}
+      ORDER BY d.closed_at DESC, d.ref DESC LIMIT ${Math.floor(size)} OFFSET ${Math.max(0, Math.floor(Number(page)) || 0) * Math.floor(size)}`,
+    params
+  );
+  const out = rows.map((r) => ({ ...r, price: Number(r.price), amount: Number(r.amount), commission_total: Number(r.commission_total), external_share: Number(r.external_share) }));
+  return { rows: out, total: totals.deals, totals };
+}
+
 /** Per Cairo month (cancelled deals left out): managers get the agency's totals, a broker their own share. */
 async function monthlyTotals(pool, actor, { months = 6, now = new Date() } = {}) {
   const since = Stages.cairoDayAt(new Date(now.getTime() - (months - 1) * 31 * 24 * 3600 * 1000), 0, 0);
@@ -311,4 +346,4 @@ async function updateDeal(pool, actor, key, change = {}, { version = null, now =
   });
 }
 
-module.exports = { STATUSES, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, monthlyTotals, updateDeal };
+module.exports = { STATUSES, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, resaleCommissions, monthlyTotals, updateDeal };
