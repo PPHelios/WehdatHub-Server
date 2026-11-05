@@ -100,6 +100,7 @@
   | `077_deals_closer_index.sql` | Index on deals by closing broker, for the commissions filters (#139). |
   | `077_follow_up_reminder_steps.sql` | `leads.follow_up_reminded_steps`: the lead times (minutes before a call or viewing) already sent for the current follow-up time; cleared by a trigger when the time or status changes. |
   | `078_plan_rules.sql` | `projects.plan_rules` (a project's developer limits: lowest down payment, longest term, allowed frequencies, highest discount, maintenance and optional fees); `project_plans.exception_status` (none, needs approval, approved). Plans outside the limits are exceptions. |
+  | `080_notify_policy.sql` | `agencies.notify_policy`: the agency's notification policy per kind (on, channel, frequency, lock by owner or manager); the notification reasons `batched` and `policy_off` added. |
   | `079_developer_profile.sql` | Developer profile free text (about, past projects, delivery record, usual payment terms, warnings), each up to 2,000 characters. Ask reads them; clients never do. |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 

@@ -10,6 +10,7 @@ const Team = require("../../services/team");
 const LeadRules = require("../../services/leadRules");
 const Targets = require("../../services/targets");
 const Rules = require("../../domain/leadRules");
+const Policy = require("../../lib/notificationPolicy");
 const Notifications = require("../../lib/notifications");
 const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
@@ -129,15 +130,6 @@ function memberTools(b, lang, today) {
     <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
     ${b.away_until ? html`<button type="submit" name="until" value="" class="secondary">${L(lang, "رجع", "Back now")}</button>` : ""}
   </form>
-  <form method="post" action="/app/team/${b.id}/notify" class="stack">
-    <p class="muted">${L(lang, "لكل إشعار: اقفله (بيفضل في صندوقه بس)، واختار القناة لو عايزها تبقى ثابتة لهذا الشخص. لو سايبها «هو يختار»، بيختار من إعداداته.", "For each notification: switch it off (it stays in their inbox only), and choose the channel if you want it fixed for this person. Leave it on \"they choose\" and their own setting applies.")}</p>
-    <table class="notify-options"><thead><tr><th>${L(lang, "الإشعار", "Notification")}</th><th>${L(lang, "القناة", "Channel")}</th><th>${L(lang, "شغّال", "On")}</th></tr></thead><tbody>
-    ${Notifications.kindsFor(b).map((k) => html`<tr data-notify-row="${k}"><td>${label(k)}</td><td><select name="ch_${k}" aria-label="${label(k)}">${[["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تليجرام والموقع", "Telegram and website")], ["telegram", L(lang, "تليجرام بس", "Telegram only")], ["web", L(lang, "الموقع", "Website")], ["whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (credits)")]].map(([v, text]) => html`<option value="${v}"${((b.notify_prefs?.manager_channels || {})[k] || "") === v ? html` selected` : ""}>${text}</option>`)}</select></td><td><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}></td></tr>`)}
-    ${Notifications.dailyKindsFor(b).map((k) => html`<tr data-notify-row="${k}"><td>${label(k)}</td><td><span class="muted">${L(lang, "تليجرام", "Telegram")}</span></td><td><input type="checkbox" name="on" value="${k}"${off.includes(k) ? "" : html` checked`}></td></tr>`)}
-    </tbody></table>
-    <input type="hidden" name="sent" value="1">
-    <button type="submit" class="secondary">${L(lang, "احفظ الإشعارات", "Save notifications")}</button>
-  </form>
 </details>`;
 }
 
@@ -176,8 +168,35 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
 </li>`;
 }
 
+/** The agency's notification policy: for each kind, on/off, channel, frequency, and whether it is forced for everyone. */
+function policyCard({ policy, viewer, lang, notice = null }) {
+  const Policy = require("../../lib/notificationPolicy");
+  const owner = isAgencyOwner(viewer);
+  const chOpts = [["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تليجرام والموقع", "Telegram and website")], ["telegram", L(lang, "تليجرام بس", "Telegram only")], ["web", L(lang, "الموقع", "Website")], ["whatsapp", L(lang, "واتساب", "WhatsApp")]];
+  const freqOpts = [["", L(lang, "هو يختار", "They choose")], ["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة", "Hourly")], ["daily", L(lang, "يومياً ٩ الصبح", "Daily at 9")]];
+  return html`<form method="post" action="/app/team/policy" class="card stack" data-notify-policy>
+  <h2>🔔 ${L(lang, "الإشعارات للفريق كله", "Notifications for the whole team")}</h2>
+  ${notice || ""}
+  <p class="muted">${L(lang, "اختار لكل إشعار: شغّال ولا مقفول، القناة، والتكرار. لو قفلته «للفريق كله»، الكل بياخده زي ما انت مختار ومش هيقدر يغيّره. لو سايبه «هو يختار»، كل واحد يضبطه لنفسه من الإعدادات.", "For each notification: on or off, the channel, and how often. Force it for everyone and nobody can change it; leave it to the team and each person sets it in Settings. Urgent ones (assigned leads, due follow-ups and viewings, hot clients, manager alerts) are always on and immediate.")}</p>
+  <div class="scroll"><table class="notify-options"><thead><tr><th>${L(lang, "الإشعار", "Notification")}</th><th>${L(lang, "شغّال", "On")}</th><th>${L(lang, "القناة", "Channel")}</th><th>${L(lang, "التكرار", "How often")}</th><th>${L(lang, "للفريق كله", "Force for everyone")}</th></tr></thead><tbody>
+  ${Notifications.KINDS.map((k) => {
+    const e = policy[k] || {};
+    const urgent = Policy.isUrgent(k);
+    const lockedByOwner = e.lock === "owner" && !owner;
+    const dis = lockedByOwner ? html` disabled` : "";
+    return html`<tr data-policy-row="${k}"><td>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${urgent ? html` <span class="muted small">(${L(lang, "دايماً فوري", "always immediate")})</span>` : ""}${lockedByOwner ? html` <span class="muted small">🔒 ${L(lang, "المالك قفله", "locked by the owner")}</span>` : ""}</td>
+    <td>${urgent ? html`<span class="muted small">${L(lang, "دايماً", "Always")}</span>` : html`<select name="on_${k}"${dis}><option value="">${L(lang, "هو يختار", "They choose")}</option><option value="1"${e.on === true ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${e.on === false ? html` selected` : ""}>${L(lang, "مقفول", "Off")}</option></select>`}</td>
+    <td><select name="ch_${k}"${dis}>${chOpts.map(([v, t]) => html`<option value="${v}"${(e.channel || "") === v ? html` selected` : ""}>${t}</option>`)}</select></td>
+    <td>${urgent ? html`<span class="muted small">${L(lang, "فوري", "Immediately")}</span>` : html`<select name="fq_${k}"${dis}>${freqOpts.map(([v, t]) => html`<option value="${v}"${(e.frequency || "") === v ? html` selected` : ""}>${t}</option>`)}</select>`}</td>
+    <td><input type="checkbox" name="lock_${k}" value="1"${e.lock && !lockedByOwner ? html` checked` : ""}${dis}${!owner && e.lock === "owner" ? html` disabled` : ""}></td></tr>`;
+  })}
+  </tbody></table></div>
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
+</form>`;
+}
+
 /** tab: 0 the team (default), 1 the lead rules (opened after saving one). */
-function teamPage({ team, lang, rules, speed, routing, viewer = null, notice = null, link = null, tab = 0, now = new Date() }) {
+function teamPage({ team, lang, rules, speed, routing, viewer = null, notice = null, link = null, tab = 0, now = new Date(), policy = {} }) {
   const today = cairoDay(now);
   const active = team.filter((b) => b.is_active).length;
   return html`<h1>${L(lang, "الفريق", "Team")}</h1>
@@ -197,7 +216,7 @@ ${tabs("team_tab", [
 <ul class="members">${team.map((b) => memberCard(b, lang, speed, today, now, viewer, team.filter((t) => t.role === "team_lead" && t.is_active)))}</ul>
 <p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الحسابات مش بتتمسح؛ الموقوفين في الآخر، والأقدم في الآخر خالص.", "Deactivating signs them out at once and returns their leads to the managers. Accounts are never deleted; former brokers are listed last, the longest gone at the very end.")}</p>
 <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>`],
-  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}`]
+  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}${policyCard({ policy, viewer, lang })}`]
 ], { open: tab })}`;
 }
 
@@ -210,7 +229,8 @@ function register(web, { pool, page }) {
     const rules = await LeadRules.getRules(pool, req.session.broker.agency_id);
     const speed = await LeadRules.speedToLead(pool, req.session.broker.agency_id, { waitMinutes: rules.wait_minutes });
     const routing = await LeadRules.routingList(pool, req.session.broker.agency_id);
-    return page(req, res, { title: L(lang, "الفريق", "Team"), nav: "settings", body: teamPage({ team, lang, rules, speed, routing, viewer: req.session.broker, ...extra }) }, status);
+    const policy = Policy.policyOf((await pool.query("SELECT notify_policy FROM agencies WHERE id = $1", [req.session.broker.agency_id])).rows[0]);
+    return page(req, res, { title: L(lang, "الفريق", "Team"), nav: "settings", body: teamPage({ team, lang, rules, speed, routing, viewer: req.session.broker, policy, ...extra }) }, status);
   };
   const bad = (code, lang) => html`<p class="card notice bad" role="alert">❌ ${errorText(code, lang)}</p>`;
 
@@ -308,16 +328,32 @@ function register(web, { pool, page }) {
     return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `هدف ${r.broker.name} اتحفظ.`, `${r.broker.name}'s target saved.`)}</p>` });
   });
 
-  web.post("/team/:id/notify", async (req, res) => {
+
+  // The agency's notification policy (owner and managers). A manager cannot change what the owner locked.
+  web.post("/team/policy", async (req, res) => {
     const lang = langOf(req);
-    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
-    // Per person: which kinds stay on (the rest go to the inbox only) and the channel the manager fixes for each kind.
-    const on = [].concat(req.body.on ?? []);
-    const channels = {};
-    for (const k of LeadRules.SWITCHABLE) if (typeof req.body[`ch_${k}`] === "string") channels[k] = req.body[`ch_${k}`];
-    const r = await LeadRules.setNotifyOptions(pool, req.session.broker, req.params.id, { on, channels });
-    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
-    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `إشعارات ${r.broker.name} اتحفظت.`, `${r.broker.name}'s notifications saved.`)}</p>` });
+    const actor = req.session.broker;
+    if (!MANAGER_ROLES.includes(String(actor.role || "").toLowerCase())) return forbidden(req, res);
+    const current = Policy.policyOf((await pool.query("SELECT notify_policy FROM agencies WHERE id = $1", [actor.agency_id])).rows[0]);
+    const changes = {};
+    for (const k of Notifications.KINDS) {
+      // A manager's form leaves the owner's locked rows out: they are not theirs to change.
+      if (current[k]?.lock === "owner" && !isAgencyOwner(actor)) continue;
+      const lock = req.body[`lock_${k}`] === "1" ? (isAgencyOwner(actor) ? "owner" : "manager") : null;
+      const on = req.body[`on_${k}`] === "1" ? true : req.body[`on_${k}`] === "0" ? false : undefined;
+      const channel = req.body[`ch_${k}`] || undefined;
+      const frequency = req.body[`fq_${k}`] || undefined;
+      const any = lock || on !== undefined || channel || frequency;
+      changes[k] = any ? { on, channel, frequency, lock } : null;
+    }
+    const merged = Policy.merge(current, actor, changes);
+    if (merged.error) {
+      const msg = merged.error === "owner_locked" ? L(lang, "المالك قفل إشعار واحد أو أكتر؛ مش هتقدر تغيّره.", "The owner has locked one or more of these; you can't change them.") : L(lang, "فيه إعداد مش صح.", "A setting is not valid.");
+      return render(req, res, { notice: bad(msg, lang), tab: 1 }, 400);
+    }
+    await pool.query("UPDATE agencies SET notify_policy = $2::jsonb WHERE id = $1", [actor.agency_id, JSON.stringify(merged.policy)]);
+    logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "notify_policy", metadata: { kinds: Object.keys(changes).length } });
+    return render(req, res, { tab: 1, notice: html`<p class="card notice ok" role="status">✅ ${L(lang, "الإشعارات اتحفظت للفريق كله.", "Notifications saved for the whole team.")}</p>` });
   });
 
   web.post("/team/:id/deactivate", async (req, res) => {

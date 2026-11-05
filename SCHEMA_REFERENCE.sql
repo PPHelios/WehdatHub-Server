@@ -313,7 +313,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   referred_by uuid,
   referral_rewarded_at timestamp with time zone,
   referral_credit_months smallint DEFAULT 0 NOT NULL,
-  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL
+  lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL,
+  notify_policy jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -1665,7 +1666,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((pay
 ALTER TABLE listings ADD CONSTRAINT listings_portal_listing_no_check CHECK (((portal_listing_no IS NULL) OR ((length(portal_listing_no) >= 4) AND (length(portal_listing_no) <= 20))));
 ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text, 'deleted'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text])));
-ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text])));
+ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text, 'batched'::text, 'policy_off'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS NULL) OR (url ~~ '/app/%'::text)));
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_kind_check CHECK ((kind = ANY (ARRAY['register'::text, 'login'::text])));
