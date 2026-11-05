@@ -205,16 +205,23 @@ function developerForm(lang, d = {}, action = "/app/catalogue/developers") {
 </form>`;
 }
 
-function listPage(lang, manager, { projects, developers, devPage, dq = "", archived, notice }) {
+function listPage(lang, manager, { projects, allProjects = [], projPage, developers, devPage, pq = "", dq = "", archived, notice }) {
   return html`<h1>🏗️ ${L(lang, "كتالوج المطورين", "Developer catalogue")}</h1>
 ${notice || ""}
 <nav class="row">${manager ? html`<a class="btn" href="/app/catalogue/updates" data-quick-updates>⚡ ${L(lang, "تحديث سريع", "Quick update")}</a>` : ""}<a class="btn secondary" href="/app/catalogue${archived ? "" : "?archived=1"}">${archived ? L(lang, "المشاريع الحالية", "Current projects") : L(lang, "المشاريع المؤرشفة", "Archived projects")}</a></nav>
 <section class="card">
   <h2>${archived ? L(lang, "مؤرشفة", "Archived") : L(lang, "المشاريع", "Projects")}</h2>
+  <form method="get" action="/app/catalogue" class="row" role="search">
+    <label>${L(lang, "ابحث باسم المشروع أو المطور", "Search by project or developer name")} <input name="pq" list="project-names" value="${pq}" autocomplete="off"></label>
+    <datalist id="project-names">${allProjects.map((pr) => html`<option value="${pr.name}"></option>`)}</datalist>
+    ${archived ? html`<input type="hidden" name="archived" value="1">` : ""}
+    <button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button>
+  </form>
   ${projects.length
     ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "المشروع", "Project")}</th><th>${L(lang, "المطور", "Developer")}</th><th>${L(lang, "الحالة", "Status")}</th><th>${L(lang, "الاستلام", "Delivery")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "أنظمة سداد", "Plans")}</th></tr></thead>
       <tbody>${projects.map((p) => html`<tr data-project="${p.id}"><td><a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a></td><td>${devName(p, lang)}</td><td>${label2(STATUS, p.status, lang)}</td><td dir="ltr">${deliveryText(p, lang)}</td><td>${p.units}</td><td>${p.plans}</td></tr>`)}</tbody></table></div>`
-    : html`<p class="muted">${L(lang, "لسه مفيش مشاريع.", "No projects yet.")}</p>`}
+    : html`<p class="muted">${pq ? L(lang, "مفيش مشروع بالاسم ده.", "No project matches that name.") : L(lang, "لسه مفيش مشاريع.", "No projects yet.")}</p>`}
+  ${projPage && projPage.pages > 1 ? html`<nav class="row" aria-label="${L(lang, "صفحات المشاريع", "Project pages")}">${projPage.page > 1 ? html`<a href="/app/catalogue?pq=${encodeURIComponent(pq)}&pp=${projPage.page - 1}${archived ? "&archived=1" : ""}">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${projPage.page} / ${projPage.pages}</span>${projPage.page < projPage.pages ? html`<a href="/app/catalogue?pq=${encodeURIComponent(pq)}&pp=${projPage.page + 1}${archived ? "&archived=1" : ""}">${L(lang, "التالي", "Next")}</a>` : ""}</nav>` : ""}
 </section>
 ${manager && !archived ? html`<details class="card"><summary>➕ ${L(lang, "مشروع جديد", "New project")}</summary>${projectForm(lang, developers)}</details>` : ""}
 <section class="card">
@@ -404,12 +411,13 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const actor = req.session.broker;
     const archived = req.query.archived === "1";
-    const [projects, developers, devPage] = await Promise.all([
+    const [projPage, allProjects, developers, devPage] = await Promise.all([
+      Catalogue.listProjectsPage(pool, actor, { q: req.query.pq, page: req.query.pp, archived }),
       Catalogue.listProjects(pool, actor, { archived }),
       Catalogue.listDevelopers(pool, actor),
       Catalogue.listDevelopersPage(pool, actor, { q: req.query.dq, page: req.query.dp })
     ]);
-    return page(req, res, { title: title(lang), nav: "catalogue", body: listPage(lang, isManager(actor), { projects, developers, devPage, dq: req.query.dq || "", archived, notice: notice || savedNotice(req) }) }, status);
+    return page(req, res, { title: title(lang), nav: "catalogue", body: listPage(lang, isManager(actor), { projects: projPage.items, allProjects, projPage, developers, devPage, pq: req.query.pq || "", dq: req.query.dq || "", archived, notice: notice || savedNotice(req) }) }, status);
   };
 
   const showProject = async (req, res, notice = null, status = 200) => {

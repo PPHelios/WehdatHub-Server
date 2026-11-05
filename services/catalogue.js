@@ -141,6 +141,28 @@ async function developerByName(db, actor, name) {
 /* Projects and phases                                                     */
 /* ---------------------------------------------------------------------- */
 
+/** One page of projects with a name search (also matches the developer's name): { items, total, page, pages }. 20 per page. */
+async function listProjectsPage(db, actor, { q = "", page = 1, archived = false } = {}) {
+  const PER = 20;
+  const term = String(q || "").trim().slice(0, 80);
+  const pattern = term ? `%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
+  const p = Math.max(1, Math.floor(Number(page) || 1));
+  const { rows } = await db.query(
+    `SELECT p.id, p.name, p.name_en, p.status, p.district, p.city, p.delivery_year, p.delivery_quarter, p.prices_updated_at,
+            p.archived_at, p.developer_id, d.name AS developer_name_ar, d.name_en AS developer_name_en,
+            (SELECT count(*)::int FROM listings l WHERE ${Vis.units("l")} AND l.project_id = p.id AND l.status = 'active') AS units,
+            (SELECT count(*)::int FROM project_plans pl WHERE pl.project_id = p.id) AS plans,
+            count(*) OVER()::int AS total
+     FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
+     WHERE p.agency_id = $1 AND (p.archived_at IS NOT NULL) = $2
+       AND ($3::text IS NULL OR p.name ILIKE $3 OR p.name_en ILIKE $3 OR d.name ILIKE $3)
+     ORDER BY lower(p.name) LIMIT $4 OFFSET $5`,
+    [actor.agency_id, Boolean(archived), pattern, PER, (p - 1) * PER]
+  );
+  const total = rows[0]?.total ?? 0;
+  return { items: rows, total, page: p, pages: Math.max(1, Math.ceil(total / PER)) };
+}
+
 async function listProjects(db, actor, { archived = false, developerId = null } = {}) {
   const { rows } = await db.query(
     `SELECT p.id, p.name, p.name_en, p.status, p.district, p.city, p.delivery_year, p.delivery_quarter, p.prices_updated_at,
@@ -772,6 +794,7 @@ module.exports = {
   num,
   listDevelopers,
   listDevelopersPage,
+  listProjectsPage,
   getDeveloper,
   saveDeveloper,
   developerByName,
