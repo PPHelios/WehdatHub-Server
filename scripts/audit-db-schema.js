@@ -156,6 +156,10 @@ async function auditCodebaseAgainstDatabase() {
       const table = insertMatch[1].toLowerCase();
       const rawCols = insertMatch[2];
 
+      // A column list built at runtime (a template like ${cols.join(", ")}) can't be read from the source text;
+      // the queries that use it run in the unit and integration tests.
+      if (rawCols.includes("${")) continue;
+
       if (schema[table]) {
         const columns = rawCols
           .split(",")
