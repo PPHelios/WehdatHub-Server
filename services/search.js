@@ -212,7 +212,12 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       if (f.floor_min !== null) where.push(`(l.floor_level IS NULL OR l.floor_level >= ${add(f.floor_min)})`);
       if (f.floor_max !== null) where.push(`(l.floor_level IS NULL OR l.floor_level <= ${add(f.floor_max)})`);
       // A blank finishing or furnishing matches both sides of the filter (only the special fields stay strict).
-      if (f.finishing.length) where.push(`(l.finishing IS NULL OR l.finishing = ANY(${add(f.finishing)}::text[]))`);
+      if (f.finishing.length) {
+        const fin = add(f.finishing);
+        where.push(`(l.finishing IS NULL OR l.finishing = ANY(${fin}::text[]))`);
+        // Exact finishing first, then the units whose finishing is blank (an unmapped old entry became blank).
+        exactFirst += `CASE WHEN l.finishing = ANY(${fin}::text[]) THEN 0 ELSE 1 END, `;
+      }
       if (f.furnishing) {
         where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
         // Exact status first, then the units whose status is blank (Haytham 2026-11-04).

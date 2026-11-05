@@ -366,6 +366,7 @@
       "cleanSummary": ["text"],
       "TYPE_LABELS": "Object",
       "FINISHING_LABELS": "Object",
+      "FURNISHING_LABELS": "Object",
       "FREQUENCY_LABELS": "Object",
       "money": ["value", "lang", "currency"],
       "typeLabel": ["l", "lang"],
@@ -738,6 +739,9 @@
     "lib/notifications.js": {
       "brokersWithRoles": ["pool", "agencyId", "roles"],
       "KINDS": "Array",
+      "KINDS_BY_ROLE": "Object",
+      "kindsFor": ["broker"],
+      "dailyKindsFor": ["broker"],
       "KIND_LABELS": "Object",
       "DAILY_KINDS": "Array",
       "DAILY_LABELS": "Object",
@@ -806,12 +810,12 @@
       "history": ["pool", "viewer", "ownerId", "params"],
       "edit": ["pool", "actor", "ownerId", "params"],
       "canEditOwner": ["pool", "viewer", "ownerId"],
-      "dataEntryOwnersOn": ["pool", "agencyId"],
-      "setDataEntryOwners": ["pool", "actor", "on"],
       "remove": ["pool", "actor", "ownerId"],
       "reassign": ["pool", "actor", "listing", "to"],
       "leadFor": ["pool", "viewer", "owner"],
-      "forLead": ["pool", "viewer", "lead"]
+      "forLead": ["pool", "viewer", "lead"],
+      "dataEntryOwnersOn": ["pool", "agencyId"],
+      "setDataEntryOwners": ["pool", "actor", "on"]
     },
     "web/routes/notifications.js": {
       "register": ["web", "params"]
@@ -1187,6 +1191,7 @@
     },
     "services/team.js": {
       "INVITE_ROLES": "Array",
+      "ADD_ROLES": "Array",
       "listTeam": ["pool", "manager"],
       "startLinkFor": ["pool", "manager", "brokerId", "params"],
       "invite": ["pool", "manager", "input", "opts"],
@@ -1363,7 +1368,9 @@
       "noteLine": ["m", "listing", "lang"]
     },
     "web/routes/portalEnquiries.js": {
-      "register": ["web", "params"]
+      "register": ["web", "params"],
+      "panel": ["pool", "actor", "lang", "extra"],
+      "noticeFor": ["lang", "query"]
     },
     "web/routes/sources.js": {
       "register": ["web", "params"]

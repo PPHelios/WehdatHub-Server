@@ -29,6 +29,9 @@ const Vis = require("../../lib/visibility");
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const STATUSES = ["active", "sold", "archived"];
+const UNITS_PAGE = 20;
+const { PROPERTY_TYPES } = require("../../domain/fieldRules");
+const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../../domain/furnishingStatus");
 
 async function imagesOf(pool, listing) {
   const { rows } = await pool.query("SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position", [
@@ -120,12 +123,50 @@ function register(web, { pool, page }) {
     const status = STATUSES.includes(req.query.status) ? req.query.status : "active";
     const mine = req.query.mine === "1";
     const onlyPrivate = req.query.private === "1" && Authz.isAgencyOwner(broker);
-    const { rows } = await pool.query(
-      `SELECT * FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = $2 ${mine ? "AND broker_id = $3" : ""}${onlyPrivate ? " AND is_private" : ""}
-       ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 200`,
-      mine ? [broker.agency_id, status, broker.id] : [broker.agency_id, status]
+    // Filters: fixed lists (type, furnishing, finishing), the agency's own compounds, and a search on the code.
+    const oneOf = (v, list) => (list.includes(String(v || "")) ? String(v) : "");
+    const type = oneOf(req.query.type, PROPERTY_TYPES);
+    const furnishing = oneOf(req.query.furnishing, FURNISHING_STATUSES);
+    const finishing = oneOf(req.query.finishing, FINISHING_STATUSES);
+    const q = String(req.query.q || "").trim().slice(0, 40);
+    const pageNo = Math.max(0, Math.min(parseInt(req.query.page, 10) || 0, 10000));
+    const { rows: compounds } = await pool.query(
+      `SELECT compound, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = $2 AND coalesce(compound, '') <> ''
+       GROUP BY compound ORDER BY compound`,
+      [broker.agency_id, status]
     );
-    const tab = (s, label) => html`<a href="/app/units?status=${s}${mine ? "&mine=1" : ""}"${s === status ? html` aria-current="page"` : ""}>${label}</a>`;
+    const wanted = String(req.query.compound || "").trim().toLowerCase();
+    const compound = wanted ? compounds.find((c) => c.compound.toLowerCase() === wanted)?.compound || "" : "";
+    const args = [broker.agency_id, status];
+    const where = ["agency_id = $1", "status = $2"];
+    const add = (sql, v) => {
+      args.push(v);
+      where.push(sql.split("?").join(`$${args.length}`));
+    };
+    if (mine) add("broker_id = ?", broker.id);
+    if (onlyPrivate) where.push("is_private");
+    if (compound) add("compound = ?", compound);
+    if (type) add("property_type = ?", type);
+    if (furnishing) add("furnishing = ?", furnishing);
+    if (finishing) add("finishing = ?", finishing);
+    if (q) add("(code ILIKE '%' || ? || '%' OR developer_unit_code ILIKE '%' || ? || '%')", q.replace(/[%_\\]/g, (c) => `\\${c}`));
+    const cond = where.join(" AND ");
+    const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
+    const { rows } = await pool.query(
+      `SELECT * FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
+      args
+    );
+    const link = (over = {}) => {
+      const p = new URLSearchParams();
+      const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, ...over };
+      for (const [k, v] of Object.entries(all)) if (v !== "" && v !== null && v !== undefined) p.set(k, v);
+      return `/app/units?${p.toString()}`;
+    };
+    const tab = (st, label) => html`<a href="${link({ status: st, page: "" })}"${st === status ? html` aria-current="page"` : ""}>${label}</a>`;
+    const active = [compound, type, furnishing, finishing].filter(Boolean).length;
+    const opt = (v, cur, label) => html`<option value="${v}"${v === cur ? html` selected` : ""}>${label}</option>`;
+    const lab = (map, key) => (lang === "en" ? map[key][1] : map[key][0]);
+    const pages = Math.max(1, Math.ceil(total / UNITS_PAGE));
     return page(req, res, {
       title: L(lang, "الوحدات", "Units"),
       nav: "units",
@@ -134,14 +175,29 @@ ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
   ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}
 </nav>
+<form method="get" action="/app/units" class="stack" data-unit-filters>
+  <input type="hidden" name="status" value="${status}">
+  ${mine ? html`<input type="hidden" name="mine" value="1">` : ""}${onlyPrivate ? html`<input type="hidden" name="private" value="1">` : ""}
+  <div class="searchbox">${icon("search", 20)}<input name="q" value="${q}" dir="ltr" aria-label="${L(lang, "بحث بكود الوحدة", "Search by unit code")}" placeholder="${L(lang, "كود الوحدة", "Unit code")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
+  <details class="card sheet"${active ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${active ? html` <span class="chip">${active}</span>` : ""}</summary>
+  <div class="grid two">
+    <label>${L(lang, "الكمبوند", "Compound")}<input name="compound" list="unit-compounds" value="${compound}" autocomplete="off" placeholder="${L(lang, "اكتب للبحث", "Type to search")}"><datalist id="unit-compounds">${compounds.map((c) => html`<option value="${c.compound}">${c.n}</option>`)}</datalist></label>
+    <label>${L(lang, "نوع الوحدة", "Unit type")}<select name="type"><option value="">${L(lang, "الكل", "All")}</option>${PROPERTY_TYPES.map((t) => opt(t, type, lab(Describe.TYPE_LABELS, t)))}</select></label>
+    <label>${L(lang, "الفرش", "Furnishing")}<select name="furnishing"><option value="">${L(lang, "الكل", "All")}</option>${FURNISHING_STATUSES.map((t) => opt(t, furnishing, lab(Describe.FURNISHING_LABELS, t)))}</select></label>
+    <label>${L(lang, "التشطيب", "Finishing")}<select name="finishing"><option value="">${L(lang, "الكل", "All")}</option>${FINISHING_STATUSES.map((t) => opt(t, finishing, lab(Describe.FINISHING_LABELS, t)))}</select></label>
+  </div>
+  <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="${link({ q: "", compound: "", type: "", furnishing: "", finishing: "" })}">${L(lang, "مسح", "Clear")}</a></div>
+  </details>
+</form>
 <p class="row between small">
-  <a class="pill-link${mine ? " on" : ""}" href="/app/units?status=${status}${mine ? "" : "&mine=1"}"${mine ? html` aria-pressed="true"` : ""}>${icon(mine ? "check" : "leads", 16)} ${L(lang, "وحداتي بس", "Mine only")}</a>
-  ${Authz.isAgencyOwner(broker) ? html`<a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/units?status=${status}${onlyPrivate ? "" : "&private=1"}">⭐ ${L(lang, "VIP", "VIP")}</a>` : ""}
+  <a class="pill-link${mine ? " on" : ""}" href="${link({ mine: mine ? "" : "1", page: "" })}"${mine ? html` aria-pressed="true"` : ""}>${icon(mine ? "check" : "leads", 16)} ${L(lang, "وحداتي بس", "Mine only")}</a>
+  ${Authz.isAgencyOwner(broker) ? html`<a class="pill-link${onlyPrivate ? " on" : ""}" href="${link({ private: onlyPrivate ? "" : "1", page: "" })}">⭐ ${L(lang, "VIP", "VIP")}</a>` : ""}
   <a href="/app/insights">${icon("chart", 16)} ${L(lang, "أسعار المتر", "Prices per m²")}</a>
 </p>
 ${rows.length
-  ? html`<p class="muted small">${L(lang, `${rows.length} وحدة · علّم الوحدات عشان تغيّر حالتها مرة واحدة.`, `${rows.length} unit(s) · tick units to change them together.`)}</p>
+  ? html`<p class="muted small" data-total="${total}">${L(lang, `${total} وحدة${pages > 1 ? ` · صفحة ${pageNo + 1} من ${pages}` : ""} · علّم الوحدات عشان تغيّر حالتها مرة واحدة.`, `${total} unit(s)${pages > 1 ? ` · page ${pageNo + 1} of ${pages}` : ""} · tick units to change them together.`)}</p>
 <ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>
+${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn secondary" href="${link({ page: pageNo - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${pageNo + 1 < pages ? html`<a class="btn secondary" href="${link({ page: pageNo + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>` : ""}
 <form id="bulk" method="post" action="/app/units/bulk" class="bulkbar">
   <select name="action" aria-label="${L(lang, "للمختار", "Selected")}">
     <option value="available">${L(lang, "لسه متاحة (تأكيد)", "Still available (confirm)")}</option>
@@ -150,7 +206,7 @@ ${rows.length
   </select>
   <button type="submit">${L(lang, "تطبيق على المختار", "Apply to selected")}</button>
 </form>`
-  : html`<div class="card empty"><p>${L(lang, "مفيش وحدات هنا.", "No units here.")}</p><a class="btn" href="/app/units/new">${L(lang, "ضيف وحدة", "Add a unit")}</a></div>`}`
+  : html`<div class="card empty"><p data-total="0">${active || q ? L(lang, "مفيش وحدات بالشروط دي.", "No units match.") : L(lang, "مفيش وحدات هنا.", "No units here.")}</p>${active || q ? "" : html`<a class="btn" href="/app/units/new">${L(lang, "ضيف وحدة", "Add a unit")}</a>`}</div>`}`
     }, code);
   }
   web.get("/units", (req, res) => unitsList(req, res));
