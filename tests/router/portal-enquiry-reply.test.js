@@ -45,6 +45,15 @@ describe("Forwarded portal enquiry replies (routes/dispatch.js)", () => {
     expect(e.status).toBe("new");
   });
 
+  test("a new enquiry sent while the phone is awaited is saved as an enquiry, not read as the phone", async () => {
+    await h.text("manager", enquiry("503956665"));
+    const next = await h.text("manager", enquiry("503956666"));
+    expect(textOf(next)).toMatch(/اتسجل استفسار Bayut/);
+    expect(textOf(next)).not.toMatch(/الرقم مش صحيح/);
+    const rows = await h.query("SELECT listing_no FROM portal_enquiries WHERE listing_no IN ('503956665','503956666')");
+    expect(rows).toHaveLength(2);
+  });
+
   test("a repeat of the same enquiry gets the already-saved reply and no fallback", async () => {
     await h.text("manager", enquiry("503956662"));
     const again = await h.text("manager", enquiry("503956662"));
