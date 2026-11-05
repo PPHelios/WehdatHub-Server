@@ -2238,8 +2238,14 @@
     "lib/testRole.js": {
       "ROLES": "Array",
       "CRM_ADMIN_PHONE": "String",
+      "VIEW_OPEN": "Object",
       "canSwitch": ["broker", "env"],
-      "config": ["env"]
+      "canView": ["broker", "env"],
+      "asViewer": ["broker", "env"],
+      "setViewing": ["sid", "on"],
+      "isViewing": ["sid"],
+      "config": ["env"],
+      "homeAgencyOf": ["broker"]
     },
     "web/routes/testRole.js": {
       "register": ["web", "params"]
@@ -2269,6 +2275,12 @@
       "checkPlan": ["rules", "plan"],
       "feeFeatureKey": ["label"],
       "visibleFees": ["fees", "unitKeys"]
+    },
+    "lib/viewGuard.js": {
+      "runReadOnly": ["fn"],
+      "active": [],
+      "isReadOnlySql": ["text"],
+      "guardPool": ["pool"]
     }
   },
   "invariant_variable_names": {

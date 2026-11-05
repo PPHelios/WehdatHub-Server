@@ -4,6 +4,8 @@
 
 const Vis = require("../lib/visibility");
 const Authz = require("../lib/authz");
+const TestRole = require("../lib/testRole");
+const ViewGuard = require("../lib/viewGuard");
 const express = require("express");
 const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
@@ -88,6 +90,8 @@ function mountWeb(app, { pool, config }) {
     })
   );
 
+  // While the test number views another agency, every request runs read-only (see lib/viewGuard.js).
+  ViewGuard.guardPool(pool);
   const ctx = { pool, config, assets, page };
   const pages = require("./routes");
   web.use(Session.loadSession(pool));
@@ -113,6 +117,14 @@ function mountWeb(app, { pool, config }) {
   for (const p of pages.PUBLIC) p.register(web, ctx);
   const priv = express.Router();
   priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
+  // The test number viewing another agency: its data only, read-only; switching back and signing out stay open.
+  priv.use((req, res, next) => {
+    if (!(TestRole.canView(req.session.broker) && TestRole.isViewing(req.sid))) return next();
+    req.session.broker = TestRole.asViewer(req.session.broker);
+    if (TestRole.VIEW_OPEN.test(req.path)) return next();
+    if (req.method !== "GET") return res.status(403).type("text/plain").send("Read only while viewing another agency");
+    return ViewGuard.runReadOnly(() => next());
+  });
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   // Data entry: only units (add, edit, look up), search, settings and notifications. Everything else is closed to them.
