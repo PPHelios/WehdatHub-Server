@@ -116,8 +116,8 @@ function pickPrice(raw, rule) {
   const parts = clean(raw).split(/\s*(?:\/|;|\+|\s-\s|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   const cands = parts.map((part) => ({ part, v: amountOf(part) })).filter((c) => c.v && !DAILY.test(c.part));
   if (rule === "first") return cands[0]?.v ?? null;
-  // The long-term price first, else the monthly one.
-  if (rule === "long") return (cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part)) || cands.find((c) => MONTH.test(c.part)))?.v ?? null;
+  // The monthly price first, else the long-term one. The other prices stay in the description (see services/imports.js).
+  if (rule === "long") return (cands.find((c) => MONTH.test(c.part)) || cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part)))?.v ?? null;
   return null;
 }
 

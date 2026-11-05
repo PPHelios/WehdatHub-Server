@@ -207,6 +207,10 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
     const usd = price.usd ? price.value : null;
     const row = SheetImport.rowToDraft(price.value === r.cells.price_value ? r.cells : { ...r.cells, price_value: price.value });
     if (usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
+    // A cell with several prices: the price the rule did not pick is kept in the description, with the one it picked.
+    if (!price.usd && price.value !== r.cells.price_value && row.draft) {
+      row.draft.details = { ...(row.draft.details || {}), clean_summary: [row.draft.details?.clean_summary, String(r.cells.price_value).trim()].filter(Boolean).join(" · ") };
+    }
     return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd), hint: SheetImport.statusHint(r.cells) };
   });
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];

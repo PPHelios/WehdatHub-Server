@@ -5,8 +5,8 @@
 
 const { hasDelivery } = require("./delivery");
 
-const APARTMENT_LIKE = ["apartment", "duplex", "penthouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "maisonette"];
-const VILLA_LIKE = ["villa", "townhouse", "twinhouse", "i_villa", "twin_villa"];
+const APARTMENT_LIKE = ["apartment", "duplex", "penthouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette"];
+const VILLA_LIKE = ["villa", "townhouse", "twinhouse", "i_villa", "twin_villa", "maisonette"];
 const COMMERCIAL = ["office", "shop", "clinic", "commercial"];
 const PROPERTY_TYPES = [...APARTMENT_LIKE, "studio", ...VILLA_LIKE, ...COMMERCIAL, "land"];
 

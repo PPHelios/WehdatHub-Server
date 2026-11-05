@@ -258,6 +258,8 @@ function rowToDraft(input = {}) {
   const expanded = expand(Object.fromEntries(Object.entries(input).map(([k, v]) => [k, unquote(v)])));
   const cells = expanded.cells;
   const draft = { details: {} };
+  // Words from the type cell that are not the type (roof, corner, floor...) and the price text a rule did not pick go to the description.
+  const descParts = [];
   const errors = [...expanded.errors];
   const has = (k) => k in cells && !isEmpty(cells[k]);
   const code = has("code") ? digits(String(cells.code)).replace(/\s+/g, "").toUpperCase().replace(/^#/, "") : null;
@@ -269,6 +271,7 @@ function rowToDraft(input = {}) {
   if (has("property_type")) {
     draft.property_type = propertyType(cells.property_type);
     if (!draft.property_type) errors.push("property_type");
+    else if (new RegExp(TYPE_NOISE.source).test(normalizeSearch(cells.property_type))) descParts.push(String(cells.property_type).trim());
   }
   if (has("listing_type")) draft.listing_type = listingType(cells.listing_type);
   if (has("market")) draft.market = market(cells.market);
@@ -326,6 +329,7 @@ function rowToDraft(input = {}) {
     if (f) draft.finishing = f;
   }
   if (has("description")) draft.details.clean_summary = text(cells.description, 600);
+  if (descParts.length) draft.details.clean_summary = [draft.details.clean_summary, ...descParts].filter(Boolean).join(" · ");
   if (has("summary_en")) draft.details.summary_en = text(cells.summary_en, 600);
   if (has("owner_name")) draft.details.owner_name = text(cells.owner_name, 120);
   if (has("unit_no")) draft.details.unit_no = text(cells.unit_no, 40);

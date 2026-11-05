@@ -70,6 +70,14 @@ describe("the sheet's own wording (from the rejected-rows file)", () => {
     expect(SheetImport.propertyType(text)).toBe(key);
   });
 
+  test("roof and corner words from the type cell go to the description", () => {
+    const out = SheetImport.rowToDraft({ code: "TX-3", price_value: "3500000", area_value: "140", property_type: "town house corner" });
+    expect(out.draft.property_type).toBe("townhouse");
+    expect(out.draft.details.clean_summary).toContain("town house corner");
+    const roof = SheetImport.rowToDraft({ code: "TX-4", price_value: "3500000", area_value: "140", property_type: "studio with roof" });
+    expect(roof.draft.details.clean_summary).toContain("studio with roof");
+  });
+
   test("a suffix word keeps the unit's garden feature", () => {
     const out = SheetImport.rowToDraft({ code: "TX-2", price_value: "3500000", area_value: "140", property_type: "apartment with garden" });
     expect(out.draft.feature_keys).toContain("private_garden");
@@ -77,7 +85,7 @@ describe("the sheet's own wording (from the rejected-rows file)", () => {
 
   test("a cell with several prices takes the long-term or monthly one", () => {
     expect(Mixed.cellPrice("long 90k / short 100k / day 6k")).toEqual({ value: 90000, usd: false });
-    expect(Mixed.cellPrice("110k year/ 150k month / 7500day")).toEqual({ value: 110000, usd: false });
+    expect(Mixed.cellPrice("110k year/ 150k month / 7500day")).toEqual({ value: 150000, usd: false });
     expect(Mixed.cellPrice("DAY 5,290 / WEEK 4,761 / month 92,000/")).toEqual({ value: 92000, usd: false });
     expect(Mixed.cellPrice("120k monthly / every 3 months 105k long term 95k").usd).toBe(false);
   });
@@ -124,6 +132,7 @@ describe("the type lists", () => {
   test("field groups: triplex, triplex with roof, sky loft, basement and mazonette are apartment-like", () => {
     for (const key of NEW_TYPES) expect(Rules.unitKind(key)).toBe("apartment");
     expect(Rules.unitKind("villa")).toBe("villa");
+    for (const k of ["i_villa", "twin_villa", "maisonette"]) expect(Rules.unitKind(k)).toBe("villa");
     expect(Rules.unitKind("apartment")).toBe("apartment");
   });
 });
