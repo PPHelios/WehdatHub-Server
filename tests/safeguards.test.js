@@ -161,14 +161,18 @@ describe("WehdatHub Master Safeguards & Regression Guard Suite", () => {
       expect(interactiveSrc).toMatch(/session_type\s*=\s*'search_state'/);
     });
 
+    // Deletion moved to services/unitDelete.js (soft delete): the route takes the advisory lock, the service locks the row
+    // and the purge removes photos after the commit, never inside it.
+    const unitDeleteSrc = fs.readFileSync(path.join(__dirname, "..", "services", "unitDelete.js"), "utf8");
+
     test("DEL-02: Deletion confirmation must acquire 64-bit transactional advisory lock", () => {
       expect(interactiveSrc).toMatch(/pg_advisory_xact_lock/);
-      expect(interactiveSrc).toMatch(/FOR UPDATE/);
+      expect(unitDeleteSrc).toMatch(/FOR UPDATE/);
     });
 
     test("SEC-04: File purge from Supabase Storage must be asynchronous and non-blocking", () => {
-      expect(interactiveSrc).toMatch(/setImmediate/);
-      expect(interactiveSrc).toMatch(/deleteStorageFiles/);
+      expect(unitDeleteSrc).toMatch(/setImmediate/);
+      expect(unitDeleteSrc).toMatch(/deleteStorageFiles/);
     });
   });
 
