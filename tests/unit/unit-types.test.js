@@ -10,6 +10,7 @@ const UnitCode = require("../../domain/unitCode");
 const Describe = require("../../domain/describe");
 const { TYPE_TERMS } = require("../../domain/vocabulary");
 const Gallery = require("../../domain/gallery");
+const Q = require("../../domain/searchQuery");
 
 const NEW_TYPES = ["triplex", "triplex_roof", "sky_loft", "basement", "mazonette"];
 
@@ -181,5 +182,18 @@ describe("the import draft", () => {
   test("a plain apartment row does not get the garden feature", () => {
     const out = SheetImport.rowToDraft({ ...base, property_type: "apartment" });
     expect(out.draft.feature_keys || []).not.toContain("private_garden");
+  });
+});
+
+describe("search by type", () => {
+  const typesOf = (text) => Q.normalizeAiSearch(Q.fallbackParse(text)).filters.property_types;
+
+  test("a villa search returns every villa kind", () => {
+    expect(typesOf("فيلا")).toEqual(expect.arrayContaining(["villa", "i_villa", "twin_villa"]));
+    expect(typesOf("villa")).not.toContain("townhouse");
+  });
+
+  test("a new type with an underscore is searched under its own key", () => {
+    expect(typesOf("sky loft")).toEqual(["sky_loft"]);
   });
 });

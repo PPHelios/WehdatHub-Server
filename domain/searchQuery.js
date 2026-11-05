@@ -180,9 +180,11 @@ function normalizeAiSearch(raw) {
   const delivery = f.delivery || {};
   const payment = f.payment || {};
 
+  // A villa search returns every villa kind: standalone, i villa and twin villa (townhouse and twinhouse are separate).
   const types = (Array.isArray(f.property_types) ? f.property_types : [])
-    .map((t) => String(t).toLowerCase().replace(/[\s_-]/g, ""))
-    .map((t) => (t === "standalone" ? "villa" : t));
+    .map((t) => String(t).toLowerCase().replace(/[\s-]/g, ""))
+    .map((t) => (t === "standalone" ? "villa" : t))
+    .flatMap((t) => (t === "villa" ? ["villa", "i_villa", "twin_villa"] : [t]));
 
   const filters = canonical({
     code: f.code ? normalizeCode(f.code) : null,
