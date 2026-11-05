@@ -7,7 +7,7 @@ const { getConfig } = require("../../config");
 const { html } = require("../html");
 const Passkeys = require("../../services/passkeys");
 const { passkeySection } = require("./passkeys");
-const { isManager, isDataEntry } = require("../../lib/authz");
+const { isManager, isDataEntry, isCrmOwner } = require("../../lib/authz");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
 const { uploads } = require("../uploads");
@@ -54,9 +54,10 @@ function register(web, { pool, page }) {
     const key = getConfig().webPush.publicKey;
     const saved = req.query.saved === "1";
     const pushed = req.query.test;
-    const manager = isManager(broker);
+    const crm = isCrmOwner(broker); // the CRM owner is no agency member: no logo, no client-message style
+    const manager = isManager(broker) && !crm;
     const kinds = Notifications.kindsFor(broker);
-    const dataEntry = isDataEntry(broker);
+    const dataEntry = isDataEntry(broker) || crm;
     const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
     const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. ارفع PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ الرفع فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
     const passkeyNotice = { on: ["✅ اتفتحت. ضيف Passkey على الجهاز ده.", "✅ On. Add a passkey on this device."], off: ["اتقفلت، والـ Passkeys اتمسحت.", "Off; your passkeys were removed."], removed: ["الـ Passkey اتمسحت.", "Passkey removed."] }[req.query.passkey];

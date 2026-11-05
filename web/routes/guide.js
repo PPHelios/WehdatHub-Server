@@ -82,6 +82,16 @@ const SECTIONS = [
     ]
   },
   {
+    id: "crm",
+    who: "crm",
+    title: ["🛠️ لمالك التطبيق", "🛠️ For the app owner"],
+    items: [
+      ["«متابعة التطبيق» و«اللوحة»: أرقام التطبيق كله (الوكالات، الفلوس، الذكاء الاصطناعي، الأداء، جودة البحث، التشغيل). أرقام بس، من غير أسماء عملاء أو تليفونات.", "\"Tracking\" and \"Board\": numbers for the whole app (agencies, money, AI, performance, search quality, operations). Numbers only, no client names or phones."],
+      ["تنبيهات التطبيق بتوصلك لو الأخطاء زادت فجأة، أو مكالمات الذكاء الاصطناعي بتفشل، أو وكالة قربت تخلص رصيدها، أو دفعة مستنية أكتر من يوم. التنبيه الواحد مش بيتكرر قبل ٦ ساعات.", "App alerts reach you when errors jump, AI calls start failing, an agency nears the end of its credits, or a payment waits over a day. The same alert is not repeated within 6 hours."],
+      ["الأرقام دي بتتظبط من إعدادات السيرفر: SYSTEM_ALERT_ERRORS_PER_HOUR وSYSTEM_ALERT_AI_FAIL_PCT وSYSTEM_ALERT_QUOTA_PCT وSYSTEM_ALERT_PAYMENT_HOURS وSYSTEM_ALERT_COOLDOWN_HOURS.", "The numbers are server settings: SYSTEM_ALERT_ERRORS_PER_HOUR, SYSTEM_ALERT_AI_FAIL_PCT, SYSTEM_ALERT_QUOTA_PCT, SYSTEM_ALERT_PAYMENT_HOURS and SYSTEM_ALERT_COOLDOWN_HOURS."]
+    ]
+  },
+  {
     id: "managers",
     who: "manager",
     title: ["👥 للمديرين", "👥 For managers"],
@@ -133,9 +143,12 @@ function commandWords(c, lang) {
 
 /** Sections and commands a signed-in role can use: managers' pages for managers, clients for everyone but data entry. Signed out: the general ones. */
 function visibleSections(broker) {
-  return SECTIONS.filter((s) => !s.who || (s.who === "manager" ? !broker || Authz.isManager(broker) : !Authz.isDataEntry(broker)));
+  // The CRM owner is no agency member: the getting-started section and their own.
+  if (Authz.isCrmOwner(broker)) return SECTIONS.filter((s) => s.id === "start" || s.who === "crm");
+  return SECTIONS.filter((s) => (s.who === "crm" ? false : !s.who || (s.who === "manager" ? !broker || Authz.isManager(broker) : !Authz.isDataEntry(broker))));
 }
 function visibleGroups(broker) {
+  if (Authz.isCrmOwner(broker)) return [];
   return Words.grouped()
     .filter((g) => !(g.id === "leads" && Authz.isDataEntry(broker)))
     .map((g) => ({ ...g, commands: g.commands.filter((c) => !c.manager || !broker || Authz.isManager(broker)) }))
@@ -144,23 +157,24 @@ function visibleGroups(broker) {
 
 function guidePage(lang, broker = null) {
   const sections = visibleSections(broker);
+  const crm = Authz.isCrmOwner(broker);
   return html`<h1>📘 ${T(lang, ["دليل سريع", "Quick guide"])}</h1>
-<nav class="card row" aria-label="${T(lang, ["المحتوى", "Contents"])}"><a href="#commands">📖 ${T(lang, ["الأوامر", "Commands"])}</a>${sections.map((s) => html`<a href="#${s.id}">${T(lang, s.title)}</a>`)}<a href="#faq">❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</a></nav>
-<section class="card" id="commands">
+<nav class="card row" aria-label="${T(lang, ["المحتوى", "Contents"])}">${crm ? "" : html`<a href="#commands">📖 ${T(lang, ["الأوامر", "Commands"])}</a>`}${sections.map((s) => html`<a href="#${s.id}">${T(lang, s.title)}</a>`)}<a href="#faq">❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</a></nav>
+${crm ? "" : html`<section class="card" id="commands">
   <h2>📖 ${T(lang, ["أوامر البوت", "Bot commands"])}</h2>
   <p class="muted">${T(lang, ["العربي بأي طريقة كتابة (أ/ا، ة/ه، ى/ي زي بعض) والإنجليزي كابيتال أو سمول.", "English words work in any case. Arabic words work in any spelling (switch the guide to Arabic to see them)."])}</p>
   ${visibleGroups(broker).map((g) => html`<h3>${T(lang, g.title)}</h3><div class="scroll"><table data-commands="${g.id}"><tbody>${g.commands.map((c) => html`<tr><td>${commandWords(c, lang)}</td><td>${T(lang, c.help)}${c.manager ? T(lang, [" (للمديرين)", " (managers)"]) : ""}</td></tr>`)}</tbody></table></div>`)}
-</section>
+</section>`}
 ${sections.map(
   (s) => html`<section class="card" id="${s.id}">
   <h2>${T(lang, s.title)}</h2>
   <ul>${s.items.map((i) => html`<li>${T(lang, i)}</li>`)}</ul>
 </section>`
 )}
-<section class="card" id="faq">
+${crm ? "" : html`<section class="card" id="faq">
   <h2>❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</h2>
   ${FAQ.map(([q, a]) => html`<details><summary>${T(lang, q)}</summary><p>${T(lang, a)}</p></details>`)}
-</section>`;
+</section>`}`;
 }
 
 function register(web, { page }) {

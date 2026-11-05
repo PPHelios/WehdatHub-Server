@@ -74,6 +74,8 @@ ${groups.map(([g, label]) => {
   web.get("/csrf", (req, res) => res.json({ csrf: req.session.csrf }));
   web.get("/", async (req, res) => {
     const { broker, agency } = req.session;
+    // The CRM owner has no agency work to start the day with: their first page is the app's tracking.
+    if (require("../../lib/authz").isCrmOwner(broker)) return res.redirect(303, "/app/owner");
     const en = broker.preferred_lang === "en";
     const now = new Date();
     const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(() => null)]);

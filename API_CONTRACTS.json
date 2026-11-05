@@ -116,7 +116,8 @@
       "normalizeTerm": ["t"],
       "handleSearchMessage": ["broker", "text", "ctx", "params"],
       "handleButton": ["broker", "id", "ctx"],
-      "handleMore": ["broker", "ctx"]
+      "handleMore": ["broker", "ctx"],
+      "handleStatus": ["broker", "status", "ctx"]
     },
     "lib/listing.js": {
       "ROLES": "Array",
@@ -339,9 +340,11 @@
       "SNAPSHOT_MAX": "Number",
       "SEARCH_PROMPT": ["featureList"],
       "parseRequest": ["AI", "params"],
+      "SEARCH_STATUSES": "Array",
       "buildSearchQuery": ["agencyId", "parsedOrFilters", "params"],
+      "countByStatus": ["pool", "agencyId", "parsed", "status"],
       "runSearch": ["pool", "agencyId", "parsed", "params"],
-      "pageByIds": ["pool", "agencyId", "ids", "offset", "pageSize"],
+      "pageByIds": ["pool", "agencyId", "ids", "offset", "pageSize", "params"],
       "search": ["params"]
     },
     "domain/onboarding.js": {
@@ -1867,6 +1870,13 @@
       "upcoming": ["db", "manager", "params"],
       "remindDue": ["db", "params"],
       "reminderJob": []
+    },
+    "services/systemAlerts.js": {
+      "limits": [],
+      "due": ["pool", "params"],
+      "recipients": ["pool"],
+      "run": ["pool", "params"],
+      "alertJob": []
     },
     "services/targets.js": {
       "monthOf": ["now"],

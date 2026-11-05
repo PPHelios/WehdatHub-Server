@@ -47,7 +47,8 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  */
 function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "", aiOff = [] }) {
   const en = lang === "en";
-  const tab = broker ? tabOf(path, nav) : null;
+  const crm = Boolean(broker) && require("../lib/authz").isCrmOwner(broker);
+  const tab = broker ? (crm ? crmTabOf(path) : tabOf(path, nav)) : null;
   return html`<!doctype html>
 <html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}">
 <head>
@@ -70,9 +71,9 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 </head>
 <body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الوكالة"}"`) : ""}>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread, tab }) : ""}
-<main id="main">${broker ? pageBar({ nav, lang, tab, path }) : ""}${body}</main>
+<main id="main">${broker ? pageBar({ nav, lang, tab, path, crm }) : ""}${body}</main>
 ${broker ? footer(broker, lang) : ""}
-${broker ? tabBar(broker, tab, lang) : ""}
+${broker ? (crm ? crmTabBar(tab, lang) : tabBar(broker, tab, lang)) : ""}
 <div class="toast" data-toast-box role="status" aria-live="polite" hidden></div>
 </body>
 </html>`;
@@ -89,11 +90,11 @@ function screenTip(nav, lang) {
 }
 
 /** One slim row above the page: Back on pages below a bottom-bar place, and the screen's "?" tip. */
-function pageBar({ nav, lang, tab, path }) {
+function pageBar({ nav, lang, tab, path, crm = false }) {
   const en = lang === "en";
   // A bottom-bar place has no Back, except search results (Back returns to the search form).
   const [bare, query = ""] = String(path || "").split("?");
-  const root = TAB_ROOTS.has(bare.replace(/\/+$/, "") || "/app") && !(nav === "search" && /(^|&)(q|f)=/.test(query));
+  const root = (crm ? CRM_ROOTS : TAB_ROOTS).has(bare.replace(/\/+$/, "") || "/app") && !(nav === "search" && /(^|&)(q|f)=/.test(query));
   const back = nav && !root ? html`<a class="backlink" data-back href="${BACK[nav] || "/app/"}">${require("./icons").icon("back", 18)} ${en ? "Back" : "رجوع"}</a>` : "";
   const tip = nav ? screenTip(nav, lang) : "";
   return back || tip ? html`<div class="pagebar">${back}${tip}</div>` : "";
@@ -142,8 +143,12 @@ const DATA_ENTRY_BAR = [
   { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings" }
 ];
 
+// The CRM owner (OWNER_BROKER_IDS) is not part of any agency: their menu is the app-tracking pages and their account.
+const CRM_NAV = new Set(["owner", "settings", "notifications", "guide"]);
+
 function navFor(broker) {
   const Dash = require("../services/dashboards");
+  if (require("../lib/authz").isCrmOwner(broker)) return NAV.filter((n) => CRM_NAV.has(n.key));
   if (require("../lib/authz").isDataEntry(broker)) return NAV.filter((n) => DATA_ENTRY_NAV.has(n.key));
   return NAV.filter((n) => !n.who || (n.who === "manager" ? Dash.isManager(broker) : Dash.isOwner(broker)));
 }
@@ -184,6 +189,33 @@ function tabBar(broker, tab, lang) {
     t.fab
       ? html`<a class="fab" href="${t.href}" aria-label="${en ? t.en : t.ar}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon, 28)}</a>`
       : html`<a href="${t.href}" data-tab="${t.key}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon)}<span>${en ? t.en : t.ar}</span></a>`
+  )}</nav>`;
+}
+
+// The CRM owner's own bottom bar: Tracking · Board · Alerts · Settings.
+const CRM_BAR = [
+  { key: "owner", href: "/app/owner", ar: "المتابعة", en: "Tracking", icon: "chart" },
+  { key: "board", href: "/app/owner/board", ar: "اللوحة", en: "Board", icon: "gauge" },
+  { key: "alerts", href: "/app/notifications", ar: "التنبيهات", en: "Alerts", icon: "bell" },
+  { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings" }
+];
+const CRM_ROOTS = new Set(["/app", "/app/owner", "/app/owner/board", "/app/notifications", "/app/settings", "/app/more"]);
+
+/** Which place of the CRM owner's bar a page belongs to. */
+function crmTabOf(path) {
+  const p = String(path || "").split("?")[0].replace(/\/+$/, "") || "/app";
+  if (/^\/app\/owner\/board(\/|$)/.test(p)) return "board";
+  if (p === "/app" || /^\/app\/owner(\/|$)/.test(p)) return "owner";
+  if (/^\/app\/notifications(\/|$)/.test(p)) return "alerts";
+  if (/^\/app\/settings(\/|$)/.test(p)) return "settings";
+  return "more";
+}
+
+function crmTabBar(tab, lang) {
+  const en = lang === "en";
+  const { icon } = require("./icons");
+  return html`<nav class="tabbar crm" aria-label="${en ? "Main" : "القائمة الرئيسية"}">${CRM_BAR.map(
+    (t) => html`<a href="${t.href}" data-tab="${t.key}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon)}<span>${en ? t.en : t.ar}</span></a>`
   )}</nav>`;
 }
 
