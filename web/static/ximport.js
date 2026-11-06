@@ -35,8 +35,10 @@
       var zip = await ZipRead.open(file);
       var wb = await XlsxRead.readWorkbook(zip, {
         onProgress: function (p) {
-          bar.value = (p.done + 1) / Math.max(1, p.total);
-          if (p.total > 1 && p.name) say(TEXT.reading + " " + TEXT.tab + " " + (p.done + 1) + " " + TEXT.of + " " + p.total + " (" + p.name + ")");
+          // The bar and the message follow the rows of the whole workbook, with the tab being read.
+          var pct = p.rowsTotal ? Math.min(100, Math.round((p.rowsDone / p.rowsTotal) * 100)) : 0;
+          bar.value = p.rowsTotal ? p.rowsDone / p.rowsTotal : 0;
+          if (p.name) say(TEXT.reading + " " + pct + "% (" + TEXT.tab + " " + (p.tabsDone + 1) + " " + TEXT.of + " " + p.tabsTotal + ": " + p.name + ")");
         }
       });
       if (!wb.tabs.length) {

@@ -52,13 +52,14 @@
   };
 
   /** One sheet's XML → the rows that have values: [{ n: sheet row number, v: [value | null, …] }] (column A first). */
-  function parseSheet(xml, shared) {
+  function parseSheet(xml, shared, onRow) {
     const rows = [];
     const rowRe = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g;
     let rm;
     let seq = 0;
     while ((rm = rowRe.exec(xml))) {
       seq++;
+      if (onRow && seq % 100 === 0) onRow(seq);
       if (!rm[2]) continue;
       const rAttr = /\br="(\d+)"/.exec(rm[1]);
       const n = rAttr ? Number(rAttr[1]) : seq;
@@ -108,7 +109,7 @@
   /**
    * Every visible tab of a workbook.
    * @param {{ entries, text }} zip - ZipRead.open(blob)
-   * @param {{ onProgress?: (info: { done: number, total: number, name: string }) => void }} opts
+   * @param {{ onProgress?: (info: { tabsDone: number, tabsTotal: number, rowsDone: number, rowsTotal: number, name: string }) => void }} opts
    * @returns {Promise<{ tabs: { name: string, rows: { n: number, v: any[] }[] }[], skipped: { name: string, reason: string }[] }>}
    * @throws {Error} code NOT_XLSX
    */
@@ -124,12 +125,11 @@
     const shared = ssEntry ? sharedStrings(await zip.text(ssEntry)) : [];
 
     const sheets = [...wbXml.matchAll(/<sheet\b[^>]*>/g)].map((m) => ({ name: attr(m[0], "name") || "", rid: attr(m[0], "r:id"), state: attr(m[0], "state") || "visible" }));
-    const tabs = [];
     const skipped = [];
-    let done = 0;
+    // First pass: find every tab to read and count its rows, so progress is per row of the whole workbook.
+    const plan = [];
+    let rowsTotal = 0;
     for (const s of sheets) {
-      onProgress?.({ done, total: sheets.length, name: s.name });
-      done++;
       if (s.state !== "visible") {
         skipped.push({ name: s.name, reason: "hidden" });
         continue;
@@ -144,11 +144,26 @@
         skipped.push({ name: s.name, reason: "too_big" });
         continue;
       }
-      const rows = parseSheet(await zip.text(entry), shared);
-      if (rows.length) tabs.push({ name: s.name, rows });
-      else skipped.push({ name: s.name, reason: "empty" });
+      onProgress?.({ tabsDone: plan.length, tabsTotal: sheets.length, rowsDone: 0, rowsTotal: 0, name: s.name });
+      const xml = await zip.text(entry);
+      const rowsInTab = (xml.match(/<row\b/g) || []).length;
+      rowsTotal += rowsInTab;
+      plan.push({ name: s.name, xml, rowsInTab });
     }
-    onProgress?.({ done: sheets.length, total: sheets.length, name: "" });
+    // Second pass: parse each tab; progress reports the rows read so far across the whole workbook.
+    const tabs = [];
+    let rowsBefore = 0;
+    for (let i = 0; i < plan.length; i++) {
+      const t = plan[i];
+      const rows = parseSheet(t.xml, shared, function (seq) {
+        onProgress?.({ tabsDone: i, tabsTotal: plan.length, rowsDone: rowsBefore + Math.min(seq, t.rowsInTab), rowsTotal, name: t.name });
+      });
+      rowsBefore += t.rowsInTab;
+      if (rows.length) tabs.push({ name: t.name, rows });
+      else skipped.push({ name: t.name, reason: "empty" });
+      t.xml = null;
+    }
+    onProgress?.({ tabsDone: plan.length, tabsTotal: plan.length, rowsDone: rowsTotal, rowsTotal, name: "" });
     return { tabs, skipped };
   }
 

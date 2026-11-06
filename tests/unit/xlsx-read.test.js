@@ -25,10 +25,16 @@ async function workbook() {
 test("every visible tab with data is read; hidden and empty tabs are reported, not read", async () => {
   const zip = await ZipRead.open(new Blob([await workbook()]));
   const seen = [];
-  const out = await XlsxRead.readWorkbook(zip, { onProgress: (p) => seen.push(p.done) });
+  const out = await XlsxRead.readWorkbook(zip, { onProgress: (p) => seen.push(p) });
   expect(out.tabs.map((t) => t.name)).toEqual(["Villette", "Mivida"]);
   expect(out.skipped).toEqual([{ name: "Sheet103", reason: "hidden" }, { name: "Empty", reason: "empty" }]);
+  // Progress counts rows across the whole workbook: it never goes back, and ends with every row read.
   expect(seen.length).toBeGreaterThan(1);
+  const rowsDone = seen.map((p) => p.rowsDone);
+  expect([...rowsDone].sort((a, b) => a - b)).toEqual(rowsDone);
+  const last = seen[seen.length - 1];
+  expect(last.rowsDone).toBe(last.rowsTotal);
+  expect(last.tabsDone).toBe(last.tabsTotal);
 });
 
 test("cells keep their column and row, text is decoded, numbers stay numbers, blank rows are dropped, formulas give their result", async () => {
