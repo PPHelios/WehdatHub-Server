@@ -127,6 +127,25 @@ describe("turns on Telegram", () => {
     expect(h.TG.outbox.filter((e) => e.method === "sendMessage").length).toBe(h.TG.outbox.slice(0, n).filter((e) => e.method === "sendMessage").length);
   });
 
+  test("boot also replays a turn a restart cut off (stuck 'processing'), once, and leaves a live one alone", async () => {
+    await h.tgLink("broker");
+    const mk = (n) => ({ id: `tg:${h.TG_IDS.broker}:${n}`, from: `tg:${h.TG_IDS.broker}`, type: "text", text: { body: "مساعدة" } });
+    const stuck = mk(910);
+    const live = mk(911);
+    await h.query("INSERT INTO inbound_messages (msg_id, phone_key, payload, status, received_at, updated_at) VALUES ($1, $2, $3, 'processing', NOW() - INTERVAL '5 minutes', NOW() - INTERVAL '5 minutes')", [stuck.id, `tg:${h.TG_IDS.broker}`, JSON.stringify(stuck)]);
+    await h.query("INSERT INTO inbound_messages (msg_id, phone_key, payload, status, received_at, updated_at) VALUES ($1, $2, $3, 'processing', NOW(), NOW())", [live.id, `tg:${h.TG_IDS.broker}`, JSON.stringify(live)]);
+    await h.app.bootRecovery();
+    await settle(10);
+    const rows = await h.query("SELECT msg_id, status, attempts FROM inbound_messages WHERE msg_id IN ($1, $2) ORDER BY msg_id", [stuck.id, live.id]);
+    expect(rows.find((r) => r.msg_id === stuck.id)).toMatchObject({ status: "batched", attempts: 1 });
+    expect(rows.find((r) => r.msg_id === live.id)).toMatchObject({ status: "processing", attempts: 0 });
+    expect(h.TG.outbox.filter((e) => e.method === "sendMessage" && e.chatId === String(h.TG_IDS.broker)).length).toBe(1);
+    // A second boot does not replay it again.
+    await h.app.bootRecovery();
+    await settle(10);
+    expect(h.TG.outbox.filter((e) => e.method === "sendMessage" && e.chatId === String(h.TG_IDS.broker)).length).toBe(1);
+  });
+
   test("boot replays a pending Telegram turn to the linked chat", async () => {
     await h.tgLink("broker");
     const msg = { id: `tg:${h.TG_IDS.broker}:900`, from: `tg:${h.TG_IDS.broker}`, type: "text", text: { body: "مساعدة" } };
