@@ -11,6 +11,7 @@ const DELETE_BATCH = 200;
 
 // Every place a stored file's path or link can be kept. A file is in use if any of these mention its name.
 const REFERENCES = `
+  /* vis:exempt: the check must see every unit and project of every agency, private or not */
   SELECT url::text AS u FROM listing_images UNION ALL SELECT flyer_url FROM listings UNION ALL SELECT logo_url FROM agencies
   UNION ALL SELECT url FROM project_images UNION ALL SELECT storage_path FROM project_images
   UNION ALL SELECT url FROM project_materials UNION ALL SELECT storage_path FROM project_materials
