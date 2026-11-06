@@ -98,8 +98,9 @@ test("the one-day filter keeps only what changed in the last 24 hours, and repea
   const rep = (await owner.agent.get("/app/owner/searches?view=repeat&period=7d&lang=en")).text;
   expect(rep).toContain("same search");
   expect(rep).toMatch(/data-repeat[\s\S]*<td>3<\/td>/);
+  // All handled needs a saved test case first (re-check gate): without one the searches stay open.
   await post(owner, "/app/owner/searches/repeat", { text: "same search" });
-  expect((await h.query("SELECT count(*)::int AS n FROM search_log WHERE query_text = 'Same Search' AND audit_resolved_at IS NULL"))[0].n).toBe(0);
+  expect((await h.query("SELECT count(*)::int AS n FROM search_log WHERE query_text = 'Same Search' AND audit_resolved_at IS NULL"))[0].n).toBe(3);
 });
 
 test("a Wrong-search report is closed as fixed or ignored from the queue", async () => {
