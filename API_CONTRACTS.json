@@ -2315,7 +2315,8 @@
       "resolveText": ["pool", "text"],
       "addCase": ["pool", "logId", "ownerId"],
       "cases": ["pool", "params"],
-      "removeCase": ["pool", "id"]
+      "removeCase": ["pool", "id"],
+      "editWord": ["pool", "id", "params"]
     },
     "web/routes/accessRequests.js": {
       "register": ["web", "params"]

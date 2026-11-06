@@ -9,6 +9,8 @@ const TYPES = {
   differ: `jsonb_array_length(s.audit->'disagree') > 0`,
   missed: `jsonb_array_length(s.audit->'missed_ids') > 0`
 };
+const { normalizeSearch } = require("../domain/searchText");
+
 const DAY = 24 * 3600 * 1000;
 
 /** The time window a list uses: the period, or just the last 24 hours when the "changed in the last day" filter is on. */
@@ -131,10 +133,34 @@ async function cases(pool, { q = "", offset = 0, limit = 20 }) {
   return { rows, total: rows[0]?.n || 0 };
 }
 
+const KINDS = ["type", "feature", "place"];
+
+/**
+ * Corrects a pending word before it is approved: its spelling (term), its kind (type, feature, or place = a compound or
+ * area) and what it means (target). → { ok } | { error }
+ */
+async function editWord(pool, id, { term, kind, target }) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return { error: "not_found" };
+  const t = normalizeSearch(String(term || "")).slice(0, 80);
+  const k = KINDS.includes(kind) ? kind : null;
+  const g = normalizeSearch(String(target || "")).slice(0, 80);
+  if (!t || !k || !g) return { error: "invalid" };
+  try {
+    const r = await pool.query(
+      "UPDATE search_aliases SET term = $2, kind = $3, target = $4, updated_at = now() WHERE id = $1 AND status = 'pending'",
+      [id, t, k, g]
+    );
+    return r.rowCount ? { ok: true } : { error: "not_found" };
+  } catch (err) {
+    if (err.code === "23505") return { error: "duplicate" };
+    throw err;
+  }
+}
+
 /** Removes a test case. */
 async function removeCase(pool, id) {
   const r = await pool.query("DELETE FROM search_test_cases WHERE id = $1", [id]);
   return r.rowCount > 0;
 }
 
-module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, resolveText, addCase, cases, removeCase };
+module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, resolveText, addCase, cases, removeCase, editWord };
