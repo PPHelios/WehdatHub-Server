@@ -76,7 +76,7 @@ function register(web, { pool, page }) {
     return handler(req, res, langOf(req));
   };
   const tabOf = (v) => (AdminBoard.TABS.includes(v) ? v : "overview");
-  const daysOf = (v) => (AdminBoard.PERIODS.includes(Number(v)) ? Number(v) : 30);
+  const daysOf = (v) => (AdminBoard.PERIODS.includes(Number(v)) ? Number(v) : 7);
 
   const boardView = async (req, res, lang, { notice = null, status = 200, tab: tabIn = req.query.tab, days: daysIn = req.query.days } = {}) => {
     const tab = tabOf(tabIn);
@@ -87,7 +87,8 @@ function register(web, { pool, page }) {
     const csrf = req.session.csrf;
     const money = tab === "money" ? await AdminBoard.listFixedCosts(pool) : [];
     const nav = AdminBoard.TABS.map((t) => html`<a href="${link(t, days, agency)}"${t === tab ? html` aria-current="page"` : ""}>${L(lang, TAB_LABELS[t][0], TAB_LABELS[t][1])}</a>`);
-    const periods = AdminBoard.PERIODS.map((d) => html`<a href="${link(tab, d, agency)}"${d === days ? html` aria-current="page"` : ""}>${d} ${L(lang, "يوم", "days")}</a>`);
+    const PERIOD_LABEL = { 1: [L(lang, "إمبارح", "Yesterday"), 1], 7: [L(lang, "٧ أيام", "7 days"), 7], 30: [L(lang, "الشهر", "Month"), 30] };
+    const periods = AdminBoard.PERIODS.map((d) => html`<a href="${link(tab, d, agency)}"${d === days ? html` aria-current="page"` : ""} data-period="${d}">${PERIOD_LABEL[d][0]}</a>`);
     const body = stored ? tabBody(tab, stored.data, lang, { agency }) : html`<p class="muted">${L(lang, "الرقم لسه متحسبش. دوس تحديث.", "Not computed yet. Press refresh.")}</p>`;
     const fixed = tab === "money" ? html`<section class="card" id="fixed-costs">
   <h3>${L(lang, "تكاليف ثابتة", "Fixed costs")}</h3>

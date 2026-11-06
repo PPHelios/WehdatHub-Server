@@ -10,7 +10,8 @@ const Vis = require("../lib/visibility");
 
 const DAY = 24 * 3600 * 1000;
 const TABS = ["overview", "money", "ai", "performance", "search", "agencies", "operations"];
-const PERIODS = [7, 30, 90];
+// Yesterday (the last 24 hours), 7 days, Month (30 days). Each is stored once per tab.
+const PERIODS = [1, 7, 30];
 const REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 
 const usdToEgp = () => Number(process.env.ADMIN_USD_EGP) > 0 ? Number(process.env.ADMIN_USD_EGP) : 60;
