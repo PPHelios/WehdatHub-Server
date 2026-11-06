@@ -7,3 +7,4 @@ CREATE TABLE IF NOT EXISTS search_test_cases (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS search_test_cases_text ON search_test_cases (lower(trim(query_text)));
+ALTER TABLE search_test_cases ENABLE ROW LEVEL SECURITY;
