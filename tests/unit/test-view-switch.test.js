@@ -66,6 +66,8 @@ test("the guard blocks writes inside a view request and allows them outside", as
 
 test("rate limits are not written while viewing (read-only); they still count normally outside", async () => {
   const RateLimit = require("../../lib/rateLimit");
+  // The limiter sweeps old rows on 2% of hits; pin the dice so the count of queries is exact.
+  jest.spyOn(Math, "random").mockReturnValue(0.5);
   const calls = [];
   const pool = { query: async (sql) => { calls.push(sql); return { rows: [{ hits: 1 }] }; } };
   const viewed = await ViewGuard.runReadOnly(() => RateLimit.hit(pool, "search:x", { limit: 5, windowSec: 60 }));
@@ -74,4 +76,5 @@ test("rate limits are not written while viewing (read-only); they still count no
   const normal = await RateLimit.hit(pool, "search:x", { limit: 5, windowSec: 60 });
   expect(normal.allowed).toBe(true);
   expect(calls.length).toBe(1);
+  Math.random.mockRestore();
 });

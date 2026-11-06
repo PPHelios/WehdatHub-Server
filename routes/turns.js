@@ -186,11 +186,14 @@ function createTurnPipeline({ pool, config, tapGuard, state }) {
   async function bootRecovery() {
     try {
       // Claimed in one statement (new → batched), so two instances booting together never replay the same row.
-      // Only `new` rows of the last 15 minutes: `batched` ones belong to a live turn, older ones are stale.
+      // Rows of the last 15 minutes that were never finished: `new` ones, and `processing` ones left by a restart
+      // (a live turn updates its row within seconds, so a minute of silence means the turn died). Each row is replayed
+      // once (attempts < 2); `batched` ones belong to a turn already replaying, older ones are stale.
       const { rows: pending } = await pool.query(
         `WITH claimed AS (
            UPDATE inbound_messages SET status = 'batched', attempts = attempts + 1, updated_at = NOW()
-           WHERE status = 'new' AND received_at >= NOW() - INTERVAL '15 minutes'
+           WHERE (status = 'new' OR (status = 'processing' AND updated_at < NOW() - INTERVAL '60 seconds'))
+             AND attempts < 2 AND received_at >= NOW() - INTERVAL '15 minutes'
            RETURNING msg_id, phone_key, payload, received_at
          )
          SELECT msg_id, phone_key, payload FROM claimed ORDER BY received_at`
