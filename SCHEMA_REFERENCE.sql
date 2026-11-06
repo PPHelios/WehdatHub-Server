@@ -1910,7 +1910,6 @@ CREATE INDEX brokers_team_lead ON public.brokers USING btree (agency_id, team_le
 CREATE UNIQUE INDEX brokers_telegram_user_uidx ON public.brokers USING btree (telegram_user_id) WHERE (telegram_user_id IS NOT NULL);
 CREATE INDEX idx_catalogue_updates_agency ON public.catalogue_updates USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_commissions_agency_status ON public.commissions USING btree (agency_id, status);
-CREATE INDEX idx_commissions_developer ON public.commissions USING btree (developer_id);
 CREATE INDEX idx_compare_links_broker ON public.compare_links USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
 CREATE INDEX idx_credit_requests_status ON public.credit_requests USING btree (status, created_at);
@@ -1930,7 +1929,6 @@ CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree 
 CREATE INDEX idx_lead_events_lead ON public.lead_events USING btree (lead_id, created_at DESC, id DESC);
 CREATE INDEX lead_intake_log_agency_idx ON public.lead_intake_log USING btree (agency_id, received_at DESC);
 CREATE UNIQUE INDEX lead_intake_log_external_idx ON public.lead_intake_log USING btree (intake_id, external_id) WHERE ((external_id IS NOT NULL) AND (outcome = ANY (ARRAY['created'::text, 'merged'::text, 'colleague'::text])));
-CREATE INDEX lead_intake_log_intake_idx ON public.lead_intake_log USING btree (intake_id, received_at DESC);
 CREATE INDEX lead_intakes_agency_idx ON public.lead_intakes USING btree (agency_id);
 CREATE INDEX idx_lead_matches_lead ON public.lead_matches USING btree (lead_id, created_at DESC);
 CREATE INDEX idx_lead_matches_listing ON public.lead_matches USING btree (agency_id, listing_id);
@@ -1945,7 +1943,6 @@ CREATE INDEX leads_flagged ON public.leads USING btree (agency_id, flagged_at) W
 CREATE INDEX leads_private ON public.leads USING btree (agency_id) WHERE is_private;
 CREATE INDEX idx_leases_agency ON public.leases USING btree (agency_id);
 CREATE INDEX leases_tenant_lead_idx ON public.leases USING btree (tenant_lead_id) WHERE (tenant_lead_id IS NOT NULL);
-CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
 CREATE INDEX listing_images_agency_phash_idx ON public.listing_images USING btree (agency_id) WHERE (phash IS NOT NULL);
 CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");
@@ -1982,7 +1979,6 @@ CREATE INDEX idx_notifications_due ON public.notifications USING btree (deliver_
 CREATE INDEX idx_notifications_inbox ON public.notifications USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_notifications_unread ON public.notifications USING btree (broker_id) WHERE (read_at IS NULL);
 CREATE INDEX idx_op_logs_agency_date ON public.operation_logs USING btree (agency_id, created_at);
-CREATE INDEX idx_op_logs_listing_code ON public.operation_logs USING btree (listing_code);
 CREATE INDEX idx_operation_logs_agency_type_created ON public.operation_logs USING btree (agency_id, operation_type, created_at DESC);
 CREATE INDEX idx_operation_logs_broker_created ON public.operation_logs USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_operation_logs_wa_outbound ON public.operation_logs USING btree (created_at, agency_id, broker_id) WHERE (operation_type = 'wa_outbound'::text);
@@ -2003,7 +1999,6 @@ CREATE INDEX idx_project_materials_check ON public.project_materials USING btree
 CREATE INDEX idx_project_materials_project ON public.project_materials USING btree (project_id, created_at);
 CREATE UNIQUE INDEX uq_project_phases_name ON public.project_phases USING btree (project_id, lower(btrim(name)));
 CREATE INDEX idx_project_plans_project ON public.project_plans USING btree (project_id, "position");
-CREATE INDEX idx_projects_developer ON public.projects USING btree (agency_id, developer_id);
 CREATE UNIQUE INDEX uq_projects_agency_lower_name ON public.projects USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING btree (broker_id);
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
@@ -2011,14 +2006,12 @@ CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (age
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX search_aliases_status ON public.search_aliases USING btree (status, agreed DESC);
 CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id, created_at DESC);
-CREATE INDEX search_log_disagree ON public.search_log USING btree (created_at DESC) WHERE (cardinality(disagree) > 0);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
 CREATE UNIQUE INDEX search_test_cases_text ON public.search_test_cases USING btree (lower(TRIM(BOTH FROM query_text)));
 CREATE INDEX share_link_opens_token_idx ON public.share_link_opens USING btree (token_hash, opened_at DESC);
 CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
-CREATE INDEX share_links_recipient_idx ON public.share_links USING btree (agency_id, recipient_phone) WHERE (recipient_phone IS NOT NULL);
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);
 CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USING btree (broker_id);
 CREATE INDEX unit_access_requests_listing ON public.unit_access_requests USING btree (agency_id, listing_id, broker_id, created_at DESC);

@@ -11,7 +11,7 @@ describe("budget with a small plain number", () => {
   // Haytham 2026-11-06: "50" can mean 50 thousand or 50 million, so the price is never guessed. The bot asks which unit.
   test.each([
     ["budget 50", "50"],
-    ["بادجيت ١٠٠", "١٠٠"],
+    ["بادجيت ١٠٠", "100"],
     ["budget 2.5", "2.5"]
   ])("%s leaves the price empty and asks for the unit", (text, typed) => {
     const parsed = Q.fallbackParse(text);

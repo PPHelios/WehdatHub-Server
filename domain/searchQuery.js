@@ -654,7 +654,9 @@ function fallbackParse(text) {
   if (f.price_max === null && f.price_min === null) {
     c = consume(hay, /(?:budget|بادجيت|بادجت|بدجت|بودجت|بودجيت|ميزانيه|ميزانيتي|الميزانيه|الميزانيتي) (\d{1,3}(?:\.\d+)?)(?![\d.])(?! ?(?:مليون|million|m|الف|ألف|k|thousand|م|دولار|dollars?|usd|\$|جنيه|egp|يورو|eur))/);
     if (c.m) {
-      const typed = c.m[1];
+      // The normalised text drops the dot, so read a decimal ('2.5') from the raw message.
+      const decimal = /(?:budget|بادجيت|بادجت|بدجت|بودجت|بودجيت|ميزانيه|ميزانيتي|الميزانيه|الميزانيتي)\s*(\d{1,3}\.\d{1,2})(?!\d)/i.exec(raw);
+      const typed = decimal ? decimal[1] : c.m[1];
       const thousands = `${typed} ألف`;
       const millions = `${typed} مليون`;
       budgetAsk.push({ typed, kind: "budget", options: f.listing_type === "sale" ? [millions, thousands] : [thousands, millions] });
