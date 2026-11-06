@@ -450,7 +450,7 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
   ${requests.length
     ? html`<ul>${requests.map(
         (r) => html`<li data-request="${r.id}">${Card.requestSummary(r.filters, lang)} · <a href="/app/search?f=${SearchLink.encodeFilters(r.filters)}">🏠 ${r.matches.total} ${L(lang, "وحدة مناسبة", "fit now")}</a>${r.alerts_enabled ? ` · 🔔` : ""}
-  <form method="post" action="${path}/requests/delete" class="inline">${hidden}<input type="hidden" name="request" value="${r.id}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Remove")}</button></form>
+  <form method="post" action="${path}/requests/delete" class="inline" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}">${hidden}<input type="hidden" name="request" value="${r.id}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Remove")}</button></form>
   ${r.matches.rows.length
     ? html`<ul>${r.matches.rows.slice(0, 3).map(
         (u) => html`<li data-match="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a> <form method="post" action="${path}/send" class="inline" target="_blank">${hidden}<input type="hidden" name="code" value="${u.code}"><button type="submit" class="link">💬 ${L(lang, "ابعت للعميل", "Send to client")}</button></form> ${tip(templatesFor(clientLangOf(lead, lang)).unit, lang)}</li>`

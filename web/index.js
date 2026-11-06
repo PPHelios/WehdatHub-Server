@@ -11,6 +11,7 @@ const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
 const Session = require("./session");
 const Audit = require("../services/audit");
+const RequestIds = require("../lib/requestIds");
 const { html, layout, withCsrf } = require("./html");
 const Notifications = require("../lib/notifications");
 const ErrorReports = require("../lib/errorReports");
@@ -119,6 +120,8 @@ function mountWeb(app, { pool, config }) {
   for (const p of pages.PUBLIC) p.register(web, ctx);
   const priv = express.Router();
   priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
+  // A repeated one-time request ID (double tap, retry, re-sent form) is answered without running the action again.
+  priv.use(RequestIds.middleware);
   // The test number viewing another agency: its data only, read-only; switching back and signing out stay open.
   priv.use((req, res, next) => {
     if (!(TestRole.canView(req.session.broker) && TestRole.isViewing(req.sid))) return next();

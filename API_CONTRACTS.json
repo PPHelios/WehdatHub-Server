@@ -824,6 +824,12 @@
     "web/routes/activityLog.js": {
       "register": ["web", "params"]
     },
+    "lib/requestIds.js": {
+      "TTL_MS": "Number",
+      "repeated": ["brokerId", "id", "now"],
+      "middleware": ["req", "res", "next"],
+      "reset": []
+    },
     "services/storageCheck.js": {
       "BUCKET": "String",
       "MIN_AGE_DAYS": "Number",

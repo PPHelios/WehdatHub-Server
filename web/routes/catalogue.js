@@ -72,7 +72,7 @@ function plansReadSection(lang, project, reading, query = {}) {
       </div>
       <p class="muted">${planLine(pl, lang)}</p></fieldset>`)}
     <div class="row"><button type="submit">${L(lang, "احفظ المعلّم", "Save ticked plans")}</button>
-    <button type="submit" class="secondary" formaction="${base}/plans/draft/discard">${L(lang, "تجاهل", "Discard")}</button></div>
+    <button type="submit" class="secondary" formaction="${base}/plans/draft/discard" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}">${L(lang, "تجاهل", "Discard")}</button></div>
   </form>`
     : "";
   const form = reading?.enabled
@@ -387,7 +387,7 @@ ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة
 `;
   const unitsTab = html`<section class="card" id="units">
   <h2>🏠 ${L(lang, "وحدات المشروع", "Project units")} (${units.length})</h2>
-  ${units.length ? html`<ul>${units.map((u) => html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a>${u.developer_unit_code ? ` · ${u.developer_unit_code}` : ""}${u.phase_id ? ` · ${phaseName(u.phase_id) || ""}` : ""} · ${u.status}${manager ? html` <form method="post" action="${base}/units/${u.id}/unlink" class="inline"><button type="submit" class="link">${L(lang, "شيلها من المشروع", "Remove from project")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش وحدات مربوطة بالمشروع.", "No units linked yet.")}</p>`}
+  ${units.length ? html`<ul>${units.map((u) => html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a>${u.developer_unit_code ? ` · ${u.developer_unit_code}` : ""}${u.phase_id ? ` · ${phaseName(u.phase_id) || ""}` : ""} · ${u.status}${manager ? html` <form method="post" action="${base}/units/${u.id}/unlink" class="inline" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}"><button type="submit" class="link">${L(lang, "شيلها من المشروع", "Remove from project")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش وحدات مربوطة بالمشروع.", "No units linked yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/units" class="stack" data-link-units>
     <label>${L(lang, "اربط وحدات بأكوادها (مسافة أو فاصلة بينهم)", "Link units by code (space or comma between)")} <input name="codes" required dir="ltr"></label>
     ${phases.length ? html`<label>${L(lang, "المرحلة", "Phase")} <select name="phase_id"><option value="">—</option>${phases.map((ph) => html`<option value="${ph.id}">${ph.name}</option>`)}</select></label>` : ""}

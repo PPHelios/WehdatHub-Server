@@ -22,8 +22,34 @@
   document.addEventListener("DOMContentLoaded", function () { grayOutAi(document); });
   document.addEventListener("htmx:afterSwap", function (e) { grayOutAi(e.target || document); });
   var meta = document.querySelector('meta[name="csrf-token"]');
+  // One-time request IDs: each action carries an ID, so the server runs a repeat of it (double tap, retry) only once.
+  function newRid() {
+    var a = new Uint8Array(12);
+    (window.crypto || window.msCrypto).getRandomValues(a);
+    var s = "";
+    for (var i = 0; i < a.length; i++) s += ("0" + a[i].toString(16)).slice(-2);
+    return s;
+  }
   document.addEventListener("htmx:configRequest", function (e) {
     if (meta) e.detail.headers["X-CSRF-Token"] = meta.content;
+    var m = (e.detail.verb || "").toLowerCase();
+    if (m && m !== "get" && e.detail.elt) {
+      if (!e.detail.elt.__rid) e.detail.elt.__rid = newRid();
+      e.detail.headers["X-Request-Id"] = e.detail.elt.__rid;
+    }
+  });
+  // A finished request frees its ID, so the next real action on the same button is a new one.
+  document.addEventListener("htmx:afterRequest", function (e) { if (e.detail && e.detail.elt) e.detail.elt.__rid = null; });
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || !form.getAttribute || (form.getAttribute("method") || "").toLowerCase() !== "post" || form.hasAttribute("hx-post")) return;
+    var f = form.querySelector("input[name=_rid]");
+    if (!f) { f = document.createElement("input"); f.type = "hidden"; f.name = "_rid"; form.appendChild(f); }
+    if (!f.value) f.value = newRid();
+  }, true);
+  window.addEventListener("pageshow", function () {
+    var all = document.querySelectorAll("input[name=_rid]");
+    for (var i = 0; i < all.length; i++) all[i].value = "";
   });
   // A page left open: when it comes back into view, take the session's current token (a sign-in elsewhere in this
   // browser replaces it) or go to sign-in and back here once the session has ended.
@@ -449,7 +475,11 @@
     function mainTarget() {
       var all = document.querySelectorAll("[data-tg-main]");
       for (var i = 0; i < all.length; i++) if (shown(all[i])) return all[i];
-      return null;
+      // No marked button: a page with exactly one primary save button in a POST form gets it as the Main button.
+      var subs = document.querySelectorAll("main form[method=post] button[type=submit]:not(.secondary):not(.link):not(.danger):not([data-confirm])");
+      var ok = [];
+      for (var j = 0; j < subs.length; j++) if (shown(subs[j])) ok.push(subs[j]);
+      return ok.length === 1 ? ok[0] : null;
     }
     function refreshMain() {
       var el = mainTarget();
