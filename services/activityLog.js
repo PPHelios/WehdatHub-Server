@@ -14,19 +14,21 @@ const PAGE = 50;
  * Pages of 50, newest first, or null for someone who may not read the log. Optional filters: from and to (instants: the
  * "to" is exclusive) and person (the broker who asked, answered or exported).
  */
-async function list(pool, viewer, { offset = 0, now = new Date(), from = null, to = null, person = null } = {}) {
+async function list(pool, viewer, { offset = 0, now = new Date(), from = null, to = null, person = null, action = null } = {}) {
   if (!isManager(viewer)) return null;
-  const types = isAgencyOwner(viewer) ? OWNER_TYPES : MANAGER_TYPES;
+  // The agency owner sees every audited action (settings, catalogue changes, sign-ins, passkeys); a manager sees the data-request part.
+  const owner = isAgencyOwner(viewer);
   const since = new Date(now.getTime() - KEEP_DAYS * 24 * 3600 * 1000).toISOString();
-  const args = [viewer.agency_id, types, from && from > since ? from : since];
-  let extra = "";
+  const args = [viewer.agency_id, from && from > since ? from : since];
+  let extra = owner ? "" : ` AND o.action = ANY($${args.push(MANAGER_TYPES)}::text[])`;
   if (to) extra += ` AND o.created_at < $${args.push(to)}`;
   if (person) extra += ` AND o.broker_id = $${args.push(person)}`;
+  if (action) extra += ` AND o.action ILIKE $${args.push("%" + String(action).replace(/[%_]/g, "!$&") + "%")} ESCAPE '!'`;
   args.push(PAGE + 1, offset);
   const { rows } = await pool.query(
-    `SELECT o.id, o.created_at, o.operation_type, o.metadata, b.name AS broker_name
-       FROM operation_logs o LEFT JOIN brokers b ON b.id = o.broker_id
-      WHERE o.agency_id = $1 AND o.operation_type = ANY($2::text[]) AND o.created_at >= $3${extra}
+    `SELECT o.id, o.created_at, o.action AS operation_type, o.payload AS metadata, o.ip, o.user_agent, o.target_type, b.name AS broker_name
+       FROM audit_logs o LEFT JOIN brokers b ON b.id = o.broker_id
+      WHERE o.agency_id = $1 AND o.created_at >= $2${extra}
       ORDER BY o.created_at DESC, o.id DESC LIMIT $${args.length - 1} OFFSET $${args.length}`,
     args
   );
@@ -50,15 +52,15 @@ function describe(row, lang) {
     case "secret_details_decision":
       return m.approved ? L(`وافق على طلب ${m.code || ""}`, `Approved the ask for ${m.code || "a unit"}`) : L(`رفض طلب ${m.code || ""}`, `Declined the ask for ${m.code || "a unit"}`);
     case "command_inventory_export":
-      return L(`نزّل الوحدات (${m.rowsCount ?? ""})`, `Exported the units (${m.rowsCount ?? ""})`);
+      return L(`نزّل الوحدات${m.rowsCount != null ? ` (${m.rowsCount})` : ""}`, `Exported the units${m.rowsCount != null ? ` (${m.rowsCount})` : ""}`);
     case "secret_details_scope":
       return L(`غيّر مين يشوف البيانات الخاصة: ${m.scope}`, `Changed who sees private details: ${m.scope}`);
     case "team_role_change":
-      return L(`غيّر دور: ${m.from} ← ${m.to}`, `Changed a role: ${m.from} → ${m.to}`);
+      return L(`غيّر دور لـ ${m.role || ""}`, `Changed a role to ${m.role || ""}`);
     case "portfolio_private":
-      return m.private ? L(`خلّى ${m.kind === "lead" ? "عميل" : "وحدة"} خاص`, `Made a ${m.kind} private`) : L(`رجّع ${m.kind === "lead" ? "عميل" : "وحدة"} للفريق`, `Made a ${m.kind} visible again`);
+      return m.private ? L(`خلّى ${row.target_type === "lead" ? "عميل" : "وحدة"} خاص`, `Made a ${row.target_type} private`) : L(`رجّع ${row.target_type === "lead" ? "عميل" : "وحدة"} للفريق`, `Made a ${row.target_type} visible again`);
     default:
-      return row.operation_type;
+      return String(row.operation_type).replace(/^web /, "");
   }
 }
 

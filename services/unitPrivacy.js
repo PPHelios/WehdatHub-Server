@@ -7,6 +7,7 @@
 
 const { isManager, isAgencyOwner } = require("../lib/authz");
 const { logOperation } = require("../lib/db");
+const Audit = require("./audit");
 const Notifications = require("../lib/notifications");
 
 const SCOPES = ["restricted", "all"];
@@ -22,6 +23,7 @@ async function scopeOf(pool, agencyId) {
 /** Only the agency owner switches who sees secret details. */
 async function setScope(pool, manager, scope) {
   if (!isAgencyOwner(manager) || !SCOPES.includes(scope)) return { ok: false, reason: "not_allowed" };
+  await Audit.recordStrict(pool, { agencyId: manager.agency_id, brokerId: manager.id, action: "secret_details_scope", targetType: "agency", targetId: manager.agency_id, payload: { scope } });
   await pool.query("UPDATE agencies SET crm_settings = crm_settings || jsonb_build_object('secret_details', $2::text) WHERE id = $1", [manager.agency_id, scope]);
   logOperation(pool, { agency_id: manager.agency_id, broker_id: manager.id, operation_type: "secret_details_scope", status: "success", metadata: { scope } });
   return { ok: true, scope };
@@ -132,6 +134,7 @@ async function deciders(pool, agencyId) {
 /** A broker asks to see a unit's secret details; the deciders hear (once a day per ask) and every step is logged. */
 async function requestAccess(pool, broker, listing) {
   if (await canSee(pool, broker, listing)) return { ok: true, already: true };
+  await Audit.recordStrict(pool, { agencyId: broker.agency_id, brokerId: broker.id, action: "secret_details_request", targetType: "listing", targetId: listing.id, payload: { code: listing.code } });
   const open = await pool.query("SELECT id FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status = 'pending' LIMIT 1", [broker.agency_id, listing.id, broker.id]);
   const id = open.rows[0]?.id || (await pool.query("INSERT INTO unit_access_requests (agency_id, listing_id, broker_id) VALUES ($1, $2, $3) RETURNING id", [broker.agency_id, listing.id, broker.id])).rows[0].id;
   logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "secret_details_request", status: "success", metadata: { code: listing.code, request_id: id } });
@@ -177,6 +180,7 @@ async function hasPending(pool, broker, listing) {
 /** A manager (or the owner, when there is no manager) says yes or no; the asker hears and the step is logged. */
 async function decide(pool, actor, listing, requestId, approve) {
   if (listing.agency_id !== actor.agency_id || !(await mayDecide(pool, actor))) return { ok: false, reason: "not_allowed" };
+  await Audit.recordStrict(pool, { agencyId: actor.agency_id, brokerId: actor.id, action: "secret_details_decision", targetType: "listing", targetId: listing.id, payload: { code: listing.code, request_id: requestId, approved: Boolean(approve) } });
   const { rows } = await pool.query(
     `UPDATE unit_access_requests SET status = $4, decided_by = $3, decided_at = now()
       WHERE id = $1 AND agency_id = $2 AND listing_id = $5 AND status = 'pending' RETURNING broker_id`,

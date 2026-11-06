@@ -33,6 +33,7 @@ const OwnerAgencies = require("../../services/ownerAgencies");
 const AgencyCreate = require("../../services/agencyCreate");
 const { isManager, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
+const Audit = require("../../services/audit");
 const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -552,6 +553,11 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
     const t0 = Date.now();
+    try {
+      await Audit.recordStrict(pool, { agencyId: broker.agency_id, brokerId: broker.id, action: "command_inventory_export", payload: { channel: "web" } });
+    } catch {
+      return res.status(503).type("text/plain").send(L(langOf(req), "مقدرناش نسجّل التنزيل فمنفذش. جرّب تاني بعد شوية.", "Could not record this download, so it was not done. Try again shortly."));
+    }
     const { rows: listings } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' ORDER BY created_at DESC", [broker.agency_id]);
     const { rows: agencies } = await pool.query("SELECT * FROM agencies WHERE id = $1", [broker.agency_id]);
     const buf = await require("../../lib/excel").buildAgencyInventoryWorkbook({ listings, agency: agencies[0], broker, lang: langOf(req) });

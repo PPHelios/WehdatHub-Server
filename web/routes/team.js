@@ -16,6 +16,7 @@ const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
 const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
+const Audit = require("../../services/audit");
 const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 
@@ -39,6 +40,7 @@ const ERRORS = {
   linked: ["الوسيط مربوط بتيليجرام بالفعل.", "This broker is already on Telegram."],
   rank: ["الأدمن والمالك يتداروا من الأدمن أو المالك بس.", "Only an admin or owner can manage an admin or owner."],
   forbidden: ["للمديرين بس.", "Managers only."],
+  audit: ["مقدرناش نسجّل العملية فمنفذتش. جرّب تاني بعد شوية.", "Could not record this action, so it was not done. Try again shortly."],
   wait_minutes: [`دقايق الانتظار من ${Rules.MIN_WAIT} لـ ${Rules.MAX_WAIT}.`, `Waiting minutes from ${Rules.MIN_WAIT} to ${Rules.MAX_WAIT}.`],
   hours: ["ساعات الشغل مش مظبوطة.", "The working hours aren't valid."],
   days: ["اختار يوم شغل واحد على الأقل.", "Choose at least one working day."],
@@ -270,6 +272,11 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const owner = req.session.broker;
     if (!isAgencyOwner(owner)) return forbidden(req, res);
+    try {
+      await Audit.recordStrict(pool, { agencyId: owner.agency_id, brokerId: owner.id, action: "team_role_change", targetType: "broker", targetId: req.params.id, payload: { role: String(req.body.role || "") } });
+    } catch {
+      return render(req, res, { notice: bad("audit", lang) }, 503);
+    }
     const r = await Team.changeRole(pool, owner, req.params.id, String(req.body.role || ""));
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
     logOperation(pool, { agency_id: owner.agency_id, broker_id: owner.id, operation_type: "team_role_change", metadata: { broker_id: r.broker.id, from: r.from, to: r.to } });

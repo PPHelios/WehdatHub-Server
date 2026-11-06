@@ -3,7 +3,9 @@
 // the options from here) and removing one. Signing in with a passkey is on the sign-in page (web/routes/auth.js).
 "use strict";
 
-const { logOperation } = require("../../lib/db");
+const { logOperation: logOp } = require("../../lib/db");
+const Audit = require("../../services/audit");
+const logOperation = (pool, p) => { Audit.fromOperation(pool, p); return logOp(pool, p); };
 
 const Passkeys = require("../../services/passkeys");
 const { html } = require("../html");

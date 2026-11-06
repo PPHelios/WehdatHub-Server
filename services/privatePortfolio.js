@@ -4,6 +4,7 @@
 
 const { isAgencyOwner } = require("../lib/authz");
 const { logOperation } = require("../lib/db");
+const Audit = require("./audit");
 
 const TABLES = { unit: "listings", lead: "leads", owner: "unit_owners" };
 
@@ -15,6 +16,7 @@ async function setPrivate(pool, owner, kind, id, value) {
   if (!isAgencyOwner(owner)) return { error: "forbidden" };
   const table = TABLES[kind];
   if (!table) return { error: "kind" };
+  await Audit.recordStrict(pool, { agencyId: owner.agency_id, brokerId: owner.id, action: "portfolio_private", targetType: kind, targetId: id, payload: { private: Boolean(value) } });
   const { rowCount } = await pool.query(`UPDATE ${table} SET is_private = $3 WHERE id = $1 AND agency_id = $2`, [id, owner.agency_id, Boolean(value)]);
   if (!rowCount) return { error: "not_found" };
   logOperation(pool, { agency_id: owner.agency_id, broker_id: owner.id, operation_type: "portfolio_private", status: "success", metadata: { kind, id, private: Boolean(value) } });
