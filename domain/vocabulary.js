@@ -7,14 +7,24 @@ const { normalizeSearch } = require("./searchText");
 
 // Words that name a property type, both languages (normalized when used).
 const TYPE_TERMS = {
-  apartment: ["شقة", "شقق", "apartment", "apartments", "flat", "apt", "apts"],
+  apartment: ["شقة", "شقق", "apartment", "apartments", "flat", "apt", "apts", "ground with garden", "ground floor with garden"],
+  // triplex_roof is listed before triplex: the first matching term wins, and "triplex with roof" contains "triplex".
+  triplex_roof: ["تريبلكس روف", "تريبلكس مع روف", "triplex roof", "triplex with roof"],
+  triplex: ["تريبلكس", "تربيلكس", "triplex"],
+  sky_loft: ["سكاي لوفت", "سكاى لوفت", "sky loft", "skyloft"],
+  basement: ["بدروم", "بيسمنت", "basement"],
+  mazonette: ["مازونيت", "مزونيت", "mazonette", "mazonet"],
   duplex: ["دوبلكس", "duplex"],
   penthouse: ["بنتهاوس", "penthouse"],
   chalet: ["شاليه", "شاليهات", "chalet"],
   studio: ["استوديو", "استديو", "studio"],
+  // i_villa and twin_villa are listed before villa: "i villa" and "twin villa" contain "villa".
+  i_villa: ["i villa", "i-villa", "ivilla", "آي فيلا", "اي فيلا"],
+  // "twin house" is a twin villa: there is no separate twin house type in search or import.
+  twin_villa: ["twin villa", "twinvilla", "توين فيلا", "twin house", "twinhouse", "توين هاوس", "توين"],
+  maisonette: ["maisonette", "maisonnette", "ميزونيت"],
   villa: ["فيلا", "فيلات", "فيلا مستقلة", "villa", "villas", "standalone", "stand alone"],
   townhouse: ["تاون هاوس", "تاون", "townhouse", "town house"],
-  twinhouse: ["توين هاوس", "توين", "twin house", "twinhouse"],
   office: ["مكتب", "مكاتب", "مكتب اداري", "office", "offices"],
   shop: ["محل تجاري", "محل", "محلات", "shop", "retail"],
   clinic: ["عيادة", "عيادات", "clinic"],

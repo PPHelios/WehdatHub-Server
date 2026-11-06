@@ -60,6 +60,7 @@ function emptyFilters() {
     code: null,
     listing_type: null,
     property_types: [],
+    property_type_order: [],
     market: null,
     places: [],
     place_terms: [],
@@ -161,6 +162,32 @@ function canonical(f) {
  * AI search JSON → { intent, transcript, language, filters }.
  * Accepts the Release 1 prompt shape and the earlier one (compound, features as words, ...).
  */
+/**
+ * Type families: a search for one kind returns the whole family, the searched kind first, then the rest in this order.
+ * A villa search returns villa, twin villa, i villa, townhouse, maisonette. Triplex with roof is searched first for a
+ * triplex roof search, and plain triplex follows. Plain triplex is not widened (not decided yet).
+ */
+const TYPE_FAMILIES = [
+  { members: ["villa", "twin_villa", "i_villa", "townhouse", "maisonette"], from: ["villa", "twin_villa", "i_villa", "townhouse", "maisonette"] },
+  { members: ["triplex", "triplex_roof"], from: ["triplex", "triplex_roof"] },
+];
+
+/** The unit types a search asks for, and the order to show them in. A standalone search (exact) is not widened. */
+function typeScope(list, exact) {
+  const names = list.map((t) => String(t).toLowerCase().replace(/[\s-]/g, "")).map((t) => (t === "standalone" ? "villa" : t));
+  if (exact || !names.length) return { types: [...new Set(names)], order: [...new Set(names)] };
+  const types = new Set(names);
+  let order = [...new Set(names)];
+  for (const fam of TYPE_FAMILIES) {
+    const head = names.find((t) => fam.from.includes(t));
+    if (!head) continue;
+    fam.members.forEach((t) => types.add(t));
+    order = [head, ...fam.members.filter((t) => t !== head), ...order.filter((t) => !fam.members.includes(t))];
+    break;
+  }
+  return { types: [...types], order };
+}
+
 function normalizeAiSearch(raw) {
   const r = (Array.isArray(raw) ? raw[0] : raw) || {};
   const f = r.filters || {};
@@ -180,14 +207,14 @@ function normalizeAiSearch(raw) {
   const delivery = f.delivery || {};
   const payment = f.payment || {};
 
-  const types = (Array.isArray(f.property_types) ? f.property_types : [])
-    .map((t) => String(t).toLowerCase().replace(/[\s_-]/g, ""))
-    .map((t) => (t === "standalone" ? "villa" : t));
+  // A villa search returns every villa kind: standalone, i villa and twin villa (townhouse is separate).
+  const { types, order } = typeScope(Array.isArray(f.property_types) ? f.property_types : [], f.type_exact === true);
 
   const filters = canonical({
     code: f.code ? normalizeCode(f.code) : null,
     listing_type: ["sale", "rent"].includes(f.listing_type) ? f.listing_type : null,
     property_types: types,
+    property_type_order: order,
     market: ["primary", "resale"].includes(f.market) ? f.market : null,
     places,
     place_terms: terms,
@@ -243,6 +270,7 @@ const STOP = new Set(
   ].map(normalizeSearch)
 );
 
+const STANDALONE_TERMS = new Set(["standalone", "stand alone", normalizeSearch("فيلا مستقلة")]);
 const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
   .flatMap(([type, words]) => words.map((w) => ({ type, term: normalizeSearch(w) })))
   .sort((a, b) => b.term.length - a.term.length);
@@ -466,6 +494,15 @@ function fallbackParse(text) {
     .replace(/ (فيرنشد|فرنشد|فيرنيشد|فرنيشد) /g, " مفروشه ")
     .replace(/ (هاي لوكس|هاى لوكس|high lux) /g, " سوبر لوكس ")
     .replace(/ (اوف بلان|off plan|offplan|under construction) /g, " تحت الانشاء ");
+
+  // Multi-word type names are read before the features, so "triplex roof" is the triplex-with-roof type, not a triplex with a roof feature.
+  for (const m of TYPE_MATCHERS) {
+    if (m.term.includes(" ") && hay.includes(` ${m.term} `)) {
+      f.property_types.push(m.type);
+      if (STANDALONE_TERMS.has(m.term)) f.type_exact = true;
+      hay = hay.split(` ${m.term} `).join(" ");
+    }
+  }
 
   // Features (dictionary only).
   f.features = Features.matchFeatureKeys(hay);
@@ -712,6 +749,7 @@ function fallbackParse(text) {
   for (const m of TYPE_MATCHERS) {
     if (hay.includes(` ${m.term} `)) {
       f.property_types.push(m.type);
+      if (STANDALONE_TERMS.has(m.term)) f.type_exact = true;
       hay = hay.split(` ${m.term} `).join(" ");
     }
   }
@@ -792,7 +830,8 @@ function fallbackParse(text) {
 function disagreements(a, b) {
   const fa = canonical(a?.filters || a || {});
   const fb = canonical(b?.filters || b || {});
-  const keys = Object.keys(emptyFilters()).filter((k) => !["feature_terms"].includes(k));
+  // The display order of the types is not a disagreement about what is searched.
+  const keys = Object.keys(emptyFilters()).filter((k) => !["feature_terms", "property_type_order"].includes(k));
   const out = [];
   for (const k of keys) {
     let x = fa[k];

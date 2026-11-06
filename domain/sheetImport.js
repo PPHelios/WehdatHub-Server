@@ -111,16 +111,31 @@ function emptyRequired(rows = []) {
 const TYPE_LOOKUP = new Map(
   Object.entries({ ...TYPE_TERMS, villa: [...TYPE_TERMS.villa, "standalone villa"] }).flatMap(([key, words]) => words.map((w) => [normalizeSearch(w), key]))
 );
-const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twinhouse"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"]];
+const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twin_villa"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"], ["triplex", "triplex"], ["basement", "basement"], ["mazonette", "mazonette"], ["maisonette", "maisonette"], ["skyloft", "sky_loft"]];
+/** Garden anywhere in the type cell ("apartment with garden", "ground with garden"): the unit gets the private-garden feature. */
+const gardenIn = (v) => /garden/.test(normalizeSearch(v));
+/** Words after a type that say where the unit is or what it has ("apartment 4th floor", "town house corner", "studio with roof"). */
+const TYPE_NOISE = /\b(ground|floor|corner|middle|roof|with|without|garden|first|use|type|single|and|for|both|[a-e]|\d+\w{0,2})\b/g;
+/** The type a normalized text names: an exact term, else a term it contains. */
+function typeIn(t) {
+  if (TYPE_LOOKUP.has(t)) return TYPE_LOOKUP.get(t);
+  for (const [w, key] of TYPE_LOOKUP) if (w.length >= 4 && t.includes(w)) return key;
+  return null;
+}
 function propertyType(v) {
   const t = normalizeSearch(v);
   if (!t) return null;
-  if (TYPE_LOOKUP.has(t)) return TYPE_LOOKUP.get(t);
-  for (const [w, key] of TYPE_LOOKUP) if (w.length >= 4 && t.includes(w)) return key;
-  // A typo ("apatment", "penthous", "twon house") is still the type it was meant to be.
-  const first = t.split(/[\s,/]+/).filter(Boolean);
-  for (const word of [first[0], first.slice(0, 2).join("")].filter((x) => x && /^[a-z]{6,12}$/.test(x))) {
-    for (const [w, key] of TYPE_WORDS) if (editDistance(w, word) <= (w.length >= 8 ? 2 : 1)) return key;
+  const direct = typeIn(t);
+  if (direct) return direct;
+  const core = t.replace(TYPE_NOISE, " ").replace(/\s+/g, " ").trim();
+  const fromCore = core && core !== t ? typeIn(core) : null;
+  if (fromCore) return fromCore;
+  // A typo ("apatment", "apaerment(cleo)", "twon house") is still the type it was meant to be.
+  for (const text of [t, core]) {
+    const words = text.split(/[\s,/()]+/).map((x) => x.replace(/[^a-z]/g, "")).filter(Boolean);
+    for (const word of [words[0], words.slice(0, 2).join("")].filter((x) => x && /^[a-z]{6,12}$/.test(x))) {
+      for (const [w, key] of TYPE_WORDS) if (editDistance(w, word) <= (w.length >= 8 ? 2 : 1)) return key;
+    }
   }
   return null;
 }
@@ -207,7 +222,8 @@ function expand(input) {
     }
   };
 
-  if (!blank("price_value") && !CURRENCY.test(String(cells.price_value)) && money(cells.price_value) === null) {
+  const plan = blank("price_value") ? null : Mixed.installmentOf(cells.price_value);
+  if (!blank("price_value") && !plan && !CURRENCY.test(String(cells.price_value)) && money(cells.price_value) === null) {
     const p = Mixed.priceText(cells.price_value);
     if (p?.ambiguous) errors.push("price_value");
     else if (p?.price_value) {
@@ -243,6 +259,8 @@ function rowToDraft(input = {}) {
   const expanded = expand(Object.fromEntries(Object.entries(input).map(([k, v]) => [k, unquote(v)])));
   const cells = expanded.cells;
   const draft = { details: {} };
+  // Words from the type cell that are not the type (roof, corner, floor...) and the price text a rule did not pick go to the description.
+  const descParts = [];
   const errors = [...expanded.errors];
   const has = (k) => k in cells && !isEmpty(cells[k]);
   const code = has("code") ? digits(String(cells.code)).replace(/\s+/g, "").toUpperCase().replace(/^#/, "") : null;
@@ -254,10 +272,21 @@ function rowToDraft(input = {}) {
   if (has("property_type")) {
     draft.property_type = propertyType(cells.property_type);
     if (!draft.property_type) errors.push("property_type");
+    else if (new RegExp(TYPE_NOISE.source).test(normalizeSearch(cells.property_type))) descParts.push(String(cells.property_type).trim());
   }
   if (has("listing_type")) draft.listing_type = listingType(cells.listing_type);
   if (has("market")) draft.market = market(cells.market);
+  // A price that states an installment plan: total, down payment and installments; the whole text goes to the description.
+  const plan = has("price_value") ? Mixed.installmentOf(cells.price_value) : null;
+  if (plan) {
+    draft.price_value = plan.price_value;
+    draft.down_payment_value = plan.down_payment_value;
+    draft.remaining_amount = plan.remaining_amount;
+    draft.market = "resale";
+    descParts.push(String(cells.price_value).trim());
+  }
   for (const k of ["price_value", "down_payment_value", "remaining_amount", "installment_value"]) {
+    if (plan && k !== "installment_value") continue;
     if (has(k)) {
       // A price in dollars or euros is not guessed at: the row is held back until someone fixes the cell.
       if (CURRENCY.test(String(cells[k]))) {
@@ -265,6 +294,8 @@ function rowToDraft(input = {}) {
         continue;
       }
       draft[k] = money(cells[k]);
+      // A bare rent figure under 1,000 is thousands: "50" in rent is 50k.
+      if (k === "price_value" && draft.listing_type === "rent" && /^\s*\d+(\.\d+)?\s*$/.test(String(cells[k])) && draft[k] && draft[k] < 1000) draft[k] = draft[k] * 1000;
       if (draft[k] === null && k === "price_value") errors.push(k);
     }
   }
@@ -299,6 +330,7 @@ function rowToDraft(input = {}) {
     draft.feature_keys = keys;
     draft.features_other = other;
   }
+  if (has("property_type") && gardenIn(cells.property_type)) draft.feature_keys = [...new Set([...(draft.feature_keys || []), "private_garden"])];
   // A description that states the finishing or features ("fully finished / kitchen / ACs") is read with the app's own
   // vocabulary, but only when the sheet has no column for them; a stated column always wins.
   if (has("description") && !has("features") && !has("orientation")) {
@@ -310,6 +342,7 @@ function rowToDraft(input = {}) {
     if (f) draft.finishing = f;
   }
   if (has("description")) draft.details.clean_summary = text(cells.description, 600);
+  if (descParts.length) draft.details.clean_summary = [draft.details.clean_summary, ...descParts].filter(Boolean).join(" · ");
   if (has("summary_en")) draft.details.summary_en = text(cells.summary_en, 600);
   if (has("owner_name")) draft.details.owner_name = text(cells.owner_name, 120);
   if (has("unit_no")) draft.details.unit_no = text(cells.unit_no, 40);

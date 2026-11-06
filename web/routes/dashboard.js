@@ -498,6 +498,21 @@ function healthSections(d, lang, usd) {
   <tbody>${d.topErrors.map((e) => html`<tr><td dir="ltr">${e.kind === "report" ? "#R" : "#E"}${e.last_id}</td><td>${e.kind}</td><td>${e.source}</td><td dir="ltr">${String(e.message || "").slice(0, 140)}</td><td>${e.n}</td></tr>`)}</tbody></table>`
     : html`<p class="muted">✅ ${L(lang, "مفيش.", "None.")}</p>`}
 </section>
+<section class="card" id="error-log">
+  <h2>${L(lang, "سجل الأخطاء (آخر 7 أيام)", "Error log (last 7 days)")}</h2>
+  ${(d.recentErrors || []).length
+    ? html`<div class="scroll"><table><thead><tr><th>#</th><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "النوع", "Kind")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "الرسالة", "Message")}</th><th>${L(lang, "مرات", "Times")}</th></tr></thead>
+  <tbody>${d.recentErrors.map((e) => html`<tr data-error="${e.id}">
+    <td dir="ltr">${e.kind === "report" ? "#R" : "#E"}${e.id}</td>
+    <td dir="ltr">${new Date(e.created_at).toISOString().slice(0, 16).replace("T", " ")}</td>
+    <td>${e.kind}</td><td dir="ltr">${e.source}</td>
+    <td dir="ltr"><div>${String(e.message || "").slice(0, 300)}</div>${e.path ? html`<div class="muted">${e.path}</div>` : ""}
+      <details><summary>${L(lang, "التفاصيل", "Details")}</summary>
+      <pre dir="ltr">${e.stack || L(lang, "مفيش stack.", "No stack.")}</pre>
+      <p class="muted" dir="ltr">agency ${e.agency_id || "—"} · broker ${e.broker_id || "—"}${e.resolved_at ? " · resolved" : ""}</p></details></td>
+    <td>${e.n}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">✅ ${L(lang, "مفيش أخطاء في آخر 7 أيام.", "No errors in the last 7 days.")}</p>`}
+</section>
 <section class="card" id="trials">
   <h2>🤝 ${L(lang, "طلبات التجربة", "Trial requests")}</h2>
   ${d.trials.length

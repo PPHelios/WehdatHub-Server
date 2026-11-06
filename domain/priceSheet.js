@@ -4,6 +4,8 @@
 // Inside a project the developer's unit code decides what is the same unit; models are never duplicates (C3).
 "use strict";
 
+const Mixed = require("./sheetMixed");
+
 const { money, propertyType } = require("./sheetImport");
 const { normalizeSearch } = require("./searchText");
 
@@ -71,7 +73,10 @@ function rowToEntry(cells = {}) {
   if (has("area") && !area) return { error: "area" };
   if (areaTo && area && areaTo <= area) areaTo = null;
   const priceFromCol = has("price_from") ? money(cells.price_from) : null;
-  const priceCol = has("price") ? money(cells.price) : null;
+  // A cell with several EGP prices takes the monthly or long-term one (domain/sheetMixed.js). Dollars stay held: a price plan has no currency.
+  // cellPrice gives back the raw text when it reads no number ("wait", "6400net"): only a read number is a price.
+  const readPrice = has("price") ? Mixed.cellPrice(cells.price) : null;
+  const priceCol = has("price") ? money(cells.price) ?? (readPrice && !readPrice.usd && typeof readPrice.value === "number" ? readPrice.value : null) : null;
   // "from 9.2M" written in the price cell also marks a "from" price.
   const fromWord = has("price") && /(^|\s)(from|starting|يبدا|يبدأ|من)(?=\s|\d|$)/i.test(String(cells.price));
   const price = priceCol || priceFromCol || (fromWord ? money(String(cells.price).replace(/(from|starting at|starting|يبدا من|يبدأ من|من)/gi, "").trim()) : null);

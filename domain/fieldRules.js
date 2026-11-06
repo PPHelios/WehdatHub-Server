@@ -5,8 +5,8 @@
 
 const { hasDelivery } = require("./delivery");
 
-const APARTMENT_LIKE = ["apartment", "duplex", "penthouse", "chalet"];
-const VILLA_LIKE = ["villa", "townhouse", "twinhouse"];
+const APARTMENT_LIKE = ["apartment", "duplex", "penthouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette"];
+const VILLA_LIKE = ["villa", "townhouse", "i_villa", "twin_villa", "maisonette"];
 const COMMERCIAL = ["office", "shop", "clinic", "commercial"];
 const PROPERTY_TYPES = [...APARTMENT_LIKE, "studio", ...VILLA_LIKE, ...COMMERCIAL, "land"];
 
@@ -19,10 +19,11 @@ const positive = (v) => present(v) && Number(v) > 0;
 /** Unit kind for the field table: apartment | studio | villa | commercial | land | unknown. */
 function unitKind(propertyType) {
   const t = normType(propertyType);
+  const is = (list) => list.map(normType).includes(t);
   if (t === "studio") return "studio";
-  if (APARTMENT_LIKE.includes(t)) return "apartment";
-  if (VILLA_LIKE.includes(t) || t === "standalone") return "villa";
-  if (COMMERCIAL.includes(t)) return "commercial";
+  if (is(APARTMENT_LIKE)) return "apartment";
+  if (is(VILLA_LIKE) || t === "standalone") return "villa";
+  if (is(COMMERCIAL)) return "commercial";
   if (t === "land") return "land";
   return "unknown";
 }

@@ -117,10 +117,20 @@ describe("owner dashboard (5.4)", () => {
     expect(alpha.usd).toBeCloseTo(0.0022, 6);
     expect(d.totalUsd).toBeCloseTo(0.0062, 6);
     expect(d.topErrors.map((e) => e.fingerprint).sort()).toEqual(["fp1", "fp2"]);
+    // The error log: every recent error with its message and stack, newest first.
+    await h.query(
+      "UPDATE error_events SET stack = 'Error: boom\\n    at lib/search.js:12', path = 'POST /app/units/import' WHERE fingerprint = 'fp1'"
+    );
+    const log = (await Dash.ownerDashboard(h.pool, await row("admin"), { weeks: 4 })).recentErrors;
+    expect(log.map((e) => e.message).sort()).toEqual(["boom", "button does nothing"]);
+    expect(log.find((e) => e.message === "boom")).toMatchObject({ stack: expect.stringContaining("lib/search.js:12"), path: "POST /app/units/import" });
 
     const a = await signIn(h, "admin");
     const page = await a.agent.get("/app/owner?lang=en");
     expect(page.status).toBe(200);
+    expect(page.text).toContain("Error log (last 7 days)");
+    expect(page.text).toContain("lib/search.js:12");
+    expect(page.text).toContain("POST /app/units/import");
     expect(page.text).toContain("AI per agency (last 30 days)");
     expect(page.text).toContain("Agency Beta");
     expect(page.text).not.toMatch(/Secret|Rival Client/);

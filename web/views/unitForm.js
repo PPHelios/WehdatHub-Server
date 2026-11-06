@@ -31,7 +31,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   const groups = [...new Set(Features.FEATURES.map((f) => f.group))];
   // A new unit is added in 4 steps (app.js shows one at a time); editing, an error or a review shows everything.
   const stepped = mode === "new" && !error && !review && !duplicate;
-  return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack"${stepped ? html` data-steps="${L(lang, "الوحدة والسعر|التسليم والدفع|المميزات|الصور والحفظ", "Unit and price|Delivery and payment|Features|Photos and save")}" data-next="${L(lang, "التالي", "Next")}" data-prev="${L(lang, "رجوع", "Back")}"` : ""}>
+  return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack" data-progress${stepped ? html` data-steps="${L(lang, "الوحدة والسعر|التسليم والدفع|المميزات|الصور والحفظ", "Unit and price|Delivery and payment|Features|Photos and save")}" data-next="${L(lang, "التالي", "Next")}" data-prev="${L(lang, "رجوع", "Back")}" data-check="/app/units/step-check"` : ""}>
   <input type="hidden" name="_csrf" value="${csrf}">
   ${notice ? html`<p class="card notice">${notice}</p>` : ""}
   ${error ? html`<p class="card notice bad" role="alert">${error}</p>` : ""}

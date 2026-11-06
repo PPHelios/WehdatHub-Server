@@ -268,6 +268,68 @@
     var el = document.querySelector("[data-search-url]");
     if (el && window.history && history.replaceState) history.replaceState(null, "", el.getAttribute("data-search-url"));
   });
+  // Search: pressing Enter or Search shows a spinner at once (the AI reading can take a moment), until the page answers.
+  document.addEventListener("submit", function (e) {
+    var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
+    if (f) f.classList.add("is-busy");
+  });
+  // Uploads with a progress bar (forms with data-progress): the file goes up with XMLHttpRequest so the bar shows how much has
+  // gone; then the server reads it. The answer replaces the page (a redirect is followed).
+  var UP = document.documentElement.lang === "ar"
+    ? { up: "بنرفع الملف…", read: "السيرفر بيقرا الملف…", fail: "الرفع ما نجحش. جرب تاني.", net: "في مشكلة في الاتصال. جرب تاني." }
+    : { up: "Uploading…", read: "The server is reading the file…", fail: "The upload failed. Try again.", net: "A connection problem. Try again." };
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!form || !form.matches || !form.matches("form[data-progress]") || ev.defaultPrevented) return;
+    if (!window.XMLHttpRequest || !window.FormData) return;
+    ev.preventDefault();
+    var box = document.createElement("div");
+    box.className = "upbar";
+    box.setAttribute("role", "status");
+    var bar = document.createElement("progress");
+    bar.max = 1;
+    bar.value = 0;
+    var label = document.createElement("p");
+    label.className = "muted small";
+    label.textContent = UP.up;
+    box.appendChild(bar);
+    box.appendChild(label);
+    form.insertBefore(box, form.firstChild);
+    var controls = form.querySelectorAll("button, input[type=submit]");
+    for (var i = 0; i < controls.length; i++) controls[i].disabled = true;
+    var stop = function (msg) {
+      label.textContent = msg;
+      for (var k = 0; k < controls.length; k++) controls[k].disabled = false;
+    };
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", form.action, true);
+    xhr.setRequestHeader("Accept", "text/html");
+    xhr.upload.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      bar.value = e.loaded / e.total;
+      label.textContent = UP.up + " " + Math.round((e.loaded / e.total) * 100) + "%";
+    };
+    xhr.upload.onload = function () { bar.removeAttribute("value"); label.textContent = UP.read; };
+    xhr.onerror = function () { stop(UP.net); };
+    xhr.ontimeout = function () { stop(UP.fail); };
+    xhr.onload = function () {
+      if (xhr.responseURL && xhr.responseURL !== location.href) { location.assign(xhr.responseURL); return; }
+      document.open();
+      document.write(xhr.responseText);
+      document.close();
+    };
+    xhr.send(new FormData(form));
+  });
+  // The stage board arrows: scroll one column left or right.
+  document.addEventListener("click", function (e) {
+    var step = e.target.closest && e.target.closest("[data-board-step]");
+    if (!step) return;
+    var wrap = step.closest(".board-wrap");
+    var cols = wrap && wrap.querySelector("[data-board]");
+    if (!cols) return;
+    var col = cols.querySelector(".bcol");
+    cols.scrollBy({ left: Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12), behavior: "smooth" });
+  });
   // ← Back (and the open menu button): the previous page when it is ours, else the link's own address.
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest("a[data-back], a[data-menu-close]");
@@ -531,9 +593,16 @@
     var next = document.createElement("button");
     next.type = "button"; next.textContent = form.getAttribute("data-next") || "Next";
     next.setAttribute("data-tg-main", "");
+    var spin = document.createElement("span");
+    spin.className = "spin"; spin.setAttribute("aria-hidden", "true");
+    next.appendChild(spin);
     nav.appendChild(prev); nav.appendChild(next);
+    var stepErr = document.createElement("p");
+    stepErr.className = "error step-err"; stepErr.setAttribute("role", "alert"); stepErr.hidden = true;
     form.insertBefore(bar, form.firstChild.nextSibling);
+    form.appendChild(stepErr);
     form.appendChild(nav);
+    var checkUrl = form.getAttribute("data-check");
     var at = 1;
     function show(n) {
       at = Math.max(1, Math.min(names.length, n));
@@ -547,13 +616,41 @@
       }
       prev.hidden = at === 1;
       next.hidden = at === names.length;
+      stepErr.hidden = true;
       window.scrollTo(0, 0);
       document.dispatchEvent(new CustomEvent("steps:change"));
+    }
+    // Next: the browser's own checks first; then, when the form has a check address, the server's field rules for this
+    // step (a spinner shows while they run). A blocker on a field of this step keeps the step open with its message.
+    // If the check cannot be reached, Next still moves on: the final save checks everything.
+    function busy(on) {
+      next.disabled = on;
+      next.classList.toggle("is-busy", on);
     }
     next.addEventListener("click", function () {
       var fields = form.querySelectorAll('[data-step="' + at + '"] input, [data-step="' + at + '"] select, [data-step="' + at + '"] textarea');
       for (var i = 0; i < fields.length; i++) if (fields[i].willValidate && !fields[i].checkValidity()) { fields[i].reportValidity(); return; }
-      show(at + 1);
+      if (!checkUrl || !window.fetch || !window.FormData) { show(at + 1); return; }
+      var here = at;
+      busy(true);
+      fetch(checkUrl, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          busy(false);
+          if (here !== at) return;
+          var shown = [];
+          var blockers = (j && j.blockers) || [];
+          for (var b = 0; b < blockers.length; b++) {
+            var input = form.querySelector('[data-step="' + here + '"] [name="' + blockers[b].field + '"]');
+            if (input) shown.push(blockers[b]);
+          }
+          if (!shown.length) { show(here + 1); return; }
+          stepErr.textContent = shown.map(function (x) { return x.label; }).join(" · ");
+          stepErr.hidden = false;
+          var first = form.querySelector('[data-step="' + here + '"] [name="' + shown[0].field + '"]');
+          if (first) first.focus();
+        })
+        .catch(function () { busy(false); show(here + 1); });
     });
     prev.addEventListener("click", function () { show(at - 1); });
     // A required field left empty on an earlier step: jump back to it instead of a silent failed submit.

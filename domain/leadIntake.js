@@ -147,7 +147,7 @@ Never invent anything: a field that is not stated is null (or an empty list).
   "note": "anything else worth keeping for the broker, short, else null",
   "request": null or {   // what a buyer or tenant is looking for
     "listing_type": "sale" | "rent" | null,
-    "property_types": [ any of: apartment, duplex, penthouse, chalet, studio, villa, townhouse, twinhouse, office, shop, clinic, commercial, land ],
+    "property_types": [ any of: apartment, duplex, penthouse, chalet, studio, villa, twin_villa, townhouse, office, shop, clinic, commercial, land ],
     "compound": "ONE compound / project name as said, else null",
     "locations": [ other place names as said ],
     "price_min": number or null, "price_max": number or null,

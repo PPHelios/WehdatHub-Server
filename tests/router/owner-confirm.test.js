@@ -1,5 +1,6 @@
-// tests/router/owner-confirm.test.js — Adding a unit by Telegram: a phone that matches an owner, or a new one, is shown on
-// the review card and waits for a choice (link or create, or discard) before the unit can be saved.
+// tests/router/owner-confirm.test.js — Adding a unit by Telegram: a new owner's phone or a matching owner is shown on the
+// card as the owner's data, with no question; saving creates or links the owner. Only a saved owner under another name
+// asks which name to keep.
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
@@ -34,33 +35,29 @@ async function reviewWithOwner(name, phone) {
   return h.text("broker", "تم");
 }
 
-test("a new owner's phone waits for a choice; the unit is not saved until it is made", async () => {
+test("a new owner's phone is shown as the owner's data, with no question; saving creates and links the owner", async () => {
   const card = await reviewWithOwner("Mr New", "01012345678");
   const text = textOf(card);
-  expect(text).toMatch(/New owner|مالك جديد/);
-  expect(ids(card[card.length - 1])).toContain("draft_owner_keep");
+  expect(text).toMatch(/Mr New/);
+  expect(text).not.toMatch(/Create and link|تضيفه وتربط|New owner|مالك جديد/);
+  expect(ids(card[card.length - 1])).not.toContain("draft_owner_keep");
   expect(ids(card[card.length - 1])).not.toContain("draft_owner_drop");
-  expect(ids(card[card.length - 1])).not.toContain("draft_confirm");
-});
-
-test("there is no discard: the owner is kept and the unit is saved with it", async () => {
-  await reviewWithOwner("Mr New", "01012345678");
-  await h.tap("broker", "draft_owner_keep");
+  expect(ids(card[card.length - 1])).toContain("draft_confirm");
   await h.tap("broker", "draft_confirm");
   const [l] = await h.query("SELECT owner_id, details FROM listings WHERE code = 'HP-77'");
   expect(l.owner_id).not.toBeNull();
   expect(l.details.owner_phone.replace(/\D/g, "")).toMatch(/1012345678$/);
+  expect((await ownerRow("201012345678")).name).toBe("Mr New");
 });
 
-test("a phone of an existing owner links the unit to that owner, not a new one", async () => {
+test("a phone of an existing owner links the unit to that owner, not a new one, with no question", async () => {
   const [owner] = await h.query(
     "INSERT INTO unit_owners (agency_id, name, phones, created_by) VALUES ($1, 'Known Owner', ARRAY['201055550000']::text[], $2) RETURNING *",
     [h.AGENCY_A, h.BROKERS.broker.id]
   );
   const card = await reviewWithOwner("Known Owner", "01055550000");
-  expect(textOf(card)).toMatch(/Existing owner|مالك موجود/);
-  expect(ids(card[card.length - 1])).toContain("draft_owner_keep");
-  await h.tap("broker", "draft_owner_keep");
+  expect(textOf(card)).not.toMatch(/Existing owner|مالك موجود|Link this unit/);
+  expect(ids(card[card.length - 1])).toContain("draft_confirm");
   await h.tap("broker", "draft_confirm");
   const [l] = await h.query("SELECT owner_id FROM listings WHERE code = 'HP-77'");
   expect(l.owner_id).toBe(owner.id);

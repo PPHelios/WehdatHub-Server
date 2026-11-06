@@ -252,9 +252,17 @@ async function ownerDashboard(pool, broker, { weeks = 8, now = new Date(), confi
        FROM error_events WHERE created_at >= $1 AND resolved_at IS NULL GROUP BY fingerprint, kind, source ORDER BY n DESC, last DESC LIMIT 10`,
     [new Date(now.getTime() - 7 * DAY).toISOString()]
   );
+  // The log the owner reads to understand a failure: the latest errors and reports with their time, place and stack
+  // (the stack and message are masked when stored, lib/errorReports.js).
+  const { rows: recentErrors } = await pool.query(
+    `SELECT e.id, e.kind, e.source, e.message, left(e.stack, 3000) AS stack, e.path, e.created_at, e.agency_id, e.broker_id, e.resolved_at,
+            (SELECT count(*)::int FROM error_events x WHERE x.fingerprint = e.fingerprint AND x.created_at >= $1) AS n
+       FROM error_events e WHERE e.created_at >= $1 ORDER BY e.created_at DESC, e.id DESC LIMIT 50`,
+    [new Date(now.getTime() - 7 * DAY).toISOString()]
+  );
   const { rows: jobs } = await pool.query("SELECT name, last_status, last_finished_at, last_error FROM crm_jobs ORDER BY name");
   const { rows: trials } = await pool.query("SELECT id, name, agency_name, phone_e164, team_size, created_at FROM demo_requests ORDER BY created_at DESC LIMIT 20");
-  return { weeks: rows, agencies, topErrors, jobs, trials, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
+  return { weeks: rows, agencies, topErrors, recentErrors, jobs, trials, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
 }
 
 module.exports = { PERIODS, isOwner, isManager, brokerActivity, agencyDashboard, ownerDashboard, weekStart };

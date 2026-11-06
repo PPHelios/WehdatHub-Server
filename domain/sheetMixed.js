@@ -15,7 +15,7 @@ const num = (x) => Number(String(x).replace(/,/g, ""));
 function areas(raw) {
   const s = clean(raw).toLowerCase();
   const out = {};
-  const bua = new RegExp(`(?:bua|built[\\s-]*up(?:\\s*area)?|built|مباني|بناء)\\s*[:=]?\\s*${NUM}`).exec(s) || new RegExp(`${NUM}\\s*${SQM}?\\s*(?:bua|built[\\s-]*up|built|بناء)`).exec(s);
+  const bua = new RegExp(`(?:bua|bue|built[\\s-]*up(?:\\s*area)?|built|مباني|بناء)\\s*[:=]?\\s*${NUM}`).exec(s) || new RegExp(`${NUM}\\s*${SQM}?\\s*(?:bua|built[\\s-]*up|built|بناء)`).exec(s);
   const land = new RegExp(`(?:land(?:\\s*area)?|plot|ارض|أرض)\\s*[:=]?\\s*${NUM}`).exec(s) || new RegExp(`${NUM}\\s*${SQM}?\\s*(?:land|plot|ارض|أرض)`).exec(s);
   if (bua) out.area_value = num(bua[1]);
   if (land) out.land_area = num(land[1]);
@@ -116,7 +116,8 @@ function pickPrice(raw, rule) {
   const parts = clean(raw).split(/\s*(?:\/|;|\+|\s-\s|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   const cands = parts.map((part) => ({ part, v: amountOf(part) })).filter((c) => c.v && !DAILY.test(c.part));
   if (rule === "first") return cands[0]?.v ?? null;
-  if (rule === "long") return (cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part)) || cands.find((c) => MONTH.test(c.part)))?.v ?? null;
+  // The monthly price first, else the long-term one. The other prices stay in the description (see services/imports.js).
+  if (rule === "long") return (cands.find((c) => MONTH.test(c.part)) || cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part)))?.v ?? null;
   return null;
 }
 
@@ -128,4 +129,63 @@ function dollars(raw) {
   return v > 0 ? v : null;
 }
 
-module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN };
+/**
+ * The price a price cell means, by the owner's rules: a cell with several prices takes the long-term or monthly one
+ * (else the first, never a daily one); a dollar amount stays in dollars; a cell with dollars and an EGP price takes the EGP.
+ * → { value, usd } where value is the raw cell when nothing is read (the caller then reports it).
+ */
+function cellPrice(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return { value: raw, usd: false };
+  const usd = dollars(text);
+  if (usd !== null) return { value: usd, usd: true };
+  if (!FOREIGN.test(text)) {
+    if (priceText(text)?.ambiguous !== true) return { value: raw, usd: false };
+    const v = pickPrice(text, "long") ?? pickPrice(text, "first");
+    return { value: v ?? raw, usd: false };
+  }
+  const egp = pickPrice(text, "long");
+  if (egp) return { value: egp, usd: false };
+  const seg = clean(text).split(/\s*(?:\/|;|\+)\s*/).find((p) => FOREIGN.test(p));
+  const d = seg ? dollars(seg) : null;
+  return d !== null ? { value: d, usd: true } : { value: raw, usd: false };
+}
+
+/** A figure as written: "3,000,000", "1.200.000", "7.326,000", "1,338,355.2", "7,200,00" → the digits. */
+function figure(raw) {
+  const x = String(raw).trim().replace(/\.(?=\d{3}(?!\d))/g, "").replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(x)) return null;
+  return Number(x);
+}
+
+/** An amount with its unit: "6 M" is 6,000,000, "193,224 k" stays 193,224; a bare figure under 1,000 is held. */
+function amountWithUnit(raw, unit) {
+  const n = figure(raw);
+  if (n === null || n <= 0) return null;
+  const u = String(unit || "").toLowerCase();
+  if (n < 1000 && u === "m") return n * 1e6;
+  if (n < 1000 && u === "k") return n * 1e3;
+  return n >= 1000 ? n : null;
+}
+
+/**
+ * A resale price cell that states an installment plan: "total 3,000,000 / down payment 2,485,000 / installments 515,000
+ * till Feb 2026". → { price_value, down_payment_value, remaining_amount } or null when the figures are not all read.
+ * The whole text is kept by the caller (it goes into the description with the dates and months).
+ */
+function installmentOf(raw) {
+  const s = clean(raw).toLowerCase();
+  const num = "([\\d][\\d.,]*)\\s*(m|k)?(?![\\w])";
+  const total = new RegExp(`total(?:\\s*price)?\\s*[:=]?\\s*${num}`).exec(s);
+  const dp = new RegExp(`(?:down\\s*payment|downpayment|d\\.?\\s*p\\.?)\\s*[:=]?\\s*${num}`).exec(s);
+  const inst = new RegExp(`(?:installments?|remain\\w*)\\s*[:=]?\\s*${num}`).exec(s) || new RegExp(`${num}\\s*installments?`).exec(s);
+  if (!dp || !inst) return null;
+  const down = amountWithUnit(dp[1], dp[2]);
+  const remaining = amountWithUnit(inst[1], inst[2]);
+  if (!down || !remaining) return null;
+  const stated = total ? amountWithUnit(total[1], total[2]) : null;
+  if (total && stated === null) return null; // a total that cannot be read is held, not worked out
+  return { price_value: stated ?? down + remaining, down_payment_value: down, remaining_amount: remaining };
+}
+
+module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN, cellPrice, installmentOf };

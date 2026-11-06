@@ -106,7 +106,8 @@ describe("one cell, several facts", () => {
     expect(SheetImport.propertyType("apatment")).toBe("apartment");
     expect(SheetImport.propertyType("penthous")).toBe("penthouse");
     expect(SheetImport.propertyType("twon house")).toBe("townhouse");
-    expect(SheetImport.propertyType("triplex")).toBeNull();
+    expect(SheetImport.propertyType("triplex")).toBe("triplex");
+    expect(SheetImport.propertyType("zebra")).toBeNull();
     expect(SheetImport.columnFor("descibation ")).toBe("description");
     expect(SheetImport.columnFor("deatils")).toBe("details_text");
     expect(SheetImport.rowToDraft({ code: "MVICr 128" }).code).toBe("MVICR128");
@@ -114,7 +115,7 @@ describe("one cell, several facts", () => {
 
   test("one price out of several, and dollars", () => {
     expect(Mixed.pickPrice("long 90k / short 100k / day 6k", "long")).toBe(90000);
-    expect(Mixed.pickPrice("month 160k /year140k /day 8k", "long")).toBe(140000);
+    expect(Mixed.pickPrice("month 160k /year140k /day 8k", "long")).toBe(160000);
     expect(Mixed.pickPrice("100k / day 5k", "first")).toBe(100000);
     expect(Mixed.pickPrice("100k / day 5k", "long")).toBeNull();
     expect(Mixed.dollars("2000$")).toBe(2000);

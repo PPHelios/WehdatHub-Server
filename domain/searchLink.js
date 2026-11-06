@@ -28,6 +28,7 @@ function sanitizeFilters(input) {
   if (["primary", "resale"].includes(f.market)) out.market = f.market;
   if (["EGP", "USD", "EUR"].includes(f.currency)) out.currency = f.currency;
   out.property_types = strList(f.property_types).filter((t) => PROPERTY_TYPES.includes(t));
+  out.property_type_order = strList(f.property_type_order).filter((t) => PROPERTY_TYPES.includes(t));
   out.places = (Array.isArray(f.places) ? f.places : [])
     .filter((p) => p && ["compound", "developer", "area"].includes(p.kind) && typeof p.key === "string" && Places.placeName(p.kind, p.key))
     .map((p) => ({ kind: p.kind, key: p.key }))
