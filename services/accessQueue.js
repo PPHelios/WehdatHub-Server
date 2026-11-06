@@ -4,6 +4,7 @@
 
 const { isManager } = require("../lib/authz");
 const Privacy = require("./unitPrivacy");
+const Vis = require("../lib/visibility");
 
 const STATUSES = ["pending", "approved", "declined"];
 
@@ -41,7 +42,7 @@ async function list(pool, actor, { from, to, status = "pending", q = "", offset 
   const { rows } = await pool.query(
     `SELECT r.id, r.status, r.created_at, r.decided_at, l.code, b.name AS broker_name, d.name AS decided_by_name, count(*) OVER()::int AS n
        FROM unit_access_requests r JOIN listings l ON l.id = r.listing_id JOIN brokers b ON b.id = r.broker_id LEFT JOIN brokers d ON d.id = r.decided_by
-      WHERE ${w.join(" AND ")} ORDER BY (r.status = 'pending') DESC, r.created_at DESC LIMIT $${args.push(limit)} OFFSET $${args.push(offset)}`,
+      WHERE ${w.join(" AND ")} AND ${Vis.units("l")} ORDER BY (r.status = 'pending') DESC, r.created_at DESC LIMIT $${args.push(limit)} OFFSET $${args.push(offset)}`,
     args
   );
   return { rows, total: rows[0]?.n || 0 };
@@ -50,7 +51,7 @@ async function list(pool, actor, { from, to, status = "pending", q = "", offset 
 /** Answers one request from the queue (same rules and notifications as the unit page). → { ok } | { ok: false, reason } */
 async function answer(pool, actor, requestId, approve) {
   const { rows } = await pool.query(
-    "SELECT l.id, l.agency_id, l.code FROM unit_access_requests r JOIN listings l ON l.id = r.listing_id WHERE r.id = $1 AND r.agency_id = $2",
+    `SELECT l.id, l.agency_id, l.code FROM unit_access_requests r JOIN listings l ON l.id = r.listing_id WHERE r.id = $1 AND r.agency_id = $2 AND ${Vis.units("l")}`,
     [requestId, actor.agency_id]
   );
   if (!rows[0]) return { ok: false, reason: "not_found" };

@@ -273,8 +273,8 @@ async function ownerPeriod(pool, broker, p, config = getConfig()) {
     const n = async (sql) => (await pool.query(sql, args)).rows[0];
     const [act, units, leads, deals, errs] = await Promise.all([
       n("SELECT count(DISTINCT agency_id)::int AS agencies, count(DISTINCT broker_id)::int AS brokers FROM operation_logs WHERE created_at >= $1 AND created_at < $2 AND broker_id IS NOT NULL"),
-      n("SELECT count(*)::int AS n FROM listings WHERE created_at >= $1 AND created_at < $2"),
-      n("SELECT count(*)::int AS n FROM leads WHERE created_at >= $1 AND created_at < $2"),
+      n(`SELECT count(*)::int AS n FROM listings WHERE created_at >= $1 AND created_at < $2 AND ${Vis.units("listings")}`),
+      n(`SELECT count(*)::int AS n FROM leads WHERE created_at >= $1 AND created_at < $2 AND ${Vis.leads("leads")}`),
       n("SELECT count(*)::int AS n FROM deals WHERE created_at >= $1 AND created_at < $2 AND status <> 'cancelled'"),
       n("SELECT count(*) FILTER (WHERE kind = 'error')::int AS errors, count(*) FILTER (WHERE kind = 'report')::int AS reports FROM error_events WHERE created_at >= $1 AND created_at < $2")
     ]);
