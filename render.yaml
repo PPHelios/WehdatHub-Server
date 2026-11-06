@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: "22"
+        value: "24"
       # glibc arena cap: flyer rendering peak RSS ~250 MB instead of ~410 MB (scripts/render-flyer-samples.js).
       - key: MALLOC_ARENA_MAX
         value: "2"
