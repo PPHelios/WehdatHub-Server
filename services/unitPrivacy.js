@@ -198,4 +198,4 @@ async function decide(pool, actor, listing, requestId, approve) {
   return { ok: true };
 }
 
-module.exports = { SCOPES, SECRET_DETAILS, GRANT_DAYS, scopeOf, setScope, canSee, redact, forBroker, askStates, pinOf, mapsUrl, parsePin, setPin, requestAccess, pendingFor, hasPending, decide };
+module.exports = { SCOPES, SECRET_DETAILS, GRANT_DAYS, scopeOf, setScope, canSee, redact, forBroker, askStates, pinOf, mapsUrl, parsePin, setPin, requestAccess, mayDecide, pendingFor, hasPending, decide };

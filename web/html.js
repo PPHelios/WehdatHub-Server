@@ -116,6 +116,7 @@ const NAV = [
   { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", who: "manager" },
   { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
   { key: "links", href: "/app/links", ar: "الروابط المفتوحة", en: "Opened links", icon: "pin", group: "work" },
+  { key: "access", href: "/app/access-requests", ar: "طلبات البيانات الخاصة", en: "Private data requests", icon: "pin", group: "agency", who: "manager" },
   { key: "import", href: "/app/import", ar: "استيراد وحدات", en: "Import units", icon: "import", group: "work", desktop: true },
   { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work", desktop: true },
   { key: "dashboard", href: "/app/dashboard", ar: "لوحة الوكالة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },
@@ -124,6 +125,7 @@ const NAV = [
   { key: "insights", href: "/app/insights", ar: "أسعار المتر", en: "Price per m²", icon: "chart", group: "agency" },
   { key: "usage", href: "/app/usage", ar: "استخدامي والحصص", en: "My usage and limits", icon: "gauge", group: "agency" },
   { key: "owner", href: "/app/owner", ar: "متابعة التطبيق", en: "App tracking", icon: "tools", group: "agency", who: "owner" },
+  { key: "searchreview", href: "/app/owner/searches", ar: "مراجعة البحث", en: "Search review", icon: "tools", group: "agency", who: "owner" },
   { key: "plan", href: "/app/plan", ar: "الاشتراك", en: "Plan", icon: "card", group: "account" },
   { key: "invite", href: "/app/plan#referral", ar: "ادعُ وكالة واكسب شهر مجاني", en: "Invite an agency, get a free month", icon: "gift", group: "account" },
   { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings", group: "account" },
@@ -145,7 +147,7 @@ const DATA_ENTRY_BAR = [
 ];
 
 // The CRM owner (OWNER_BROKER_IDS) is not part of any agency: their menu is the app-tracking pages and their account.
-const CRM_NAV = new Set(["owner", "settings", "notifications", "guide"]);
+const CRM_NAV = new Set(["owner", "searchreview", "settings", "notifications", "guide"]);
 
 function navFor(broker) {
   const Dash = require("../services/dashboards");

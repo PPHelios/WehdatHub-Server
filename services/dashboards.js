@@ -265,4 +265,23 @@ async function ownerDashboard(pool, broker, { weeks = 8, now = new Date(), confi
   return { weeks: rows, agencies, topErrors, recentErrors, jobs, trials, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
 }
 
-module.exports = { PERIODS, isOwner, isManager, brokerActivity, agencyDashboard, ownerDashboard, weekStart };
+/** The app in one period (owner only): active agencies and brokers, new units, leads, deals, errors and reports; and the period before. */
+async function ownerPeriod(pool, broker, p, config = getConfig()) {
+  if (!isOwner(broker, config)) return null;
+  const one = async (from, to) => {
+    const args = [from, to];
+    const n = async (sql) => (await pool.query(sql, args)).rows[0];
+    const [act, units, leads, deals, errs] = await Promise.all([
+      n("SELECT count(DISTINCT agency_id)::int AS agencies, count(DISTINCT broker_id)::int AS brokers FROM operation_logs WHERE created_at >= $1 AND created_at < $2 AND broker_id IS NOT NULL"),
+      n("SELECT count(*)::int AS n FROM listings WHERE created_at >= $1 AND created_at < $2"),
+      n("SELECT count(*)::int AS n FROM leads WHERE created_at >= $1 AND created_at < $2"),
+      n("SELECT count(*)::int AS n FROM deals WHERE created_at >= $1 AND created_at < $2 AND status <> 'cancelled'"),
+      n("SELECT count(*) FILTER (WHERE kind = 'error')::int AS errors, count(*) FILTER (WHERE kind = 'report')::int AS reports FROM error_events WHERE created_at >= $1 AND created_at < $2")
+    ]);
+    return { agencies: act.agencies, brokers: act.brokers, units: units.n, leads: leads.n, deals: deals.n, errors: errs.errors, reports: errs.reports };
+  };
+  const [now, before] = await Promise.all([one(p.from, p.to), one(p.prevFrom, p.prevTo)]);
+  return { now, before };
+}
+
+module.exports = { ownerPeriod, PERIODS, isOwner, isManager, brokerActivity, agencyDashboard, ownerDashboard, weekStart };
