@@ -333,7 +333,7 @@ ${items.length
   <span class="muted">${stripStars(formatInterpretation({ filters }, lang))}</span>
   <span>${L(lang, `${total} وحدة`, `${total} unit(s)`)}</span>
   ${fresh ? html`<span class="ok" data-new="${fresh}">🆕 ${L(lang, `${fresh} جديد`, `${fresh} new`)}</span>` : ""}
-  <form method="post" action="/app/searches/${s.id}/delete"><button class="link" type="submit">${L(lang, "حذف", "Delete")}</button></form>
+  <form method="post" action="/app/searches/${s.id}/delete" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}"><button class="link" type="submit">${L(lang, "حذف", "Delete")}</button></form>
 </li>`
     )}</ul>`
   : html`<p class="card">${L(lang, "مفيش بحث محفوظ لسه. ابحث واضغط «احفظ البحث».", "No saved searches yet. Search, then tap Save search.")}</p>`}`

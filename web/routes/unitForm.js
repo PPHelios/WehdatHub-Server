@@ -177,7 +177,12 @@ function register(web, { pool, page, assets }) {
     const lang = langOf(req);
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length });
-    return res.json({ blockers: ev.blockers.map((b) => ({ field: b.field, label: b.label })) });
+    // A unit that looks like one the agency already has is flagged at the first Next, not only at the final save.
+    let duplicate = null;
+    try {
+      duplicate = ev.listing ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, {}) : null;
+    } catch { /* the final save checks again */ }
+    return res.json({ blockers: ev.blockers.map((b) => ({ field: b.field, label: b.label })), duplicate: duplicate || null });
   });
 
   // ✅ Create: the field table must pass; insert-only (a used code is refused, never overwritten).

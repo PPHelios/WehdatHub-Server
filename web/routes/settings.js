@@ -39,7 +39,7 @@ function brandSection(lang, agency, notice) {
     <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
     <button type="submit" class="secondary">${L(lang, "رفع الشعار", "Upload logo")}</button>
   </form>
-  ${agency.logo_url ? html`<form method="post" action="/app/settings/logo/remove"><button type="submit" class="link">${L(lang, "شيل الشعار", "Remove the logo")}</button></form>` : ""}
+  ${agency.logo_url ? html`<form method="post" action="/app/settings/logo/remove" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}"><button type="submit" class="link">${L(lang, "شيل الشعار", "Remove the logo")}</button></form>` : ""}
 </section>`;
 }
 
