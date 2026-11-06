@@ -61,7 +61,7 @@ function formBody(req, { error = null } = {}) {
   const manager = isManager(req.session.broker);
   return html`<h1>📥 ${L(lang, "استيراد عملاء من ملف", "Import clients from a file")}</h1>
 ${error ? html`<p class="card notice bad" role="alert">⚠️ ${error}</p>` : ""}
-<form method="post" action="/app/leads/import" enctype="multipart/form-data" class="card stack">
+<form method="post" action="/app/leads/import" enctype="multipart/form-data" class="card stack" data-progress>
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <p class="muted">${L(lang, "ملف CSV أو إكسيل (.xlsx)، لحد 5 ميجا و2000 صف. لازم عمود الموبايل؛ الباقي اختياري. هنوريك كل صف هيعمل إيه قبل أي حفظ. استخدم", "A CSV or Excel (.xlsx) file, up to 5 MB and 2,000 rows. The phone column is required; the rest is optional. You see what each row will do before anything is saved. Use")} <a href="/app/leads/import/template.xlsx">${L(lang, "النموذج ده", "this template")}</a>.</p>
   <input type="file" name="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>

@@ -276,7 +276,7 @@ function register(web, { pool, page, assets }) {
     const err = (n) => (notice && tab === n ? notice : "");
     return html`<h1>${L(lang, "استيراد", "Import")}</h1>
 ${tabs("import_tab", [
-  [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-grid-url="/app/import/excel/grid">
+  [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-progress data-grid-url="/app/import/excel/grid">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>📊 ${L(lang, "شيت إكسيل (مقارنة بالمخزون)", "Excel sheet (compared with your inventory)")}</h2>
   <p class="muted">${L(lang, "هنوريك الجديد والمتغير قبل أي حفظ. ينفع شيت التصدير من البوت أو", "You see what is new and what changed before anything is saved. The bot's export works, or")} <a href="/app/import/template.xlsx">${L(lang, "النموذج ده", "this template")}</a>.</p>
@@ -286,7 +286,7 @@ ${tabs("import_tab", [
   <button type="submit">${L(lang, "قارن", "Compare")}</button>
   <script src="${assets.url("zipread.js")}"></script><script src="${assets.url("xlsxread.js")}"></script><script src="${assets.url("ximport.js")}"></script>
 </form>`],
-  [html`<span class="ti">💬</span>${L(lang, "بوستات جروبات", "Group posts")}`, html`${err(1)}<form method="post" action="/app/import/group" enctype="multipart/form-data" class="card stack">
+  [html`<span class="ti">💬</span>${L(lang, "بوستات جروبات", "Group posts")}`, html`${err(1)}<form method="post" action="/app/import/group" enctype="multipart/form-data" class="card stack" data-progress>
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>💬 ${L(lang, "بوستات الجروبات", "Group posts")}</h2>
   <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>

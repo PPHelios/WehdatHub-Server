@@ -10,6 +10,10 @@
     ? { reading: "بنقرأ الملف في المتصفح…", tab: "تاب", of: "من", sending: "بنبعت الصفوف…", fail: "مقدرناش نقرأ الملف. جرب تحفظه تاني كـ .xlsx.", net: "حصلت مشكلة في الاتصال. جرب تاني." }
     : { reading: "Reading the file in your browser…", tab: "Tab", of: "of", sending: "Sending the rows…", fail: "Could not read the file. Try saving it again as .xlsx.", net: "A connection problem. Try again." };
   var status = form.querySelector("[data-xi-status]");
+  var bar = document.createElement("progress");
+  bar.max = 1;
+  bar.hidden = true;
+  if (status) status.parentNode.insertBefore(bar, status);
   var button = form.querySelector("button[type=submit]");
   var say = function (msg, bad) {
     if (!status) return;
@@ -24,11 +28,14 @@
     if (!file || !/\.xlsx$/i.test(file.name)) return; // the server path
     ev.preventDefault();
     if (button) button.disabled = true;
+    bar.hidden = false;
+    bar.removeAttribute("value");
     try {
       say(TEXT.reading);
       var zip = await ZipRead.open(file);
       var wb = await XlsxRead.readWorkbook(zip, {
         onProgress: function (p) {
+          bar.value = (p.done + 1) / Math.max(1, p.total);
           if (p.total > 1 && p.name) say(TEXT.reading + " " + TEXT.tab + " " + (p.done + 1) + " " + TEXT.of + " " + p.total + " (" + p.name + ")");
         }
       });
@@ -37,6 +44,7 @@
         return;
       }
       say(TEXT.sending);
+      bar.removeAttribute("value");
       var r = await fetch(form.getAttribute("data-grid-url"), {
         method: "POST",
         credentials: "same-origin",
@@ -52,6 +60,7 @@
     } catch (e) {
       say(e && (e.code === "NOT_ZIP" || e.code === "NOT_XLSX" || e.code === "BAD_ENTRY") ? TEXT.fail : TEXT.net, true);
     } finally {
+      bar.hidden = true;
       if (button) button.disabled = false;
     }
   });

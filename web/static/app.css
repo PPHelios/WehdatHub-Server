@@ -406,6 +406,8 @@ details.sheet { padding-block: 4px; }
 
 /* Lead board: stage columns that swipe sideways */
 .board-wrap { display: flex; align-items: stretch; gap: 6px; }
+.upbar { display: grid; gap: 6px; margin: 8px 0; }
+.upbar progress { height: 10px; }
 .board-cols { flex: 1; min-width: 0; display: flex; gap: 12px; overflow-x: scroll; scrollbar-width: auto; scrollbar-color: var(--brand) var(--soft); scroll-snap-type: x mandatory; padding-bottom: 12px; margin-inline: -16px; padding-inline: 16px; }
 .board-nav { flex: 0 0 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 1.5rem; line-height: 1; cursor: pointer; }
 @media (max-width: 719.98px) { .board-nav { display: none; } }

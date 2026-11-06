@@ -273,6 +273,53 @@
     var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
     if (f) f.classList.add("is-busy");
   });
+  // Uploads with a progress bar (forms with data-progress): the file goes up with XMLHttpRequest so the bar shows how much has
+  // gone; then the server reads it. The answer replaces the page (a redirect is followed).
+  var UP = document.documentElement.lang === "ar"
+    ? { up: "بنرفع الملف…", read: "السيرفر بيقرا الملف…", fail: "الرفع ما نجحش. جرب تاني.", net: "في مشكلة في الاتصال. جرب تاني." }
+    : { up: "Uploading…", read: "The server is reading the file…", fail: "The upload failed. Try again.", net: "A connection problem. Try again." };
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!form || !form.matches || !form.matches("form[data-progress]") || ev.defaultPrevented) return;
+    if (!window.XMLHttpRequest || !window.FormData) return;
+    ev.preventDefault();
+    var box = document.createElement("div");
+    box.className = "upbar";
+    box.setAttribute("role", "status");
+    var bar = document.createElement("progress");
+    bar.max = 1;
+    bar.value = 0;
+    var label = document.createElement("p");
+    label.className = "muted small";
+    label.textContent = UP.up;
+    box.appendChild(bar);
+    box.appendChild(label);
+    form.insertBefore(box, form.firstChild);
+    var controls = form.querySelectorAll("button, input[type=submit]");
+    for (var i = 0; i < controls.length; i++) controls[i].disabled = true;
+    var stop = function (msg) {
+      label.textContent = msg;
+      for (var k = 0; k < controls.length; k++) controls[k].disabled = false;
+    };
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", form.action, true);
+    xhr.setRequestHeader("Accept", "text/html");
+    xhr.upload.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      bar.value = e.loaded / e.total;
+      label.textContent = UP.up + " " + Math.round((e.loaded / e.total) * 100) + "%";
+    };
+    xhr.upload.onload = function () { bar.removeAttribute("value"); label.textContent = UP.read; };
+    xhr.onerror = function () { stop(UP.net); };
+    xhr.ontimeout = function () { stop(UP.fail); };
+    xhr.onload = function () {
+      if (xhr.responseURL && xhr.responseURL !== location.href) { location.assign(xhr.responseURL); return; }
+      document.open();
+      document.write(xhr.responseText);
+      document.close();
+    };
+    xhr.send(new FormData(form));
+  });
   // The stage board arrows: scroll one column left or right.
   document.addEventListener("click", function (e) {
     var step = e.target.closest && e.target.closest("[data-board-step]");
