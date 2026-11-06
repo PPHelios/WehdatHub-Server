@@ -11,7 +11,7 @@ const Notifications = require("../lib/notifications");
 
 const SCOPES = ["restricted", "all"];
 const SECRET_DETAILS = ["owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "unit_no", "address"];
-const GRANT_DAYS = 30;
+const GRANT_DAYS = 60;
 
 /** The agency's choice ('restricted' unless a manager opened it to all). */
 async function scopeOf(pool, agencyId) {

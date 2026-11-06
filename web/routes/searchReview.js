@@ -47,19 +47,28 @@ function register(web, { pool, page }) {
       total = all.length;
       const words = all.slice(pg.offset, pg.offset + pg.size);
       content = words.length
-        ? html`<table><thead><tr><th>${L(lang, "الكلمة", "Word")}</th><th>${L(lang, "تعني", "Means")}</th><th>${L(lang, "اتفاق الذكاء", "AI agreed")}</th><th>${L(lang, "مثال", "Example")}</th><th></th></tr></thead><tbody>
-${words.map((w) => html`<tr data-alias="${w.id}"><td>${w.term}</td><td>${w.target} <span class="muted">(${w.kind})</span></td><td>${w.agreed}</td><td class="muted">${w.example || ""}</td>
-<td><form method="post" action="${PATH}/words/${w.id}" class="row"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="back" value="${here}"><button name="decision" value="approve">${L(lang, "اعتمد", "Approve")}</button> <button name="decision" value="reject" class="secondary">${L(lang, "ارفض", "Reject")}</button></form></td></tr>`)}</tbody></table>`
+        ? html`<table><thead><tr><th>${L(lang, "تعديل", "Edit")}</th><th>${L(lang, "اتفاق الذكاء", "AI agreed")}</th><th>${L(lang, "مثال", "Example")}</th><th>${L(lang, "قرار", "Decide")}</th></tr></thead><tbody>
+${words.map((w) => html`<tr data-alias="${w.id}"><td><form method="post" action="${PATH}/words/${w.id}" class="stack" data-edit-word><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="back" value="${here}">
+<label>${L(lang, "الكلمة (الإملا الصح)", "Word (correct spelling)")}<input name="term" value="${w.term}" required></label>
+<label>${L(lang, "النوع", "Kind")}<select name="kind">${[["type", L(lang, "نوع وحدة", "Unit type")], ["feature", L(lang, "ميزة", "Feature")], ["place", L(lang, "كمبوند / منطقة", "Compound or area")]].map(([k, label]) => html`<option value="${k}"${k === w.kind ? raw(" selected") : ""}>${label}</option>`)}</select></label>
+<label>${L(lang, "تعني (الاسم الصح)", "Means (correct name)")}<input name="target" value="${w.target}" required></label>
+<button name="decision" value="save" class="secondary">${L(lang, "احفظ التعديل", "Save changes")}</button></form></td>
+<td>${w.agreed}</td><td class="muted">${w.example || ""}</td>
+<td><form method="post" action="${PATH}/words/${w.id}" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="back" value="${here}"><button name="decision" value="approve">${L(lang, "اعتمد", "Approve")}</button> <button name="decision" value="reject" class="secondary">${L(lang, "ارفض", "Reject")}</button></form></td></tr>`)}</tbody></table>`
         : html`<p class="muted">${L(lang, "مفيش كلمات مقترحة.", "Nothing proposed.")}</p>`;
     } else if (view === "reports") {
       const r = await Review.reports(pool, { ...win, status, q: text, offset: pg.offset, limit: pg.size });
       total = r.total;
+      const help = html`<p class="card notice">${L(lang, "البلاغ = سمسار قال إن نتيجة البحث غلط. اقرأ البحث والكلام اللي كتبه، وبعدين: لو الكلمة مش متعرفة (إملا أو اسم) صلّحها من «كلمات جديدة»، وبعدين دوس «اتصلح». لو النتيجة صح والسمسار غلطان دوس «تجاهل».", "A report means a broker said a search result was wrong. Read the search and what they wrote. If a word was not understood (spelling or name), fix it under New words, then press Mark as fixed. If the result was right, press Dismiss.")}</p>`;
       content = r.rows.length
-        ? r.rows.map((x) => html`<div class="card" data-report="${x.id}"><strong>${x.query_text || "—"}</strong> <span class="muted">(${x.source}, ${x.total})${x.status !== "open" ? ` · ${x.status}` : ""}</span>${x.note ? html`<p>${x.note}</p>` : ""}
-<p class="muted">${L(lang, "القارئ السريع", "Quick reader")}: <code dir="ltr">${short(x.local_filters)}</code></p>
-<p class="muted">${L(lang, "الذكاء", "AI")}: <code dir="ltr">${short(x.ai_filters)}</code></p>
-<p class="muted">${L(lang, "اللي اتبحث بيه", "Used")}: <code dir="ltr">${short(x.used_filters)}</code></p>
-<div class="row">${x.status === "open" ? html`${form(`${PATH}/reports/${x.id}`, { decision: "fixed" }, L(lang, "اتصلح", "Fixed"))} ${form(`${PATH}/reports/${x.id}`, { decision: "dismiss" }, L(lang, "تجاهل", "Ignore"), "secondary")}` : form(`${PATH}/reports/${x.id}`, { decision: "reopen" }, L(lang, "افتحه تاني", "Reopen"), "secondary")}</div></div>`)
+        ? html`${help}${r.rows.map((x) => html`<div class="card stack" data-report="${x.id}">
+<p><strong>${L(lang, "البحث", "Search")}:</strong> ${x.query_text || "—"} <span class="muted small">(${x.source}, ${L(lang, "نتايج", "results")}: ${x.total})${x.status !== "open" ? ` · ${x.status === "fixed" ? L(lang, "اتصلح", "fixed") : L(lang, "اتجاهل", "dismissed")}` : ""}</span></p>
+<p><strong>${L(lang, "السمسار كتب", "Broker wrote")}:</strong> ${x.note || L(lang, "(مفيش كلام)", "(no note)")}</p>
+<details><summary class="muted small">${L(lang, "تفاصيل الفلاتر", "Filter details")}</summary>
+<p class="muted small">${L(lang, "القارئ السريع", "Quick reader")}: <code dir="ltr">${short(x.local_filters)}</code></p>
+<p class="muted small">${L(lang, "الذكاء", "AI")}: <code dir="ltr">${short(x.ai_filters)}</code></p>
+<p class="muted small">${L(lang, "اللي اتبحث بيه", "Used")}: <code dir="ltr">${short(x.used_filters)}</code></p></details>
+<div class="row">${x.status === "open" ? html`${form(`${PATH}/reports/${x.id}`, { decision: "fixed" }, L(lang, "علّمه اتصلح", "Mark as fixed"))} ${form(`${PATH}/reports/${x.id}`, { decision: "dismiss" }, L(lang, "تجاهل (النتيجة صح)", "Dismiss (result was right)"), "secondary")}` : form(`${PATH}/reports/${x.id}`, { decision: "reopen" }, L(lang, "افتحه تاني", "Reopen"), "secondary")}</div></div>`)}`
         : html`<p class="muted">${L(lang, "مفيش بلاغات في الفترة دي.", "No reports in this period.")}</p>`;
     } else if (view === "audit") {
       const r = await Review.findings(pool, { ...win, status, type, q: text, offset: pg.offset, limit: pg.size });
@@ -119,7 +128,8 @@ ${Period.pager(PATH, params, pg, total, lang)}`
   });
 
   web.post("/owner/searches/words/:id", guard, async (req, res) => {
-    await Learn.decide(pool, req.params.id, req.body.decision === "approve");
+    if (req.body.decision === "save") await Review.editWord(pool, req.params.id, { term: req.body.term, kind: req.body.kind, target: req.body.target });
+    else await Learn.decide(pool, req.params.id, req.body.decision === "approve");
     return res.redirect(303, back(req.body.back));
   });
   web.post("/owner/searches/reports/:id", guard, async (req, res) => {

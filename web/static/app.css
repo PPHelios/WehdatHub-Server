@@ -543,3 +543,9 @@ details.sheet { padding-block: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
 .search-icon { display: inline-flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
+
+/* Owner review pages (search review): tables scroll sideways on a phone and their buttons wrap instead of being cut off. */
+[data-view-body] table { display: block; overflow-x: auto; }
+[data-view-body] form.row, [data-view-body] form.stack { flex-wrap: wrap; }
+[data-view-body] td { vertical-align: top; }
+
