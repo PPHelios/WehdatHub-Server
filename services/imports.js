@@ -137,6 +137,10 @@ async function knownCompounds(pool, agencyId) {
  * the sheet's highest and the agency's highest with the same letters, so a made-up code never lands on an existing unit.
  * Codes in that tab that break the pattern are marked. The marks stay on the stored rows, so later edits keep them.
  */
+/** The code prefix comes from the sheet, so it is never used as a pattern or LIKE text as it is (audit 2026-11-06). */
+const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeLike = (v) => String(v).replace(/[\\%_]/g, "\\$&");
+
 async function applyCodePatterns(pool, agencyId, sheet) {
   const next = new Map(); // prefix → last number used
   for (const t of sheet.tabs || []) {
@@ -145,9 +149,9 @@ async function applyCodePatterns(pool, agencyId, sheet) {
     const rows = sheet.rows.filter((r) => r.tab === t.name);
     const key = pat.prefix;
     if (!next.has(key)) {
-      const { rows: have } = await pool.query("SELECT code_norm FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm LIKE $2", [agencyId, key + "%"]);
+      const { rows: have } = await pool.query("SELECT code_norm FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm LIKE $2", [agencyId, escapeLike(key) + "%"]);
       const top = have.reduce((m, h) => {
-        const x = new RegExp("^" + key + "[-_ ]?(\\d+)$", "i").exec(h.code_norm || "");
+        const x = new RegExp("^" + escapeRegex(key) + "[-_ ]?(\\d+)$", "i").exec(h.code_norm || "");
         return x ? Math.max(m, Number(x[1])) : m;
       }, 0);
       next.set(key, Math.max(top, 0));
@@ -732,6 +736,8 @@ async function applyGroup(pool, broker, id, { rows = [], lang = "ar" } = {}) {
 }
 
 module.exports = {
+  escapeRegex,
+  escapeLike,
   describeChanges,
   planExcel,
   savePlan,

@@ -105,6 +105,7 @@
   | `082_search_audit_resolved.sql` | `search_log.audit_resolved_at`: the CRM owner marks a nightly search finding as handled (search review work queue). |
   | `083_search_test_cases.sql` | `search_test_cases`: searches the CRM owner keeps as test cases from a nightly finding (one per text). |
   | `084_board_periods.sql` | `admin_board_snapshots.period_days` now allows 1 (Yesterday), 7 and 30 (Month); 90 is dropped. |
+  | `085_cleanup_unused.sql` | Drops seven unused indexes (operation log by listing code, listing drafts by time, projects and commissions by developer, lead intake log by intake, search log disagreements, share links by recipient). Only indexes; no data is changed. |
   | `079_developer_profile.sql` | Developer profile free text (about, past projects, delivery record, usual payment terms, warnings), each up to 2,000 characters. Ask reads them; clients never do. |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 

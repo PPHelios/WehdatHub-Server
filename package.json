@@ -15,10 +15,9 @@
     "test:contracts": "jest tests/contract-guard.test.js --runInBand",
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
-    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
-    "test:browser": "node tests/browser/search-voice.browser.js",
-    "test:ci": "npm run test:unit && npm run test:jest",
+    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/web && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/router && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/crm && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/unit && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns tests/web tests/router tests/crm tests/unit tests/browser tests/e2e.test.js",
     "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
+    "test:ci": "npm run test:unit && npm run test:jest",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
     "migrate": "node --env-file=.env scripts/migrate.js",
     "onboard": "node --env-file=.env scripts/onboard.js",
@@ -48,10 +47,10 @@
     "html-react-parser": "5.2.17",
     "htmx.org": "2.0.11",
     "jszip": "3.10.2",
-    "multer": "2.4.0",
+    "multer": "2.5.0",
     "pdf-lib": "1.17.1",
     "pg": "8.23.1",
-    "satori": "0.10.14",
+    "satori": "0.63.2",
     "sharp": "0.35.5",
     "web-push": "3.6.7"
   },
@@ -61,5 +60,9 @@
     "playwright": "^1.63.0",
     "supertest": "7.3.1",
     "typescript": "7.0.2"
+  },
+  "overrides": {
+    "uuid": "11.1.1",
+    "fflate": "0.8.3"
   }
 }

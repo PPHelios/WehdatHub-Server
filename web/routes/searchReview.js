@@ -147,7 +147,12 @@ ${Period.pager(PATH, params, pg, total, lang)}`
     return res.redirect(303, back(req.body.back));
   });
   web.post("/owner/searches/repeat", guard, async (req, res) => {
-    if (req.body.text) await Review.resolveText(pool, String(req.body.text).slice(0, 300));
+    // Re-check first: "All handled" needs a saved test case and a clean reading. Otherwise the row stays in the queue.
+    if (req.body.text) {
+      const text = String(req.body.text).slice(0, 300);
+      const gate = await Review.recheck(pool, text);
+      if (gate.ok) await Review.resolveText(pool, text);
+    }
     return res.redirect(303, back(req.body.back));
   });
 }

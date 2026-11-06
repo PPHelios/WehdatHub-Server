@@ -441,6 +441,8 @@ function fallbackParse(text) {
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
   const egpWord = / (جنيه|جنيها|egp|pound|pounds|le) /.test(` ${normalizeSearch(raw)} `);
   const f = emptyFilters();
+  // Budget numbers with no unit: the bot asks which unit was meant (see the budget rule below).
+  const budgetAsk = [];
   // A dollar or euro budget keeps its currency; the amount is converted only at search time (domain/fx.js).
   f.currency = Fx.currencyOfText(raw);
 
@@ -556,7 +558,7 @@ function fallbackParse(text) {
       hay = c.hay;
     }
   }
-  const CAP = "(?:حدود |تحت |اقل من |under |max |مش (?:عايز )?(?:اكتر|اكثر) من |بحد اقصي |حد اقصي |اقصي |لحد )?";
+  const CAP = "(?:حدود |تحت |اقل من |under |max |less than |at most |below |up to |مش (?:عايز )?(?:اكتر|اكثر) من |بحد اقصي |حد اقصي |اقصي |لحد )?";
   c = consume(hay, new RegExp(` و?(?:مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment) ${CAP}${MONEY} `));
   if (c.m) {
     f.max_down_payment = money(c.m[1], c.m[2]);
@@ -643,6 +645,21 @@ function fallbackParse(text) {
     c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|الميزانيه|بادجت|البادجت|بدجت|بودجت|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget) (\d{4,9}) /);
     if (c.m) {
       f.price_max = Number(c.m[1]);
+      hay = c.hay;
+    }
+  }
+
+  // A budget word with a small plain number and no unit ("budget 50", "بادجيت ١٠٠", "budget 2.5"): it could be thousands or
+  // millions, so nothing is guessed. The price stays empty and the bot asks which unit was meant (rent: thousands first, sale: millions first).
+  if (f.price_max === null && f.price_min === null) {
+    c = consume(hay, /(?:budget|بادجيت|بادجت|بدجت|بودجت|بودجيت|ميزانيه|ميزانيتي|الميزانيه|الميزانيتي) (\d{1,3}(?:\.\d+)?)(?![\d.])(?! ?(?:مليون|million|m|الف|ألف|k|thousand|م|دولار|dollars?|usd|\$|جنيه|egp|يورو|eur))/);
+    if (c.m) {
+      // The normalised text drops the dot, so read a decimal ('2.5') from the raw message.
+      const decimal = /(?:budget|بادجيت|بادجت|بدجت|بودجت|بودجيت|ميزانيه|ميزانيتي|الميزانيه|الميزانيتي)\s*(\d{1,3}\.\d{1,2})(?!\d)/i.exec(raw);
+      const typed = decimal ? decimal[1] : c.m[1];
+      const thousands = `${typed} ألف`;
+      const millions = `${typed} مليون`;
+      budgetAsk.push({ typed, kind: "budget", options: f.listing_type === "sale" ? [millions, thousands] : [thousands, millions] });
       hay = c.hay;
     }
   }
@@ -819,7 +836,7 @@ function fallbackParse(text) {
     language: /[؀-ۿ]/.test(raw) ? "ar" : "en",
     filters,
     // What the local reader did and did not understand: shown to the broker and used to decide whether to ask the AI.
-    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied, guesses, ambiguous }
+    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied, guesses, ambiguous: [...ambiguous, ...budgetAsk] }
   };
 }
 

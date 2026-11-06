@@ -583,6 +583,10 @@
   // the fields of the step on screen. Without this script every step simply shows.
   function stepForm(form) {
     if (!form || form.hasAttribute("data-stepped")) return;
+    form.addEventListener("input", function (e) {
+      var lab = e.target && e.target.closest ? e.target.closest("label") : null;
+      if (lab) lab.classList.remove("field-missing");
+    });
     var names = form.getAttribute("data-steps").split("|");
     var parts = form.querySelectorAll("[data-step]");
     if (!parts.length) return;
@@ -648,6 +652,11 @@
             if (input) shown.push(blockers[b]);
           }
           if (!shown.length) { show(here + 1); return; }
+          // Red outline on each field that blocks this step; it clears when the field is changed.
+          for (var m = 0; m < shown.length; m++) {
+            var mf = form.querySelector('[data-step="' + here + '"] [name="' + shown[m].field + '"]');
+            if (mf && mf.closest("label")) mf.closest("label").classList.add("field-missing");
+          }
           stepErr.textContent = shown.map(function (x) { return x.label; }).join(" · ");
           stepErr.hidden = false;
           var first = form.querySelector('[data-step="' + here + '"] [name="' + shown[0].field + '"]');

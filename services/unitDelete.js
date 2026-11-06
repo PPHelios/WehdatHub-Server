@@ -81,6 +81,8 @@ async function purgeDue(pool, { now = new Date(), limit = 100 } = {}) {
       const l = rows[0];
       if (!l) return null;
       const { rows: imgs } = await client.query("SELECT url FROM listing_images WHERE listing_id = $1", [l.id]);
+      // Cached flyers are files too (the newest few per unit); the purge removes them with the photos.
+      const flyerFiles = Object.entries(l.flyer_cache || {}).filter(([k, v]) => k !== "updated_at" && typeof v === "string").map(([, v]) => v);
       await client.query(
         `INSERT INTO unit_reference (agency_id, code, listing_type, market, property_type, compound, compound_en, district, city, area_value, bedrooms, bathrooms,
                                      price_value, currency, finishing, furnishing, delivery_year, created_at, deleted_at, purged_at)
@@ -91,7 +93,7 @@ async function purgeDue(pool, { now = new Date(), limit = 100 } = {}) {
         ]
       );
       await client.query(`DELETE FROM listings WHERE ${Vis.allUnits()} AND id = $1`, [l.id]);
-      return imgs.map((r) => r.url);
+      return [...imgs.map((r) => r.url), ...flyerFiles];
     });
     if (photos === null) continue;
     purged += 1;

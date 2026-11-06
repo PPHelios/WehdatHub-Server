@@ -5,7 +5,7 @@
 
 const { isManager, isAgencyOwner } = require("../lib/authz");
 
-const KEEP_DAYS = 90;
+const KEEP_DAYS = 365;
 const MANAGER_TYPES = ["secret_details_request", "secret_details_decision", "command_inventory_export"];
 const OWNER_TYPES = [...MANAGER_TYPES, "secret_details_scope", "team_role_change", "portfolio_private"];
 const PAGE = 50;

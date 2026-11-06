@@ -664,6 +664,8 @@
       "xlsxSheets": ["buffer"]
     },
     "services/imports.js": {
+      "escapeRegex": ["v"],
+      "escapeLike": ["v"],
       "describeChanges": ["listing", "patch", "lang"],
       "planExcel": ["pool", "broker", "sheet", "params"],
       "savePlan": ["pool", "broker", "kind", "payload", "params"],
@@ -2312,6 +2314,7 @@
       "repeats": ["pool", "params"],
       "decideReport": ["pool", "id", "decision"],
       "decideFinding": ["pool", "id", "decision"],
+      "recheck": ["pool", "text"],
       "resolveText": ["pool", "text"],
       "addCase": ["pool", "logId", "ownerId"],
       "cases": ["pool", "params"],

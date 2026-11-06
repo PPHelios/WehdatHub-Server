@@ -217,7 +217,7 @@ function register(web, { pool, page }) {
     );
     const broker = await WebAuth.consumeLoginCode(pool, rows[0], req.body.code);
     if (!broker) {
-      logOperation(pool, { operation_type: "web_login_code", status: "failed" });
+      logOperation(pool, { operation_type: "web_login_code", status: "failed", metadata: { ip: req.ip } });
       return bad(L(req.lang, "الكود مش صح، أو انتهى، أو اتستخدم قبل كده.", "That code is wrong, expired, or already used."));
     }
     if (req.sid) await WebAuth.revokeSession(pool, req.sid);
@@ -260,11 +260,13 @@ function register(web, { pool, page }) {
     if (req.sid) await WebAuth.revokeSession(pool, req.sid);
     const { sid } = await WebAuth.createSession(pool, broker, { userAgent: req.get("user-agent") });
     S.setSessionCookie(res, sid);
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login" });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login", metadata: { ip: req.ip, ua: String(req.get("user-agent") || "").slice(0, 200) } });
     return res.redirect(303, "/app/");
   });
 
   web.post("/logout", S.noStore, S.requireBroker, S.verifyCsrf, async (req, res) => {
+    const who = req.session.broker;
+    logOperation(pool, { agency_id: who.agency_id, broker_id: who.id, operation_type: "web_logout", metadata: { ip: req.ip } });
     await WebAuth.revokeSession(pool, req.sid);
     S.clearSessionCookie(res);
     return res.redirect(303, "/app/login");
