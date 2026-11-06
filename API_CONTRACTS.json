@@ -2312,6 +2312,7 @@
       "repeats": ["pool", "params"],
       "decideReport": ["pool", "id", "decision"],
       "decideFinding": ["pool", "id", "decision"],
+      "recheck": ["pool", "text"],
       "resolveText": ["pool", "text"],
       "addCase": ["pool", "logId", "ownerId"],
       "cases": ["pool", "params"],
