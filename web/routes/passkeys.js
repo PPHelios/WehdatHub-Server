@@ -3,6 +3,8 @@
 // the options from here) and removing one. Signing in with a passkey is on the sign-in page (web/routes/auth.js).
 "use strict";
 
+const { logOperation } = require("../../lib/db");
+
 const Passkeys = require("../../services/passkeys");
 const { html } = require("../html");
 
@@ -52,12 +54,16 @@ function register(web, { pool }) {
 
   web.post("/passkey/register", async (req, res) => {
     const b = req.body || {};
-    const out = await Passkeys.register(pool, req.session.broker, { credentialId: b.credentialId, clientDataJSON: b.clientDataJSON, authenticatorData: b.authenticatorData, publicKey: b.publicKey, alg: b.alg }, { label: labelOf(req.get("user-agent")) });
+    const who = req.session.broker;
+    const out = await Passkeys.register(pool, who, { credentialId: b.credentialId, clientDataJSON: b.clientDataJSON, authenticatorData: b.authenticatorData, publicKey: b.publicKey, alg: b.alg }, { label: labelOf(req.get("user-agent")) });
+    if (!out.error) logOperation(pool, { agency_id: who.agency_id, broker_id: who.id, operation_type: "web_passkey_add", metadata: { ua: labelOf(req.get("user-agent")) } });
     return out.error ? res.status(400).json(out) : res.json(out);
   });
 
   web.post("/passkeys/:id/remove", async (req, res) => {
-    await Passkeys.remove(pool, req.session.broker, req.params.id);
+    const who = req.session.broker;
+    await Passkeys.remove(pool, who, req.params.id);
+    logOperation(pool, { agency_id: who.agency_id, broker_id: who.id, operation_type: "web_passkey_remove", metadata: { passkey: String(req.params.id).slice(0, 64) } });
     return res.redirect(303, "/app/settings?passkey=removed#passkeys");
   });
 }
