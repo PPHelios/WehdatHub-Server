@@ -132,6 +132,6 @@ test("agency alerts never reach the CRM owner, even when their broker row is an 
   const crm = { ...h.BROKERS.admin, agency_id: h.AGENCY_A };
   const res = await N.notifyBroker(h.pool, crm, { kind: "manager_alert", dedupeKey: "unassigned_digest:test", title: "📥 Unassigned leads: 1" });
   expect(res).toEqual({ skipped: true, reason: "crm_owner" });
-  const { rows } = await h.query("SELECT 1 FROM notifications WHERE broker_id = $1 AND kind = 'manager_alert'", [crm.id]);
+  const rows = await h.query("SELECT 1 FROM notifications WHERE broker_id = $1 AND kind = 'manager_alert'", [crm.id]);
   expect(rows).toHaveLength(0);
 });

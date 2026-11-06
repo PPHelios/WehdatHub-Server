@@ -48,6 +48,7 @@ test("only the owner sees and uses the agency controls", async () => {
   expect((await h.query("SELECT is_active FROM brokers WHERE id = $1", [h.BROKERS.rival.id]))[0].is_active).toBe(true);
 
   // Announcement reaches every manager; the log lists the owner's actions.
+  await h.seedBroker("manager"); // the CRM owner (admin) gets no agency alerts, so a real agency manager receives it
   const sent = await agent.post("/app/owner/announce").type("form").send({ _csrf: csrf, title: "New feature" });
   expect(sent.text).toMatch(/Sent to \d+ managers/);
   expect((await h.query("SELECT count(*)::int AS n FROM notifications WHERE title LIKE '%New feature%'"))[0].n).toBeGreaterThan(0);
