@@ -15,7 +15,7 @@ const num = (x) => Number(String(x).replace(/,/g, ""));
 function areas(raw) {
   const s = clean(raw).toLowerCase();
   const out = {};
-  const bua = new RegExp(`(?:bua|built[\\s-]*up(?:\\s*area)?|built|مباني|بناء)\\s*[:=]?\\s*${NUM}`).exec(s) || new RegExp(`${NUM}\\s*${SQM}?\\s*(?:bua|built[\\s-]*up|built|بناء)`).exec(s);
+  const bua = new RegExp(`(?:bua|bue|built[\\s-]*up(?:\\s*area)?|built|مباني|بناء)\\s*[:=]?\\s*${NUM}`).exec(s) || new RegExp(`${NUM}\\s*${SQM}?\\s*(?:bua|built[\\s-]*up|built|بناء)`).exec(s);
   const land = new RegExp(`(?:land(?:\\s*area)?|plot|ارض|أرض)\\s*[:=]?\\s*${NUM}`).exec(s) || new RegExp(`${NUM}\\s*${SQM}?\\s*(?:land|plot|ارض|أرض)`).exec(s);
   if (bua) out.area_value = num(bua[1]);
   if (land) out.land_area = num(land[1]);

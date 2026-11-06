@@ -815,7 +815,10 @@ async function pipeline(pool, actor, { now = new Date() } = {}) {
   );
   const byStage = Object.fromEntries(Stages.STAGES.map((s) => [s, 0]));
   for (const r of stages.rows) byStage[r.stage] = r.n;
-  return { stages: byStage, overdue: overdue.rows };
+  // The VIP and Portal cards: VIP leads the viewer can see, and Portal enquiries nobody has taken yet.
+  const vip = await pool.query("SELECT count(*)::int AS n FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 AND is_private", [actor.agency_id]);
+  const portal = await pool.query("SELECT count(*)::int AS n FROM portal_enquiries WHERE agency_id = $1 AND assigned_broker_id IS NULL AND lead_id IS NULL", [actor.agency_id]);
+  return { stages: byStage, overdue: overdue.rows, vip: vip.rows[0].n, portal: portal.rows[0].n };
 }
 
 /** The last 20 events (then "older" with beforeId), with the acting broker's name. Null if the lead isn't visible. */

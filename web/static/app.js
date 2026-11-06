@@ -273,6 +273,16 @@
     var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
     if (f) f.classList.add("is-busy");
   });
+  // The stage board arrows: scroll one column left or right.
+  document.addEventListener("click", function (e) {
+    var step = e.target.closest && e.target.closest("[data-board-step]");
+    if (!step) return;
+    var wrap = step.closest(".board-wrap");
+    var cols = wrap && wrap.querySelector("[data-board]");
+    if (!cols) return;
+    var col = cols.querySelector(".bcol");
+    cols.scrollBy({ left: Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12), behavior: "smooth" });
+  });
   // ← Back (and the open menu button): the previous page when it is ours, else the link's own address.
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest("a[data-back], a[data-menu-close]");
