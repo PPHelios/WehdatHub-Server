@@ -1226,6 +1226,7 @@
       "unitCheckJob": []
     },
     "services/dashboards.js": {
+      "ownerPeriod": ["pool", "broker", "p", "config"],
       "PERIODS": "Array",
       "isOwner": ["broker", "config"],
       "isManager": ["b"],
@@ -2056,6 +2057,7 @@
       "parsePin": ["text"],
       "setPin": ["pool", "actor", "listing", "pin", "params"],
       "requestAccess": ["pool", "broker", "listing"],
+      "mayDecide": ["pool", "actor"],
       "pendingFor": ["pool", "actor", "listing"],
       "hasPending": ["pool", "broker", "listing"],
       "decide": ["pool", "actor", "listing", "requestId", "approve"]
@@ -2283,6 +2285,37 @@
       "active": [],
       "isReadOnlySql": ["text"],
       "guardPool": ["pool"]
+    },
+    "lib/period.js": {
+      "KEYS": "Array",
+      "DEFAULT": "String",
+      "parse": ["value", "now"],
+      "change": ["now", "before"],
+      "tabs": ["path", "params", "key", "lang"],
+      "qs": ["params", "over"],
+      "pageOf": ["value", "size"],
+      "pager": ["path", "params", "params", "total", "lang"],
+      "startOfCairoDay": ["at"]
+    },
+    "services/accessQueue.js": {
+      "STATUSES": "Array",
+      "summary": ["pool", "actor", "p", "now"],
+      "list": ["pool", "actor", "params"],
+      "answer": ["pool", "actor", "requestId", "approve"]
+    },
+    "services/searchReview.js": {
+      "TYPES": "Object",
+      "windowOf": ["p", "changed", "now"],
+      "summary": ["pool", "p"],
+      "reports": ["pool", "params"],
+      "findings": ["pool", "params"],
+      "repeats": ["pool", "params"],
+      "decideReport": ["pool", "id", "decision"],
+      "decideFinding": ["pool", "id", "decision"],
+      "resolveText": ["pool", "text"]
+    },
+    "web/routes/accessRequests.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

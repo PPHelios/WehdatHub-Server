@@ -25,6 +25,7 @@ const PRIVATE = [
   require("./usage"),
   require("./dashboard"),
   require("./searchReview"),
+  require("./accessRequests"),
   require("./team"),
   require("./plan"),
   require("./report"),

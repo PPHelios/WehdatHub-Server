@@ -1359,7 +1359,8 @@ CREATE TABLE IF NOT EXISTS public.search_log (
   disagree text[] DEFAULT '{}'::text[] NOT NULL,
   guesses jsonb,
   asked text[] DEFAULT '{}'::text[] NOT NULL,
-  ai_error text
+  ai_error text,
+  audit_resolved_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.search_reports (
