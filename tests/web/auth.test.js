@@ -1,4 +1,4 @@
-// tests/web/auth.test.js — Release 2 step 3: magic-link sign-in (GET→POST), hashed tokens, 30-day
+// tests/web/auth.test.js — Release 2 step 3: magic-link sign-in (GET→POST), hashed tokens, 10-day
 // sessions, CSRF and rate limits
 "use strict";
 
@@ -55,7 +55,7 @@ describe("the link comes from WhatsApp and opens a confirm page", () => {
     expect(used).toBe(false);
   });
 
-  test("the POST signs in once: 30-day HttpOnly cookie, a hashed session; the link cannot be used again", async () => {
+  test("the POST signs in once: 10-day HttpOnly cookie, a hashed session; the link cannot be used again", async () => {
     const { token } = await linkFromWhatsApp();
     const agent = request.agent(web());
     const page = await agent.get(`/app/login/confirm?t=${token}`);
@@ -65,10 +65,10 @@ describe("the link comes from WhatsApp and opens a confirm page", () => {
     const cookie = res.headers["set-cookie"].find((c) => c.startsWith("aq_sid="));
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Lax/);
-    expect(cookie).toMatch(/Max-Age=2592000/);
+    expect(cookie).toMatch(/Max-Age=864000/);
     const sid = cookie.match(/^aq_sid=([^;]+)/)[1];
     const [s] = await h.query("SELECT id_hash, round(extract(epoch FROM expires_at - created_at) / 86400) AS days FROM web_sessions");
-    expect(s).toEqual({ id_hash: WebAuth.sha256(sid), days: 30 });
+    expect(s).toEqual({ id_hash: WebAuth.sha256(sid), days: 10 });
 
     const home = await agent.get("/app/");
     expect(home.status).toBe(200);
