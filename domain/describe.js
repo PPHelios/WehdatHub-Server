@@ -15,7 +15,6 @@ const TYPE_LABELS = {
   studio: ["استوديو", "Studio"],
   villa: ["فيلا", "Villa"],
   townhouse: ["تاون هاوس", "Townhouse"],
-  twinhouse: ["توين هاوس", "Twin house"],
   office: ["مكتب", "Office"],
   shop: ["محل", "Shop"],
   clinic: ["عيادة", "Clinic"],

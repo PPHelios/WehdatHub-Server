@@ -207,7 +207,7 @@ function normalizeAiSearch(raw) {
   const delivery = f.delivery || {};
   const payment = f.payment || {};
 
-  // A villa search returns every villa kind: standalone, i villa and twin villa (townhouse and twinhouse are separate).
+  // A villa search returns every villa kind: standalone, i villa and twin villa (townhouse is separate).
   const { types, order } = typeScope(Array.isArray(f.property_types) ? f.property_types : [], f.type_exact === true);
 
   const filters = canonical({

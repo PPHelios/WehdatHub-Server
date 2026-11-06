@@ -25,7 +25,6 @@ const TYPE_TERMS = {
   maisonette: ["maisonette", "maisonnette", "ميزونيت"],
   villa: ["فيلا", "فيلات", "فيلا مستقلة", "villa", "villas", "standalone", "stand alone"],
   townhouse: ["تاون هاوس", "تاون", "townhouse", "town house"],
-  twinhouse: [],
   office: ["مكتب", "مكاتب", "مكتب اداري", "office", "offices"],
   shop: ["محل تجاري", "محل", "محلات", "shop", "retail"],
   clinic: ["عيادة", "عيادات", "clinic"],

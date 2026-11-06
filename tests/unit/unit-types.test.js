@@ -143,7 +143,7 @@ describe("the type lists", () => {
     }
   });
 
-  test("unit codes: the new types have their own letters (townhouse and twinhouse already share T)", () => {
+  test("unit codes: the new types have their own letters (townhouse already uses T)", () => {
     const letters = NEW_TYPES.map((k) => UnitCode.TYPE_LETTER[k]);
     expect(new Set(letters).size).toBe(letters.length);
     for (const k of NEW_TYPES) {

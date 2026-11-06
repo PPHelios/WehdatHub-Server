@@ -2172,7 +2172,9 @@
       "pickPrice": ["raw", "rule"],
       "dollars": ["raw"],
       "readText": ["raw"],
-      "FOREIGN": "Object"
+      "FOREIGN": "Object",
+      "cellPrice": ["raw"],
+      "installmentOf": ["raw"]
     },
     "lib/aiBlock.js": {
       "kindOf": ["err"],

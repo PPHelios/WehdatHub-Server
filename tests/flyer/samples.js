@@ -87,7 +87,7 @@ const SAMPLES = [
   {
     name: "08-long-arabic-name-many-features",
     photos: 7,
-    listing: { ...base, code: "LNG-2026", property_type: "twinhouse", listing_type: "sale", market: "resale",
+    listing: { ...base, code: "LNG-2026", property_type: "twin_villa", listing_type: "sale", market: "resale",
       compound: "كمبوند الياسمين الجديد بالقرب من محور الشيخ زايد والمطار الدولي", district: "الشيخ زايد", area_key: "sheikh_zayed",
       price_value: 27500000, area_value: 320, bedrooms: 4, bathrooms: 5, finishing: "ultra_super_lux", delivery_year: 2027,
       feature_keys: ["north_facing", "corner", "master_bedroom", "dressing_room", "nanny_room", "driver_room", "laundry_room", "roof", "private_garden",

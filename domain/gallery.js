@@ -7,7 +7,7 @@
 const VERSION = "gallery-v1";
 const MAX_FILES = 10;
 const KINDS = ["render", "amenity", "master_plan", "layout", "other"];
-const TYPES = ["apartment", "duplex", "penthouse", "studio", "villa", "twinhouse", "townhouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "other"];
+const TYPES = ["apartment", "duplex", "penthouse", "studio", "villa", "townhouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "other"];
 const AREA_TOLERANCE = 0.03;
 
 const PROMPT = `You look at ONE image or PDF page from an Egyptian real-estate project's marketing material.

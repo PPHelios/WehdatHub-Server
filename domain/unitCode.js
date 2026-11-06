@@ -14,7 +14,6 @@ const TYPE_LETTER = {
   maisonette: "N",
   villa: "V",
   townhouse: "T",
-  twinhouse: "T",
   duplex: "D",
   penthouse: "P",
   chalet: "C",

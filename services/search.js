@@ -28,7 +28,7 @@ Never invent a filter that was not asked for.
     "code": "a unit code if asked for one (e.g. N4-105), else null",
     "listing_type": "sale" | "rent" | null,
     "market": "primary" | "resale" | null,
-    "property_types": [ any of: apartment, duplex, penthouse, chalet, studio, villa, townhouse, twinhouse, office, shop, clinic, commercial, land ],
+    "property_types": [ any of: apartment, duplex, penthouse, chalet, studio, villa, twin_villa, townhouse, office, shop, clinic, commercial, land ],
     "compound": "ONE compound / project name, written in English (translate an Arabic name to its usual English spelling), else null",
     "locations": [ other place names (areas, districts, cities), in English where the usual English name is known ],
     "currency": "EGP" | "USD" | "EUR" | null,
