@@ -664,6 +664,7 @@
       next.disabled = on;
       next.classList.toggle("is-busy", on);
     }
+    var warnedDup = null;
     next.addEventListener("click", function () {
       var fields = form.querySelectorAll('[data-step="' + at + '"] input, [data-step="' + at + '"] select, [data-step="' + at + '"] textarea');
       for (var i = 0; i < fields.length; i++) if (fields[i].willValidate && !fields[i].checkValidity()) { fields[i].reportValidity(); return; }
@@ -680,6 +681,20 @@
           for (var b = 0; b < blockers.length; b++) {
             var input = form.querySelector('[data-step="' + here + '"] [name="' + blockers[b].field + '"]');
             if (input) shown.push(blockers[b]);
+          }
+          // A look-alike unit is a red warning with a link, shown once; tapping Next again goes on (the final save asks again).
+          var dup = j && j.duplicate;
+          if (!shown.length && dup && warnedDup !== dup) {
+            warnedDup = dup;
+            stepErr.textContent = "";
+            var lnk = document.createElement("a");
+            lnk.href = "/app/units/" + encodeURIComponent(dup);
+            lnk.textContent = dup;
+            stepErr.appendChild(document.createTextNode(EN ? "⚠️ This looks like " : "⚠️ شكلها نفس الوحدة "));
+            stepErr.appendChild(lnk);
+            stepErr.appendChild(document.createTextNode(EN ? " already in your list. Tap Next again if it is a different unit." : " اللي عندك. لو دي وحدة تانية دوس التالي تاني."));
+            stepErr.hidden = false;
+            return;
           }
           if (!shown.length) { show(here + 1); return; }
           // Red outline on each field that blocks this step; it clears when the field is changed.

@@ -60,6 +60,16 @@ function post(agent, url, csrf, fields = {}, { photos = [], voice = null, header
 const unit = async (code) => (await h.query("SELECT * FROM listings WHERE code_norm = upper($1)", [code]))[0];
 
 describe("P13: a unit that looks like one already listed", () => {
+  test("Next's check names the look-alike unit already at the first step", async () => {
+    await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
+    const { agent, csrf } = await signIn(h, "broker");
+    let r = agent.post("/app/units/step-check").field("_csrf", csrf);
+    for (const [k, v] of Object.entries(FULL)) r = r.field(k, v);
+    const out = await r;
+    expect(out.status).toBe(200);
+    expect(out.body.duplicate).toBe("HP-OLD");
+  });
+
   test("the review panel and the save warn once; Save anyway saves", async () => {
     await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
     const { agent, csrf } = await signIn(h, "broker");
