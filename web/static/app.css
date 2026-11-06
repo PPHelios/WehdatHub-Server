@@ -549,3 +549,5 @@ details.sheet { padding-block: 4px; }
 [data-view-body] form.row, [data-view-body] form.stack { flex-wrap: wrap; }
 [data-view-body] td { vertical-align: top; }
 
+/* Mandatory fields that block a step: red outline until the field changes. */
+label.field-missing input, label.field-missing select, label.field-missing textarea { outline: 2px solid var(--bad); outline-offset: 1px; border-color: var(--bad); }
