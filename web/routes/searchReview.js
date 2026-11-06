@@ -12,7 +12,7 @@ const { html, raw } = require("../html");
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const short = (v) => (v ? JSON.stringify(v).replace(/"[a-z_]+":(null|\[\]|""),?/g, "").slice(0, 400) : "—");
-const VIEWS = ["words", "reports", "audit", "repeat"];
+const VIEWS = ["words", "reports", "audit", "repeat", "cases"];
 const STATUSES = ["open", "done", "all"];
 const pct = (n, of) => (of ? `${Math.round((n / of) * 100)}%` : "—");
 const PATH = "/app/owner/searches";
@@ -68,8 +68,15 @@ ${words.map((w) => html`<tr data-alias="${w.id}"><td>${w.term}</td><td>${w.targe
         [a.zero ? L(lang, "صفر نتايج", "zero results") : "", a.bad_ids?.length ? L(lang, `${a.bad_ids.length} نتيجة غلط`, `${a.bad_ids.length} wrong results`) : "", a.disagree?.length ? L(lang, `اختلاف: ${a.disagree.join("، ")}`, `differ: ${a.disagree.join(", ")}`) : "", a.missed_ids?.length ? L(lang, `${a.missed_ids.length} وحدة فاتت`, `${a.missed_ids.length} missed units`) : ""].filter(Boolean).join(" · ");
       content = r.rows.length
         ? html`<table><thead><tr><th>${L(lang, "البحث", "Search")}</th><th>${L(lang, "النتايج", "Results")}</th><th>${L(lang, "الملاحظة", "Finding")}</th><th></th></tr></thead><tbody>
-${r.rows.map((a) => html`<tr data-finding="${a.id}"><td>${a.query_text || "—"}</td><td>${a.total}</td><td>${finding(a.audit)}</td><td>${a.audit_resolved_at ? form(`${PATH}/audit/${a.id}`, { decision: "reopen" }, L(lang, "افتحه تاني", "Reopen"), "secondary") : form(`${PATH}/audit/${a.id}`, { decision: "resolve" }, L(lang, "اتعالج", "Handled"))}</td></tr>`)}</tbody></table>`
+${r.rows.map((a) => html`<tr data-finding="${a.id}"><td>${a.query_text || "—"}</td><td>${a.total}</td><td>${finding(a.audit)}</td><td>${a.audit_resolved_at ? form(`${PATH}/audit/${a.id}`, { decision: "reopen" }, L(lang, "افتحه تاني", "Reopen"), "secondary") : form(`${PATH}/audit/${a.id}`, { decision: "resolve" }, L(lang, "اتعالج", "Handled"))} ${form(`${PATH}/audit/${a.id}`, { decision: "addcase" }, L(lang, "ضيفه كحالة اختبار", "Add as test case"), "secondary")}</td></tr>`)}</tbody></table>`
         : html`<p class="muted">${L(lang, "مفيش ملاحظات في الفترة دي.", "Nothing found in this period.")}</p>`;
+    } else if (view === "cases") {
+      const r = await Review.cases(pool, { q: text, offset: pg.offset, limit: pg.size });
+      total = r.total;
+      content = r.rows.length
+        ? html`<table><thead><tr><th>${L(lang, "البحث", "Search")}</th><th>${L(lang, "اتضاف", "Added")}</th><th></th></tr></thead><tbody>
+${r.rows.map((x) => html`<tr data-case="${x.id}"><td>${x.query_text}</td><td class="muted">${new Date(x.created_at).toISOString().slice(0, 10)}</td><td>${form(`${PATH}/cases/${x.id}`, { decision: "remove" }, L(lang, "امسحه", "Remove"), "secondary")}</td></tr>`)}</tbody></table>`
+        : html`<p class="muted">${L(lang, "مفيش حالات اختبار لسه. ضيف من فحص الليل.", "No test cases yet. Add them from the nightly check.")}</p>`;
     } else {
       const r = await Review.repeats(pool, { ...win, q: text, offset: pg.offset, limit: pg.size });
       total = r.total;
@@ -98,11 +105,11 @@ ${card("بدون نتايج", "Zero results", pct(n.zero, n.searches), `${n.zero
 ${card("بلاغات «بحث غلط»", "\"Wrong search\" reports", n.reports, Period.change(n.reports, b.reports))}
 ${card("ملاحظات فحص الليل", "Nightly problems", pct(n.flagged, n.searches), `${n.flagged} · ${Period.change(n.flagged, b.flagged)}`)}
 </div>
-<nav class="seg" data-queue>${tab("words", "كلمات جديدة", "New words", sum.open.words)}${tab("reports", "بلاغات", "Reports", sum.open.reports)}${tab("audit", "فحص الليل", "Nightly check", sum.open.audit)}${tab("repeat", "متكرر", "Repeat offenders", 0)}</nav>
+<nav class="seg" data-queue>${tab("words", "كلمات جديدة", "New words", sum.open.words)}${tab("reports", "بلاغات", "Reports", sum.open.reports)}${tab("audit", "فحص الليل", "Nightly check", sum.open.audit)}${tab("repeat", "متكرر", "Repeat offenders", 0)}${tab("cases", "حالات الاختبار", "Test cases", 0)}</nav>
 ${view === "words" ? "" : html`<form method="get" action="${PATH}" class="row" data-filters>
 <input type="hidden" name="period" value="${p.key}"><input type="hidden" name="view" value="${view}">
 <input type="search" name="q" value="${text}" placeholder="${L(lang, "دوّر في البحث", "Search text")}">
-${view === "repeat" ? "" : html`<select name="status"><option value="open"${status === "open" ? raw(" selected") : ""}>${L(lang, "مفتوح", "Open")}</option><option value="done"${status === "done" ? raw(" selected") : ""}>${L(lang, "اتقفل", "Done")}</option><option value="all"${status === "all" ? raw(" selected") : ""}>${L(lang, "الكل", "All")}</option></select>`}
+${view === "repeat" || view === "cases" ? "" : html`<select name="status"><option value="open"${status === "open" ? raw(" selected") : ""}>${L(lang, "مفتوح", "Open")}</option><option value="done"${status === "done" ? raw(" selected") : ""}>${L(lang, "اتقفل", "Done")}</option><option value="all"${status === "all" ? raw(" selected") : ""}>${L(lang, "الكل", "All")}</option></select>`}
 ${view === "audit" ? html`<select name="type"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Object.keys(Review.TYPES).map((t) => html`<option value="${t}"${t === type ? raw(" selected") : ""}>${t}</option>`)}</select>` : ""}
 <label class="row"><input type="checkbox" name="changed" value="1"${changed ? raw(" checked") : ""}> ${L(lang, "اتغير آخر يوم", "Changed in the last day")}</label>
 <button class="secondary">${L(lang, "فلتر", "Filter")}</button></form>`}
@@ -120,7 +127,13 @@ ${Period.pager(PATH, params, pg, total, lang)}`
     return res.redirect(303, back(req.body.back));
   });
   web.post("/owner/searches/audit/:id", guard, async (req, res) => {
-    if (/^[0-9a-f-]{36}$/i.test(req.params.id)) await Review.decideFinding(pool, req.params.id, req.body.decision);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.redirect(303, back(req.body.back));
+    if (req.body.decision === "addcase") await Review.addCase(pool, req.params.id, req.session.broker.id);
+    else await Review.decideFinding(pool, req.params.id, req.body.decision);
+    return res.redirect(303, back(req.body.back));
+  });
+  web.post("/owner/searches/cases/:id", guard, async (req, res) => {
+    if (/^[0-9a-f-]{36}$/i.test(req.params.id) && req.body.decision === "remove") await Review.removeCase(pool, req.params.id);
     return res.redirect(303, back(req.body.back));
   });
   web.post("/owner/searches/repeat", guard, async (req, res) => {

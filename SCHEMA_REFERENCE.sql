@@ -1443,6 +1443,14 @@ CREATE TABLE IF NOT EXISTS public.share_link_opens (
   visitor text NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.search_test_cases (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  query_text text NOT NULL,
+  source_log_id uuid,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1510,6 +1518,7 @@ ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY 
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_pkey PRIMARY KEY (id);
 ALTER TABLE search_log ADD CONSTRAINT search_log_pkey PRIMARY KEY (id);
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_pkey PRIMARY KEY (id);
+ALTER TABLE search_test_cases ADD CONSTRAINT search_test_cases_pkey PRIMARY KEY (id);
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_pkey PRIMARY KEY (kind, key);
 ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_pkey PRIMARY KEY (id);
 ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
@@ -1548,7 +1557,7 @@ ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp >= 0));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
-ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_period_days_check CHECK ((period_days = ANY (ARRAY[7, 30, 90])));
+ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_period_days_check CHECK ((period_days = ANY (ARRAY[1, 7, 30])));
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_tab_check CHECK ((tab = ANY (ARRAY['overview'::text, 'money'::text, 'ai'::text, 'performance'::text, 'search'::text, 'agencies'::text, 'operations'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
@@ -1858,6 +1867,8 @@ ALTER TABLE search_log ADD CONSTRAINT search_log_rerun_of_fkey FOREIGN KEY (reru
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_search_log_id_fkey FOREIGN KEY (search_log_id) REFERENCES search_log(id) ON DELETE CASCADE;
+ALTER TABLE search_test_cases ADD CONSTRAINT search_test_cases_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE search_test_cases ADD CONSTRAINT search_test_cases_source_log_id_fkey FOREIGN KEY (source_log_id) REFERENCES search_log(id) ON DELETE SET NULL;
 ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_token_hash_fkey FOREIGN KEY (token_hash) REFERENCES share_links(token_hash) ON DELETE CASCADE;
 ALTER TABLE share_links ADD CONSTRAINT share_links_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE share_links ADD CONSTRAINT share_links_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2003,6 +2014,7 @@ CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id,
 CREATE INDEX search_log_disagree ON public.search_log USING btree (created_at DESC) WHERE (cardinality(disagree) > 0);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
+CREATE UNIQUE INDEX search_test_cases_text ON public.search_test_cases USING btree (lower(TRIM(BOTH FROM query_text)));
 CREATE INDEX share_link_opens_token_idx ON public.share_link_opens USING btree (token_hash, opened_at DESC);
 CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);

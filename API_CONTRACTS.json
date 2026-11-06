@@ -2312,7 +2312,10 @@
       "repeats": ["pool", "params"],
       "decideReport": ["pool", "id", "decision"],
       "decideFinding": ["pool", "id", "decision"],
-      "resolveText": ["pool", "text"]
+      "resolveText": ["pool", "text"],
+      "addCase": ["pool", "logId", "ownerId"],
+      "cases": ["pool", "params"],
+      "removeCase": ["pool", "id"]
     },
     "web/routes/accessRequests.js": {
       "register": ["web", "params"]

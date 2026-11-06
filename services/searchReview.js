@@ -108,4 +108,33 @@ async function resolveText(pool, text) {
   return r.rowCount;
 }
 
-module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, resolveText };
+/** Keeps a finding's search text as a test case (once per text). → true when added, false when it already was one or missing. */
+async function addCase(pool, logId, ownerId) {
+  const { rows } = await pool.query("SELECT query_text FROM search_log WHERE id = $1", [logId]);
+  if (!rows[0]) return false;
+  const r = await pool.query(
+    "INSERT INTO search_test_cases (query_text, source_log_id, created_by) VALUES ($1, $2, $3) ON CONFLICT (lower(trim(query_text))) DO NOTHING",
+    [rows[0].query_text, logId, ownerId || null]
+  );
+  return r.rowCount > 0;
+}
+
+/** The kept test cases, newest first, filtered by text. → { rows, total } */
+async function cases(pool, { q = "", offset = 0, limit = 20 }) {
+  const w = ["TRUE"];
+  const args = [];
+  if (q) w.push(`query_text ILIKE $${args.push(like(q))}`);
+  const { rows } = await pool.query(
+    `SELECT id, query_text, created_at, count(*) OVER()::int AS n FROM search_test_cases WHERE ${w.join(" AND ")} ORDER BY created_at DESC LIMIT $${args.push(limit)} OFFSET $${args.push(offset)}`,
+    args
+  );
+  return { rows, total: rows[0]?.n || 0 };
+}
+
+/** Removes a test case. */
+async function removeCase(pool, id) {
+  const r = await pool.query("DELETE FROM search_test_cases WHERE id = $1", [id]);
+  return r.rowCount > 0;
+}
+
+module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, resolveText, addCase, cases, removeCase };
