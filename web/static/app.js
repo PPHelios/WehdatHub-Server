@@ -337,8 +337,11 @@
     var ours = false;
     try { ours = document.referrer && new URL(document.referrer).origin === location.origin; } catch (err) { ours = false; }
     if (ours && history.length > 1) {
+      // Telegram's webview often ignores history.back(): if the page did not change, follow the link's own address.
       e.preventDefault();
+      var here = location.href, to = a.href;
       history.back();
+      setTimeout(function () { if (location.href === here) location.href = to; }, 400);
     }
   });
   // <ol data-sortable>: reorder items by dragging or with their [data-move="up|down"] buttons; each item's hidden
