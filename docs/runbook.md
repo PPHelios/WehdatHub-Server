@@ -38,6 +38,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `AI_PRICES_JSON` | no | built-in | Model prices for the cost column, e.g. `{"gemini-3.8-flash":{"inPerM":0.75,"outPerM":3.75}}`. Built in (checked 2026-10-25): 3.8/3.6 Flash $0.75 in / $3.75 out per million tokens, rising to $1.50 / $7.50 on 1 January 2027 (applied automatically by date); 3.5 Flash-Lite $0.30 / $2.50. Rows logged before 2026-10-25 used older prices and under-count cost about 10×. |
 | `FLYER_WORKER` / `FLYER_MAX_QUEUE` / `FLYER_TIMEOUT_MS` | no | on / `6` / `45000` | Flyer rendering worker thread. |
 | `SLOW_QUERY_MS` | no | `1000` | Slow-query log threshold. |
+| `SLOW_REQUEST_MS` | no | `2000` | A website page slower than this is stored in the problem log (kind slow), one row per page per minute. |
 | `WEBHOOK_ALLOW_UNSIGNED` | no | — | Local development only; ignored in production. |
 | `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` | yes | — | VAPID keys for website notifications (web push). Generate once: `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Rotating them turns push off for every broker until they turn it on again in ⚙️ Settings. |
 | `LEAD_HASH_KEY` | yes | dev key outside production | Secret for the keyed hash (HMAC-SHA256) of an erased client's phone in `lead_erasures`, so a re-capture can say "this client asked to be deleted" without keeping the number. Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. Never rotate it casually: earlier erasures stop matching. |
