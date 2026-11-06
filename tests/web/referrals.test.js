@@ -59,6 +59,7 @@ test("managers get a stable invite code and link on /app/plan; brokers don't", a
 });
 
 test("sign-up with an invite code; the first payment gives both agencies a free month, once; credits wait for the next payment", async () => {
+  await h.seedBroker("manager"); // the CRM owner (admin) gets no agency alerts, so a real agency manager receives them
   const code = await Referrals.codeOf(h.pool, h.AGENCY_A);
   const a = await signIn(h, "admin");
   await a.agent.post("/app/owner/signup").type("form").send({ _csrf: a.csrf, open: "1" });
