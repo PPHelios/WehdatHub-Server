@@ -84,6 +84,12 @@ async function due(pool, { now = new Date() } = {}) {
     out.push({ key: `ai_spend:${now.toISOString().slice(0, 10)}`, title: `💸 AI spend is about $${spend.usd.toFixed(2)} in the last 24 hours (limit $${lim.aiDailyUsd})`, body: "Open the board's AI tab." });
   }
 
+  // 5b. The weekly storage check found files nothing points to (a dry run unless deleting is switched on).
+  const [store] = (await pool.query("SELECT watermark FROM crm_jobs WHERE name = 'storage_check'")).rows;
+  if (store?.watermark?.orphans > 0 && store.watermark.dry_run) {
+    out.push({ key: "storage_orphans", title: `🗑️ ${store.watermark.orphans} unused photo files (${Math.round(store.watermark.bytes / 1048576)} MB) found in storage`, body: "Dry run only. Set STORAGE_CLEANUP_DELETE=true to remove them." });
+  }
+
   // 6. Unusual activity from the audit log: many failed sign-ins in an hour, or one person exporting the inventory again and again.
   const [fails] = (await pool.query("SELECT count(*)::int AS n FROM audit_logs WHERE action LIKE '% failed' AND created_at >= $1", [since(HOUR)])).rows;
   if (fails.n >= lim.failedSignIns) out.push({ key: "failed_signins", title: `🔐 ${fails.n} failed sign-in attempts in the last hour`, body: "Check the agencies' activity logs." });

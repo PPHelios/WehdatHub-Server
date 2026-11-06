@@ -824,6 +824,13 @@
     "web/routes/activityLog.js": {
       "register": ["web", "params"]
     },
+    "services/storageCheck.js": {
+      "BUCKET": "String",
+      "MIN_AGE_DAYS": "Number",
+      "findOrphans": ["pool", "params"],
+      "run": ["pool", "params"],
+      "checkJob": []
+    },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",
       "withClient": ["req", "_res", "next"],
