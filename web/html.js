@@ -228,7 +228,7 @@ function testRoleForm(broker, lang) {
   const en = lang === "en";
   const TestRole = require("../lib/testRole");
   const names = { owner: en ? "Owner" : "مالك", manager: en ? "Manager" : "مدير", team_lead: en ? "Team lead" : "قايد فريق", broker: en ? "Broker" : "بروكر", data_entry: en ? "Data entry" : "مدخل بيانات" };
-  return html`<form method="post" action="/app/test-role" class="test-role" data-test-role><label><span class="sr-only">${en ? "Test role" : "دور التجربة"}</span><select name="role" data-autosubmit>${TestRole.ROLES.map((r) => html`<option value="${r}"${r === broker.role ? raw(" selected") : ""}>${names[r]}</option>`)}</select></label><noscript><button type="submit">✓</button></noscript></form>`;
+  return html`<form method="post" action="/app/test-role" class="test-role" data-test-role><label><span class="sr-only">${en ? "Test role" : "دور التجربة"}</span><select name="role" data-autosubmit>${TestRole.ROLES.map((r) => html`<option value="${r}"${r === (broker.home_role || broker.role) ? raw(" selected") : ""}>${names[r]}</option>`)}</select></label><noscript><button type="submit">✓</button></noscript></form>`;
 }
 
 function viewAgencyForm(broker, lang) {
@@ -244,7 +244,7 @@ function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   return html`<header class="top">
   <a class="brand" href="${broker ? "/app/" : "/"}" aria-label="WehdatHub">${MARK}<span dir="ltr">Wehdat<b>Hub</b></span></a>
   ${broker && TestRole.canSwitch(broker) && (TestRole.canView(broker) || broker.view_of) ? viewAgencyForm(broker, lang) : ""}
-  ${broker && TestRole.canSwitch(broker) && !broker.view_of ? testRoleForm(broker, lang) : ""}
+  ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
   ${broker
     ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
   <a class="iconbtn" href="${tab === "more" ? "/app/" : "/app/more"}" aria-label="${tab === "more" ? (en ? "Close menu" : "إغلاق القائمة") : (en ? "More" : "المزيد")}"${tab === "more" ? raw(' aria-current="page" data-menu-close') : ""}>${icon("more")}</a>`

@@ -12,8 +12,11 @@ function register(web, { pool }) {
     if (!TestRole.canSwitch(broker)) return res.status(403).type("text/plain").send("Not available");
     const role = String(req.body.role || "");
     if (!TestRole.ROLES.includes(role)) return res.status(422).type("text/plain").send("Unknown role");
-    await pool.query("UPDATE brokers SET role = $2 WHERE id = $1 AND agency_id = $3", [broker.id, role, broker.agency_id]);
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "test_role_switch", metadata: { from: broker.role, to: role } });
+    // The test number's own row, in its own (test) agency, even while it views another agency.
+    const home = TestRole.homeAgencyOf(broker);
+    const from = broker.home_role || broker.role;
+    await pool.query("UPDATE brokers SET role = $2 WHERE id = $1 AND agency_id = $3", [broker.id, role, home]);
+    logOperation(pool, { agency_id: home, broker_id: broker.id, operation_type: "test_role_switch", metadata: { from, to: role } });
     return res.redirect(303, "/app/");
   });
 
