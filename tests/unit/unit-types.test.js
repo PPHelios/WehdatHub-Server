@@ -224,3 +224,12 @@ describe("search by type", () => {
     expect(sql).toMatch(/ORDER BY\s+CASE l\.property_type WHEN \$\d+ THEN 0/);
   });
 });
+
+describe("twin house and twin villa", () => {
+  test("either spelling searches the twin villas first, and imports as a twin villa", () => {
+    for (const text of ["twin house", "twin villa", "twinhouse", "توين هاوس"]) {
+      expect(Q.normalizeAiSearch(Q.fallbackParse(text)).filters.property_type_order[0]).toBe("twin_villa");
+      expect(SheetImport.propertyType(text)).toBe("twin_villa");
+    }
+  });
+});
