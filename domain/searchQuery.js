@@ -556,7 +556,7 @@ function fallbackParse(text) {
       hay = c.hay;
     }
   }
-  const CAP = "(?:حدود |تحت |اقل من |under |max |مش (?:عايز )?(?:اكتر|اكثر) من |بحد اقصي |حد اقصي |اقصي |لحد )?";
+  const CAP = "(?:حدود |تحت |اقل من |under |max |less than |at most |below |up to |مش (?:عايز )?(?:اكتر|اكثر) من |بحد اقصي |حد اقصي |اقصي |لحد )?";
   c = consume(hay, new RegExp(` و?(?:مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment) ${CAP}${MONEY} `));
   if (c.m) {
     f.max_down_payment = money(c.m[1], c.m[2]);
@@ -643,6 +643,15 @@ function fallbackParse(text) {
     c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|الميزانيه|بادجت|البادجت|بدجت|بودجت|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget) (\d{4,9}) /);
     if (c.m) {
       f.price_max = Number(c.m[1]);
+      hay = c.hay;
+    }
+  }
+
+  // A budget word with a small plain number and no unit ("budget 50", "بادجيت ١٠٠"): the number is in thousands of EGP.
+  if (f.price_max === null && f.price_min === null) {
+    c = consume(hay, /(?:budget|بادجيت|بادجت|بدجت|بودجت|بودجيت|ميزانيه|ميزانيتي|الميزانيه|الميزانيتي) (\d{1,3}(?:\.\d+)?)(?![\d.])(?! ?(?:مليون|million|m|الف|ألف|k|thousand|م|دولار|dollars?|usd|\$|جنيه|egp|يورو|eur))/);
+    if (c.m) {
+      f.price_max = Math.round(Number(c.m[1]) * 1000);
       hay = c.hay;
     }
   }
