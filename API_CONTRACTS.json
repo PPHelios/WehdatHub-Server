@@ -664,6 +664,8 @@
       "xlsxSheets": ["buffer"]
     },
     "services/imports.js": {
+      "escapeRegex": ["v"],
+      "escapeLike": ["v"],
       "describeChanges": ["listing", "patch", "lang"],
       "planExcel": ["pool", "broker", "sheet", "params"],
       "savePlan": ["pool", "broker", "kind", "payload", "params"],
