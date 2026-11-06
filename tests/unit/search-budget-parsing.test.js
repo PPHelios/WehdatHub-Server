@@ -8,14 +8,26 @@ const Q = require("../../domain/searchQuery");
 const read = (text) => Q.fallbackParse(text).filters;
 
 describe("budget with a small plain number", () => {
+  // Haytham 2026-11-06: "50" can mean 50 thousand or 50 million, so the price is never guessed. The bot asks which unit.
   test.each([
-    ["budget 50", 50000],
-    ["بادجيت ١٠٠", 100000],
-    ["عايز شقة budget 70", 70000]
-  ])("%s reads as a price ceiling of %i", (text, expected) => {
-    const f = read(text);
-    expect(f.price_max).toBe(expected);
-    expect(f.price_min).toBeNull();
+    ["budget 50", "50"],
+    ["بادجيت ١٠٠", "١٠٠"],
+    ["budget 2.5", "2.5"]
+  ])("%s leaves the price empty and asks for the unit", (text, typed) => {
+    const parsed = Q.fallbackParse(text);
+    expect(parsed.filters.price_max).toBeNull();
+    expect(parsed.filters.price_min).toBeNull();
+    const ask = parsed.meta.ambiguous.find((a) => a.kind === "budget");
+    expect(ask).toBeDefined();
+    expect(ask.typed).toBe(typed);
+    expect(ask.options).toHaveLength(2);
+  });
+
+  test("rent offers thousands first, sale offers millions first", () => {
+    const rent = Q.fallbackParse("شقة للايجار budget 50").meta.ambiguous.find((a) => a.kind === "budget");
+    const sale = Q.fallbackParse("شقة للبيع budget 2.5").meta.ambiguous.find((a) => a.kind === "budget");
+    expect(rent.options[0]).toMatch(/ألف/);
+    expect(sale.options[0]).toMatch(/مليون/);
   });
 
   test("a budget with a full amount and dollar sign is unchanged", () => {

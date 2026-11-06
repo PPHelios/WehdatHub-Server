@@ -441,6 +441,8 @@ function fallbackParse(text) {
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
   const egpWord = / (جنيه|جنيها|egp|pound|pounds|le) /.test(` ${normalizeSearch(raw)} `);
   const f = emptyFilters();
+  // Budget numbers with no unit: the bot asks which unit was meant (see the budget rule below).
+  const budgetAsk = [];
   // A dollar or euro budget keeps its currency; the amount is converted only at search time (domain/fx.js).
   f.currency = Fx.currencyOfText(raw);
 
@@ -647,11 +649,15 @@ function fallbackParse(text) {
     }
   }
 
-  // A budget word with a small plain number and no unit ("budget 50", "بادجيت ١٠٠"): the number is in thousands of EGP.
+  // A budget word with a small plain number and no unit ("budget 50", "بادجيت ١٠٠", "budget 2.5"): it could be thousands or
+  // millions, so nothing is guessed. The price stays empty and the bot asks which unit was meant (rent: thousands first, sale: millions first).
   if (f.price_max === null && f.price_min === null) {
     c = consume(hay, /(?:budget|بادجيت|بادجت|بدجت|بودجت|بودجيت|ميزانيه|ميزانيتي|الميزانيه|الميزانيتي) (\d{1,3}(?:\.\d+)?)(?![\d.])(?! ?(?:مليون|million|m|الف|ألف|k|thousand|م|دولار|dollars?|usd|\$|جنيه|egp|يورو|eur))/);
     if (c.m) {
-      f.price_max = Math.round(Number(c.m[1]) * 1000);
+      const typed = c.m[1];
+      const thousands = `${typed} ألف`;
+      const millions = `${typed} مليون`;
+      budgetAsk.push({ typed, kind: "budget", options: f.listing_type === "sale" ? [millions, thousands] : [thousands, millions] });
       hay = c.hay;
     }
   }
@@ -828,7 +834,7 @@ function fallbackParse(text) {
     language: /[؀-ۿ]/.test(raw) ? "ar" : "en",
     filters,
     // What the local reader did and did not understand: shown to the broker and used to decide whether to ask the AI.
-    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied, guesses, ambiguous }
+    meta: { unsure: reasons.length > 0, reasons, leftover: leftovers, leftover_numbers: leftNumbers, unapplied, guesses, ambiguous: [...ambiguous, ...budgetAsk] }
   };
 }
 

@@ -397,6 +397,12 @@ async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE
   const parse = await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
   const intent = Q.classifyIntent(parse.parsed);
   const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons, disagree: parse.disagree || [], aiError: parse.aiError || null };
+  // A budget with no unit ("budget 50") is never guessed: ask which unit was meant, and show how many units fit without the budget.
+  const budgetUnit = (parse.parsed?.meta?.ambiguous || []).some((a) => a.kind === "budget");
+  if (budgetUnit && intent !== "listing" && !allowDrop) {
+    const without = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: false });
+    return { ...base, rows: [], ids: [], total: 0, relaxed: false, status: "ask", ask: { terms: [], numbers: [], withoutTotal: without.total }, timings: { parseMs: parse.ms, dbMs: without.dbMs } };
+  }
   if (intent !== "search") return { ...base, status: intent, rows: [], ids: [], total: 0, relaxed: false, timings: { parseMs: parse.ms, dbMs: 0 } };
   const res = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: !allowDrop });
   // The AI could not answer and the quick reader left a number it could not place ("بادجت 70000"): ask, never search without it.
