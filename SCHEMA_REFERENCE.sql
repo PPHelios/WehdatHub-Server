@@ -65,6 +65,29 @@ AS $function$
   FROM (SELECT btrim(left(btrim(regexp_replace(lower(coalesce(p_name, '')), '[^a-z0-9]+', '-', 'g'), '-'), 40), '-') AS s) x
 $function$;
 
+CREATE OR REPLACE FUNCTION public.audit_logs_protect()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    -- Only the foreign-key clean-up (agency or broker removed) may touch a row: it blanks those two ids and nothing else.
+    IF NEW.id = OLD.id AND NEW.action = OLD.action AND NEW.severity IS NOT DISTINCT FROM OLD.severity
+       AND NEW.payload IS NOT DISTINCT FROM OLD.payload AND NEW.created_at = OLD.created_at
+       AND NEW.ip IS NOT DISTINCT FROM OLD.ip AND NEW.user_agent IS NOT DISTINCT FROM OLD.user_agent
+       AND NEW.target_type IS NOT DISTINCT FROM OLD.target_type AND NEW.target_id IS NOT DISTINCT FROM OLD.target_id
+       AND (NEW.agency_id IS NULL OR NEW.agency_id = OLD.agency_id) AND (NEW.broker_id IS NULL OR NEW.broker_id = OLD.broker_id) THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'audit_logs rows cannot be changed';
+  END IF;
+  IF OLD.created_at > NOW() - INTERVAL '12 months' THEN
+    RAISE EXCEPTION 'audit_logs rows are kept for 12 months';
+  END IF;
+  RETURN OLD;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text text)
  RETURNS text
  LANGUAGE sql
@@ -559,7 +582,11 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   action character varying(64) NOT NULL,
   severity character varying(16) DEFAULT 'info'::character varying,
   payload jsonb DEFAULT '{}'::jsonb,
-  created_at timestamp with time zone DEFAULT now()
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  ip text,
+  user_agent text,
+  target_type text,
+  target_id text
 );
 
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
@@ -1746,7 +1773,7 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (update
 ALTER TABLE agencies ADD CONSTRAINT agencies_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
-ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
@@ -1899,6 +1926,7 @@ CREATE UNIQUE INDEX agencies_referral_code_idx ON public.agencies USING btree (r
 CREATE INDEX agencies_referred_by_idx ON public.agencies USING btree (referred_by) WHERE (referred_by IS NOT NULL);
 CREATE UNIQUE INDEX uq_agencies_slug ON public.agencies USING btree (slug);
 CREATE INDEX idx_assistant_questions_agency ON public.assistant_questions USING btree (agency_id, created_at DESC);
+CREATE INDEX idx_audit_logs_action ON public.audit_logs USING btree (agency_id, action, created_at DESC);
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_broker_passkeys_broker ON public.broker_passkeys USING btree (broker_id);
 CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
@@ -2025,6 +2053,7 @@ CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree 
 CREATE INDEX idx_web_sessions_broker ON public.web_sessions USING btree (broker_id);
 
 CREATE TRIGGER trg_agencies_slug BEFORE INSERT OR UPDATE OF slug, name ON public.agencies FOR EACH ROW WHEN (((new.slug IS NULL) OR (btrim(new.slug) = ''::text) OR (new.slug <> lower(btrim(new.slug))))) EXECUTE FUNCTION agencies_set_slug();
+CREATE TRIGGER audit_logs_protect_trg BEFORE DELETE OR UPDATE ON public.audit_logs FOR EACH ROW EXECUTE FUNCTION audit_logs_protect();
 CREATE CONSTRAINT TRIGGER trg_deal_shares_balance AFTER INSERT OR DELETE OR UPDATE ON public.deal_splits DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION deal_shares_balance();
 CREATE TRIGGER trg_deal_splits_same_agency BEFORE INSERT OR UPDATE ON public.deal_splits FOR EACH ROW EXECUTE FUNCTION deal_splits_same_agency();
 CREATE CONSTRAINT TRIGGER trg_deal_total_balance AFTER INSERT OR UPDATE OF commission_total, external_share ON public.deals DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION deal_shares_balance();

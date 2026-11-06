@@ -21,6 +21,9 @@ function limits() {
     aiMinCalls: num("SYSTEM_ALERT_AI_MIN_CALLS", 10),
     quotaPct: num("SYSTEM_ALERT_QUOTA_PCT", 90),
     paymentHours: num("SYSTEM_ALERT_PAYMENT_HOURS", 24),
+    aiDailyUsd: num("SYSTEM_ALERT_AI_DAILY_USD", 5),
+    failedSignIns: num("SYSTEM_ALERT_FAILED_SIGNINS", 10),
+    exportsPerDay: num("SYSTEM_ALERT_EXPORTS_PER_DAY", 3),
     cooldownHours: num("SYSTEM_ALERT_COOLDOWN_HOURS", 6)
   };
 }
@@ -74,6 +77,22 @@ async function due(pool, { now = new Date() } = {}) {
     [since(lim.paymentHours * HOUR)]
   );
   for (const p of pay) out.push({ key: `payment:${p.id}`, title: `💳 A payment from ${p.name} has waited over ${lim.paymentHours} hours`, body: "Confirm or cancel it on the board." });
+
+  // 5. The AI bill for the last 24 hours (estimated from the logged tokens) is over the daily limit.
+  const [spend] = (await pool.query("SELECT COALESCE(sum(estimated_cost_usd), 0)::float AS usd FROM operation_logs WHERE created_at >= $1 AND model_used IS NOT NULL", [since(24 * HOUR)])).rows;
+  if (spend.usd >= lim.aiDailyUsd) {
+    out.push({ key: `ai_spend:${now.toISOString().slice(0, 10)}`, title: `💸 AI spend is about $${spend.usd.toFixed(2)} in the last 24 hours (limit $${lim.aiDailyUsd})`, body: "Open the board's AI tab." });
+  }
+
+  // 6. Unusual activity from the audit log: many failed sign-ins in an hour, or one person exporting the inventory again and again.
+  const [fails] = (await pool.query("SELECT count(*)::int AS n FROM audit_logs WHERE action LIKE '% failed' AND created_at >= $1", [since(HOUR)])).rows;
+  if (fails.n >= lim.failedSignIns) out.push({ key: "failed_signins", title: `🔐 ${fails.n} failed sign-in attempts in the last hour`, body: "Check the agencies' activity logs." });
+  const { rows: exp } = await pool.query(
+    `SELECT a.broker_id, b.name, count(*)::int AS n FROM audit_logs a LEFT JOIN brokers b ON b.id = a.broker_id
+      WHERE a.action = 'command_inventory_export' AND a.created_at >= $1 GROUP BY a.broker_id, b.name HAVING count(*) >= $2 LIMIT 10`,
+    [since(24 * HOUR), lim.exportsPerDay]
+  );
+  for (const x of exp) out.push({ key: `exports:${x.broker_id}:${now.toISOString().slice(0, 10)}`, title: `📤 ${x.name || "Someone"} exported the inventory ${x.n} times in a day`, body: "Check the agency's activity log." });
   return out;
 }
 

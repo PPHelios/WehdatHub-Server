@@ -10,6 +10,7 @@ const express = require("express");
 const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
 const Session = require("./session");
+const Audit = require("../services/audit");
 const { html, layout, withCsrf } = require("./html");
 const Notifications = require("../lib/notifications");
 const ErrorReports = require("../lib/errorReports");
@@ -95,6 +96,7 @@ function mountWeb(app, { pool, config }) {
   const ctx = { pool, config, assets, page };
   const pages = require("./routes");
   web.use(Session.loadSession(pool));
+  web.use(Audit.withClient);
   // P7: ?lang=ar|en on any page switches the language: a cookie before sign-in, the broker's preferred_lang after.
   web.use(async (req, res, next) => {
     try {
@@ -136,6 +138,8 @@ function mountWeb(app, { pool, config }) {
     if (req.method === "GET" && !req.get("HX-Request")) return res.redirect(303, "/app/units");
     return res.status(403).type("text/plain").send(req.lang === "en" ? "Not available for data entry" : "مش متاح لمدخل البيانات");
   });
+  // Every change under these areas is written to the audit log first; if that fails the change is refused.
+  priv.use(Audit.auditWrites(pool, /^\/(catalogue|settings|team|owner|usage|units\/[^/]+\/project)(\/|$)/));
   // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).
   priv.use(async (req, _res, next) => {
     if (req.method === "GET" && !req.get("HX-Request")) {

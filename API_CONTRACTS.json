@@ -824,6 +824,18 @@
     "web/routes/activityLog.js": {
       "register": ["web", "params"]
     },
+    "services/audit.js": {
+      "KEEP_MONTHS": "Number",
+      "withClient": ["req", "_res", "next"],
+      "BATCH": "Number",
+      "fromReq": ["req"],
+      "record": ["pool", "e"],
+      "recordStrict": ["pool", "e"],
+      "fromOperation": ["pool", "p"],
+      "auditWrites": ["pool", "pathPattern", "params"],
+      "cleanup": ["pool"],
+      "cleanupJob": []
+    },
     "services/activityLog.js": {
       "people": ["pool", "viewer"],
       "KEEP_DAYS": "Number",
