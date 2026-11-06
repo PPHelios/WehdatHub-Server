@@ -135,7 +135,7 @@ function loadConfig(env = process.env) {
     alerts: {
       telegramToken: env.TELEGRAM_BOT_TOKEN || "",
       telegramChatId: String(env.ALERT_TELEGRAM_CHAT_ID || "").trim(),
-      everyMin: Math.max(1, int(env.ALERT_EVERY_MIN, 30))
+      everyMin: Math.max(1, int(env.ALERT_EVERY_MIN, 60))
     },
     // "Talk to a person" (services/onboarding.js): the owner's WhatsApp number and/or Telegram username.
     support: {
