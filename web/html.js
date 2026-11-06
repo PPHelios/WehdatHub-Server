@@ -195,8 +195,9 @@ function tabBar(broker, tab, lang) {
   )}</nav>`;
 }
 
-// The CRM owner's own bottom bar: Tracking · Board · Alerts · Settings.
+// The CRM owner's own bottom bar: Home · Tracking · Board · Alerts · Settings.
 const CRM_BAR = [
+  { key: "home", href: "/app", ar: "الرئيسية", en: "Home", icon: "home" },
   { key: "owner", href: "/app/owner", ar: "المتابعة", en: "Tracking", icon: "chart" },
   { key: "board", href: "/app/owner/board", ar: "اللوحة", en: "Board", icon: "gauge" },
   { key: "alerts", href: "/app/notifications", ar: "التنبيهات", en: "Alerts", icon: "bell" },
@@ -207,8 +208,9 @@ const CRM_ROOTS = new Set(["/app", "/app/owner", "/app/owner/board", "/app/notif
 /** Which place of the CRM owner's bar a page belongs to. */
 function crmTabOf(path) {
   const p = String(path || "").split("?")[0].replace(/\/+$/, "") || "/app";
+  if (p === "/app") return "home";
   if (/^\/app\/owner\/board(\/|$)/.test(p)) return "board";
-  if (p === "/app" || /^\/app\/owner(\/|$)/.test(p)) return "owner";
+  if (/^\/app\/owner(\/|$)/.test(p)) return "owner";
   if (/^\/app\/notifications(\/|$)/.test(p)) return "alerts";
   if (/^\/app\/settings(\/|$)/.test(p)) return "settings";
   return "more";

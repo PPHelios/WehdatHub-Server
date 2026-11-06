@@ -39,6 +39,7 @@ test("the CRM owner starts on their own home and has their own bar and menu", as
   expect(home.text).toMatch(/Latest app alerts/);
   expect(home.text).not.toMatch(/Needs you now|Follow-ups today/);
   const bar = barOf((await crm.agent.get("/app/owner?lang=en")).text);
+  expect(bar).toMatch(/Home/);
   expect(bar).toMatch(/Tracking/);
   expect(bar).toMatch(/Board/);
   expect(bar).toMatch(/Alerts/);
