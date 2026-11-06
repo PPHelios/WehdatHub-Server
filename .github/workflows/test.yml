@@ -64,6 +64,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run offline tests (errors only)
+        env:
+          # The full offline suite ran out of the default Node heap (about 3.3 GB) on the first Node 24 run.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
           npm run test:ci > test.log 2>&1 || {
             grep -E '^(FAIL|not ok)|  ●|Error:|✕' test.log | head -300
