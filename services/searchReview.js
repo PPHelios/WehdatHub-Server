@@ -15,6 +15,7 @@ const DAY = 24 * 3600 * 1000;
 
 /** The time window a list uses: the period, or just the last 24 hours when the "changed in the last day" filter is on. */
 const windowOf = (p, changed, now = new Date()) => (changed ? { from: new Date(now.getTime() - DAY), to: now } : { from: p.from, to: p.to });
+const Q = require("../domain/searchQuery");
 
 async function figures(pool, from, to) {
   const { rows } = await pool.query(
@@ -105,6 +106,19 @@ async function decideFinding(pool, id, decision) {
 }
 
 /** Resolves every open finding of one search text at once (a repeat offender fixed). */
+/**
+ * Re-check before "All handled" (Haytham 2026-11-06): the text needs a saved test case, and the quick reader must now read it
+ * with no open question (no unsure reasons, no unit question). → { ok, missing: [] } listing what is still missing.
+ */
+async function recheck(pool, text) {
+  const missing = [];
+  const { rowCount } = await pool.query("SELECT 1 FROM search_test_cases WHERE lower(trim(query_text)) = lower(trim($1))", [text]);
+  if (!rowCount) missing.push("test_case");
+  const parsed = Q.fallbackParse(text);
+  if (parsed.meta?.reasons?.length || (parsed.meta?.ambiguous || []).length) missing.push("parser");
+  return { ok: missing.length === 0, missing };
+}
+
 async function resolveText(pool, text) {
   const r = await pool.query(`UPDATE search_log s SET audit_resolved_at = now() WHERE lower(trim(s.query_text)) = lower(trim($1)) AND s.audit_resolved_at IS NULL AND ${FLAGGED}`, [text]);
   return r.rowCount;
@@ -163,4 +177,4 @@ async function removeCase(pool, id) {
   return r.rowCount > 0;
 }
 
-module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, resolveText, addCase, cases, removeCase, editWord };
+module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, recheck, resolveText, addCase, cases, removeCase, editWord };
