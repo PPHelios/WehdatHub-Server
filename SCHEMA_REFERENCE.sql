@@ -337,7 +337,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   referral_rewarded_at timestamp with time zone,
   referral_credit_months smallint DEFAULT 0 NOT NULL,
   lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL,
-  notify_policy jsonb DEFAULT '{}'::jsonb NOT NULL
+  notify_policy jsonb DEFAULT '{}'::jsonb NOT NULL,
+  owner_code_next integer DEFAULT 1 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -1294,7 +1295,8 @@ CREATE TABLE IF NOT EXISTS public.unit_owners (
   created_by uuid,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  is_private boolean DEFAULT false NOT NULL
+  is_private boolean DEFAULT false NOT NULL,
+  code text
 );
 
 CREATE TABLE IF NOT EXISTS public.unit_owner_events (
@@ -1480,6 +1482,21 @@ CREATE TABLE IF NOT EXISTS public.search_test_cases (
   note text
 );
 
+CREATE TABLE IF NOT EXISTS public.owner_change_requests (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  owner_id uuid NOT NULL,
+  kind text DEFAULT 'rename'::text NOT NULL,
+  old_value text,
+  new_value text NOT NULL,
+  requested_by uuid,
+  listing_id uuid,
+  status text DEFAULT 'pending'::text NOT NULL,
+  decided_by uuid,
+  decided_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1524,6 +1541,7 @@ ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
 ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_pkey PRIMARY KEY (id);
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KEY (challenge);
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
@@ -1708,6 +1726,8 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((cha
 ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text, 'batched'::text, 'policy_off'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS NULL) OR (url ~~ '/app/%'::text)));
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_kind_check CHECK ((kind = 'rename'::text));
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_kind_check CHECK ((kind = ANY (ARRAY['register'::text, 'login'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_amount_egp_check CHECK ((amount_egp > 0));
 ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text) = (plan IS NOT NULL)));
@@ -1762,7 +1782,7 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY
 ALTER TABLE share_links ADD CONSTRAINT share_links_note_length CHECK (((note IS NULL) OR (char_length(note) <= 200)));
 ALTER TABLE share_links ADD CONSTRAINT share_links_source_check CHECK (((source IS NULL) OR (source = ANY (ARRAY['bot'::text, 'web'::text, 'lead'::text]))));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
-ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text])));
+ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text, 'rename_requested'::text, 'rename_approved'::text, 'rename_rejected'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_client_note_check CHECK (((client_note IS NULL) OR (length(client_note) <= 300)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
@@ -1853,6 +1873,11 @@ ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (projec
 ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_merged_into_fkey FOREIGN KEY (merged_into) REFERENCES notifications(id) ON DELETE SET NULL;
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE CASCADE;
+ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -2014,6 +2039,8 @@ CREATE INDEX idx_operation_logs_agency_type_created ON public.operation_logs USI
 CREATE INDEX idx_operation_logs_broker_created ON public.operation_logs USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_operation_logs_wa_outbound ON public.operation_logs USING btree (created_at, agency_id, broker_id) WHERE (operation_type = 'wa_outbound'::text);
 CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id, created_at DESC);
+CREATE UNIQUE INDEX owner_change_requests_one_pending ON public.owner_change_requests USING btree (owner_id, lower(new_value)) WHERE (status = 'pending'::text);
+CREATE INDEX owner_change_requests_open ON public.owner_change_requests USING btree (agency_id, status, created_at DESC);
 CREATE INDEX idx_passkey_challenges_expiry ON public.passkey_challenges USING btree (expires_at);
 CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
@@ -2048,6 +2075,7 @@ CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USIN
 CREATE INDEX unit_access_requests_listing ON public.unit_access_requests USING btree (agency_id, listing_id, broker_id, created_at DESC);
 CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (owner_id, created_at DESC, id DESC);
 CREATE INDEX unit_owners_agency ON public.unit_owners USING btree (agency_id, created_at DESC);
+CREATE UNIQUE INDEX unit_owners_code ON public.unit_owners USING btree (agency_id, code);
 CREATE INDEX unit_owners_phones ON public.unit_owners USING gin (phones);
 CREATE INDEX unit_reference_agency_idx ON public.unit_reference USING btree (agency_id, purged_at DESC);
 CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
