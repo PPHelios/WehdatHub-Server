@@ -50,6 +50,8 @@ async function seed(pool) {
       [b.id, b.agency_id, b.phone, b.name, b.role, b.lang]
     );
   }
+  // The approved list every web-form test saves against (a compound outside the list is refused by the form).
+  await pool.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved) VALUES ('hyde park', 'Hyde Park', 'هايد بارك', 29.98, 31.55, true)`);
 }
 
 /** Inserts a listing directly (fixture), bypassing the bot. Returns the row. */

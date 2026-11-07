@@ -32,7 +32,8 @@ async function seedPlaces() {
   await h.query(
     `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, lat, lng) VALUES
        ('mivida', 'Mivida', 'ميفيدا', 'Emaar Misr', 'New Cairo', 30.0058, 31.5377),
-       ('hyde park', 'Hyde Park', 'هايد بارك', 'Mountain View', 'New Cairo', 29.98, 31.55)`
+       ('hyde park', 'Hyde Park', 'هايد بارك', 'Mountain View', 'New Cairo', 29.98, 31.55)
+     ON CONFLICT (name_key) DO NOTHING`
   );
 }
 async function seedUnits() {
