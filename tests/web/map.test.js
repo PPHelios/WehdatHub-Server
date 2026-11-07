@@ -166,9 +166,7 @@ test("the owner's queue: approve a seed place, re-check units, and mark a name a
   expect(page.text).toMatch(/Approve &quot;Eastown&quot;|Approve "Eastown"/);
   const id = (await h.query("SELECT id FROM map_places WHERE name_key = 'eastown'"))[0].id;
   expect((await crm.agent.post(`/app/owner/map/${id}/approve`).type("form").send({ _csrf: crm.csrf })).headers.location).toMatch(/msg=approved/);
-  const count = await crm.agent.post("/app/owner/map/recheck").type("form").send({ _csrf: crm.csrf });
-  expect(count.headers.location).toMatch(/msg=wouldfix&n=1/);
-  await crm.agent.post("/app/owner/map/recheck").type("form").send({ _csrf: crm.csrf, apply: "1" });
+  expect((await crm.agent.get("/app/owner/map?lang=en")).text).not.toMatch(/Fix units now|Approve the master list/);
   const u = (await h.query("SELECT compound, place_id, details FROM listings WHERE code = 'ET-1'"))[0];
   expect(u.place_id).toBe(id);
   expect(u.compound).toBe("Eastown");

@@ -374,4 +374,14 @@ async function dismiss(pool, name) {
   return ids.length;
 }
 
-module.exports = { FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, importMaster, TYPES };
+/** Boot-time sync: approve the master list by name, then link units that now match. Safe to repeat. */
+async function syncApproved(pool) {
+  const fs = require("fs");
+  const path = require("path");
+  const rows = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "map-seed", "master.json"), "utf8"));
+  const master = await importMaster(pool, rows);
+  const units = await recheck(pool, { apply: true });
+  return { master, units };
+}
+
+module.exports = { syncApproved, FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, importMaster, TYPES };
