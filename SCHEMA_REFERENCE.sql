@@ -1449,6 +1449,22 @@ CREATE TABLE IF NOT EXISTS public.owner_change_requests (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.map_places (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  name_key text NOT NULL,
+  name_en text,
+  name_ar text,
+  developer text,
+  district text,
+  lat double precision NOT NULL,
+  lng double precision NOT NULL,
+  aliases text[] DEFAULT '{}'::text[] NOT NULL,
+  verified boolean DEFAULT false NOT NULL,
+  source text DEFAULT 'manual'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1489,6 +1505,7 @@ ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
+ALTER TABLE map_places ADD CONSTRAINT map_places_pkey PRIMARY KEY (id);
 ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
 ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_pkey PRIMARY KEY (id);
@@ -1540,6 +1557,7 @@ ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_i
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_ref_key UNIQUE (agency_id, ref);
 ALTER TABLE leases ADD CONSTRAINT leases_listing_id_key UNIQUE (listing_id);
 ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
+ALTER TABLE map_places ADD CONSTRAINT map_places_name_key_key UNIQUE (name_key);
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key UNIQUE (broker_id, dedupe_key);
 ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
 ALTER TABLE place_names ADD CONSTRAINT place_names_name_key_key UNIQUE (name_key);
@@ -1669,6 +1687,9 @@ ALTER TABLE listings ADD CONSTRAINT listings_market_check CHECK ((market = ANY (
 ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((payment_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_portal_listing_no_check CHECK (((portal_listing_no IS NULL) OR ((length(portal_listing_no) >= 4) AND (length(portal_listing_no) <= 20))));
 ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text, 'deleted'::text])));
+ALTER TABLE map_places ADD CONSTRAINT map_places_lat_check CHECK (((lat >= (21)::double precision) AND (lat <= (32)::double precision)));
+ALTER TABLE map_places ADD CONSTRAINT map_places_lng_check CHECK (((lng >= (24)::double precision) AND (lng <= (37)::double precision)));
+ALTER TABLE map_places ADD CONSTRAINT map_places_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text, 'batched'::text, 'policy_off'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
@@ -1975,6 +1996,7 @@ CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_norm
 CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);
 CREATE UNIQUE INDEX uq_listings_agency_code_norm ON public.listings USING btree (agency_id, code_norm);
 CREATE UNIQUE INDEX uq_listings_project_dev_code ON public.listings USING btree (project_id, upper(btrim(developer_unit_code))) WHERE ((project_id IS NOT NULL) AND (developer_unit_code IS NOT NULL) AND (btrim(developer_unit_code) <> ''::text));
+CREATE INDEX map_places_verified ON public.map_places USING btree (verified);
 CREATE INDEX idx_notifications_agency ON public.notifications USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_notifications_due ON public.notifications USING btree (deliver_after) WHERE (status = ANY (ARRAY['held'::text, 'queued'::text]));
 CREATE INDEX idx_notifications_inbox ON public.notifications USING btree (broker_id, created_at DESC);

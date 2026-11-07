@@ -48,17 +48,22 @@
     "html-react-parser": "5.2.17",
     "htmx.org": "2.0.11",
     "jszip": "3.10.2",
+    "leaflet": "^1.9.4",
     "multer": "2.5.0",
     "pdf-lib": "1.17.1",
     "pg": "8.23.1",
+    "protomaps-leaflet": "^5.1.0",
     "satori": "0.63.2",
     "sharp": "0.35.5",
     "web-push": "3.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
+    "@mapbox/vector-tile": "^3.0.0",
     "jest": "29.7.0",
+    "pbf": "^5.1.2",
     "playwright": "^1.63.0",
+    "pmtiles": "^4.5.0",
     "supertest": "7.3.1",
     "typescript": "7.0.2"
   },

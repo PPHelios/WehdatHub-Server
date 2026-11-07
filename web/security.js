@@ -21,10 +21,18 @@ const CSP = [
   "worker-src 'self'"
 ].join("; ");
 
+/** The policy, plus the map file's own address in connect-src when MAP_TILES_URL is set (the browser reads it in ranges). */
+function cspWithMap() {
+  const url = require("../config").getConfig().map.tilesUrl;
+  if (!url) return CSP;
+  const origin = new URL(url).origin;
+  return CSP.replace("connect-src 'self'", `connect-src 'self' ${origin}`);
+}
+
 /** Security headers for HTML pages and static files of the web app and the public pages. */
 function securityHeaders(_req, res, next) {
   res.set({
-    "Content-Security-Policy": CSP,
+    "Content-Security-Policy": cspWithMap(),
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
     "Permissions-Policy": "microphone=(self), camera=(), geolocation=(self), payment=()",

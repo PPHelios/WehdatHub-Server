@@ -151,6 +151,10 @@ function loadConfig(env = process.env) {
     owner: {
       brokerIds: String(env.OWNER_BROKER_IDS || "").split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[0-9a-f-]{36}$/.test(s))
     },
+    // The map (web/routes/map.js): the public address of the .pmtiles map file (Cloudflare R2). Empty = the Map page says it is not set up.
+    map: {
+      tilesUrl: /^https:\/\/[^\s"'<>]+\.pmtiles(\?[^\s"'<>]*)?$/i.test(String(env.MAP_TILES_URL || "").trim()) ? String(env.MAP_TILES_URL).trim() : ""
+    },
     // Self-ping so Render Free doesn't sleep (lib/keepAwake.js). Off unless KEEP_AWAKE=true: free hours are capped.
     keepAwake: {
       enabled: /^(true|1|on|yes)$/i.test(String(env.KEEP_AWAKE || "").trim()),

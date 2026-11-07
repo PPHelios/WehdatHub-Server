@@ -551,3 +551,45 @@ details.sheet { padding-block: 4px; }
 
 /* Mandatory fields that block a step: red outline until the field changes. */
 label.field-missing input, label.field-missing select, label.field-missing textarea { outline: 2px solid var(--bad); outline-offset: 1px; border-color: var(--bad); }
+
+/* ---- Map (web/routes/map.js, web/static/map.js) ---- */
+.mapapp { position: relative; display: grid; gap: 8px; }
+.map-top { display: flex; gap: 8px; align-items: center; }
+.map-search { position: relative; flex: 1; min-width: 0; }
+.map-search input { width: 100%; }
+.map-suggest { position: absolute; inset-inline: 0; inset-block-start: calc(100% + 4px); z-index: 600; margin: 0; padding: 4px; list-style: none; max-height: 40vh; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-btn); box-shadow: 0 8px 24px rgba(14, 21, 33, 0.18); }
+.map-suggest li { display: flex; flex-direction: column; gap: 2px; min-height: 44px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.map-suggest li:hover, .map-suggest li:focus { background: var(--brand-soft); outline: 0; }
+.map-filters { display: none; gap: 10px; padding: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-btn); }
+.map-filters.open { display: grid; }
+.seg-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); font-weight: 600; cursor: pointer; }
+.chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.map-field { display: grid; gap: 4px; }
+.map-budget { display: grid; gap: 6px; }
+.map-budget input[type="range"] { width: 100%; accent-color: var(--brand); }
+.between { justify-content: space-between; }
+.map-count { margin: 0; }
+.map-view { position: relative; z-index: 0; height: calc(100dvh - 250px); min-height: 320px; border-radius: var(--radius-btn); overflow: hidden; border: 1px solid var(--line); direction: ltr; }
+.map-view.map-pick { height: 320px; margin-block: 12px; }
+.pin-wrap { background: none; border: 0; }
+.pin { display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); }
+.pin-n { min-width: 34px; padding: 4px 8px; border-radius: 999px; background: var(--brand); color: #fff; font-weight: 800; font-size: 0.95rem; text-align: center; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(14, 21, 33, 0.35); }
+.pin-t { display: none; margin-block-start: 2px; padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.92); color: #0e1521; font-size: 0.75rem; font-weight: 600; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.map-view.zoomed .pin-t { display: block; }
+.map-drawer { position: fixed; inset-inline: 0; inset-block-end: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px)); z-index: 40; max-height: 55dvh; overflow: auto; padding: 12px 16px 16px; background: var(--card); border-start-start-radius: var(--radius); border-start-end-radius: var(--radius); border: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(14, 21, 33, 0.2); transform: translateY(100%); transition: transform 0.2s ease; }
+.map-drawer.open { transform: translateY(0); }
+.map-units { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.map-units a { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; min-height: 48px; padding: 8px 10px; border-radius: 12px; background: var(--soft); color: var(--ink); text-decoration: none; }
+.map-price { font-weight: 700; color: var(--brand-ink); }
+.map-credit { margin: 0; text-align: end; }
+@media (min-width: 900px) {
+  .mapapp { grid-template-columns: 340px 1fr; grid-template-areas: "top view" "filters view" "count view"; align-items: start; }
+  .map-top { grid-area: top; }
+  .map-filters { display: grid; grid-area: filters; }
+  .map-count { grid-area: count; }
+  .map-view { grid-area: view; height: calc(100dvh - 140px); }
+  .map-credit { grid-column: 2; }
+  [data-map-filter-toggle] { display: none; }
+  .map-drawer { inset-inline: auto 24px; inset-block-end: 24px; width: 380px; max-height: 60dvh; border-radius: var(--radius); }
+}

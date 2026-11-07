@@ -33,6 +33,11 @@ const FILES = {
   "xlsxread.js": path.join(STATIC_DIR, "xlsxread.js"),
   "ximport.js": path.join(STATIC_DIR, "ximport.js"),
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
+  // The map page: Leaflet and the vector-tile layer (read from the owner's .pmtiles file), loaded on that page only.
+  "leaflet.js": require.resolve("leaflet/dist/leaflet.js"),
+  "leaflet.css": require.resolve("leaflet/dist/leaflet.css"),
+  "protomaps-leaflet.js": path.join(path.dirname(require.resolve("protomaps-leaflet/package.json")), "dist", "protomaps-leaflet.js"),
+  "map.js": path.join(STATIC_DIR, "map.js"),
   // Cairo, self-hosted (CSP font-src 'self'): regular and bold; 600 renders with the bold face.
   "fonts/cairo-400.woff2": path.join(STATIC_DIR, "fonts", "cairo-400.woff2"),
   "fonts/cairo-700.woff2": path.join(STATIC_DIR, "fonts", "cairo-700.woff2"),
@@ -43,6 +48,9 @@ const FILES = {
   // F12: a sample developer price sheet to download from the project page.
   "samples/price-sheet-sample.csv": path.join(STATIC_DIR, "samples", "price-sheet-sample.csv")
 };
+
+// Fetched when the Map page opens, not with every install of the app.
+const LAZY = new Set(["leaflet.js", "leaflet.css", "protomaps-leaflet.js", "map.js"]);
 
 const hash = (buf) => crypto.createHash("sha256").update(buf).digest("hex").slice(0, 10);
 
@@ -69,7 +77,7 @@ function loadAssets() {
   const swSource = fs
     .readFileSync(path.join(STATIC_DIR, "sw.js"), "utf8")
     .replace('"__VERSION__"', JSON.stringify(version))
-    .replace("= __ASSETS__;", `= ${JSON.stringify(Object.keys(files).map(url))};`);
+    .replace("= __ASSETS__;", `= ${JSON.stringify(Object.keys(files).filter((n) => !LAZY.has(n)).map(url))};`);
   return { files, version, url, swSource };
 }
 
