@@ -40,13 +40,15 @@ const MANIFEST = {
 function mountWeb(app, { pool, config }) {
   const assets = loadAssets();
   /** Renders a full page; the signed-in broker (top bar, language) and CSRF token come from req. */
+  // A one-person account (set per request below) reads "your account" instead of "the company" in the fixed Arabic phrases.
+  const solo = (s, lang, htmlText) => (s?.solo && lang === "ar" ? require("../lib/copy").soloPage(htmlText) : htmlText);
   const page = (req, res, opts, status = 200) => {
     const s = req.session;
     const lang = opts.lang || (s ? (s.broker.preferred_lang === "en" ? "en" : "ar") : req.lang === "en" ? "en" : "ar");
     return res
       .status(status)
       .type("html")
-      .send(withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, aiOff: s?.aiOff || [], path: String(req.originalUrl || ""), ...opts, lang }), s?.csrf));
+      .send(solo(s, lang, withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, aiOff: s?.aiOff || [], path: String(req.originalUrl || ""), ...opts, lang }), s?.csrf)));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);
@@ -133,6 +135,10 @@ function mountWeb(app, { pool, config }) {
   });
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
+  priv.use(async (req, _res, next) => {
+    if (req.method === "GET" && req.session?.broker?.agency_id) req.session.solo = await require("../lib/credits").isSoloCached(pool, req.session.broker.agency_id);
+    return next();
+  });
   // Data entry: only units (add, edit, look up), search, settings and notifications. Everything else is closed to them.
   const DATA_ENTRY_PATHS = /^\/(units|search|settings|passkeys?|notifications|guide|more|owners|logout|csrf|push|test-role)(\/|$)/;
   priv.use((req, res, next) => {
