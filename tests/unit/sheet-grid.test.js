@@ -142,3 +142,11 @@ describe("code pattern and room words", () => {
     expect(Mixed.areas("ارض 600 م مباني 244 م")).toEqual({ area_value: 244, land_area: 600 });
   });
 });
+
+describe("compound column that says no compound", () => {
+  test("'outside' in the compound column reads the compound from the location column", () => {
+    const head = ["name", "number", "unit type", "compound", "location", "price", "area", "code"];
+    const sheet = buildSheet([{ name: "Sheet1", rows: [row(1, ...head), row(2, "Ali", 1011111111, "apartment", "outside", "Rehab 1, 3rd floor", "8m", "120m", "A1"), row(3, "Sam", 1022222222, "apartment", "Mivida", "u12", "9m", "130m", "A2")] }]);
+    expect(sheet.rows.map((r) => r.cells.compound)).toEqual(["Rehab 1, 3rd floor", "Mivida"]);
+  });
+});
