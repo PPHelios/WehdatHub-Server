@@ -1,0 +1,1241 @@
+[
+{
+"name_en": "Mivida",
+"name_ar": "ميفيدا",
+"developer": "Emaar Misr",
+"district": "South 90th",
+"aliases": []
+},
+{
+"name_en": "Eastown",
+"name_ar": "إيست تاون",
+"developer": "SODIC",
+"district": "South 90th (AUC)",
+"aliases": []
+},
+{
+"name_en": "Fifth Square",
+"name_ar": "فيفث سكوير",
+"developer": "Al Marasim",
+"district": "North 90th (Golden Square)",
+"aliases": [
+"5th square"
+]
+},
+{
+"name_en": "Lake View",
+"name_ar": "ليك فيو",
+"developer": "El Hazek Construction",
+"district": "Golden Square",
+"aliases": [
+"lake view villas"
+]
+},
+{
+"name_en": "Cairo Festival City",
+"name_ar": "كايرو فستيفال سيتي",
+"developer": "Al-Futtaim Group",
+"district": "Ring Road / North 90th",
+"aliases": [
+"cfc"
+]
+},
+{
+"name_en": "Mountain View Hyde Park",
+"name_ar": "ماونتن فيو هايد بارك",
+"developer": "Mountain View (DMG)",
+"district": "Golden Square",
+"aliases": [
+"mvhp"
+]
+},
+{
+"name_en": "Porto New Cairo",
+"name_ar": "بورتو نيو كايرو",
+"developer": "Porto Group / Arab Developers",
+"district": "North 90th (Facing AUC)",
+"aliases": []
+},
+{
+"name_en": "The Village Gate",
+"name_ar": "فيلدج جيت",
+"developer": "Palm Hills Developments",
+"district": "Behind AUC",
+"aliases": [
+"village gate",
+"vgk"
+]
+},
+{
+"name_en": "The Village",
+"name_ar": "ذا فيلدج",
+"developer": "Palm Hills Developments",
+"district": "Facing AUC",
+"aliases": []
+},
+{
+"name_en": "The Square",
+"name_ar": "ذا سكوير",
+"developer": "Al Ahly Sabbour",
+"district": "Behind Mivida",
+"aliases": []
+},
+{
+"name_en": "Mountain View iCity",
+"name_ar": "ماونتن فيو أي سيتي",
+"developer": "Mountain View (DMG)",
+"district": "Middle Ring Road Extension",
+"aliases": [
+"ماونتن فيو أي سيتي"
+]
+},
+{
+"name_en": "Layan Residence",
+"name_ar": "ليان صبور",
+"developer": "Al Ahly Sabbour",
+"district": "Golden Square",
+"aliases": [
+"layan"
+]
+},
+{
+"name_en": "Hyde Park",
+"name_ar": "هايد بارك",
+"developer": "Hyde Park Developments",
+"district": "South 90th / Middle Ring",
+"aliases": [
+"هايد بارك"
+]
+},
+{
+"name_en": "Madinaty",
+"name_ar": "مدينتي",
+"developer": "Talaat Moustafa Group (TMG)",
+"district": "Suez Road",
+"aliases": [
+"madinty"
+]
+},
+{
+"name_en": "Mountain View Executive Katameya",
+"name_ar": "ماونتن فيو إكزيكتيف قطامية",
+"developer": "Mountain View (DMG)",
+"district": "Katameya / Ring Road",
+"aliases": [
+"mountain view executive",
+"mountain view exectuive",
+"mountain view erk"
+]
+},
+{
+"name_en": "Palm Hills Katameya 2 (PK2)",
+"name_ar": "بالم هيلز قطامية 2",
+"developer": "Palm Hills Developments",
+"district": "Northern Investors",
+"aliases": [
+"pk2"
+]
+},
+{
+"name_en": "Katameya Heights Golf & Tennis",
+"name_ar": "قطامية هايتس",
+"developer": "Katameya Real Estate",
+"district": "Ring Road Entrance",
+"aliases": [
+"kattamaya heights",
+"kattameya heights",
+"kattamya heights",
+"katameya heights"
+]
+},
+{
+"name_en": "The Address East",
+"name_ar": "ذا أدريس إيست",
+"developer": "Dorra Group",
+"district": "Golden Square Extension",
+"aliases": [
+"address east",
+"the address"
+]
+},
+{
+"name_en": "Hayati Residence",
+"name_ar": "حياتي ريزيدنس",
+"developer": "Al Mansour Development",
+"district": "Sadat Axis / Yasmine",
+"aliases": [
+"hayaty residence"
+]
+},
+{
+"name_en": "Katameya Dunes",
+"name_ar": "قطامية ديونز",
+"developer": "Dunes Real Estate",
+"district": "Gamal Abdel Nasser Axis",
+"aliases": [
+"katamya dunes",
+"kattamya dunes"
+]
+},
+{
+"name_en": "Katameya Plaza",
+"name_ar": "قطامية بلازا",
+"developer": "SODIC",
+"district": "Northern Investors",
+"aliases": [
+"kattameya plaza",
+"kattamya plaza"
+]
+},
+{
+"name_en": "The Waterway",
+"name_ar": "ذا ووتر واي",
+"developer": "Equity Real Estate Development",
+"district": "Northern Investors",
+"aliases": [
+"waterway",
+"water way"
+]
+},
+{
+"name_en": "Celia",
+"name_ar": "سيليا",
+"developer": "Talaat Moustafa Group (TMG)",
+"district": "Green River / Central Park",
+"aliases": []
+},
+{
+"name_en": "Katameya Gardens",
+"name_ar": "قطامية جاردنز",
+"developer": "North Africa Co.",
+"district": "Extension / Golden Square",
+"aliases": [
+"kattamaya gardens",
+"katamya garden's"
+]
+},
+{
+"name_en": "Lake View Residence / Dusit",
+"name_ar": "ليك فيو ريزيدنس / دوسيت",
+"developer": "El Hazek Construction",
+"district": "Road 90",
+"aliases": [
+"lake view dusit"
+]
+},
+{
+"name_en": "Regents Park",
+"name_ar": "ريجنتس بارك",
+"developer": "Al Dawlia Real Estate",
+"district": "Behind AUC",
+"aliases": [
+"regents park residences",
+"regent"
+]
+},
+{
+"name_en": "Acacia",
+"name_ar": "أكاسيا",
+"developer": "Housing & Development Bank",
+"district": "Sadat Axis / Northern Investors",
+"aliases": [
+"acasia"
+]
+},
+{
+"name_en": "El Masrawya",
+"name_ar": "المصراوية",
+"developer": "Al Masrawya Developments",
+"district": "South 90th",
+"aliases": [
+"el masrwaya",
+"masrwya"
+]
+},
+{
+"name_en": "Al Burouj",
+"name_ar": "البروج",
+"developer": "Capital Group Properties (CGP)",
+"district": "Cairo-Ismailia Road",
+"aliases": [
+"elboroj with garden",
+"burouj",
+"elborouj"
+]
+},
+{
+"name_en": "Leila",
+"name_ar": "ليلى",
+"developer": "Al Mansour Development",
+"district": "North 90th / Bnafsaj",
+"aliases": [
+"laila"
+]
+},
+{
+"name_en": "El Patio 7",
+"name_ar": "الباتيو 7",
+"developer": "La Vista Developments",
+"district": "Behind AUC",
+"aliases": [
+"patio 7"
+]
+},
+{
+"name_en": "El Patio Oro",
+"name_ar": "الباتيو أورو",
+"developer": "La Vista Developments",
+"district": "Golden Square",
+"aliases": [
+"patio oro"
+]
+},
+{
+"name_en": "Retaj City",
+"name_ar": "ريتاج سيتي",
+"developer": "Retaj Developments",
+"district": "Sadat Axis",
+"aliases": [
+"retage",
+"retag city"
+]
+},
+{
+"name_en": "Sarai",
+"name_ar": "سراي",
+"developer": "Madinet Masr (MNHD)",
+"district": "Suez Road (Opposite Madinaty)",
+"aliases": [
+"سراى بجوار مدينتى"
+]
+},
+{
+"name_en": "Tag Sultan",
+"name_ar": "تاج سلطان",
+"developer": "Madinet Masr (MNHD)",
+"district": "Ring Road / Suez Road Junction",
+"aliases": [
+"taj slutan",
+"taj sultan"
+]
+},
+{
+"name_en": "Top View",
+"name_ar": "توب فيو",
+"developer": "Arabia Holding",
+"district": "Southern Investors",
+"aliases": []
+},
+{
+"name_en": "Uptown Cairo",
+"name_ar": "أبتاون كايرو",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"uptown"
+]
+},
+{
+"name_en": "Al Jazi Egypt",
+"name_ar": "الجازي مصر",
+"developer": "Seldar Misr",
+"district": "North 90th",
+"aliases": [
+"al jazi"
+]
+},
+{
+"name_en": "Al Gezira",
+"name_ar": "الجزيرة",
+"developer": "Private Developer",
+"district": "Central Zayed",
+"aliases": [
+"al juezira"
+]
+},
+{
+"name_en": "El Rehab City - Group 8",
+"name_ar": "مدينة الرحاب - مجموعة 8",
+"developer": "Talaat Moustafa Group (TMG)",
+"district": "Al Rehab Phase 1",
+"aliases": [
+"al rehab mgmo3a 8"
+]
+},
+{
+"name_en": "Uptown Cairo - Alto 3",
+"name_ar": "أبتاون كايرو - ألتو 3",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"alto 3 uptown cairo 203-3"
+]
+},
+{
+"name_en": "Paradise",
+"name_ar": "بارادايس",
+"developer": "Private Developer",
+"district": "Southern Investors",
+"aliases": [
+"baradays"
+]
+},
+{
+"name_en": "Boston Residence Katameya",
+"name_ar": "بوستون ريزيدنس القطامية",
+"developer": "Boston Developments",
+"district": "Katameya",
+"aliases": [
+"boston residence alktamya"
+]
+},
+{
+"name_en": "Ministry of Finance Compound",
+"name_ar": "كمبوند وزارة المالية",
+"developer": "Ministry of Finance",
+"district": "1st Settlement",
+"aliases": [
+"compound wazrit el malyaah"
+]
+},
+{
+"name_en": "Concord Gardens",
+"name_ar": "كونكورد جاردنز",
+"developer": "Concord Real Estate",
+"district": "South 90th",
+"aliases": [
+"concord garden"
+]
+},
+{
+"name_en": "Koronfol Heights",
+"name_ar": "قرنفل هايتس",
+"developer": "Private Developer",
+"district": "Al Koronfol",
+"aliases": [
+"coumpound elornfel heights",
+"oronfel hights"
+]
+},
+{
+"name_en": "Dar Misr - Al Koronfol",
+"name_ar": "دار مصر - القرنفل",
+"developer": "Ministry of Housing",
+"district": "North of Al Rehab",
+"aliases": [
+"dar masr el qoronfel",
+"dar misr el koronfol"
+]
+},
+{
+"name_en": "Diplomats Compound",
+"name_ar": "كمبوند الدبلوماسيين",
+"developer": "Diplomatic Corps Association",
+"district": "Golden Square",
+"aliases": [
+"diplomates"
+]
+},
+{
+"name_en": "District 5",
+"name_ar": "ديستريكت 5",
+"developer": "Marakez",
+"district": "Ain Sokhna Road",
+"aliases": [
+"distrect 5"
+]
+},
+{
+"name_en": "Dyar Residence",
+"name_ar": "ديار ريزيدنس",
+"developer": "Al Ahly Sabbour",
+"district": "Sadat Axis",
+"aliases": []
+},
+{
+"name_en": "Al Nakheel",
+"name_ar": "النخيل",
+"developer": "El Nakheel Developments",
+"district": "Near Police Academy / Ring Rd",
+"aliases": [
+"el nakhel"
+]
+},
+{
+"name_en": "El Patio 2",
+"name_ar": "الباتيو 2",
+"developer": "La Vista Developments",
+"district": "Choueifat",
+"aliases": []
+},
+{
+"name_en": "El Rehab City - Phase 1",
+"name_ar": "مدينة الرحاب - المرحلة 1",
+"developer": "Talaat Moustafa Group (TMG)",
+"district": "Suez Road",
+"aliases": [
+"el rehab 1",
+"rehab1"
+]
+},
+{
+"name_en": "El Rehab City - Phase 2",
+"name_ar": "مدينة الرحاب - المرحلة 2",
+"developer": "Talaat Moustafa Group (TMG)",
+"district": "Suez Road",
+"aliases": [
+"el rehab 2"
+]
+},
+{
+"name_en": "El Patio 1",
+"name_ar": "الباتيو 1",
+"developer": "La Vista Developments",
+"district": "Northern Investors",
+"aliases": [
+"elpatio 1",
+"patio 1"
+]
+},
+{
+"name_en": "Fleur De Ville",
+"name_ar": "فلور دي فيل",
+"developer": "Modern Real Estate",
+"district": "Sadat Axis",
+"aliases": [
+"flour de valley"
+]
+},
+{
+"name_en": "G5 Compound",
+"name_ar": "جي 5",
+"developer": "Private Developer",
+"district": "Al Narges",
+"aliases": [
+"g5"
+]
+},
+{
+"name_en": "Golf View",
+"name_ar": "جولف فيو",
+"developer": "Katameya Real Estate",
+"district": "Katameya Heights",
+"aliases": [
+"golfview"
+]
+},
+{
+"name_en": "Grand Residencia (Cesar)",
+"name_ar": "جراند ريزيدنسيا",
+"developer": "Al Ahly Sabbour",
+"district": "Southern Investors",
+"aliases": [
+"grand cesar"
+]
+},
+{
+"name_en": "Highland Park",
+"name_ar": "هاي لاند بارك",
+"developer": "Hassan Allam Properties",
+"district": "Sadat Axis / 5th Settlement",
+"aliases": [
+"high land park"
+]
+},
+{
+"name_en": "JW Marriott Residences",
+"name_ar": "ماريوت ريزيدنس",
+"developer": "Marriott / Al Jazi",
+"district": "Ring Road / Suez Rd",
+"aliases": [
+"hotai jw maryot"
+]
+},
+{
+"name_en": "Katameya Hills",
+"name_ar": "قطامية هيلز",
+"developer": "Al Ahly Sabbour",
+"district": "North 90th",
+"aliases": [
+"kattamaya hilla",
+"kattamaya hills",
+"kattamya hills"
+]
+},
+{
+"name_en": "Katameya Residence",
+"name_ar": "قطامية ريزيدنس",
+"developer": "Al Ahly Sabbour",
+"district": "Mirage City / Ring Rd",
+"aliases": [
+"kattamaya residence",
+"kattamya residence"
+]
+},
+{
+"name_en": "La Mirada",
+"name_ar": "لا ميرادا",
+"developer": "Grand Plaza Developments",
+"district": "Southern Investors",
+"aliases": [
+"lamerada",
+"lamirada"
+]
+},
+{
+"name_en": "L'Avenir",
+"name_ar": "لافينير صبور",
+"developer": "Al Ahly Sabbour",
+"district": "Central Mostakbal",
+"aliases": [
+"lavenir"
+]
+},
+{
+"name_en": "Marvel City",
+"name_ar": "مارفيل سيتي",
+"developer": "Location Developments",
+"district": "1st Settlement",
+"aliases": [
+"marvel"
+]
+},
+{
+"name_en": "Mountain View 1",
+"name_ar": "ماونتن فيو 1",
+"developer": "Mountain View (DMG)",
+"district": "1st Settlement / Al Yasmine",
+"aliases": [
+"mauntain view 1",
+"mountain view1",
+"mountian view 1",
+"moutnain view 1"
+]
+},
+{
+"name_en": "Mirage Residence",
+"name_ar": "ميراج ريزيدنس",
+"developer": "Mirage City Co.",
+"district": "Suez Road / Mirage City",
+"aliases": [
+"mirrage residence"
+]
+},
+{
+"name_en": "Mountain View 2",
+"name_ar": "ماونتن فيو 2",
+"developer": "Mountain View (DMG)",
+"district": "Katameya / Sadat Axis",
+"aliases": [
+"moutnain view 2"
+]
+},
+{
+"name_en": "One Kattameya",
+"name_ar": "وان قطامية",
+"developer": "Memaar Al Morshedy",
+"district": "Ring Road / Maadi Entrance",
+"aliases": [
+"one katamya"
+]
+},
+{
+"name_en": "Palm Hills October",
+"name_ar": "بالم هيلز أكتوبر",
+"developer": "Palm Hills Developments",
+"district": "26th of July Corridor",
+"aliases": []
+},
+{
+"name_en": "Les Rois",
+"name_ar": "لي روا",
+"developer": "Housing & Development Co.",
+"district": "Southern Investors / AUC",
+"aliases": [
+"pearl de rois",
+"pearl les rois"
+]
+},
+{
+"name_en": "Promenade New Cairo",
+"name_ar": "بروميناد التجمع",
+"developer": "Wadi Degla Developments",
+"district": "South 90th",
+"aliases": [
+"promande",
+"promenade"
+]
+},
+{
+"name_en": "El Rehab City",
+"name_ar": "مدينة الرحاب",
+"developer": "Talaat Moustafa Group (TMG)",
+"district": "Suez Road",
+"aliases": [
+"rehab",
+"el rehab"
+]
+},
+{
+"name_en": "River Walk",
+"name_ar": "ريفر ووك",
+"developer": "Wadi Degla Developments",
+"district": "Sadat Axis / Northern Investors",
+"aliases": [
+"revar wook"
+]
+},
+{
+"name_en": "Sephora Heights",
+"name_ar": "سيفورا هايتس",
+"developer": "Sephora Developments",
+"district": "Southern Investors",
+"aliases": [
+"sephora highlights"
+]
+},
+{
+"name_en": "Stone Park",
+"name_ar": "ستون بارك",
+"developer": "Roya Group",
+"district": "Ring Road (Katameya)",
+"aliases": []
+},
+{
+"name_en": "The Icon Residence",
+"name_ar": "ذا أيكون ريزيدنس",
+"developer": "Style Home Developments",
+"district": "South 90th Extension",
+"aliases": [
+"the icon"
+]
+},
+{
+"name_en": "The Villa",
+"name_ar": "ذا فيلا",
+"developer": "Dorra Group",
+"district": "Northern Investors",
+"aliases": []
+},
+{
+"name_en": "Uptown Cairo - Levana",
+"name_ar": "أبتاون كايرو - ليفانا",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"up town levana"
+]
+},
+{
+"name_en": "Uptown Cairo - Sierras 4",
+"name_ar": "أبتاون كايرو - سييرا 4",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"up town sierras 4"
+]
+},
+{
+"name_en": "Uptown Cairo - Alto",
+"name_ar": "أبتاون كايرو - ألتو",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"uptown alto"
+]
+},
+{
+"name_en": "Uptown Cairo - Eleva",
+"name_ar": "أبتاون كايرو - إليفا",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"uptown cairo elev"
+]
+},
+{
+"name_en": "Uptown Cairo - Eleva 95",
+"name_ar": "أبتاون كايرو - إليفا 95",
+"developer": "Emaar Misr",
+"district": "Mokattam Hills",
+"aliases": [
+"uptown eleva 95"
+]
+},
+{
+"name_en": "Zizinia",
+"name_ar": "زيزينيا",
+"developer": "ARCO Developments",
+"district": "Northern Investors",
+"aliases": [
+"zezenya",
+"zezinya"
+]
+},
+{
+"name_en": "Akoya",
+"name_ar": "أكويا",
+"developer": "Green Hills Real Estate",
+"district": "Beside Katameya Dunes",
+"aliases": [
+"اكويا"
+]
+},
+{
+"name_en": "Villette",
+"name_ar": "فيليت",
+"developer": "SODIC",
+"district": "Golden Square",
+"aliases": []
+},
+{
+"name_en": "Galleria Moon Valley",
+"name_ar": "جاليريا مون فالي",
+"developer": "Arabia Holding",
+"district": "Golden Square",
+"aliases": []
+},
+{
+"name_en": "Palm Hills New Cairo (PK1)",
+"name_ar": "بالم هيلز قطامية",
+"developer": "Palm Hills Developments",
+"district": "Northern Investors",
+"aliases": [
+"palm hills"
+]
+},
+{
+"name_en": "90 Avenue",
+"name_ar": "تسعين أفينيو",
+"developer": "Tabarak Developments",
+"district": "South 90th (Facing AUC)",
+"aliases": []
+},
+{
+"name_en": "Azad",
+"name_ar": "آزاد",
+"developer": "Tameer",
+"district": "Behind AUC",
+"aliases": []
+},
+{
+"name_en": "El Patio",
+"name_ar": "الباتيو",
+"developer": "La Vista Developments",
+"district": "Northern Investors",
+"aliases": []
+},
+{
+"name_en": "Midtown",
+"name_ar": "ميدتاون",
+"developer": "Better Home",
+"district": "Facing AUC",
+"aliases": []
+},
+{
+"name_en": "Stone Residence",
+"name_ar": "ستون ريزيدنس",
+"developer": "Roya Group",
+"district": "Ring Road (Katameya)",
+"aliases": []
+},
+{
+"name_en": "Jayd",
+"name_ar": "جايد",
+"developer": "Saudi Egyptian Developers (SED)",
+"district": "Sadat Axis / Rehab Gate 24",
+"aliases": []
+},
+{
+"name_en": "Park View",
+"name_ar": "بارك فيو",
+"developer": "Hassan Allam Properties",
+"district": "Sadat Axis / Northern Investors",
+"aliases": []
+},
+{
+"name_en": "Bellagio",
+"name_ar": "بيلاجيو",
+"developer": "ARCO Developments",
+"district": "Sadat Axis / Northern Investors",
+"aliases": []
+},
+{
+"name_en": "Dyar Park",
+"name_ar": "ديار بارك",
+"developer": "Al Ahly Sabbour",
+"district": "Sadat Axis",
+"aliases": []
+},
+{
+"name_en": "Easy Life",
+"name_ar": "إيزي لايف",
+"developer": "Private Developer",
+"district": "Southern Investors",
+"aliases": []
+},
+{
+"name_en": "Family City",
+"name_ar": "فاميلي سيتي",
+"developer": "Al Mansour Development",
+"district": "Sadat Axis / Northern Investors",
+"aliases": []
+},
+{
+"name_en": "Smart Life",
+"name_ar": "سمارت لايف",
+"developer": "Private Developer",
+"district": "Southern Investors",
+"aliases": []
+},
+{
+"name_en": "Sunrise Compound",
+"name_ar": "كمبوند صن رايز",
+"developer": "Sunrise Developments",
+"district": "Sadat Axis",
+"aliases": [
+"sunrise"
+]
+},
+{
+"name_en": "Swan Lake Residences",
+"name_ar": "سوان ليك",
+"developer": "Hassan Allam Properties",
+"district": "1st Settlement",
+"aliases": [
+"swan lake"
+]
+},
+{
+"name_en": "Village Avenue",
+"name_ar": "فيلدج أفينيو",
+"developer": "Palm Hills Developments",
+"district": "Beside AUC",
+"aliases": []
+},
+{
+"name_en": "The Allegria",
+"name_ar": "الجيريا",
+"developer": "SODIC",
+"district": "Cairo-Alex Desert Road",
+"aliases": [
+"allegria"
+]
+},
+{
+"name_en": "Beverly Hills",
+"name_ar": "بيفرلي هيلز",
+"developer": "SODIC",
+"district": "Central Zayed",
+"aliases": []
+},
+{
+"name_en": "Dyar (Sabbour)",
+"name_ar": "ديار صبور",
+"developer": "Al Ahly Sabbour",
+"district": "Sadat Axis",
+"aliases": [
+"dyar sabour"
+]
+},
+{
+"name_en": "Emerald Park",
+"name_ar": "إميرالد بارك",
+"developer": "Private Developer",
+"district": "Sadat Axis",
+"aliases": []
+},
+{
+"name_en": "Flowers Park",
+"name_ar": "فلاورز بارك",
+"developer": "Flowers Real Estate",
+"district": "Sadat Axis",
+"aliases": []
+},
+{
+"name_en": "Garden City New Cairo",
+"name_ar": "جاردن سيتي التجمع",
+"developer": "Private Developer",
+"district": "Southern Investors",
+"aliases": [
+"garden city"
+]
+},
+{
+"name_en": "Gardenia Springs",
+"name_ar": "جاردينيا سبرنجز",
+"developer": "Hassan Allam Properties",
+"district": "Sadat Axis / Northern Investors",
+"aliases": [
+"gardenia"
+]
+},
+{
+"name_en": "La Nuova Vista",
+"name_ar": "لا نوفا فيستا",
+"developer": "Misr Italia",
+"district": "Sadat Axis / 1st Settlement",
+"aliases": [
+"la nouva vista"
+]
+},
+{
+"name_en": "Palm Hills New Cairo",
+"name_ar": "بالم هيلز القاهرة الجديدة",
+"developer": "Palm Hills Developments",
+"district": "Middle Ring Road",
+"aliases": []
+},
+{
+"name_en": "Bloomfields",
+"name_ar": "بلومفيلدز",
+"developer": "Tatweer Misr",
+"district": "Central Mostakbal",
+"aliases": []
+},
+{
+"name_en": "IL Bosco City",
+"name_ar": "إل بوسكو سيتي",
+"developer": "Misr Italia",
+"district": "Central Mostakbal (Green River)",
+"aliases": []
+},
+{
+"name_en": "Haptown",
+"name_ar": "هاب تاون",
+"developer": "Hassan Allam Properties",
+"district": "Eastern Sector",
+"aliases": []
+},
+{
+"name_en": "Aliva",
+"name_ar": "أليفا",
+"developer": "Mountain View (DMG)",
+"district": "Heart of Mostakbal",
+"aliases": []
+},
+{
+"name_en": "The City of Odyssia",
+"name_ar": "ذا سيتي أوف أوديسيا",
+"developer": "Al Ahly Sabbour",
+"district": "Central Mostakbal",
+"aliases": []
+},
+{
+"name_en": "Aria",
+"name_ar": "أريا صبور",
+"developer": "Landmark Sabbour (LMD)",
+"district": "First Phase Mostakbal",
+"aliases": []
+},
+{
+"name_en": "Rare",
+"name_ar": "رير صبور",
+"developer": "Al Ahly Sabbour",
+"district": "Central Sector",
+"aliases": []
+},
+{
+"name_en": "Green Square",
+"name_ar": "جرين سكوير",
+"developer": "Al Ahly Sabbour",
+"district": "First Sector",
+"aliases": []
+},
+{
+"name_en": "IL Bosco New Capital",
+"name_ar": "إل بوسكو العاصمة الإدارية",
+"developer": "Misr Italia",
+"district": "R7 Sector (Southern Mohamed Bin Zayed)",
+"aliases": []
+},
+{
+"name_en": "Vinci",
+"name_ar": "فينشي",
+"developer": "Misr Italia",
+"district": "R7 Sector",
+"aliases": []
+},
+{
+"name_en": "OIA",
+"name_ar": "أويا",
+"developer": "Edge Holding",
+"district": "R7 Sector (Plot G5)",
+"aliases": []
+},
+{
+"name_en": "Sueno",
+"name_ar": "سوينو",
+"developer": "SAK Developments",
+"district": "R7 Sector",
+"aliases": []
+},
+{
+"name_en": "Armonia",
+"name_ar": "أرمونيا",
+"developer": "The Land Developers (TLD)",
+"district": "R7 Sector",
+"aliases": []
+},
+{
+"name_en": "Scenario",
+"name_ar": "سيناريو",
+"developer": "Akam Developments",
+"district": "R7 Sector",
+"aliases": []
+},
+{
+"name_en": "Entrada",
+"name_ar": "إنترادا",
+"developer": "Sorouh Developments",
+"district": "R7 Sector (Facing Expo City)",
+"aliases": []
+},
+{
+"name_en": "La Vista City",
+"name_ar": "لافيستا سيتي",
+"developer": "La Vista Developments",
+"district": "Golden Gate / Middle Ring",
+"aliases": []
+},
+{
+"name_en": "Al Maqsad",
+"name_ar": "المقصد",
+"developer": "City Edge Developments",
+"district": "R3 Sector",
+"aliases": []
+},
+{
+"name_en": "Creek Town",
+"name_ar": "كريك تاون",
+"developer": "Il Cazar Developments",
+"district": "Suez Road / 1st Settlement",
+"aliases": []
+},
+{
+"name_en": "Stei8ht",
+"name_ar": "ستيت",
+"developer": "LMD (Landmark)",
+"district": "Suez Road / Sadat Axis",
+"aliases": []
+},
+{
+"name_en": "Saada",
+"name_ar": "سعادة",
+"developer": "Horizon Egypt",
+"district": "Suez Road Corridor",
+"aliases": []
+},
+{
+"name_en": "Yellow Residence",
+"name_ar": "يلو ريزيدنس",
+"developer": "Urbnlanes Developments",
+"district": "Suez Road / Sadat Axis",
+"aliases": []
+},
+{
+"name_en": "Telal East",
+"name_ar": "تلال إيست",
+"developer": "Roya Group",
+"district": "Middle Ring Road (Opposite iCity)",
+"aliases": []
+},
+{
+"name_en": "The Marq",
+"name_ar": "ذا مارك",
+"developer": "The MarQ Communities",
+"district": "Golden Square",
+"aliases": []
+},
+{
+"name_en": "Blue Tree",
+"name_ar": "بلو تري",
+"developer": "Sky AD Developments",
+"district": "Golden Square",
+"aliases": []
+},
+{
+"name_en": "Sodic East",
+"name_ar": "سوديك إيست",
+"developer": "SODIC",
+"district": "Suez / Ismailia Link",
+"aliases": []
+},
+{
+"name_en": "VYE",
+"name_ar": "فاي",
+"developer": "SODIC",
+"district": "Dabaa Corridor / Desert Rd",
+"aliases": []
+},
+{
+"name_en": "Karmell",
+"name_ar": "كارميل",
+"developer": "SODIC",
+"district": "Dabaa Corridor",
+"aliases": []
+},
+{
+"name_en": "Rivers",
+"name_ar": "ريفرز",
+"developer": "Tatweer Misr",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Solana",
+"name_ar": "سولانا",
+"developer": "Ora Developers",
+"district": "Dabaa Corridor",
+"aliases": []
+},
+{
+"name_en": "De Joya New Zayed",
+"name_ar": "دي جويا نيو زايد",
+"developer": "Taj Misr",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Naia West",
+"name_ar": "نايا ويست",
+"developer": "Naia Developments",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Badya",
+"name_ar": "بادية",
+"developer": "Palm Hills Developments",
+"district": "Oasis Road (Creative City)",
+"aliases": []
+},
+{
+"name_en": "O West",
+"name_ar": "أو ويست",
+"developer": "Orascom Development",
+"district": "Wahat Road",
+"aliases": []
+},
+{
+"name_en": "Mountain View Chillout Park",
+"name_ar": "ماونتن فيو تشيل أوت بارك",
+"developer": "Mountain View (DMG)",
+"district": "Bolivar Axis",
+"aliases": []
+},
+{
+"name_en": "Mountain View iCity October",
+"name_ar": "ماونتن فيو أي سيتي أكتوبر",
+"developer": "Mountain View (DMG)",
+"district": "Bolivar Axis",
+"aliases": []
+},
+{
+"name_en": "Sun Capital",
+"name_ar": "صن كابيتال",
+"developer": "Arabia Holding",
+"district": "Fayoum Road (Pyramids View)",
+"aliases": []
+}
+]

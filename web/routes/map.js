@@ -136,7 +136,7 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   ]);
   const msg = String(req.query.msg || "");
   const err = ERRORS(lang)[String(req.query.err || "")];
-  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", approved: "اتعتمد.", dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", approved: "Approved.", dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
+  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", approved: "اتعتمد.", master: `اتعتمد ${req.query.n || 0} مكان.`, dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", approved: "Approved.", master: `${req.query.n || 0} places approved from the master list.`, dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
   const next = list.rows.length === 50 ? html`<a class="btn secondary" href="/app/owner/map?q=${encodeURIComponent(q)}&p=${pageNo + 1}">${L(lang, "التالي", "Next")}</a>` : "";
   return html`<h1>🗺️ ${L(lang, "أماكن الخريطة", "Map places")}</h1>
 ${notice}
@@ -145,6 +145,7 @@ ${placeForm(lang, editing)}
 <div class="map-view map-pick" data-map data-pick role="application" aria-label="${L(lang, "اختار مكان الدبوس", "Pick the pin")}" data-tiles="${tilesUrl}" data-i18n="${JSON.stringify(words(lang))}" data-lang="${lang}"></div>
 <section class="card stack" id="seed"><h2>${L(lang, "القايمة الأولى", "First list")}</h2>
   <p class="muted">${L(lang, "بتضيف الأماكن اللي مش عندك بس. اللي موجود مبيتغيرش.", "Adds only the places you do not have yet. Existing ones are not changed.")}</p>
+  <form method="post" action="/app/owner/map/master" data-confirm="${L(lang, "تعتمد القايمة الرئيسية؟", "Approve the master list?")}"><button type="submit" class="secondary">${L(lang, "اعتمد القايمة الرئيسية", "Approve the master list")}</button></form>
   <form method="post" action="/app/owner/map/import" data-confirm="${L(lang, "تضيف القايمة الأولى؟", "Add the first list?")}"><button type="submit" class="secondary">${L(lang, "ضيف القايمة الأولى", "Add the first list")}</button></form>
 </section>
 <section class="card stack" id="unmatched"><h2>${L(lang, "أسماء عليها وحدات ومالهاش مكان", "Unit names with no place")}</h2>
@@ -160,7 +161,7 @@ ${placeForm(lang, editing)}
 <section class="card stack" id="places"><h2>${L(lang, "الأماكن", "Places")}</h2>
   <form method="get" action="/app/owner/map" class="row"><input type="search" name="q" value="${q}" placeholder="${L(lang, "ابحث", "Search")}"><select name="v"><option value="">${L(lang, "الكل", "All")}</option><option value="1"${filter === true ? raw(" selected") : ""}>${L(lang, "مراجَع", "Checked")}</option><option value="0"${filter === false ? raw(" selected") : ""}>${L(lang, "لسه", "Not yet")}</option></select><button type="submit" class="secondary">${L(lang, "ابحث", "Search")}</button></form>
   <div class="scroll"><table><thead><tr><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المنطقة", "District")}</th><th>${L(lang, "الموقع", "Location")}</th><th></th></tr></thead>
-  <tbody>${list.rows.map((p) => html`<tr data-place="${p.id}"><td>${p.name_en || ""}<br><span class="muted">${p.name_ar || ""}</span>${p.verified ? html` ✅` : ""}</td><td>${p.district || "—"}</td><td dir="ltr">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</td>
+  <tbody>${list.rows.map((p) => html`<tr data-place="${p.id}"><td>${p.name_en || ""}<br><span class="muted">${p.name_ar || ""}</span>${p.verified ? html` ✅` : ""}</td><td>${p.district || "—"}</td><td dir="ltr">${p.lat == null ? L(lang, "من غير مكان", "no pin yet") : `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`}</td>
     <td class="row"><a class="btn secondary small" href="/app/owner/map?edit=${p.id}#place-form">${L(lang, "تعديل", "Edit")}</a>
     <form method="post" action="/app/owner/map/${p.id}/delete" data-confirm="${L(lang, "تمسح المكان ده؟", "Delete this place?")}"><button type="submit" class="secondary small">${L(lang, "امسح", "Delete")}</button></form></td></tr>`)}</tbody></table></div>
   ${next}
@@ -239,6 +240,17 @@ function register(web, { pool, page, assets }) {
   web.post("/owner/map/:id/approve", ownerOnly(async (req, res) => {
     await Maps.approve(pool, req.params.id);
     return goOwner(res, "msg=approved#unmatched");
+  }));
+
+  web.post("/owner/map/master", ownerOnly(async (req, res) => {
+    let rows = [];
+    try {
+      rows = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "data", "map-seed", "master.json"), "utf8"));
+    } catch {
+      return goOwner(res, "err=missing");
+    }
+    const out = await Maps.importMaster(pool, rows);
+    return goOwner(res, `msg=master&n=${out.updated + out.added}`);
   }));
 
   web.post("/owner/map/import", ownerOnly(async (req, res) => {

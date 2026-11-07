@@ -177,3 +177,22 @@ test("the owner's queue: approve a seed place, re-check units, and mark a name a
   expect(gone.headers.location).toMatch(/msg=dismissed&n=1/);
   expect((await h.query("SELECT compound FROM listings WHERE code = 'OS-1'"))[0].compound).toBeNull();
 });
+
+test("the master list approves places by name: a place the map has keeps its position, a new one has no pin yet", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('mivida', 'Mivida', 30.0058, 31.5377, 'seed', false)`);
+  const crm = await signIn(h, "admin");
+  const out = await crm.agent.post("/app/owner/map/master").type("form").send({ _csrf: crm.csrf });
+  expect(out.headers.location).toMatch(/msg=master&n=\d+/);
+  const [mv] = await h.query("SELECT approved, lat, name_ar, developer FROM map_places WHERE name_key = 'mivida'");
+  expect(mv).toMatchObject({ approved: true, lat: 30.0058, name_ar: "ميفيدا" });
+  const fresh = (await h.query("SELECT count(*)::int AS n FROM map_places WHERE lat IS NULL AND approved"))[0].n;
+  expect(fresh).toBeGreaterThan(50);
+  await h.insertListing({ code: "BF-1", compound: "Bloomfields" });
+  const b = await signIn(h, "broker");
+  const pins = (await b.agent.get("/app/map/pins")).body;
+  expect(pins.pins.map((p) => p.name)).not.toContain("Bloomfields");
+  expect(pins.unmapped).toBe(1);
+  expect((await crm.agent.get("/app/owner/map?lang=en")).status).toBe(200);
+});

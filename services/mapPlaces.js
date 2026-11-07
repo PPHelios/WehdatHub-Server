@@ -66,7 +66,8 @@ async function pins(pool, broker, query = {}) {
   let unmapped = 0;
   for (const r of rows) {
     const id = P.matchCompound(index, r.compound_en, r.compound);
-    if (id) counts.set(id, (counts.get(id) || 0) + r.n);
+    if (id && places.find((p) => p.id === id)?.lat == null) unmapped += r.n; // approved by name, no pin yet
+    else if (id) counts.set(id, (counts.get(id) || 0) + r.n);
     else unmapped += r.n;
   }
   const byId = new Map(places.map((p) => [p.id, p]));
@@ -239,6 +240,40 @@ async function importSeed(pool, rows) {
   return { read: rows.length, usable: clean.length, added };
 }
 
+/**
+ * Loads the master list (names, Arabic names, developers, spellings): each place is approved. A place the map already
+ * has keeps its position; one it does not have is added without one (its pin is dropped later).
+ */
+async function importMaster(pool, rows) {
+  const all = await pool.query("SELECT id, name_key, name_en, name_ar, aliases, verified FROM map_places");
+  const index = P.buildIndex(all.rows);
+  let updated = 0;
+  let added = 0;
+  for (const r of rows) {
+    const key = P.placeKey(r.name_en || r.name_ar);
+    if (key.length < 2) continue;
+    const id = index.get(key) || (r.aliases || []).map((a) => index.get(P.placeKey(a))).find(Boolean);
+    const aliases = (r.aliases || []).filter(Boolean);
+    if (id) {
+      await pool.query(
+        `UPDATE map_places SET approved = true, name_ar = COALESCE(name_ar, $2), developer = COALESCE(developer, $3), district = COALESCE(district, $4),
+                aliases = (SELECT array(SELECT DISTINCT unnest(aliases || $5::text[]))), updated_at = now() WHERE id = $1`,
+        [id, r.name_ar || null, r.developer || null, r.district || null, aliases]
+      );
+      updated += 1;
+    } else {
+      const { rowCount } = await pool.query(
+        `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, aliases, verified, source, approved) VALUES ($1,$2,$3,$4,$5,$6,false,'manual',true)
+         ON CONFLICT (name_key) DO NOTHING`,
+        [key, r.name_en || null, r.name_ar || null, r.developer || null, r.district || null, aliases]
+      );
+      added += rowCount;
+    }
+  }
+  clearCache();
+  return { updated, added };
+}
+
 /** The owner checked this place: units can now be matched to it. */
 async function approve(pool, id) {
   const { rowCount } = await pool.query("UPDATE map_places SET approved = true, updated_at = now() WHERE id = $1", [id]);
@@ -339,4 +374,4 @@ async function dismiss(pool, name) {
   return ids.length;
 }
 
-module.exports = { FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, TYPES };
+module.exports = { FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, importMaster, TYPES };
