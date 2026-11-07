@@ -2413,6 +2413,10 @@
       "drawerBody": ["lang", "units", "place"],
       "words": ["lang"],
       "MapRules": "Object"
+    },
+    "services/compoundResolve.js": {
+      "resolve": ["db", "fields"],
+      "normalize": ["db", "fields"]
     }
   },
   "invariant_variable_names": {
