@@ -2336,11 +2336,21 @@
     },
     "services/searchReview.js": {
       "TYPES": "Object",
+      "KINDS": "Array",
       "windowOf": ["p", "changed", "now"],
       "summary": ["pool", "p"],
       "reports": ["pool", "params"],
       "findings": ["pool", "params"],
       "repeats": ["pool", "params"],
+      "queue": ["pool", "params"],
+      "closeText": ["pool", "text", "how"],
+      "runCase": ["c"],
+      "casesWithResults": ["pool", "params"],
+      "addTextCase": ["pool", "text", "params"],
+      "previewWord": ["pool", "params"],
+      "teachWord": ["pool", "params"],
+      "vocabulary": ["pool", "params"],
+      "removeWord": ["pool", "id"],
       "decideReport": ["pool", "id", "decision"],
       "decideFinding": ["pool", "id", "decision"],
       "recheck": ["pool", "text"],
@@ -2348,7 +2358,7 @@
       "addCase": ["pool", "logId", "ownerId"],
       "cases": ["pool", "params"],
       "removeCase": ["pool", "id"],
-      "editWord": ["pool", "id", "params"]
+      "editWord": ["pool", "id", "params", "params"]
     },
     "web/routes/accessRequests.js": {
       "register": ["web", "params"]

@@ -47,16 +47,16 @@ test("a word cannot be saved with an unknown kind, an empty spelling, or as a du
   expect((await h.query("SELECT term FROM search_aliases WHERE id = $1", [a.id]))[0].term).toBe("تكيفات");
 });
 
-test("the reports page says what to do and offers Mark as fixed and Dismiss", async () => {
+test("the queue shows a reported search once with Teach word, Re-check and Dismiss", async () => {
   await h.query("INSERT INTO search_log (agency_id, channel, query_text, source, total) VALUES ($1, 'web', 'مفيده', 'parser', 0)", [h.AGENCY_A]);
   const logId = (await h.query("SELECT id FROM search_log WHERE query_text = 'مفيده'"))[0].id;
   await h.query("INSERT INTO search_reports (search_log_id, agency_id, broker_id, note) VALUES ($1, $2, $3, 'مش لاقي')", [logId, h.AGENCY_A, h.BROKERS.broker.id]);
   const owner = await signIn(h, "admin");
-  const text = (await owner.agent.get("/app/owner/searches?view=reports&lang=en")).text;
-  expect(text).toContain("Mark as fixed");
-  expect(text).toContain("Dismiss (result was right)");
-  expect(text).toContain("Broker wrote");
-  expect(text).toContain("New words");
+  const text = (await owner.agent.get("/app/owner/searches?view=queue&lang=en")).text;
+  expect(text).toContain("Re-check");
+  expect(text).toContain("Dismiss");
+  expect(text).toContain("report ×1");
+  expect(text).toContain("Vocabulary");
 });
 
 test("the owner page has one search review link", async () => {

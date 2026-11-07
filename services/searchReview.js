@@ -112,8 +112,9 @@ async function decideFinding(pool, id, decision) {
  */
 async function recheck(pool, text) {
   const missing = [];
-  const { rowCount } = await pool.query("SELECT 1 FROM search_test_cases WHERE lower(trim(query_text)) = lower(trim($1))", [text]);
-  if (!rowCount) missing.push("test_case");
+  const { rows: kept } = await pool.query("SELECT query_text, expected FROM search_test_cases WHERE lower(trim(query_text)) = lower(trim($1))", [text]);
+  if (!kept.length) missing.push("test_case");
+  else if (!runCase(kept[0]).pass) missing.push("rule"); // a rule problem stays open until the rule is fixed and the case passes
   const parsed = Q.fallbackParse(text);
   if (parsed.meta?.reasons?.length || (parsed.meta?.ambiguous || []).length) missing.push("parser");
   return { ok: missing.length === 0, missing };
@@ -147,13 +148,13 @@ async function cases(pool, { q = "", offset = 0, limit = 20 }) {
   return { rows, total: rows[0]?.n || 0 };
 }
 
-const KINDS = ["type", "feature", "place"];
+const KINDS = ["type", "feature", "place", "furnishing", "finishing", "listing_type"];
 
 /**
  * Corrects a pending word before it is approved: its spelling (term), its kind (type, feature, or place = a compound or
  * area) and what it means (target). → { ok } | { error }
  */
-async function editWord(pool, id, { term, kind, target }) {
+async function editWord(pool, id, { term, kind, target }, { statuses = ["pending"] } = {}) {
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return { error: "not_found" };
   const t = normalizeSearch(String(term || "")).slice(0, 80);
   const k = KINDS.includes(kind) ? kind : null;
@@ -161,8 +162,8 @@ async function editWord(pool, id, { term, kind, target }) {
   if (!t || !k || !g) return { error: "invalid" };
   try {
     const r = await pool.query(
-      "UPDATE search_aliases SET term = $2, kind = $3, target = $4, updated_at = now() WHERE id = $1 AND status = 'pending'",
-      [id, t, k, g]
+      "UPDATE search_aliases SET term = $2, kind = $3, target = $4, updated_at = now() WHERE id = $1 AND status = ANY($5::text[])",
+      [id, t, k, g, statuses]
     );
     return r.rowCount ? { ok: true } : { error: "not_found" };
   } catch (err) {
@@ -177,4 +178,159 @@ async function removeCase(pool, id) {
   return r.rowCount > 0;
 }
 
-module.exports = { TYPES, windowOf, summary, reports, findings, repeats, decideReport, decideFinding, recheck, resolveText, addCase, cases, removeCase, editWord };
+/* ---- Queue, vocabulary and test cases (search review in three tabs) ---- */
+
+const IN_WINDOW = (a, b) => `created_at >= ${a} AND created_at < ${b}`;
+
+/**
+ * The work queue: one row per search text, with where it came from (broker reports, nightly findings) and how often.
+ * status open = something about it is still open; done = everything about it is closed; type narrows the nightly findings.
+ * → { rows: [{ query_text, reports, findings, open_n, last_at, report_id, finding_id }], total }
+ */
+async function queue(pool, { from, to, status = "open", type = "", q = "", offset = 0, limit = 20 }) {
+  const args = [from, to];
+  const textLike = q ? `AND s.query_text ILIKE $${args.push(like(q))}` : "";
+  const typeSql = TYPES[type] ? `AND ${TYPES[type]}` : "";
+  const reportsPart = type
+    ? ""
+    : `UNION ALL SELECT lower(trim(s.query_text)), r.id::text, 'report', r.created_at, (r.status = 'open'), s.total
+         FROM search_reports r JOIN search_log s ON s.id = r.search_log_id WHERE r.created_at >= $1 AND r.created_at < $2 ${textLike}`;
+  const having = status === "open" ? "HAVING count(*) FILTER (WHERE is_open) > 0" : status === "done" ? "HAVING count(*) FILTER (WHERE is_open) = 0" : "";
+  const { rows } = await pool.query(
+    `SELECT k AS query_text, count(*) FILTER (WHERE src = 'report')::int AS reports, count(*) FILTER (WHERE src = 'audit')::int AS findings,
+            count(*) FILTER (WHERE is_open)::int AS open_n, max(at) AS last_at, min(total)::int AS total,
+            (array_agg(id ORDER BY at DESC) FILTER (WHERE src = 'report'))[1] AS report_id,
+            (array_agg(id ORDER BY at DESC) FILTER (WHERE src = 'audit'))[1] AS finding_id,
+            count(*) OVER()::int AS n
+       FROM (SELECT lower(trim(s.query_text)) AS k, s.id::text AS id, 'audit' AS src, s.created_at AS at, (s.audit_resolved_at IS NULL) AS is_open, s.total
+               FROM search_log s WHERE s.created_at >= $1 AND s.created_at < $2 AND ${FLAGGED} ${typeSql} ${textLike}
+             ${reportsPart}) x
+      WHERE k IS NOT NULL AND k <> ''
+      GROUP BY k ${having} ORDER BY open_n DESC, max(at) DESC LIMIT $${args.push(limit)} OFFSET $${args.push(offset)}`,
+    args
+  );
+  return { rows, total: rows[0]?.n || 0 };
+}
+
+/** Closes everything open about one search text: reports as fixed or dismissed, nightly findings as handled. */
+async function closeText(pool, text, how = "fixed") {
+  const rep = await pool.query(
+    `UPDATE search_reports r SET status = $2 FROM search_log s WHERE s.id = r.search_log_id AND lower(trim(s.query_text)) = lower(trim($1)) AND r.status = 'open'`,
+    [text, how === "dismiss" ? "dismissed" : "fixed"]
+  );
+  const fin = await resolveText(pool, text);
+  return { reports: rep.rowCount, findings: fin };
+}
+
+const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** Runs one test case through the quick reader. A case with expected filters must read them exactly; one without must read with no open question. */
+function runCase(c) {
+  const parsed = Q.fallbackParse(c.query_text);
+  if (c.expected && typeof c.expected === "object") {
+    const diffs = Object.keys(c.expected).filter((k) => !sameJson(parsed.filters?.[k], c.expected[k]));
+    return { pass: diffs.length === 0, diffs, got: Object.fromEntries(diffs.map((k) => [k, parsed.filters?.[k] ?? null])) };
+  }
+  const open = Boolean(parsed.meta?.reasons?.length) || (parsed.meta?.ambiguous || []).length > 0;
+  return { pass: !open, diffs: open ? ["reading"] : [], got: {} };
+}
+
+/** Every kept test case with its pass/fail now (filtered by text, paged). → { rows: [..., pass, diffs, got], total, failing } */
+async function casesWithResults(pool, { q = "", offset = 0, limit = 20 }) {
+  const base = await cases(pool, { q, offset, limit });
+  const ids = base.rows.map((r) => r.id);
+  const extra = ids.length ? (await pool.query("SELECT id, expected, note FROM search_test_cases WHERE id = ANY($1::uuid[])", [ids])).rows : [];
+  const by = new Map(extra.map((e) => [e.id, e]));
+  const rows = base.rows.map((r) => ({ ...r, expected: by.get(r.id)?.expected || null, note: by.get(r.id)?.note || null, ...runCase({ query_text: r.query_text, expected: by.get(r.id)?.expected }) }));
+  const all = (await pool.query("SELECT query_text, expected FROM search_test_cases")).rows;
+  return { rows, total: base.total, failing: all.filter((c) => !runCase(c).pass).length };
+}
+
+/** Keeps a search text as a test case. With expected filters (a rule problem) it fails until the rule is fixed. */
+async function addTextCase(pool, text, { expected = null, note = null, ownerId = null } = {}) {
+  const t = String(text || "").trim().slice(0, 300);
+  if (!t) return { error: "invalid" };
+  let exp = null;
+  if (expected !== null && expected !== "") {
+    try {
+      exp = typeof expected === "string" ? JSON.parse(expected) : expected;
+    } catch {
+      return { error: "bad_json" };
+    }
+    if (!exp || typeof exp !== "object" || Array.isArray(exp)) return { error: "bad_json" };
+  }
+  const r = await pool.query(
+    `INSERT INTO search_test_cases (query_text, created_by, expected, note) VALUES ($1, $2, $3::jsonb, $4)
+     ON CONFLICT (lower(trim(query_text))) DO UPDATE SET expected = COALESCE(EXCLUDED.expected, search_test_cases.expected), note = COALESCE(EXCLUDED.note, search_test_cases.note) RETURNING id`,
+    [t, ownerId, exp ? JSON.stringify(exp) : null, note ? String(note).slice(0, 300) : null]
+  );
+  return { ok: true, id: r.rows[0].id };
+}
+
+/**
+ * What a new word would change, without saving it: this search's reading before and after, and which test cases would start
+ * passing or failing. → { reading_changes, fixes: [text], breaks: [text] }
+ */
+async function previewWord(pool, { term, target, text }) {
+  const t = normalizeSearch(String(term || ""));
+  const g = normalizeSearch(String(target || ""));
+  if (!t || !g) return { error: "invalid" };
+  const approved = (await pool.query("SELECT term, target FROM search_aliases WHERE status = 'approved'")).rows;
+  const cs = (await pool.query("SELECT query_text, expected FROM search_test_cases")).rows;
+  const evaluate = (list) => {
+    Q.setAliases(list);
+    return { reading: JSON.stringify(Q.fallbackParse(String(text || "")).filters), cases: cs.map((c) => runCase(c).pass) };
+  };
+  try {
+    const before = evaluate(approved);
+    const after = evaluate([...approved, { term: t, target: g }]);
+    const fixes = cs.filter((_, i) => !before.cases[i] && after.cases[i]).map((c) => c.query_text);
+    const breaks = cs.filter((_, i) => before.cases[i] && !after.cases[i]).map((c) => c.query_text);
+    return { reading_changes: before.reading !== after.reading, fixes, breaks };
+  } finally {
+    Q.setAliases(approved);
+  }
+}
+
+/** Saves a word the owner taught (approved at once) unless it would break a passing test case. → { ok } | { blocked } | { error } */
+async function teachWord(pool, { term, kind, target, text }) {
+  const k = KINDS.includes(kind) ? kind : null;
+  const t = normalizeSearch(String(term || "")).slice(0, 80);
+  const g = normalizeSearch(String(target || "")).slice(0, 80);
+  if (!t || !g || !k) return { error: "invalid" };
+  const pre = await previewWord(pool, { term: t, target: g, text });
+  if (pre.error) return pre;
+  if (pre.breaks.length) return { blocked: pre.breaks, ...pre };
+  try {
+    await pool.query(
+      `INSERT INTO search_aliases (term, target, kind, status, source, decided_by, example) VALUES ($1, $2, $3, 'approved', 'manual', 'owner', $4)
+       ON CONFLICT (term, target) DO UPDATE SET status = 'approved', kind = EXCLUDED.kind, decided_by = 'owner', updated_at = now()`,
+      [t, g, k, String(text || "").slice(0, 200)]
+    );
+  } catch (err) {
+    throw err;
+  }
+  return { ok: true, ...pre };
+}
+
+/** The vocabulary: the AI's pending proposals first, then the approved words. → { rows, total } */
+async function vocabulary(pool, { q = "", offset = 0, limit = 20 }) {
+  const args = [];
+  const w = ["status IN ('pending', 'approved')"];
+  if (q) w.push(`(term ILIKE $${args.push(like(q))} OR target ILIKE $${args.length})`);
+  const { rows } = await pool.query(
+    `SELECT id, term, target, kind, status, source, agreed, example, count(*) OVER()::int AS n FROM search_aliases WHERE ${w.join(" AND ")}
+      ORDER BY (status = 'pending') DESC, agreed DESC, term LIMIT $${args.push(limit)} OFFSET $${args.push(offset)}`,
+    args
+  );
+  return { rows, total: rows[0]?.n || 0 };
+}
+
+/** Removes an approved word (kept as rejected, so the AI does not propose it again). */
+async function removeWord(pool, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return false;
+  const r = await pool.query("UPDATE search_aliases SET status = 'rejected', decided_by = 'owner', updated_at = now() WHERE id = $1 AND status = 'approved'", [id]);
+  return r.rowCount > 0;
+}
+
+module.exports = { TYPES, KINDS, windowOf, summary, reports, findings, repeats, queue, closeText, runCase, casesWithResults, addTextCase, previewWord, teachWord, vocabulary, removeWord, decideReport, decideFinding, recheck, resolveText, addCase, cases, removeCase, editWord };

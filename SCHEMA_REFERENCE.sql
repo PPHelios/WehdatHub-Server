@@ -1475,7 +1475,9 @@ CREATE TABLE IF NOT EXISTS public.search_test_cases (
   query_text text NOT NULL,
   source_log_id uuid,
   created_by uuid,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  expected jsonb,
+  note text
 );
 
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
@@ -1749,7 +1751,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_delivery_quarter_check CHECK (((del
 ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
-ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_kind_check CHECK ((kind = ANY (ARRAY['place'::text, 'type'::text, 'feature'::text])));
+ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_kind_check CHECK ((kind = ANY (ARRAY['place'::text, 'type'::text, 'feature'::text, 'furnishing'::text, 'finishing'::text, 'listing_type'::text])));
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'ai'::text, 'manual'::text])));
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_status_check CHECK ((status = ANY (ARRAY['open'::text, 'fixed'::text, 'dismissed'::text])));
