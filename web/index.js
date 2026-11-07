@@ -143,7 +143,7 @@ function mountWeb(app, { pool, config }) {
     return res.status(403).type("text/plain").send(req.lang === "en" ? "Not available for data entry" : "مش متاح لمدخل البيانات");
   });
   // Every change under these areas is written to the audit log first; if that fails the change is refused.
-  priv.use(Audit.auditWrites(pool, /^\/(catalogue|settings|team|owner|usage|units\/[^/]+\/project)(\/|$)/));
+  priv.use(Audit.auditWrites(pool, /^\/(catalogue|settings|team|owner|owners|usage|units\/[^/]+\/project)(\/|$)/));
   // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).
   priv.use(async (req, _res, next) => {
     if (req.method === "GET" && !req.get("HX-Request")) {

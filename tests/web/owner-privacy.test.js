@@ -67,7 +67,8 @@ test("a broker sees and edits an owner through their own unit; without one, or a
   const broker = await signIn(h, "broker");
   expect((await broker.agent.get(`/app/owners/${publicId}`)).status).toBe(200);
   expect((await post(broker, `/app/owners/${publicId}`, { name: "Renamed by broker", notes: "called", flag: "" })).status).toBe(303);
-  expect((await h.query("SELECT name FROM unit_owners WHERE id = $1", [publicId]))[0].name).toBe("Renamed by broker");
+  expect((await h.query("SELECT name FROM unit_owners WHERE id = $1", [publicId]))[0].name).toBe("Public Owner"); // a broker's rename is a request now
+  expect((await h.query("SELECT new_value FROM owner_change_requests WHERE owner_id = $1 AND status = 'pending'", [publicId]))[0].new_value).toBe("Renamed by broker");
 
   // An owner whose only unit belongs to another broker: hidden and not editable until a manager approves a request.
   await h.insertListing({ code: "OTHER-1", broker_id: h.BROKERS.owner.id });

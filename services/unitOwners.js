@@ -33,6 +33,12 @@ async function findByPhone(db, agencyId, phone) {
   return rows[0] || null;
 }
 
+/** The agency's next owner code (O-0042): a counter on the agency row, so two saves at once never get the same number. */
+async function nextCode(db, agencyId) {
+  const { rows } = await db.query("UPDATE agencies SET owner_code_next = owner_code_next + 1 WHERE id = $1 RETURNING owner_code_next - 1 AS n", [agencyId]);
+  return `O-${String(rows[0]?.n || 1).padStart(4, "0")}`;
+}
+
 async function findOrCreate(db, agencyId, { phone, name = null, brokerId = null }) {
   const digits = Phone.normalizePhone(phone);
   if (!digits) return null;
@@ -41,22 +47,134 @@ async function findOrCreate(db, agencyId, { phone, name = null, brokerId = null 
     if (!found.rows[0].name && name) await db.query("UPDATE unit_owners SET name = $2, updated_at = now() WHERE id = $1", [found.rows[0].id, clean(name, 120)]);
     return found.rows[0];
   }
-  const { rows } = await db.query("INSERT INTO unit_owners (agency_id, name, phones, created_by) VALUES ($1, $2, ARRAY[$3]::text[], $4) RETURNING *", [agencyId, clean(name, 120), digits, brokerId]);
-  await addEvent(db, agencyId, rows[0].id, brokerId, "created", { phone: digits });
+  const code = await nextCode(db, agencyId);
+  const { rows } = await db.query("INSERT INTO unit_owners (agency_id, name, phones, created_by, code) VALUES ($1, $2, ARRAY[$3]::text[], $4, $5) RETURNING *", [agencyId, clean(name, 120), digits, brokerId, code]);
+  await addEvent(db, agencyId, rows[0].id, brokerId, "created", { phone: digits, code });
   return rows[0];
 }
 
-/** The broker chose the typed name on a unit draft: the owner (found by phone) takes that name; history records it. */
-async function renameFromDraft(db, broker, phone, name) {
+/** May this person rename an owner right away? Managers, data entry and the agency owner can; a broker asks (see requestRename). */
+const canRenameDirectly = (viewer) => isManager(viewer) || isDataEntry(viewer);
+
+/**
+ * The broker chose the typed name on a unit draft. Managers and data entry rename the owner (found by phone) at once, history kept.
+ * A broker cannot: the typed name becomes a rename request and the unit keeps the saved name until it is approved.
+ * → the owner, or { owner, requested: true }
+ */
+async function renameFromDraft(db, broker, phone, name, { listing = null } = {}) {
   const digits = Phone.normalizePhone(phone);
   const next = clean(name, 120);
   if (!digits || !next) return null;
   const { rows } = await db.query("SELECT * FROM unit_owners WHERE agency_id = $1 AND phones @> ARRAY[$2]::text[] ORDER BY created_at LIMIT 1", [broker.agency_id, digits]);
   const owner = rows[0];
   if (!owner || owner.name === next) return owner || null;
+  if (!canRenameDirectly(broker)) {
+    await requestRename(db, broker, owner, next, { listing });
+    return { owner, requested: true };
+  }
   await db.query("UPDATE unit_owners SET name = $2, updated_at = now() WHERE id = $1", [owner.id, next]);
   await addEvent(db, broker.agency_id, owner.id, broker.id, "edited", { name: next });
   return owner;
+}
+
+const APPROVER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, telegram_chat_id";
+
+/**
+ * Who decides a rename of this owner: the agency owner for a VIP owner; otherwise data entry (when owners are on for them),
+ * else the managers, else the agency owner.
+ */
+async function approversFor(db, owner) {
+  const q = (roles) => db.query(`SELECT ${APPROVER_COLS} FROM brokers WHERE agency_id = $1 AND is_active AND lower(role) = ANY($2::text[])`, [owner.agency_id, roles]).then((r) => r.rows);
+  if (owner.is_private) return q(["owner"]);
+  if (await dataEntryOwnersOn(db, owner.agency_id)) {
+    const de = await q(["data_entry"]);
+    if (de.length) return de;
+  }
+  const mgr = await q(["manager", "admin", "team_lead"]);
+  if (mgr.length) return mgr;
+  return q(["owner"]);
+}
+
+/** Asks for a new name. One pending request per owner and name; the approvers are told. → the request id (or null when one is already waiting) */
+async function requestRename(db, broker, owner, newName, { listing = null } = {}) {
+  const next = clean(newName, 120);
+  if (!next) return null;
+  const ins = await db.query(
+    `INSERT INTO owner_change_requests (agency_id, owner_id, kind, old_value, new_value, requested_by, listing_id) VALUES ($1, $2, 'rename', $3, $4, $5, $6)
+     ON CONFLICT (owner_id, lower(new_value)) WHERE status = 'pending' DO NOTHING RETURNING id`,
+    [broker.agency_id, owner.id, owner.name, next, broker.id, listing?.id || null]
+  );
+  if (!ins.rows[0]) return null;
+  await addEvent(db, broker.agency_id, owner.id, broker.id, "rename_requested", { name: next });
+  // A unit saved with the typed name goes back to the saved name until the request is approved.
+  if (listing?.id) await db.query("UPDATE listings SET details = details || jsonb_build_object('owner_name', $3::text) WHERE id = $1 AND agency_id = $2 AND $3::text IS NOT NULL", [listing.id, broker.agency_id, owner.name]);
+  try {
+    const Notifications = require("../lib/notifications");
+    for (const a of await approversFor(db, owner)) {
+      await Notifications.notifyBroker(db, a, { kind: "manager_alert", dedupeKey: `owner_rename:${ins.rows[0].id}:${a.id}`, title: `✏️ ${broker.name || "A broker"} asks to rename ${owner.code || "an owner"}: ${owner.name || "—"} → ${next}`, body: "Approve or reject it under Owners → Name requests.", url: "/app/owners/requests" }).catch(() => {});
+    }
+  } catch { /* the request is saved; a missed alert is not an error */ }
+  return ins.rows[0].id;
+}
+
+/** May this person decide requests for this owner? The agency owner always; data entry for non-VIP owners (switch on); a manager only when the agency has no data entry. */
+async function canDecide(pool, viewer, owner) {
+  if (!viewer || viewer.agency_id !== owner.agency_id) return false;
+  if (isAgencyOwner(viewer)) return true;
+  if (owner.is_private) return false;
+  if (isDataEntry(viewer)) return dataEntryOwnersOn(pool, viewer.agency_id);
+  if (isManager(viewer)) {
+    if (!(await dataEntryOwnersOn(pool, viewer.agency_id))) return true;
+    const { rows } = await pool.query("SELECT 1 FROM brokers WHERE agency_id = $1 AND is_active AND lower(role) = 'data_entry' LIMIT 1", [viewer.agency_id]);
+    return rows.length === 0;
+  }
+  return false;
+}
+
+/** The pending requests this person may decide. */
+async function pendingFor(pool, viewer) {
+  const { rows } = await pool.query(
+    `SELECT r.id, r.owner_id, r.old_value, r.new_value, r.created_at, o.code, o.is_private, o.agency_id, b.name AS requested_by_name
+       FROM owner_change_requests r JOIN unit_owners o ON o.id = r.owner_id LEFT JOIN brokers b ON b.id = r.requested_by
+      WHERE r.agency_id = $1 AND r.status = 'pending' ORDER BY r.created_at LIMIT 200`,
+    [viewer.agency_id]
+  );
+  const out = [];
+  for (const r of rows) if (await canDecide(pool, viewer, { agency_id: r.agency_id, is_private: r.is_private })) out.push(r);
+  return out;
+}
+
+/** Approves (the owner takes the new name; units of a non-VIP owner follow) or rejects a request. History and the operation log record it. */
+async function decideRequest(pool, viewer, requestId, approve) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(requestId))) return { error: "not_found" };
+  const { rows } = await pool.query("SELECT r.*, o.is_private, o.name AS current_name, o.code FROM owner_change_requests r JOIN unit_owners o ON o.id = r.owner_id WHERE r.id = $1 AND r.agency_id = $2", [requestId, viewer.agency_id]);
+  const r = rows[0];
+  if (!r) return { error: "not_found" };
+  if (r.status !== "pending") return { error: "decided" };
+  if (!(await canDecide(pool, viewer, { agency_id: r.agency_id, is_private: r.is_private }))) return { error: "forbidden" };
+  const upd = await pool.query("UPDATE owner_change_requests SET status = $2, decided_by = $3, decided_at = now() WHERE id = $1 AND status = 'pending'", [r.id, approve ? "approved" : "rejected", viewer.id]);
+  if (!upd.rowCount) return { error: "decided" };
+  if (approve) {
+    await pool.query("UPDATE unit_owners SET name = $3, updated_at = now() WHERE id = $1 AND agency_id = $2", [r.owner_id, r.agency_id, r.new_value]);
+    await addEvent(pool, r.agency_id, r.owner_id, viewer.id, "edited", { name: r.new_value, approved_request: r.id });
+    if (!r.is_private) await pool.query("UPDATE listings SET details = details || jsonb_build_object('owner_name', $3::text) WHERE owner_id = $1 AND agency_id = $2 AND details ? 'owner_name'", [r.owner_id, r.agency_id, r.new_value]);
+  } else {
+    await addEvent(pool, r.agency_id, r.owner_id, viewer.id, "rename_rejected", { name: r.new_value });
+  }
+  logOperation(pool, { agency_id: r.agency_id, broker_id: viewer.id, operation_type: approve ? "owner_rename_approved" : "owner_rename_rejected", status: "success", metadata: { request_id: r.id, owner_id: r.owner_id } });
+  return { ok: true, approved: Boolean(approve) };
+}
+
+/** A broker linked a unit to a VIP owner: the agency owner is told (information only; nothing is blocked). */
+async function warnVipLink(db, broker, owner, listing) {
+  if (!owner?.is_private || !broker || isAgencyOwner(broker)) return;
+  try {
+    const Notifications = require("../lib/notifications");
+    const { rows } = await db.query(`SELECT ${APPROVER_COLS} FROM brokers WHERE agency_id = $1 AND is_active AND lower(role) = 'owner'`, [owner.agency_id]);
+    for (const a of rows) {
+      await Notifications.notifyBroker(db, a, { kind: "manager_alert", dedupeKey: `vip_link:${owner.id}:${listing.id}`, title: `⭐ ${broker.name || "A broker"} linked unit ${listing.code} to the VIP owner ${owner.code || ""}`, body: "Information only. The broker sees just their own unit.", url: `/app/owners/${owner.id}` }).catch(() => {});
+    }
+  } catch { /* information only */ }
 }
 
 /** Points a unit at an owner (no-op when it already does) and records it on the owner's history. */
@@ -71,7 +189,11 @@ async function syncFromListing(db, broker, listing) {
   const d = listing?.details || {};
   if (!d.owner_phone) return null;
   const owner = await findOrCreate(db, listing.agency_id, { phone: d.owner_phone, name: d.owner_name, brokerId: broker?.id || null });
-  if (owner) await link(db, listing.agency_id, listing, owner.id, broker?.id || null);
+  if (owner) {
+    const wasLinked = listing.owner_id === owner.id;
+    await link(db, listing.agency_id, listing, owner.id, broker?.id || null);
+    if (!wasLinked) await warnVipLink(db, broker, owner, listing);
+  }
   // A VIP owner's name and phone are not kept on the unit: the link stays, the details do not.
   if (owner?.is_private) await db.query("UPDATE listings SET details = details - 'owner_name' - 'owner_phone' WHERE id = $1 AND agency_id = $2", [listing.id, listing.agency_id]);
   return owner;
@@ -167,7 +289,7 @@ async function listFor(pool, viewer, { q = "", limit = 50, offset = 0, onlyPriva
     `SELECT o.*, (SELECT count(*)::int FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerSees(viewer, scopeAll)}) AS unit_count
        FROM unit_owners o
       WHERE o.agency_id = $1 AND ${Vis.owners("o")}${privateOnly}
-        AND (CASE WHEN $2::text = '' THEN true ELSE (o.name ILIKE '%' || $2 || '%' OR ($3::text IS NOT NULL AND o.phones @> ARRAY[$3]::text[])) END)
+        AND (CASE WHEN $2::text = '' THEN true ELSE (o.name ILIKE '%' || $2 || '%' OR upper(o.code) = upper($2) OR ($3::text IS NOT NULL AND o.phones @> ARRAY[$3]::text[])) END)
         AND ((SELECT count(*) FROM listings u WHERE u.owner_id = o.id AND u.agency_id = o.agency_id AND ${Vis.units("u")}${brokerSees(viewer, scopeAll)}) > 0
              ${seesAllOwners(viewer) ? `OR NOT EXISTS (SELECT 1 FROM listings u WHERE ${Vis.allUnits()} AND u.owner_id = o.id AND u.agency_id = o.agency_id)` : ""})
       ORDER BY o.created_at DESC LIMIT $4 OFFSET $5`,
@@ -193,6 +315,13 @@ async function edit(pool, actor, ownerId, { name, phone, notes, flag }) {
   if (!before) return { error: "not_found" };
   if (!(await getFor(pool, actor, ownerId))) return { error: "not_found" };
   const next = { name: clean(name, 120), notes: clean(notes, NOTE_MAX), flag: clean(flag, 200) };
+  // A broker cannot change a name: it becomes a request for the approver, and the rest of the edit goes through.
+  let requested = false;
+  if (!canRenameDirectly(actor) && next.name !== before.name) {
+    if (next.name) await requestRename(pool, actor, before, next.name);
+    next.name = before.name;
+    requested = true;
+  }
   // An empty phone keeps the current one; a new one must be valid and not belong to another profile.
   const digits = String(phone ?? "").trim() ? Phone.normalizePhone(phone) : (before.phones || [])[0] || null;
   if (!digits) return { error: "bad_phone" };
@@ -207,7 +336,7 @@ async function edit(pool, actor, ownerId, { name, phone, notes, flag }) {
   if (next.flag !== before.flag) await addEvent(pool, actor.agency_id, ownerId, actor.id, "flag", { from: before.flag, to: next.flag });
   if (next.notes !== before.notes) await addEvent(pool, actor.agency_id, ownerId, actor.id, "note", { text: next.notes });
   if (next.name !== before.name) await addEvent(pool, actor.agency_id, ownerId, actor.id, "edited", { name: next.name });
-  return { ok: true };
+  return { ok: true, ...(requested ? { name_requested: true } : {}) };
 }
 
 /** Managers delete a profile; its units stay and lose the link. */
@@ -274,4 +403,17 @@ async function forLead(pool, viewer, lead) {
   return rows[0] ? getFor(pool, viewer, rows[0].id) : null;
 }
 
-module.exports = { findByPhone, findOrCreate, renameFromDraft, syncFromListing, hideOwnerDetails, restoreOwnerDetails, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead, dataEntryOwnersOn, setDataEntryOwners };
+/**
+ * Typeahead for the owners search: owners this person may see whose name starts like, or whose code or phone matches, the typed text.
+ * A search by code shows the code and name only; a phone is shown only to those who see every owner. → [{ id, code, name, phone? }]
+ */
+async function suggest(pool, viewer, q, { limit = 8 } = {}) {
+  const term = String(q || "").trim().slice(0, 60);
+  if (term.length < 2) return [];
+  const list = await listFor(pool, viewer, { q: term, limit, offset: 0 });
+  const wide = seesAllOwners(viewer);
+  const byCode = /^o-?\d+$/i.test(term);
+  return list.rows.map((o) => ({ id: o.id, code: o.code, name: o.name, ...(wide && !byCode && o.phones?.[0] ? { phone: `+${o.phones[0]}` } : {}) }));
+}
+
+module.exports = { nextCode, requestRename, approversFor, canDecide, pendingFor, decideRequest, suggest, warnVipLink, findByPhone, findOrCreate, renameFromDraft, syncFromListing, hideOwnerDetails, restoreOwnerDetails, getFor, listFor, history, edit, canEditOwner, remove, reassign, leadFor, forLead, dataEntryOwnersOn, setDataEntryOwners };

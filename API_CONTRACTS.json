@@ -869,9 +869,17 @@
       "unitOwnerBlock": ["pool", "viewer", "listing", "lang", "csrf", "notice"]
     },
     "services/unitOwners.js": {
+      "nextCode": ["db", "agencyId"],
+      "requestRename": ["db", "broker", "owner", "newName", "params"],
+      "approversFor": ["db", "owner"],
+      "canDecide": ["pool", "viewer", "owner"],
+      "pendingFor": ["pool", "viewer"],
+      "decideRequest": ["pool", "viewer", "requestId", "approve"],
+      "suggest": ["pool", "viewer", "q", "params"],
+      "warnVipLink": ["db", "broker", "owner", "listing"],
       "findByPhone": ["db", "agencyId", "phone"],
       "findOrCreate": ["db", "agencyId", "params"],
-      "renameFromDraft": ["db", "broker", "phone", "name"],
+      "renameFromDraft": ["db", "broker", "phone", "name", "params"],
       "syncFromListing": ["db", "broker", "listing"],
       "hideOwnerDetails": ["db", "agencyId", "ownerId"],
       "restoreOwnerDetails": ["db", "agencyId", "ownerId"],

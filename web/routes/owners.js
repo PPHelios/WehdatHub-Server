@@ -63,6 +63,7 @@ function register(web, { pool, page }) {
     const q = String(req.query.q || "").slice(0, 80);
     const onlyPrivate = req.query.private === "1" && isAgencyOwner(broker);
     const list = await Owners.listFor(pool, broker, { q, limit: PAGE, offset: n * PAGE, onlyPrivate });
+    const pendingCount = isDataEntry(broker) || isManager(broker) || isAgencyOwner(broker) ? (await Owners.pendingFor(pool, broker)).length : 0;
     const dataEntryOn = isAgencyOwner(broker) ? await Owners.dataEntryOwnersOn(pool, broker.agency_id) : false;
     return page(req, res, {
       title: L(lang, "المُلّاك", "Owners"),
@@ -70,9 +71,10 @@ function register(web, { pool, page }) {
       body: html`<h1>👤 ${L(lang, "المُلّاك", "Owners")}</h1>
 <form method="get" action="/app/owners" class="row"><input id="owner-q" hx-preserve="true" hx-get="/app/owners" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="innerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${q}" placeholder="${L(lang, "اسم أو موبايل", "Name or mobile")}" aria-label="${L(lang, "بحث", "Search")}"><button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button></form>
 ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/data-entry" class="row" data-data-entry-owners><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="on" value="${dataEntryOn ? "0" : "1"}"><button type="submit" class="secondary">${dataEntryOn ? L(lang, "🔒 قفل: مدخل البيانات مش هيشوف المُلّاك", "🔒 Turn off: data entry cannot see owners") : L(lang, "🔓 فتح: مدخل البيانات يشوف ويعدّل المُلّاك (ما عدا VIP)", "🔓 Turn on: data entry sees and edits owners (not VIP)")}</button></form>` : ""}
+${pendingCount ? html`<p><a class="pill-link" href="/app/owners/requests">📝 ${L(lang, "طلبات الأسماء", "Name requests")} (${pendingCount})</a></p>` : ""}
 ${isAgencyOwner(broker) ? html`<p><a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/owners?private=${onlyPrivate ? "" : "1"}">⭐ ${L(lang, "VIP", "VIP")}</a></p>` : ""}
 ${list.rows.length
-  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.displayPhone(`+${p}`)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">⚠️ ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
+  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="chip" dir="ltr">${o.code || ""}</span> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.displayPhone(`+${p}`)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">⚠️ ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
   : html`<p class="muted">${L(lang, "مفيش مُلّاك لسه.", "No owners yet.")}</p>`}
 <p class="row">${n > 0 ? html`<a href="/app/owners?page=${n - 1}&q=${encodeURIComponent(q)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${list.more ? html`<a href="/app/owners?page=${n + 1}&q=${encodeURIComponent(q)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
     });
@@ -84,6 +86,33 @@ ${list.rows.length
     if (!isAgencyOwner(broker)) return next();
     await Owners.setDataEntryOwners(pool, broker, req.body.on === "1");
     return res.redirect(303, "/app/owners");
+  });
+
+  // Owner name suggestions while typing (name, code or phone; phones only for those who may see them).
+  web.get("/owners/suggest", async (req, res) => {
+    const q = String(req.query.q || "").slice(0, 80);
+    if (q.trim().length < 2) return res.json([]);
+    return res.json(await Owners.suggest(pool, req.session.broker, q));
+  });
+
+  // Name-change requests waiting for the people allowed to decide them.
+  web.get("/owners/requests", async (req, res) => {
+    const lang = langOf(req);
+    const rows = await Owners.pendingFor(pool, req.session.broker);
+    return page(req, res, {
+      title: L(lang, "طلبات تعديل الأسماء", "Name requests"),
+      nav: "units",
+      body: html`<h1>📝 ${L(lang, "طلبات تعديل الأسماء", "Name requests")}</h1>
+${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => html`<li class="card" data-request="${r.id}"><b>${r.code}</b> · ${r.old_value || "—"} → <b>${r.new_value}</b> <span class="muted small">${r.requested_by_name || ""} · ${stamp(r.created_at, lang)}</span>
+<form method="post" action="/app/owners/requests/${r.id}" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><button name="decision" value="approve" type="submit">${L(lang, "موافقة", "Approve")}</button><button name="decision" value="reject" type="submit" class="secondary">${L(lang, "رفض", "Reject")}</button></form></li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش طلبات.", "No requests.")}</p>`}`
+    });
+  });
+
+  web.post("/owners/requests/:id", async (req, res, next) => {
+    const r = await Owners.decideRequest(pool, req.session.broker, req.params.id, req.body.decision === "approve");
+    if (r.error === "forbidden") return res.status(403).send(L(langOf(req), "مش مسموحلك.", "Not allowed."));
+    if (r.error) return next();
+    return res.redirect(303, "/app/owners/requests");
   });
 
   web.get("/owners/:id", async (req, res, next) => {
@@ -102,7 +131,8 @@ ${list.rows.length
       nav: "units",
       body: html`<article class="card stack" data-owner-profile="${owner.id}">
   ${req.query.saved ? html`<p class="notice ok">✅ ${L(lang, "اتحفظ", "Saved")}</p>` : ""}
-  <h1>👤 ${owner.name || L(lang, "بدون اسم", "No name")}</h1>
+  <h1>👤 ${owner.name || L(lang, "بدون اسم", "No name")} <span class="chip" dir="ltr">${owner.code || ""}</span></h1>
+  ${req.query.requested ? html`<p class="notice ok">📝 ${L(lang, "طلب تعديل الاسم اتبعت للموافقة", "Name change sent for approval")}</p>` : ""}
   <p dir="ltr">${(owner.phones || []).map((p) => html`<a href="${Phone.telUrl(`+${p}`)}">${Phone.displayPhone(`+${p}`)}</a> `)}</p>
   ${owner.is_private ? html`<p class="badge">⭐ ${L(lang, "VIP", "VIP")}</p>` : ""}
   ${owner.flag ? html`<p class="card notice warn">⚠️ ${owner.flag}</p>` : ""}
@@ -141,7 +171,7 @@ ${list.rows.length
     if (r.error === "duplicate") return res.status(409).type("html").send(`<p>${L(lang, "الموبايل ده موجود على مالك تاني:", "This phone already belongs to another owner:")} <a href="/app/owners/${r.existingId}">${escapeHtml(r.existingName || L(lang, "بدون اسم", "No name"))}</a></p>`);
     if (r.error === "bad_phone") return res.status(422).type("text").send(L(lang, "الموبايل مش صح.", "The phone is not valid."));
     if (r.error) return next();
-    return res.redirect(303, `/app/owners/${req.params.id}?saved=1`);
+    return res.redirect(303, `/app/owners/${req.params.id}?${r.name_requested ? "requested=1" : "saved=1"}`);
   });
 
   // The agency owner marks a profile private or public again.

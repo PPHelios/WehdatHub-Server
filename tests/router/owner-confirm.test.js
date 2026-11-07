@@ -82,6 +82,7 @@ test("a typed owner line with a saved owner under another name lets the broker c
   await h.tap("broker", "draft_confirm");
   const [l] = await h.query("SELECT owner_id FROM listings WHERE code = 'HP-78'");
   expect(l.owner_id).not.toBeNull();
-  expect((await ownerRow("201055550011")).name).toBe("New Name");
+  expect((await ownerRow("201055550011")).name).toBe("Old Name"); // a broker cannot rename: it is a request
+  expect((await h.query("SELECT new_value FROM owner_change_requests WHERE status = 'pending'"))[0].new_value).toBe("New Name");
   expect((await h.query("SELECT count(*)::int AS n FROM unit_owners WHERE agency_id = $1", [h.AGENCY_A]))[0].n).toBe(1);
 });
