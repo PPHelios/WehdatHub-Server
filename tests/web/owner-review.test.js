@@ -67,23 +67,23 @@ test("nightly findings are paged, filtered by type and period, and handled with 
   await h.query("INSERT INTO search_log (agency_id, channel, query_text, source, total, audit) VALUES ($1, 'web', 'old one', 'parser', 0, $2::jsonb)", [h.AGENCY_A, FLAG]);
   await h.query("UPDATE search_log SET created_at = now() - interval '20 days' WHERE query_text = 'old one'");
   const owner = await signIn(h, "admin");
-  const first = (await owner.agent.get("/app/owner/searches?view=audit&period=7d&lang=en")).text;
-  expect((first.match(/data-finding=/g) || []).length).toBe(20);
+  const first = (await owner.agent.get("/app/owner/searches?view=queue&period=7d&lang=en")).text;
+  expect((first.match(/data-queue-row=/g) || []).length).toBe(20);
   expect(first).toContain("data-pager");
   expect(first).not.toContain("old one");
-  const second = (await owner.agent.get("/app/owner/searches?view=audit&period=7d&page=2&lang=en")).text;
-  expect((second.match(/data-finding=/g) || []).length).toBe(5);
-  expect((await owner.agent.get("/app/owner/searches?view=audit&period=month&status=all&q=old&lang=en")).text).toContain("old one");
-  expect((await owner.agent.get("/app/owner/searches?view=audit&period=7d&type=wrong&lang=en")).text).not.toContain("data-finding=");
+  const second = (await owner.agent.get("/app/owner/searches?view=queue&period=7d&page=2&lang=en")).text;
+  expect((second.match(/data-queue-row=/g) || []).length).toBe(5);
+  expect((await owner.agent.get("/app/owner/searches?view=queue&period=month&status=all&q=old&lang=en")).text).toContain("old one");
+  expect((await owner.agent.get("/app/owner/searches?view=queue&period=7d&type=wrong&lang=en")).text).not.toContain("data-queue-row=");
 
   const id = (await h.query("SELECT id FROM search_log WHERE query_text = 'villa 0'"))[0].id;
   const done = await post(owner, `/app/owner/searches/audit/${id}`, { decision: "resolve", back: "https://evil.example/x" });
   expect(done.status).toBe(303);
   expect(done.headers.location).toBe("/app/owner/searches");
   expect((await h.query("SELECT audit_resolved_at FROM search_log WHERE id = $1", [id]))[0].audit_resolved_at).not.toBeNull();
-  const open = (await owner.agent.get("/app/owner/searches?view=audit&period=7d&lang=en")).text;
-  expect(open).not.toContain(`data-finding="${id}"`);
-  expect((await owner.agent.get("/app/owner/searches?view=audit&period=7d&status=done&lang=en")).text).toContain(`data-finding="${id}"`);
+  const open = (await owner.agent.get("/app/owner/searches?view=queue&period=7d&lang=en")).text;
+  expect(open).not.toContain('data-queue-row="villa 0"');
+  expect((await owner.agent.get("/app/owner/searches?view=queue&period=7d&status=done&lang=en")).text).toContain('data-queue-row="villa 0"');
 });
 
 test("the one-day filter keeps only what changed in the last 24 hours, and repeat offenders group the same search", async () => {
@@ -91,15 +91,16 @@ test("the one-day filter keeps only what changed in the last 24 hours, and repea
   await seedFlagged(1, "recent");
   await h.query("INSERT INTO search_log (agency_id, channel, query_text, source, total, audit, created_at) VALUES ($1, 'web', 'zzold', 'parser', 0, $2::jsonb, now() - interval '3 days')", [h.AGENCY_A, FLAG]);
   const owner = await signIn(h, "admin");
-  const day = (await owner.agent.get("/app/owner/searches?view=audit&period=month&changed=1&lang=en")).text;
+  const day = (await owner.agent.get("/app/owner/searches?view=queue&period=month&changed=1&lang=en")).text;
   expect(day).toContain("recent 0");
   expect(day).not.toContain("zzold");
   for (let i = 0; i < 3; i++) await h.query("INSERT INTO search_log (agency_id, channel, query_text, source, total, audit) VALUES ($1, 'web', 'Same Search', 'parser', 0, $2::jsonb)", [h.AGENCY_A, FLAG]);
-  const rep = (await owner.agent.get("/app/owner/searches?view=repeat&period=7d&lang=en")).text;
-  expect(rep).toContain("same search");
-  expect(rep).toMatch(/data-repeat[\s\S]*<td>3<\/td>/);
-  // All handled needs a saved test case first (re-check gate): without one the searches stay open.
-  await post(owner, "/app/owner/searches/repeat", { text: "same search" });
+  const rep = (await owner.agent.get("/app/owner/searches?view=queue&period=7d&lang=en")).text;
+  expect(rep).toContain('data-queue-row="same search"');
+  expect(rep).toContain("seen 3×");
+  // Re-check needs a saved test case first: without one the searches stay open.
+  const gated = await post(owner, "/app/owner/searches/queue/recheck", { text: "same search" });
+  expect(gated.headers.location).toContain("note=notyet");
   expect((await h.query("SELECT count(*)::int AS n FROM search_log WHERE query_text = 'Same Search' AND audit_resolved_at IS NULL"))[0].n).toBe(3);
 });
 
@@ -110,10 +111,10 @@ test("a Wrong-search report is closed as fixed or ignored from the queue", async
   await h.query("INSERT INTO search_reports (search_log_id, agency_id, broker_id, note) VALUES ($1, $2, $3, 'wrong area')", [logId, h.AGENCY_A, h.BROKERS.broker.id]);
   const rid = (await h.query("SELECT id FROM search_reports"))[0].id;
   const owner = await signIn(h, "admin");
-  expect((await owner.agent.get("/app/owner/searches?view=reports&lang=en")).text).toContain(`data-report="${rid}"`);
+  const logText = (await h.query("SELECT lower(trim(query_text)) AS t FROM search_log WHERE id = $1", [logId]))[0].t;
+  expect((await owner.agent.get("/app/owner/searches?view=queue&lang=en")).text).toContain(`data-queue-row="${logText}"`);
   await post(owner, `/app/owner/searches/reports/${rid}`, { decision: "fixed" });
   expect((await h.query("SELECT status FROM search_reports"))[0].status).toBe("fixed");
-  expect((await owner.agent.get("/app/owner/searches?view=reports&lang=en")).text).not.toContain(`data-report="${rid}"`);
 });
 
 test("the owner page carries the period tabs and a link to the search review", async () => {

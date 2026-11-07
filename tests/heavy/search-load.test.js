@@ -1,4 +1,4 @@
-// tests/web/search-load.test.js — Search on 50,000 units (patch 5): typical searches answer fast, use the indexes, and 40 at once all answer.
+// tests/heavy/search-load.test.js — Search on 50,000 units (patch 5): typical searches answer fast, use the indexes, and 40 at once all answer.
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
