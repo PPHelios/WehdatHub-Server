@@ -1831,6 +1831,9 @@
       "sharedFor": ["db", "listing", "params"],
       "layoutsFor": ["db", "listing"]
     },
+    "web/routes/globalProjects.js": {
+      "register": ["web", "params"]
+    },
     "web/routes/gallery.js": {
       "register": ["web", "params"],
       "gallerySection": ["lang", "manager", "data", "params"]
