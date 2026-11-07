@@ -40,3 +40,13 @@ test("a place needs a name and Egyptian coordinates (typed or from a link); alia
   expect(ok.ok).toBe(true);
   expect(ok.value).toMatchObject({ name_key: "mivida", name_en: "Mivida Compound", lat: 30.005812, lng: 31.5377, aliases: ["Emaar Mivida", "ميفيدا إعمار"], verified: true });
 });
+
+test("details after the compound are split off, and a trailing number still finds the compound", () => {
+  expect(M.splitCompound("Rehab 1, 3rd floor")).toEqual({ name: "Rehab 1", extra: "3rd floor" });
+  expect(M.splitCompound("Mivida / villa 12")).toEqual({ name: "Mivida", extra: "villa 12" });
+  expect(M.splitCompound("Hyde Park")).toEqual({ name: "Hyde Park", extra: "" });
+  const index = M.buildIndex([{ id: "r", name_en: "El Rehab", aliases: [] }, { id: "p", name_en: "Palm Hills Katameya", aliases: [] }]);
+  expect(M.resolveName(index, "El Rehab 2, 3rd floor")).toEqual({ id: "r", exact: true, extra: "2, 3rd floor" });
+  expect(M.resolveName(index, "Palm Hills Katameya Phase 2")).toMatchObject({ id: "p", exact: false });
+  expect(M.resolveName(index, "Unknown Place")).toBeNull();
+});

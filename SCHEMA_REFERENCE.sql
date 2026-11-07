@@ -443,7 +443,9 @@ CREATE TABLE IF NOT EXISTS public.listings (
   owner_id uuid,
   portal_listing_no text,
   deleted_at timestamp with time zone,
-  deleted_by uuid
+  deleted_by uuid,
+  place_id uuid,
+  compound_state text
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -1462,7 +1464,8 @@ CREATE TABLE IF NOT EXISTS public.map_places (
   verified boolean DEFAULT false NOT NULL,
   source text DEFAULT 'manual'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  approved boolean DEFAULT false NOT NULL
 );
 
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
@@ -1680,6 +1683,7 @@ ALTER TABLE leases ADD CONSTRAINT leases_rent_check CHECK (((rent IS NULL) OR (r
 ALTER TABLE leases ADD CONSTRAINT leases_tenant_name_check CHECK (((tenant_name IS NULL) OR (length(tenant_name) <= 120)));
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_price_check CHECK ((price > (0)::numeric));
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_source_check CHECK ((source = ANY (ARRAY['sheet'::text, 'increase'::text, 'edit'::text, 'quick'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_compound_state_check CHECK (((compound_state IS NULL) OR (compound_state = 'needs_fix'::text)));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_quarter_check CHECK (((delivery_quarter >= 1) AND (delivery_quarter <= 4)));
 ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text, 'kitchen_and_ac'::text, 'ac_only'::text, 'kitchen_only'::text])));
@@ -1836,6 +1840,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_
 ALTER TABLE listings ADD CONSTRAINT listings_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE SET NULL;
+ALTER TABLE listings ADD CONSTRAINT listings_place_id_fkey FOREIGN KEY (place_id) REFERENCES map_places(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
@@ -1980,6 +1985,8 @@ CREATE INDEX idx_listings_dev_code ON public.listings USING btree (agency_id, de
 CREATE INDEX idx_listings_dev_code_norm ON public.listings USING btree (agency_id, upper(developer_unit_code)) WHERE (developer_unit_code IS NOT NULL);
 CREATE INDEX idx_listings_developer_key ON public.listings USING btree (agency_id, developer_key) WHERE (developer_key IS NOT NULL);
 CREATE INDEX idx_listings_feature_keys ON public.listings USING gin (feature_keys);
+CREATE INDEX idx_listings_needs_fix ON public.listings USING btree (agency_id) WHERE (compound_state = 'needs_fix'::text);
+CREATE INDEX idx_listings_place ON public.listings USING btree (agency_id, place_id) WHERE (place_id IS NOT NULL);
 CREATE INDEX idx_listings_project ON public.listings USING btree (project_id) WHERE (project_id IS NOT NULL);
 CREATE INDEX idx_listings_search_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(search_text_normalized, search_text, ''::text)) gin_trgm_ops) WITH (fastupdate=off);
 CREATE INDEX idx_listings_unit_check ON public.listings USING btree (agency_id, confirmed_at) WHERE (status = 'active'::text);
