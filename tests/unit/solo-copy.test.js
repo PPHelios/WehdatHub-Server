@@ -13,3 +13,9 @@ test("the Arabic notices say الشركة, and a solo account says حسابك in
   expect(t("web_login_ceiling", "ar", { solo: true })).toContain("كلم الدعم");
   expect(t("credits_hint_80", "en", { url: "u", solo: true })).toContain("You have");
 });
+
+test("Arabic website phrases about the company read as 'your account' for a solo account", () => {
+  const { soloPage } = require("../../lib/copy");
+  expect(soloPage("<h1>لوحة الشركة</h1><p>رصيد الشركة الشهري</p>")).toBe("<h1>لوحتي</h1><p>رصيد حسابك الشهري</p>");
+  expect(soloPage("<p>اسم الشركة</p>")).toBe("<p>اسم الشركة</p>");
+});
