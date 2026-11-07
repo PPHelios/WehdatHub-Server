@@ -1,4 +1,4 @@
-// tests/web/load-30-agencies.test.js — Load test copy (patch 6): 30 agencies, 750 people, 50,000 units in one database. Measures the
+// tests/heavy/load-30-agencies.test.js — Load test copy (patch 6): 30 agencies, 750 people, 50,000 units in one database. Measures the
 // website's lists and search for every agency at once, bot replies, and an import; checks no agency sees another's data; prints a
 // report with the real numbers (search the log for "LOAD REPORT").
 "use strict";

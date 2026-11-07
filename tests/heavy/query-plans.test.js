@@ -1,4 +1,4 @@
-// tests/web/query-plans.test.js — Query plans on 50,000 units (patch 5): the units list, the code lookup and the compound filter use
+// tests/heavy/query-plans.test.js — Query plans on 50,000 units (patch 5): the units list, the code lookup and the compound filter use
 // indexes, and the paged list answers fast, with another agency's units in the same table.
 "use strict";
 

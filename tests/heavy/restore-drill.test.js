@@ -1,4 +1,4 @@
-// tests/web/restore-drill.test.js — Restore drill (patch 6): the whole database is copied out as a backup file and loaded into an empty
+// tests/heavy/restore-drill.test.js — Restore drill (patch 6): the whole database is copied out as a backup file and loaded into an empty
 // database; every table has the same rows, the audit log is still protected, and the app's tables answer. (Supabase Free keeps no
 // downloadable backup, so this proves the data can be moved and restored from a copy we make ourselves.)
 "use strict";

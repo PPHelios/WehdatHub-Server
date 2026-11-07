@@ -15,7 +15,7 @@
     "test:contracts": "jest tests/contract-guard.test.js --runInBand",
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
-    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/web && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/router && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/crm && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/unit && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns tests/web tests/router tests/crm tests/unit tests/browser tests/e2e.test.js",
+    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/web && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/router && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/crm && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/unit && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/heavy && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns tests/web tests/router tests/crm tests/unit tests/heavy tests/browser tests/e2e.test.js",
     "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
     "test:ci": "npm run test:unit && npm run test:jest",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
