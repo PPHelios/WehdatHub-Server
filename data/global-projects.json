@@ -1,0 +1,263 @@
+[
+ {
+  "name": "Aliva",
+  "developer": "Mountain View",
+  "region": "Mostakbal City",
+  "status": "Off-Plan Launch",
+  "unit_types": "iVillas, Apartments, Standalone",
+  "area_acres": 638.0,
+  "facts": "Vast green masterplan; pure engagement concept. — Lagoon Beach Park, River Park, Fields Park, Home Park (Farmer's Market), Club Park."
+ },
+ {
+  "name": "SouthMed",
+  "developer": "TMG",
+  "region": "North Coast (Dabaa)",
+  "status": "Off-Plan Launch",
+  "unit_types": "Chalets, Villas, Marina Apts",
+  "area_acres": 5530.0,
+  "facts": "World-class sustainable coastal masterplan on 23 million sqm. — International Marina (rivals Amalfi), 8km pristine swimmable beach, Crystal Lagoons, 18-hole golf course, Luxury Spa, Hotels, Open-air mall."
+ },
+ {
+  "name": "Badya",
+  "developer": "Palm Hills",
+  "region": "6th of October",
+  "status": "Active Handover",
+  "unit_types": "Apartments, Townhouses, Villas",
+  "area_acres": 3000.0,
+  "facts": "Egypt's first cognitive smart city. — Smart home technology, vast recreational areas, eco-friendly infrastructure, dedicated downtown, expansive sports facilities."
+ },
+ {
+  "name": "IL Bosco",
+  "developer": "Misr Italia",
+  "region": "New Capital (R7)",
+  "status": "Delivering",
+  "unit_types": "Apartments, Twin Houses, Villas",
+  "area_acres": 200.0,
+  "facts": "Features the iconic 'Vertical Forest'. — Vertical Forest (buildings integrated with greenery), The Creek (river-like water feature), Community Center, Sports Club, Commercial strip, The Cliff villas."
+ },
+ {
+  "name": "Celia",
+  "developer": "TMG",
+  "region": "New Capital",
+  "status": "Delivering",
+  "unit_types": "Apartments, Villas",
+  "area_acres": null,
+  "facts": null
+ },
+ {
+  "name": "ZED East",
+  "developer": "Ora Developers",
+  "region": "New Cairo",
+  "status": "Under Construction",
+  "unit_types": "Fully Finished Apts, Villas",
+  "area_acres": 360.0,
+  "facts": "80% allocated to greenery, parks, and landscapes. — ZED Club, ZED East University, 29.4k sqm retail area, 137k sqm offices, massive central plazas."
+ },
+ {
+  "name": "Bloomfields",
+  "developer": "Tatweer Misr",
+  "region": "Mostakbal City",
+  "status": "Under Construction",
+  "unit_types": "Apts, Duplexes, Townhouses",
+  "area_acres": null,
+  "facts": null
+ },
+ {
+  "name": "Rivers",
+  "developer": "Tatweer Misr",
+  "region": "New Zayed",
+  "status": "Off-Plan Launch",
+  "unit_types": "Townhouses, Twin, Standalone",
+  "area_acres": null,
+  "facts": null
+ },
+ {
+  "name": "O West",
+  "developer": "Orascom",
+  "region": "6th of October",
+  "status": "Under Construction",
+  "unit_types": "Apts, Duplexes, Villas",
+  "area_acres": 1007.0,
+  "facts": "Divided into 4 neighborhoods: Spring Valley, Parkside, Club Yard, Hillside. — O West Sports Club, Downtown commercial hub, 4 International Schools, Art Center, Hospital."
+ },
+ {
+  "name": "Swan Lake Residences",
+  "developer": "Hassan Allam",
+  "region": "New Cairo (1st Settlement)",
+  "status": "Delivering",
+  "unit_types": "Luxury Villas, Premium Apts",
+  "area_acres": null,
+  "facts": null
+ },
+ {
+  "name": "Vinci",
+  "developer": "Misr Italia",
+  "region": "New Capital (R7)",
+  "status": null,
+  "unit_types": "Apartments, Twin Houses, Townhouses, Villas, Serviced Apts",
+  "area_acres": 110.0,
+  "facts": "Divided into 8 art-inspired luxury districts. — 5km lake promenade, walkery pathways, community center, boutique commercial strip, signature clubhouses."
+ },
+ {
+  "name": "Villette",
+  "developer": "SODIC",
+  "region": "New Cairo (Golden Square)",
+  "status": null,
+  "unit_types": "Sky Condos, Twin Houses, Villas",
+  "area_acres": 301.0,
+  "facts": "Houses make up just a third of the area; walkable green spaces. — 4 signature pocket parks (52,000 sqm total), Club S Villette (30-acre sports club), town center, 8-meter min distance between units."
+ },
+ {
+  "name": "VYE",
+  "developer": "SODIC",
+  "region": "New Zayed",
+  "status": null,
+  "unit_types": "Apartments, Duplexes, Townhouses, Villas",
+  "area_acres": 500.0,
+  "facts": "Contemporary European style with glass facades. — VYE Business District, VYE Town Center, electronic security, artificial lakes, solar panel integration, Central Gardens."
+ },
+ {
+  "name": "Madinaty",
+  "developer": "TMG (Talaat Moustafa Group)",
+  "region": "New Cairo (Suez Road)",
+  "status": null,
+  "unit_types": "Apartments, Standalone Villas, Townhouses",
+  "area_acres": 8000.0,
+  "facts": "Massive self-sustaining city housing 700,000 residents. — Madinaty Sporting Club (200 acres), South Park, Open Air Mall, Craft Zone, international schools, 18 mosques, central cooling, smart security."
+ },
+ {
+  "name": "Haptown",
+  "developer": "Hassan Allam Properties",
+  "region": "Mostakbal City",
+  "status": null,
+  "unit_types": "Apartments, Duplexes, Townhouses, Villas",
+  "area_acres": 252.0,
+  "facts": "1,021,902 sqm land area designed by CallisonRTKL & Alchemy. — Sports Club, 24,000 sqm commercial district, 49,000 sqm office spaces, 7.5km of bicycle trails."
+ },
+ {
+  "name": "District 5",
+  "developer": "Marakez",
+  "region": "New Cairo / Katameya",
+  "status": null,
+  "unit_types": "Apartments, Townhouses, Villas",
+  "area_acres": 268.0,
+  "facts": "Divided into 5 distinct experiences: Live, Play, Grow, Shop, Work. — Massive open-air commercial mall, Business Park, Lifestyle center, Club 5, walking trails."
+ },
+ {
+  "name": "Noor Capital Gardens",
+  "developer": "TMG",
+  "region": "New Administrative Capital",
+  "status": null,
+  "unit_types": "Studios, Apartments, Townhouses, Twin, Villas",
+  "area_acres": 5000.0,
+  "facts": "Eco-friendly, 15-minute smart city prioritizing sustainability. — Solar panels, smart climate control, waste management recycling, TMG mega-club, commercial strip, schools."
+ },
+ {
+  "name": "Mivida",
+  "developer": "Emaar Misr",
+  "region": "New Cairo (South 90th)",
+  "status": null,
+  "unit_types": "Apartments, Townhouses, Twin Houses, Villas",
+  "area_acres": 860.0,
+  "facts": "222 acres of eco-friendly pine forests and native greenery. — Mivida Business Park, Boulevard retail area, international schools (Repton, EISC), Mivida Healthcare city, Clubhouses."
+ },
+ {
+  "name": "Eastown",
+  "developer": "SODIC",
+  "region": "New Cairo (Adjacent to AUC)",
+  "status": null,
+  "unit_types": "Apartments, Duplexes",
+  "area_acres": 200.0,
+  "facts": "Urban, walkable design with an 8km green spine. — Eastown District New Cairo (EDNC) commercial hub, clubhouses, pedestrian tree-lined promenades, retail spine."
+ },
+ {
+  "name": "Cairo Festival City",
+  "developer": "Al-Futtaim Group",
+  "region": "New Cairo (Ring Road)",
+  "status": null,
+  "unit_types": "Apartments, Twin Houses, Villas",
+  "area_acres": 700.0,
+  "facts": "Egypt's premier mixed-use destination. — CFC Mall (largest in East Cairo), IKEA, KidZania, AIS School, Honda Academy, massive Business Park."
+ },
+ {
+  "name": "Mountain View Hyde Park",
+  "developer": "Mountain View (DMG)",
+  "region": "New Cairo (Golden Square)",
+  "status": null,
+  "unit_types": "iVillas, Apartments, Twin Houses, Standalone Villas",
+  "area_acres": 200.0,
+  "facts": "Signature American-style architecture with blue roofs. — Sunken gardens, majestic lake, 2km pedestrian promenade, Club Park, commercial strip."
+ },
+ {
+  "name": "Taj City",
+  "developer": "Madinet Masr (MNHD)",
+  "region": "New Cairo (Ring Road)",
+  "status": null,
+  "unit_types": "Studios, Apartments, Duplexes, Villas",
+  "area_acres": 900.0,
+  "facts": "Sprawling masterplan segmented into boutique zones (Origami, Club Side, Elect). — Taj City Club, Business District, international schools, medical center, vast open parks."
+ },
+ {
+  "name": "Hyde Park New Cairo",
+  "developer": "Hyde Park Developments",
+  "region": "New Cairo (South 90th)",
+  "status": null,
+  "unit_types": "Apartments, Townhouses, Twin Houses, Villas",
+  "area_acres": 1200.0,
+  "facts": "Features the largest private park in Egypt (141 acres). — Hyde Park Club, Hyde Out (F&B/Entertainment), Business District, international schools, medical center."
+ },
+ {
+  "name": "The Waterway",
+  "developer": "Equity Real Estate",
+  "region": "New Cairo (Northern Investors)",
+  "status": null,
+  "unit_types": "Luxury Apartments, Duplexes",
+  "area_acres": 26.0,
+  "facts": "Boutique, highly dense commercial-residential integration. — The Waterway commercial strip (premium F&B), office spaces, hotel-serviced apartments, underground parking."
+ },
+ {
+  "name": "Palm Hills October",
+  "developer": "Palm Hills Developments",
+  "region": "6th of October",
+  "status": null,
+  "unit_types": "Apartments, Townhouses, Twin Houses, Villas",
+  "area_acres": 2000.0,
+  "facts": "Vast, undulating landscape emphasizing privacy. — Palm Hills Club (27 holes golf course), commercial hubs, schools, equestrian facilities."
+ },
+ {
+  "name": "Sarai",
+  "developer": "Madinet Masr (MNHD)",
+  "region": "East Cairo (Suez Road)",
+  "status": null,
+  "unit_types": "Studios, Apartments, Townhouses, Villas",
+  "area_acres": 1300.0,
+  "facts": "Built around Cairo's largest private crystal lagoon. — Equestrian club, athletic club, luxury hotel, commercial mall, education hub, lagoon beaches."
+ },
+ {
+  "name": "Al Burouj",
+  "developer": "Capital Group Properties",
+  "region": "Shorouk (Cairo-Ismailia Rd)",
+  "status": null,
+  "unit_types": "Apartments, Townhouses, Twin Houses, Villas",
+  "area_acres": 1200.0,
+  "facts": "Fully integrated community with 70 acres dedicated to an orchard park. — Cadmus International School, Smart Village East, Al Burouj Cultural Hub (El Sawy Culturewheel), massive sports club."
+ },
+ {
+  "name": "IL Monte Galala",
+  "developer": "Tatweer Misr",
+  "region": "Ain Sokhna (Galala)",
+  "status": null,
+  "unit_types": "Chalets, Lofts, Townhouses, Villas",
+  "area_acres": 545.0,
+  "facts": "Mountain resort built on varying elevations up to 210m above sea level. — First crystal lagoon in the mountains, Basecamp, Maesta Promenade, luxury hotels, marina access."
+ },
+ {
+  "name": "Marassi",
+  "developer": "Emaar Misr",
+  "region": "North Coast (Sidi Abdel Rahman)",
+  "status": null,
+  "unit_types": "Chalets, Apartments, Townhouses, Villas",
+  "area_acres": 1500.0,
+  "facts": "Mediterranean-inspired coastal city encompassing 5 beaches. — International Marina, 18-hole golf course, 9 luxury hotels, Mporium commercial hub, exclusive clubhouses."
+ }
+]

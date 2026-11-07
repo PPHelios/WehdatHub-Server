@@ -140,6 +140,7 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   const next = list.rows.length === 50 ? html`<a class="btn secondary" href="/app/owner/map?q=${encodeURIComponent(q)}&p=${pageNo + 1}">${L(lang, "التالي", "Next")}</a>` : "";
   return html`<h1>🗺️ ${L(lang, "أماكن الخريطة", "Map places")}</h1>
 ${notice}
+<p><a class="btn secondary small" href="/app/owner/library">📚 ${L(lang, "مكتبة المشاريع", "Project library")}</a></p>
 <p class="muted">${L(lang, `${list.total} مكان، ${list.verified} منهم مراجَع.`, `${list.total} places, ${list.verified} checked.`)}</p>
 ${placeForm(lang, editing)}
 <div class="map-view map-pick" data-map data-pick role="application" aria-label="${L(lang, "اختار مكان الدبوس", "Pick the pin")}" data-tiles="${tilesUrl}" data-i18n="${JSON.stringify(words(lang))}" data-lang="${lang}"></div>

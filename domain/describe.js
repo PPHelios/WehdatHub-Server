@@ -239,7 +239,7 @@ function maintenanceText(l, lang = "ar") {
  * Every captured, non-internal fact as display lines (shared by the broker card, the review card
  * and the client copy). Unknown fields are skipped.
  */
-function factLines(l, lang = "ar") {
+function factLines(l, lang = "ar", { markMissing = false } = {}) {
   const en = lang === "en";
   const d = l.details || {};
   const lines = [];
@@ -271,7 +271,13 @@ function factLines(l, lang = "ar") {
   ].filter(Boolean);
   if (extras.length) lines.push(`🌳 ${extras.join(" · ")}`);
 
-  const finish = [floorLabel(l, lang), finishingLabel(l, lang), furnishingLabel(l, lang)].filter(Boolean);
+  const notStated = lang === "en" ? "not stated" : "مش محدد";
+  const noKind = !markMissing || Rules.unitKind(l.property_type) === "land" || Rules.unitKind(l.property_type) === "unknown";
+  const finish = [
+    floorLabel(l, lang),
+    finishingLabel(l, lang) || (noKind ? null : `${lang === "en" ? "Finishing" : "التشطيب"} ❔ ${notStated}`),
+    furnishingLabel(l, lang) || (noKind ? null : `${lang === "en" ? "Furnishing" : "الفرش"} ❔ ${notStated}`)
+  ].filter(Boolean);
   if (finish.length) lines.push(`🏢 ${finish.join(" · ")}`);
 
   const feats = featureLabels(l, lang);
@@ -310,7 +316,7 @@ function confirmedLine(l, lang = "ar") {
 function brokerCard(l, { lang = "ar" } = {}) {
   const status = pick(STATUS_LABELS[l.status || "active"], lang);
   const head = [`🔑 \`${l.code}\``, status, confirmedLine(l, lang)].filter(Boolean).join(" · ");
-  return [head, ...factLines(l, lang), ...internalLines(l, lang)].join("\n");
+  return [head, ...factLines(l, lang, { markMissing: true }), ...internalLines(l, lang)].join("\n");
 }
 
 /**
@@ -319,7 +325,7 @@ function brokerCard(l, { lang = "ar" } = {}) {
  */
 function reviewCard(l, { warnings = [], blockers = [], lang = "ar" } = {}) {
   const en = lang === "en";
-  const lines = [en ? "📋 *Review before saving*" : "📋 *مراجعة قبل الحفظ*", `🔑 \`${l.code}\``, ...factLines(l, lang), ...internalLines(l, lang)];
+  const lines = [en ? "📋 *Review before saving*" : "📋 *مراجعة قبل الحفظ*", `🔑 \`${l.code}\``, ...factLines(l, lang, { markMissing: true }), ...internalLines(l, lang)];
   if (blockers.length) {
     lines.push("", en ? "⛔ *Still needed to save:*" : "⛔ *ناقص لإتمام الحفظ:*", ...blockers.map((b) => Rules.blockerLine(b, lang)));
     const onlyQuestion = blockers.every((b) => b.field === "installments_question");

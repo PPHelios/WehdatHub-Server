@@ -2423,6 +2423,12 @@
       "resolve": ["db", "fields"],
       "normalize": ["db", "fields"],
       "suggest": ["db", "typed", "limit"]
+    },
+    "services/globalProjects.js": {
+      "syncFile": ["pool", "file"],
+      "list": ["pool", "opts"],
+      "setPublished": ["pool", "id", "published"],
+      "use": ["pool", "actor", "id"]
     }
   },
   "invariant_variable_names": {

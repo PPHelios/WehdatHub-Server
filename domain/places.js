@@ -20,10 +20,17 @@ const DEVELOPERS = {
   sodic: ["سوديك", "sodic"],
   emaar: ["إعمار", "اعمار", "emaar"],
   palm_hills: ["بالم هيلز", "palm hills"],
-  mountain_view: ["ماونتن فيو", "mountain view"],
+  mountain_view: ["ماونتن فيو", "ماونتنفيو", "mountain view", "dmg", "dar al mimar"],
   ora: ["أورا", "ora developers"],
   tmg: ["طلعت مصطفى", "talaat moustafa", "tmg"],
-  hassan_allam: ["حسن علام", "hassan allam"]
+  hassan_allam: ["حسن علام", "hassan allam", "حسن علام العقارية", "hap", "swan lake"],
+  misr_italia: ["مصر إيطاليا", "مصر ايطاليا", "misr italia", "misr italia properties"],
+  tatweer_misr: ["تطوير مصر", "tatweer misr"],
+  madinet_masr: ["مدينة مصر", "madinet masr", "madinet nasr", "mnhd"],
+  sabbour: ["الأهلي صبور", "الاهلي صبور", "صبور", "al ahly sabbour", "sabbour"],
+  orascom: ["أوراسكوم", "اوراسكوم", "orascom", "orascom development"],
+  hyde_park_dev: ["هايد بارك للتطوير", "hyde park developments"],
+  city_edge: ["سيتي إيدج", "سيتي ايدج", "city edge", "city edge developments"]
 };
 
 // key: [area, developer, synonyms...] — the first Latin synonym is the canonical English name.

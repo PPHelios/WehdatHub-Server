@@ -330,7 +330,7 @@ async function recheck(pool, { apply = false } = {}) {
   const { rows: places, index } = await approvedIndex(pool);
   const { rows } = await pool.query(
     `SELECT l.id, l.compound, l.compound_en, l.details FROM listings l
-      WHERE ${Vis.allUnits()} AND l.status = 'active' AND l.place_id IS NULL AND coalesce(l.compound, l.compound_en) IS NOT NULL`
+      WHERE ${Vis.allUnits()} AND l.status <> 'deleted' AND l.place_id IS NULL AND coalesce(l.compound, l.compound_en) IS NOT NULL`
   );
   const fixes = [];
   for (const r of rows) {

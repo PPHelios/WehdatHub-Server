@@ -236,6 +236,7 @@ async function start() {
 
   // Approved places list: the master list and unit re-check run on every boot (safe to repeat; nothing to press).
   await require("./services/mapPlaces").syncApproved(pool).catch((err) => console.warn("Places sync failed:", err.message));
+  await require("./services/globalProjects").syncFile(pool).catch((err) => console.warn("Global projects sync failed:", err.message));
 
   await Credits.refresh(pool).catch((err) => console.warn("Plans load failed, using the starting copy:", err.message));
   const { app, state, scheduler, bootRecovery, preWarmAssets } = createApp({ pool, config });
