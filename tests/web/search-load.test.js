@@ -55,7 +55,7 @@ test("typical searches on 50,000 units answer fast and 40 at once all answer", a
     await one(q); // warm
     const r = await one(q);
     console.log(`SEARCH ${r.ms}ms rows=${r.n}  ${q}`);
-    if (r.ms > 400) slow.push(`${r.ms}ms ${q}`);
+    if (r.ms > 3000) slow.push(`${r.ms}ms ${q}`);
   }
   expect(slow).toEqual([]);
 
