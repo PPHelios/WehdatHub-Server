@@ -36,6 +36,8 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
   // tapGuard drops repeated button taps (double taps, re-taps while a slow review runs): lib/tapGuard.js.
 
   const app = express();
+  // Smaller pages and downloads over slow mobile connections (images and other already-compressed types are skipped by default).
+  app.use(require("compression")());
 
   // Plans, bundles and credits per action come from the database (owner page); keep the in-memory copy fresh.
   app.use((_req, _res, next) => {

@@ -122,6 +122,7 @@ function mountWeb(app, { pool, config }) {
   priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
   // A repeated one-time request ID (double tap, retry, re-sent form) is answered without running the action again.
   priv.use(RequestIds.middleware);
+  priv.use(require("../lib/slowRequests").middleware(pool));
   // The test number viewing another agency: its data only, read-only; switching back and signing out stay open.
   priv.use((req, res, next) => {
     if (!(TestRole.canView(req.session.broker) && TestRole.isViewing(req.sid))) return next();
