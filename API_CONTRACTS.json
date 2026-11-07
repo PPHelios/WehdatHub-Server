@@ -397,7 +397,7 @@
       "paymentLines": ["l", "lang", "params"],
       "planHint": ["p", "lang"],
       "maintenanceText": ["l", "lang"],
-      "factLines": ["l", "lang"],
+      "factLines": ["l", "lang", "params"],
       "internalLines": ["l", "lang"],
       "brokerCard": ["l", "params"],
       "reviewCard": ["l", "params"],
@@ -2391,6 +2391,7 @@
       "BOUNDS": "Object"
     },
     "services/mapPlaces.js": {
+      "syncApproved": ["pool"],
       "FINISHING": "Array",
       "FURNISHING": "Array",
       "allPlaces": ["pool"],
@@ -2426,7 +2427,7 @@
     },
     "services/globalProjects.js": {
       "syncFile": ["pool", "file"],
-      "list": ["pool", "opts"],
+      "list": ["pool", "params"],
       "setPublished": ["pool", "id", "published"],
       "use": ["pool", "actor", "id"]
     }
