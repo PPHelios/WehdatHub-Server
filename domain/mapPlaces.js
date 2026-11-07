@@ -44,6 +44,37 @@ function matchCompound(index, ...names) {
   return null;
 }
 
+// Unit details written after the compound ("Rehab 1, 3rd floor", "Mivida / villa 12", "Hyde Park - 3 rooms").
+const DETAIL = /\s*(?:[\/,،;|(]|\s-\s|\s+(?:\d+(?:st|nd|rd|th)?\s*floor|floor\s*\d+|الدور|دور\s*\d|unit\s*\d|apt\b|apartment|bldg|building|عمارة|شقة|villa\s*\d|فيلا\s*\d|\d+\s*(?:rooms?|beds?|bedrooms?|غرف|غرفة))).*$/i;
+
+/** Splits "Rehab 1, 3rd floor" into the compound part and the details left over. */
+function splitCompound(text) {
+  const s = String(text ?? "").trim();
+  const m = s.match(DETAIL);
+  const name = (m ? s.slice(0, m.index) : s).trim();
+  return { name, extra: m ? s.slice(m.index).replace(/^[\s\/,،;|(-]+|[\s)]+$/g, "").trim() : "" };
+}
+
+/**
+ * Finds the approved place for what a person wrote: the whole text, then the compound part, then without a trailing
+ * number ("Rehab 2" -> "Rehab"), then the longest leading words. A match from the last two steps is not exact.
+ * @returns {{id: string, exact: boolean, extra: string}|null}
+ */
+function resolveName(index, text) {
+  const { name, extra } = splitCompound(text);
+  const whole = index.get(placeKey(text));
+  if (whole) return { id: whole, exact: true, extra: "" };
+  const part = index.get(placeKey(name));
+  if (part) return { id: part, exact: true, extra };
+  const words = placeKey(name).split(" ").filter(Boolean);
+  for (let n = words.length - 1; n >= 1; n--) {
+    const id = index.get(words.slice(0, n).join(" "));
+    const rest = words.slice(n).join(" ");
+    if (id && (n >= 2 || /^\d+$/.test(rest))) return { id, exact: /^\d+$/.test(rest), extra: [rest, extra].filter(Boolean).join(", ") };
+  }
+  return null;
+}
+
 const inEgypt = (lat, lng) => lat >= BOUNDS.lat[0] && lat <= BOUNDS.lat[1] && lng >= BOUNDS.lng[0] && lng <= BOUNDS.lng[1];
 
 /**
@@ -112,4 +143,4 @@ function cleanPlace(input) {
   };
 }
 
-module.exports = { placeKey, keysOf, buildIndex, matchCompound, parseMapsLink, parseAliases, cleanPlace, inEgypt, BOUNDS };
+module.exports = { placeKey, keysOf, buildIndex, matchCompound, splitCompound, resolveName, parseMapsLink, parseAliases, cleanPlace, inEgypt, BOUNDS };

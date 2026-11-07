@@ -52,7 +52,8 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${select("listing_type", L(lang, "بيع أو إيجار *", "Sale or rent *"), v.listing_type, [["", "—"], ["sale", L(lang, "بيع", "Sale")], ["rent", L(lang, "إيجار", "Rent")]])}
     ${select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]])}
     ${select("property_type", L(lang, "النوع *", "Type *"), v.property_type, [["", "—"], ...Rules.PROPERTY_TYPES.map((t) => [t, pick(Describe.TYPE_LABELS[t], lang)])])}
-    ${input("compound", L(lang, "الكمبوند *", "Compound *"), v.compound, { extra: ' list="places"' })}
+    ${input("compound", L(lang, "الكمبوند *", "Compound *"), v.compound, { extra: ' list="approved-places" autocomplete="off"' })}
+    <label class="check"><input type="checkbox" name="compound_new" value="1"${raw(v.compound_new === "1" ? " checked" : "")}> ${L(lang, "الكمبوند مش في القائمة (ضيفه كجديد)", "Compound not in the list (add as new)")}</label>
     ${input("district", L(lang, "الحي", "District"), v.district)}
     ${input("city", L(lang, "المدينة", "City"), v.city)}
     ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}

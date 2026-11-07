@@ -2381,6 +2381,8 @@
       "keysOf": ["place"],
       "buildIndex": ["places"],
       "matchCompound": ["index", "names"],
+      "splitCompound": ["text"],
+      "resolveName": ["index", "text"],
       "parseMapsLink": ["text"],
       "parseAliases": ["text"],
       "cleanPlace": ["input"],
@@ -2411,6 +2413,10 @@
       "drawerBody": ["lang", "units", "place"],
       "words": ["lang"],
       "MapRules": "Object"
+    },
+    "services/compoundResolve.js": {
+      "resolve": ["db", "fields"],
+      "normalize": ["db", "fields"]
     }
   },
   "invariant_variable_names": {

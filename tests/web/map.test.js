@@ -32,7 +32,8 @@ async function seedPlaces() {
   await h.query(
     `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, lat, lng) VALUES
        ('mivida', 'Mivida', 'ميفيدا', 'Emaar Misr', 'New Cairo', 30.0058, 31.5377),
-       ('hyde park', 'Hyde Park', 'هايد بارك', 'Mountain View', 'New Cairo', 29.98, 31.55)`
+       ('hyde park', 'Hyde Park', 'هايد بارك', 'Mountain View', 'New Cairo', 29.98, 31.55)
+     ON CONFLICT (name_key) DO NOTHING`
   );
 }
 async function seedUnits() {
@@ -137,4 +138,19 @@ test("only the CRM owner opens the places window; it saves a place from a pasted
   expect((await h.query("SELECT count(*)::int AS n FROM map_places WHERE name_key = 'mivida'"))[0].n).toBe(1);
   const gone = await crm.agent.post(`/app/owner/map/${ok.headers.location.includes("saved") ? (await h.query("SELECT id FROM map_places WHERE name_key='mivida'"))[0].id : ""}/delete`).type("form").send({ _csrf: crm.csrf });
   expect(gone.headers.location).toMatch(/msg=deleted/);
+});
+
+test("a compound is matched to the approved list on save: details move to the notes, unknown names are flagged", async () => {
+  await h.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved) VALUES ('rehab', 'El Rehab', 'الرحاب', 30.06, 31.49, true), ('mivida', 'Mivida', 'ميفيدا', 30.0058, 31.5377, false)`);
+  const Store = require("../../lib/listingStore");
+  const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+  await h.insertListing({ code: "RH-1", compound: "x" });
+  let listing = (await h.query("SELECT * FROM listings WHERE code = 'RH-1'"))[0];
+  const ok = await Store.applyListingPatch(h.pool, admin, { listing, patch: { compound: "El Rehab 2, 3rd floor" } });
+  expect(ok.listing).toMatchObject({ compound: "الرحاب", compound_en: "El Rehab", compound_state: null });
+  expect(ok.listing.place_id).toBeTruthy();
+  expect(ok.listing.details.notes).toMatch(/3rd floor/);
+  listing = ok.listing;
+  const bad = await Store.applyListingPatch(h.pool, admin, { listing, patch: { compound: "Mivida" } });
+  expect(bad.listing).toMatchObject({ compound: "Mivida", compound_state: "needs_fix", place_id: null });
 });

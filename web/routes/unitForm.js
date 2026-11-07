@@ -90,8 +90,17 @@ function register(web, { pool, page, assets }) {
     return null;
   };
 
+  // The compound must be on the approved list; a name that is not asks for a pick, or for "add as new" (kept as pending).
+  const compoundError = async (client, listing, body, lang) => {
+    if (!String(listing.compound || "").trim() || body.compound_new === "1") return null;
+    const r = await require("../../services/compoundResolve").resolve(client, listing);
+    return r.compound_state === "needs_fix"
+      ? L10n(lang, "⛔ الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\" عشان يتراجع.", "⛔ This compound is not on the list. Pick it from the list, or tick \"not in the list\" so it is reviewed.")
+      : null;
+  };
   const formPage = async (req, res, opts, status = 200) => {
     const lang = langOf(req);
+    const approvedPlaces = await pool.query("SELECT name_en, name_ar FROM map_places WHERE approved ORDER BY name_en").then((r) => r.rows).catch(() => []);
     const leadChoices = await Leases.tenantChoices(pool, req.session.broker).catch(() => []);
     const edit = opts.mode === "edit";
     return page(
@@ -100,7 +109,7 @@ function register(web, { pool, page, assets }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}<datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
+        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.flatMap((p) => [p.name_en, p.name_ar]).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
       },
       status
     );
@@ -197,6 +206,8 @@ function register(web, { pool, page, assets }) {
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
     const nameError = ownerNameError(ev.listing, req.body, lang);
     if (nameError) return again(422, nameError);
+    const compError = await compoundError(pool, ev.listing, req.body, lang);
+    if (compError) return again(422, compError);
     const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
     if (leadError) return again(422, leadError);
     // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
@@ -263,6 +274,8 @@ function register(web, { pool, page, assets }) {
       if (!ev.ok) return { rollback: true, listing, ev };
       const nameError = ownerNameError(ev.listing, req.body, lang);
       if (nameError) return { rollback: true, listing, ev, leadError: nameError };
+      const compError = ev.listing.compound !== listing.compound ? await compoundError(client, ev.listing, req.body, lang) : null;
+      if (compError) return { rollback: true, listing, ev, leadError: compError };
       const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
       if (leadError) return { rollback: true, listing, ev, leadError };
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
