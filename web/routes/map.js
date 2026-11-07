@@ -136,7 +136,7 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   ]);
   const msg = String(req.query.msg || "");
   const err = ERRORS(lang)[String(req.query.err || "")];
-  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
+  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", approved: "اتعتمد.", dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", approved: "Approved.", dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
   const next = list.rows.length === 50 ? html`<a class="btn secondary" href="/app/owner/map?q=${encodeURIComponent(q)}&p=${pageNo + 1}">${L(lang, "التالي", "Next")}</a>` : "";
   return html`<h1>🗺️ ${L(lang, "أماكن الخريطة", "Map places")}</h1>
 ${notice}
@@ -148,9 +148,13 @@ ${placeForm(lang, editing)}
   <form method="post" action="/app/owner/map/import" data-confirm="${L(lang, "تضيف القايمة الأولى؟", "Add the first list?")}"><button type="submit" class="secondary">${L(lang, "ضيف القايمة الأولى", "Add the first list")}</button></form>
 </section>
 <section class="card stack" id="unmatched"><h2>${L(lang, "أسماء عليها وحدات ومالهاش مكان", "Unit names with no place")}</h2>
+  <div class="row"><form method="post" action="/app/owner/map/recheck"><button type="submit" class="secondary small">${L(lang, "عدّ الوحدات اللي هتتصلح", "Count units that would be fixed")}</button></form>
+  <form method="post" action="/app/owner/map/recheck" data-confirm="${L(lang, "تصلّح الوحدات؟", "Fix the units now?")}"><input type="hidden" name="apply" value="1"><button type="submit" class="small">${L(lang, "صلّح الوحدات", "Fix units now")}</button></form></div>
   ${unmatched.length
-    ? html`<ul class="stack">${unmatched.map((r) => html`<li data-unmatched><strong>${r.compound_en || r.compound}</strong> <span class="muted">${r.compound && r.compound_en ? r.compound : ""} · ${r.n} ${L(lang, "وحدة", "units")}</span>
-      <form method="post" action="/app/owner/map/alias" class="row"><input type="hidden" name="alias" value="${r.compound_en || r.compound}"><input name="place" placeholder="${L(lang, "اسم المكان", "Place name")}" required maxlength="80"><button type="submit" class="secondary small">${L(lang, "اربط", "Link")}</button></form></li>`)}</ul>`
+    ? html`<ul class="stack">${unmatched.map((r) => html`<li data-unmatched><strong>${r.name}</strong> <span class="muted">${r.other} · ${r.n} ${L(lang, "وحدة", "units")} · ${r.agencies} ${L(lang, "مكتب", "agencies")}</span>
+      ${r.hint ? html`<form method="post" action="/app/owner/map/${r.hint.id}/approve" class="row"><button type="submit" class="small">${L(lang, `اعتمد "${r.hint.name}"`, `Approve "${r.hint.name}"`)}</button></form>` : ""}
+      <form method="post" action="/app/owner/map/alias" class="row"><input type="hidden" name="alias" value="${r.name}"><input name="place" placeholder="${L(lang, "اسم المكان", "Place name")}" required maxlength="80"><button type="submit" class="secondary small">${L(lang, "اربط", "Link")}</button></form>
+      <form method="post" action="/app/owner/map/dismiss" class="row" data-confirm="${L(lang, "الاسم ده مش كمبوند؟", "Not a compound?")}"><input type="hidden" name="name" value="${r.name}"><button type="submit" class="secondary small">${L(lang, "مش كمبوند", "Not a compound")}</button></form></li>`)}</ul>`
     : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
 </section>
 <section class="card stack" id="places"><h2>${L(lang, "الأماكن", "Places")}</h2>
@@ -222,6 +226,19 @@ function register(web, { pool, page, assets }) {
     if (!id) return goOwner(res, "err=missing#unmatched");
     await Maps.addAlias(pool, id, req.body.alias);
     return goOwner(res, "msg=alias#unmatched");
+  }));
+
+  web.post("/owner/map/recheck", ownerOnly(async (req, res) => {
+    const out = await Maps.recheck(pool, { apply: req.body.apply === "1" });
+    return goOwner(res, `msg=${req.body.apply === "1" ? "rechecked" : "wouldfix"}&n=${out.fixed}#unmatched`);
+  }));
+  web.post("/owner/map/dismiss", ownerOnly(async (req, res) => {
+    const n = await Maps.dismiss(pool, req.body.name);
+    return goOwner(res, `msg=dismissed&n=${n}#unmatched`);
+  }));
+  web.post("/owner/map/:id/approve", ownerOnly(async (req, res) => {
+    await Maps.approve(pool, req.params.id);
+    return goOwner(res, "msg=approved#unmatched");
   }));
 
   web.post("/owner/map/import", ownerOnly(async (req, res) => {

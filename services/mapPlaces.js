@@ -12,7 +12,7 @@ let cache = { at: 0, places: [], index: new Map() };
 /** All places, cached for a minute (the owner's own changes clear it). */
 async function allPlaces(pool) {
   if (Date.now() - cache.at < CACHE_MS) return cache;
-  const { rows } = await pool.query("SELECT id, name_en, name_ar, developer, district, lat, lng, aliases, verified FROM map_places");
+  const { rows } = await pool.query("SELECT id, name_en, name_ar, developer, district, lat, lng, aliases, verified, approved FROM map_places");
   cache = { at: Date.now(), places: rows, index: P.buildIndex(rows) };
   return cache;
 }
@@ -175,7 +175,7 @@ async function save(pool, id, input) {
   if (id) {
     try {
       const { rows } = await pool.query(
-        `UPDATE map_places SET name_key=$2, name_en=$3, name_ar=$4, developer=$5, district=$6, lat=$7, lng=$8, aliases=$9, verified=$10, updated_at=now() WHERE id=$1 RETURNING *`,
+        `UPDATE map_places SET name_key=$2, name_en=$3, name_ar=$4, developer=$5, district=$6, lat=$7, lng=$8, aliases=$9, verified=$10, approved=true, updated_at=now() WHERE id=$1 RETURNING *`,
         [id, v.name_key, v.name_en, v.name_ar, v.developer, v.district, v.lat, v.lng, v.aliases, v.verified]
       );
       clearCache();
@@ -186,8 +186,8 @@ async function save(pool, id, input) {
     }
   }
   const { rows } = await pool.query(
-    `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, lat, lng, aliases, verified, source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual')
+    `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, lat, lng, aliases, verified, source, approved)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual',true)
      ON CONFLICT (name_key) DO NOTHING RETURNING *`,
     [v.name_key, v.name_en, v.name_ar, v.developer, v.district, v.lat, v.lng, v.aliases, v.verified]
   );
@@ -239,19 +239,104 @@ async function importSeed(pool, rows) {
   return { read: rows.length, usable: clean.length, added };
 }
 
-/** Compound names units use (all agencies) that no place answers to yet, most used first. */
+/** The owner checked this place: units can now be matched to it. */
+async function approve(pool, id) {
+  const { rowCount } = await pool.query("UPDATE map_places SET approved = true, updated_at = now() WHERE id = $1", [id]);
+  clearCache();
+  return rowCount > 0;
+}
+
+/** Approved places only (the list units are matched against). */
+async function approvedIndex(pool) {
+  const { rows } = await pool.query("SELECT id, name_en, name_ar, aliases, verified FROM map_places WHERE approved");
+  return { rows, index: P.buildIndex(rows) };
+}
+
+/**
+ * Compound names units use (all agencies) that no approved place answers to yet, most used first. A name an unapproved
+ * place (the seed) answers to comes with it as `hint`, so the owner can approve that place in one tap.
+ */
 async function unmatched(pool, limit = 50) {
-  const { index } = await allPlaces(pool);
+  const [{ index }, all] = await Promise.all([approvedIndex(pool), allPlaces(pool)]);
   const { rows } = await pool.query(
-    `SELECT l.compound, l.compound_en, count(*)::int AS n
+    `SELECT l.compound, l.compound_en, count(*)::int AS n, count(DISTINCT l.agency_id)::int AS agencies
        FROM listings l
       WHERE l.status = 'active' AND (l.compound IS NOT NULL OR l.compound_en IS NOT NULL) AND ${Vis.allUnits()}
       GROUP BY l.compound, l.compound_en`
   );
-  return rows
-    .filter((r) => !P.matchCompound(index, r.compound_en, r.compound))
+  const byName = new Map();
+  for (const r of rows) {
+    const typed = r.compound_en || r.compound;
+    const { name } = P.splitCompound(typed);
+    const hit = P.resolveName(index, typed) || P.resolveName(index, r.compound);
+    if (hit && hit.exact) continue;
+    const key = P.placeKey(name);
+    if (!key) continue;
+    const cur = byName.get(key) || { name, other: r.compound_en && r.compound ? r.compound : "", n: 0, agencies: 0 };
+    cur.n += r.n;
+    cur.agencies = Math.max(cur.agencies, r.agencies);
+    byName.set(key, cur);
+  }
+  return [...byName.values()]
     .sort((a, b) => b.n - a.n)
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((r) => {
+      const h = P.resolveName(all.index, r.name);
+      const place = h ? all.places.find((x) => x.id === h.id) : null;
+      return { ...r, hint: place && !place.approved ? { id: place.id, name: place.name_en || place.name_ar } : null };
+    });
 }
 
-module.exports = { FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, TYPES };
+/**
+ * Matches units that are flagged (or have no place yet) to the approved list again: after the owner approves or adds a
+ * place, the units that name it are fixed in one go. With apply = false it only counts.
+ */
+async function recheck(pool, { apply = false } = {}) {
+  const { rows: places, index } = await approvedIndex(pool);
+  const { rows } = await pool.query(
+    `SELECT l.id, l.compound, l.compound_en, l.details FROM listings l
+      WHERE ${Vis.allUnits()} AND l.status = 'active' AND l.place_id IS NULL AND coalesce(l.compound, l.compound_en) IS NOT NULL`
+  );
+  const fixes = [];
+  for (const r of rows) {
+    const hit = P.resolveName(index, r.compound) || P.resolveName(index, r.compound_en);
+    if (!hit || !hit.exact) continue;
+    const place = places.find((x) => x.id === hit.id);
+    const old = String(r.details?.notes || "").trim();
+    const notes = hit.extra && !old.includes(hit.extra) ? [old, hit.extra].filter(Boolean).join(" — ") : old;
+    fixes.push({ id: r.id, place_id: place.id, compound: place.name_ar || place.name_en, compound_en: place.name_en || null, notes });
+  }
+  if (apply) {
+    for (let i = 0; i < fixes.length; i += 300) {
+      await pool.query(
+        `UPDATE listings l SET place_id = x.place_id, compound_state = NULL, compound = x.compound, compound_en = x.compound_en,
+                details = CASE WHEN x.notes = '' THEN l.details ELSE jsonb_set(l.details, '{notes}', to_jsonb(x.notes)) END
+           FROM jsonb_to_recordset($1::jsonb) AS x(id uuid, place_id uuid, compound text, compound_en text, notes text)
+          WHERE l.id = x.id`,
+        [JSON.stringify(fixes.slice(i, i + 300))]
+      );
+    }
+  }
+  return { checked: rows.length, fixed: fixes.length };
+}
+
+/** "Not a compound": units that carry this name (all agencies) lose it; the old text stays in their notes. */
+async function dismiss(pool, name) {
+  const key = P.placeKey(name);
+  if (!key) return 0;
+  const { rows } = await pool.query(
+    `SELECT l.id, l.compound, l.compound_en, l.details FROM listings l WHERE ${Vis.allUnits()} AND l.place_id IS NULL AND coalesce(l.compound, l.compound_en) IS NOT NULL`
+  );
+  const ids = rows.filter((r) => P.placeKey(P.splitCompound(r.compound_en || r.compound).name) === key);
+  for (const r of ids) {
+    const old = String(r.details?.notes || "").trim();
+    const note = [old, r.compound_en || r.compound].filter(Boolean).join(" — ");
+    await pool.query(
+      "UPDATE listings SET compound = NULL, compound_en = NULL, compound_state = NULL, details = jsonb_set(details, '{notes}', to_jsonb($2::text)) WHERE id = $1",
+      [r.id, note]
+    );
+  }
+  return ids.length;
+}
+
+module.exports = { FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, TYPES };

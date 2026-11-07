@@ -154,3 +154,26 @@ test("a compound is matched to the approved list on save: details move to the no
   const bad = await Store.applyListingPatch(h.pool, admin, { listing, patch: { compound: "Mivida" } });
   expect(bad.listing).toMatchObject({ compound: "Mivida", compound_state: "needs_fix", place_id: null });
 });
+
+test("the owner's queue: approve a seed place, re-check units, and mark a name as not a compound", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('eastown', 'Eastown', 30.02, 31.5, 'seed', false)`);
+  await h.insertListing({ code: "ET-1", compound: "Eastown, 3rd floor" });
+  await h.insertListing({ code: "OS-1", compound: "outside" });
+  const crm = await signIn(h, "admin");
+  const page = await crm.agent.get("/app/owner/map?lang=en");
+  expect(page.text).toMatch(/Approve &quot;Eastown&quot;|Approve "Eastown"/);
+  const id = (await h.query("SELECT id FROM map_places WHERE name_key = 'eastown'"))[0].id;
+  expect((await crm.agent.post(`/app/owner/map/${id}/approve`).type("form").send({ _csrf: crm.csrf })).headers.location).toMatch(/msg=approved/);
+  const count = await crm.agent.post("/app/owner/map/recheck").type("form").send({ _csrf: crm.csrf });
+  expect(count.headers.location).toMatch(/msg=wouldfix&n=1/);
+  await crm.agent.post("/app/owner/map/recheck").type("form").send({ _csrf: crm.csrf, apply: "1" });
+  const u = (await h.query("SELECT compound, place_id, details FROM listings WHERE code = 'ET-1'"))[0];
+  expect(u.place_id).toBe(id);
+  expect(u.compound).toBe("Eastown");
+  expect(u.details.notes).toMatch(/3rd floor/);
+  const gone = await crm.agent.post("/app/owner/map/dismiss").type("form").send({ _csrf: crm.csrf, name: "outside" });
+  expect(gone.headers.location).toMatch(/msg=dismissed&n=1/);
+  expect((await h.query("SELECT compound FROM listings WHERE code = 'OS-1'"))[0].compound).toBeNull();
+});
