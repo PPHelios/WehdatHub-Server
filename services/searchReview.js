@@ -94,8 +94,43 @@ async function repeats(pool, { from, to, q = "", offset = 0, limit = 20 }) {
 async function decideReport(pool, id, decision) {
   const status = { fixed: "fixed", dismiss: "dismissed", reopen: "open" }[decision];
   if (!status) return false;
-  const r = await pool.query("UPDATE search_reports SET status = $2 WHERE id = $1", [id, status]);
+  const r = await pool.query(
+    "UPDATE search_reports r SET status = $2 FROM search_log s WHERE r.id = $1 AND s.id = r.search_log_id AND r.status <> $2 RETURNING r.broker_id, r.agency_id, s.query_text",
+    [id, status]
+  );
+  if (status === "fixed") await retestAndTell(pool, r.rows);
   return r.rowCount > 0;
+}
+
+/**
+ * After reports are marked fixed: the search text is run through the quick reader again, and each reporter is told it works now
+ * (with the text to try). A text that still reads badly tells nobody; the owner sees it in the returned list.
+ * → [{ text, pass }]
+ */
+async function retestAndTell(pool, rows) {
+  const out = [];
+  const seen = new Set();
+  for (const r of rows) {
+    const text = String(r.query_text || "").trim();
+    const pass = runCase({ query_text: text }).pass;
+    if (!seen.has(`${text}|${r.broker_id}`)) out.push({ text, pass });
+    seen.add(`${text}|${r.broker_id}`);
+    if (!pass || !r.broker_id) continue;
+    try {
+      const { rows: b } = await pool.query("SELECT id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, telegram_chat_id FROM brokers WHERE id = $1 AND is_active", [r.broker_id]);
+      if (!b[0]) continue;
+      const en = b[0].preferred_lang === "en";
+      await require("../lib/notifications").notifyBroker(pool, b[0], {
+        kind: "system_alert",
+        dedupeKey: `search_fixed:${r.broker_id}:${text.toLowerCase().slice(0, 80)}`,
+        title: en ? `✅ Your search report is fixed: "${text}". Try it again.` : `✅ اتصلحت مشكلة البحث اللي بلّغت عنها: «${text}». جرّبها تاني.`,
+        url: "/app/search"
+      });
+    } catch (err) {
+      console.warn("Search fix notice failed:", err.message);
+    }
+  }
+  return out;
 }
 
 /** Marks a nightly finding handled (or reopens it). */
@@ -215,11 +250,12 @@ async function queue(pool, { from, to, status = "open", type = "", q = "", offse
 /** Closes everything open about one search text: reports as fixed or dismissed, nightly findings as handled. */
 async function closeText(pool, text, how = "fixed") {
   const rep = await pool.query(
-    `UPDATE search_reports r SET status = $2 FROM search_log s WHERE s.id = r.search_log_id AND lower(trim(s.query_text)) = lower(trim($1)) AND r.status = 'open'`,
+    `UPDATE search_reports r SET status = $2 FROM search_log s WHERE s.id = r.search_log_id AND lower(trim(s.query_text)) = lower(trim($1)) AND r.status = 'open' RETURNING r.broker_id, r.agency_id, s.query_text`,
     [text, how === "dismiss" ? "dismissed" : "fixed"]
   );
   const fin = await resolveText(pool, text);
-  return { reports: rep.rowCount, findings: fin };
+  const retest = how === "dismiss" ? [] : await retestAndTell(pool, rep.rows);
+  return { reports: rep.rowCount, findings: fin, retest };
 }
 
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);

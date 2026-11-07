@@ -128,7 +128,7 @@ function createTurnPipeline({ pool, config, tapGuard, state }) {
         if ((recent[0]?.n || 0) <= 1 && config.whatsapp.enabled) {
           await WA.sendWhatsAppText(
             normalizedPhone,
-            "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد في منصة WehdatHub. يرجى التواصل مع إدارة وكالتك لتفعيل حسابك.\n" +
+            "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد في منصة WehdatHub. يرجى التواصل مع إدارة شركتك لتفعيل حسابك.\n" +
               "⚠️ This number is not registered as a WehdatHub broker. Please ask your agency admin to activate your account."
           );
         }

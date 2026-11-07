@@ -85,7 +85,7 @@ async function sendInventoryStats(broker, ctx, startTime) {
       }
     } else {
       statsMsg =
-        `📊 *تقرير وملخص مخزون الوكالة*\n` +
+        `📊 *تقرير وملخص مخزون الشركة*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `• *إجمالي الوحدات المسجلة:* ${s.total_count}\n` +
         `• 🟢 *نشط ومتاح للبحث:* ${s.active_count}\n` +
@@ -178,7 +178,7 @@ async function startInventoryExport(broker, ctx) {
     broker,
     lang === "en"
       ? "⏳ Compiling agency inventory spreadsheet... You will receive the .xlsx file shortly."
-      : "⏳ جاري استخراج شيت إكسيل بمخزون الوكالة... سيتم إرسال الملف مباشرة."
+      : "⏳ جاري استخراج شيت إكسيل بمخزون الشركة... سيتم إرسال الملف مباشرة."
   );
 
   setImmediate(async () => {
@@ -207,7 +207,7 @@ async function startInventoryExport(broker, ctx) {
         `Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`,
         lang === "en"
           ? "📊 Full Agency Inventory Report"
-          : "📊 تقرير مخزون الوكالة المعتمد"
+          : "📊 تقرير مخزون الشركة المعتمد"
       );
       if (!sent) throw new Error("Inventory workbook delivery failed");
 

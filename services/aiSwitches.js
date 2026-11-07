@@ -18,7 +18,7 @@ const FEATURES = [
   { key: "voice_catalogue", tab: "voice", ar: "تعديلات الكتالوج بالصوت", en: "Catalogue changes by voice" },
   { key: "unit_fill", tab: "written", ar: "املأ بيانات الوحدة من وصف مكتوب", en: "Fill a unit from a written description" },
   { key: "clients_text", tab: "written", ar: "العملاء وتحديثاتهم بالكتابة", en: "Clients and updates by text" },
-  { key: "ask", tab: "written", ar: "اسأل (إجابات من بيانات الوكالة)", en: "Ask (answers from the agency's data)" },
+  { key: "ask", tab: "written", ar: "اسأل (إجابات من بيانات الشركة)", en: "Ask (answers from the agency's data)" },
   { key: "follow_up", tab: "written", ar: "رسايل المتابعة المكتوبة", en: "Written follow-up messages" },
   { key: "brochure_lines", tab: "written", ar: "أهم نقاط البروشور", en: "Brochure highlights" },
   { key: "catalogue_sentence", tab: "written", ar: "تعديلات الكتالوج بجملة", en: "Catalogue changes by sentence" },

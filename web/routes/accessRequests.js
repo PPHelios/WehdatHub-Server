@@ -41,7 +41,7 @@ function register(web, { pool, page }) {
       body: html`<h1>🔒 ${L(lang, "طلبات البيانات الخاصة", "Private data requests")}</h1>
 <details class="card" data-howto><summary>${L(lang, "إزاي أستخدمها؟", "How to use this page")}</summary>
 <p>${L(lang, "ده كل طلبات السماسرة لرؤية بيانات وحدة خاصة (المالك والعنوان واللوكيشن). وافق أو ارفض من هنا، والسمسار بيتبلّغ. الموافقة بتفضل ٣٠ يوم.", "Every broker request to see a unit's private details (owner, address, pin). Approve or decline here and the broker is told. An approval lasts 30 days.")}</p>
-${sum.canAnswer ? "" : html`<p class="muted">${L(lang, "الرد على الطلبات للمديرين؛ صاحب الوكالة بيرد لو مفيش مدير.", "Managers answer requests; the agency owner answers only when there is no manager.")}</p>`}</details>
+${sum.canAnswer ? "" : html`<p class="muted">${L(lang, "الرد على الطلبات للمديرين؛ صاحب الشركة بيرد لو مفيش مدير.", "Managers answer requests; the agency owner answers only when there is no manager.")}</p>`}</details>
 ${Period.tabs(PATH, params, p.key, lang)}
 <div class="grid" data-summary>
 ${card("طلبات", "Asked", n.asked, Period.change(n.asked, b.asked))}

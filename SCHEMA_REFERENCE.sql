@@ -466,20 +466,6 @@ CREATE TABLE IF NOT EXISTS public.inbound_messages (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.processed_batches (
-  batch_key text NOT NULL,
-  agency_id uuid,
-  listing_code text,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS public.broker_search_state (
-  phone_key text NOT NULL,
-  parsed jsonb NOT NULL,
-  next_offset integer DEFAULT 0 NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS public.operation_logs (
   id bigint DEFAULT nextval('operation_logs_id_seq'::regclass) NOT NULL,
   agency_id uuid,
@@ -501,18 +487,6 @@ CREATE TABLE IF NOT EXISTS public.operation_logs (
   estimated_cost_usd numeric(10,6) DEFAULT 0,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   metadata jsonb DEFAULT '{}'::jsonb
-);
-
-CREATE TABLE IF NOT EXISTS public.listing_drafts (
-  broker_id uuid NOT NULL,
-  agency_id uuid NOT NULL,
-  broker_phone character varying(32) NOT NULL,
-  media_ids text[] DEFAULT '{}'::text[],
-  voice_ids text[] DEFAULT '{}'::text[],
-  texts text[] DEFAULT '{}'::text[],
-  custom_code character varying(64),
-  updated_at timestamp with time zone DEFAULT now(),
-  staged_data jsonb
 );
 
 CREATE TABLE IF NOT EXISTS public.projects (
@@ -552,28 +526,6 @@ CREATE TABLE IF NOT EXISTS public.broker_sessions (
   session_type character varying(64) NOT NULL,
   session_data jsonb DEFAULT '{}'::jsonb NOT NULL,
   expires_at timestamp with time zone NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS public.payment_plans (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  listing_id uuid,
-  plan_id character varying(64) NOT NULL,
-  name character varying(255) NOT NULL,
-  years integer DEFAULT 0 NOT NULL,
-  discount_pct numeric(5,2) DEFAULT 0.00,
-  down_payment_pct numeric(5,2) DEFAULT 10.00,
-  maintenance_pct numeric(5,2) DEFAULT 8.00,
-  maintenance_splits integer DEFAULT 3,
-  milestones jsonb DEFAULT '[]'::jsonb,
-  created_at timestamp with time zone DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.processed_messages (
-  message_id character varying(128) NOT NULL,
-  sender_masked character varying(64) NOT NULL,
-  direction character varying(16) DEFAULT 'inbound'::character varying NOT NULL,
-  action_type character varying(64),
-  created_at timestamp with time zone DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.audit_logs (
@@ -1504,7 +1456,6 @@ ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_pkey PRIMARY KEY (id);
-ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
 ALTER TABLE broker_team_history ADD CONSTRAINT broker_team_history_pkey PRIMARY KEY (id);
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
@@ -1535,7 +1486,6 @@ ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_pkey PRIMARY KEY (id);
 ALTER TABLE lead_requests ADD CONSTRAINT lead_requests_pkey PRIMARY KEY (id);
 ALTER TABLE leads ADD CONSTRAINT leads_pkey PRIMARY KEY (id);
 ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
-ALTER TABLE listing_drafts ADD CONSTRAINT listing_drafts_pkey PRIMARY KEY (broker_id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
@@ -1543,7 +1493,6 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
 ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_pkey PRIMARY KEY (id);
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KEY (challenge);
-ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE place_names ADD CONSTRAINT place_names_pkey PRIMARY KEY (id);
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_pkey PRIMARY KEY (id);
@@ -1551,8 +1500,6 @@ ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id)
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_pkey PRIMARY KEY (fingerprint);
 ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_pkey PRIMARY KEY (id);
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_pkey PRIMARY KEY (id);
-ALTER TABLE processed_batches ADD CONSTRAINT processed_batches_pkey PRIMARY KEY (batch_key);
-ALTER TABLE processed_messages ADD CONSTRAINT processed_messages_pkey PRIMARY KEY (message_id);
 ALTER TABLE project_contexts ADD CONSTRAINT project_contexts_pkey PRIMARY KEY (project_id);
 ALTER TABLE project_images ADD CONSTRAINT project_images_pkey PRIMARY KEY (id);
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_pkey PRIMARY KEY (id);
@@ -1862,7 +1809,6 @@ ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_agency_id_fkey FOREIGN 
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_sheet_id_fkey FOREIGN KEY (sheet_id) REFERENCES price_sheets(id) ON DELETE SET NULL;
-ALTER TABLE listings ADD CONSTRAINT fk_listings_agency FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listings ADD CONSTRAINT fk_listings_broker FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
@@ -1879,7 +1825,6 @@ ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_listing_i
 ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE CASCADE;
 ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
-ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_bundle_id_fkey FOREIGN KEY (bundle_id) REFERENCES credit_bundles(id);
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2042,7 +1987,6 @@ CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id,
 CREATE UNIQUE INDEX owner_change_requests_one_pending ON public.owner_change_requests USING btree (owner_id, lower(new_value)) WHERE (status = 'pending'::text);
 CREATE INDEX owner_change_requests_open ON public.owner_change_requests USING btree (agency_id, status, created_at DESC);
 CREATE INDEX idx_passkey_challenges_expiry ON public.passkey_challenges USING btree (expires_at);
-CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
 CREATE INDEX place_names_status ON public.place_names USING btree (status, times_seen DESC);
@@ -2050,7 +1994,6 @@ CREATE INDEX portal_enquiries_agency_idx ON public.portal_enquiries USING btree 
 CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effective_on) WHERE (status = 'scheduled'::text);
 CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);
 CREATE INDEX idx_price_sheets_project ON public.price_sheets USING btree (project_id, created_at DESC);
-CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
 CREATE INDEX project_images_listings_idx ON public.project_images USING gin (listing_ids);
 CREATE INDEX project_images_project_idx ON public.project_images USING btree (project_id, "position");
 CREATE INDEX idx_project_materials_check ON public.project_materials USING btree (checked_at NULLS FIRST);

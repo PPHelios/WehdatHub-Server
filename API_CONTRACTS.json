@@ -301,7 +301,8 @@
     },
     "lib/copy.js": {
       "COPY": "Object",
-      "t": ["key", "lang", "vars"]
+      "t": ["key", "lang", "vars"],
+      "soloWords": ["text", "lang"]
     },
     "lib/registry.js": {
       "COMMANDS": "Array",
@@ -742,6 +743,7 @@
       "last4": ["raw"]
     },
     "lib/credits.js": {
+      "isSolo": ["pool", "agencyId"],
       "LOGIN_KINDS": "Array",
       "HINT_LEVELS": "Array",
       "monthKey": ["now"],

@@ -40,10 +40,10 @@ function tryForm(lang, { error, values = {}, sent }) {
     return html`<section class="card notice ok" id="try" role="status"><h2>✅ ${T(lang, "وصلنا طلبك", "We got your request")}</h2><p>${T(lang, "هنكلمك خلال يوم عمل.", "We'll call you within one working day.")}</p></section>`;
   }
   return html`<form method="post" action="/try?lang=${lang}#try" class="card stack" id="try">
-  <h2>🤝 ${T(lang, "جرّبه مع وكالتك", "Try it with your agency")}</h2>
+  <h2>🤝 ${T(lang, "جرّبه مع شركتك", "Try it with your agency")}</h2>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}</p>` : ""}
   <label>${T(lang, "اسمك", "Your name")} <input name="name" required maxlength="80" autocomplete="name" value="${values.name || ""}"></label>
-  <label>${T(lang, "اسم الوكالة", "Agency name")} <input name="agency" maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
+  <label>${T(lang, "اسم الشركة", "Agency name")} <input name="agency" maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
   <div class="grid two"><label>${T(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" autocomplete="tel" dir="ltr" maxlength="20" value="${values.phone || ""}"></label>
   <label>${T(lang, "عدد البروكرز", "Number of brokers")} <input name="team" type="number" min="1" max="1000" inputmode="numeric" value="${values.team || ""}"></label></div>
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
@@ -57,11 +57,11 @@ function landingBody(lang, { telegramUrl, form, logo, signupOpen, actions = [] }
   return html`<section class="hero lp-hero">
   <img class="hero-logo" src="${logo}" alt="" width="64" height="64">
   <h1>${T(lang, "وحداتك وعملاءك في مكان واحد", "Your units and clients in one place")}</h1>
-  <p class="lead">${T(lang, "على تيليجرام والموقع. ابعت فويس، البوت يضيف الوحدة ويلاقي لعميلك المناسب. معمول للبروكرز والوكالات العقارية في مصر.", "On Telegram and the web. Send a voice note; the bot adds the unit and finds what fits your client. Built for real estate brokers and agencies in Egypt.")}</p>
+  <p class="lead">${T(lang, "على تيليجرام والموقع. ابعت فويس، البوت يضيف الوحدة ويلاقي لعميلك المناسب. معمول للبروكرز والشركات العقارية في مصر.", "On Telegram and the web. Send a voice note; the bot adds the unit and finds what fits your client. Built for real estate brokers and agencies in Egypt.")}</p>
   <div class="lp-cta">
     ${telegramUrl ? html`<a class="btn" href="${telegramUrl}" rel="noopener">✈️ ${T(lang, "افتح في تيليجرام", "Open in Telegram")}</a>` : ""}
-    ${signupOpen ? html`<a class="btn${telegramUrl ? " secondary" : ""}" href="/app/signup?lang=${lang}">🏢 ${T(lang, "سجّل وكالتك", "Sign up your agency")}</a>` : ""}
-    <a class="btn${telegramUrl || signupOpen ? " secondary" : ""}" href="#try">🤝 ${T(lang, "جرّبه مع وكالتك", "Try it with your agency")}</a>
+    ${signupOpen ? html`<a class="btn${telegramUrl ? " secondary" : ""}" href="/app/signup?lang=${lang}">🏢 ${T(lang, "سجّل شركتك", "Sign up your agency")}</a>` : ""}
+    <a class="btn${telegramUrl || signupOpen ? " secondary" : ""}" href="#try">🤝 ${T(lang, "جرّبه مع شركتك", "Try it with your agency")}</a>
   </div>
   <p class="lp-trust">${T(lang, `${num(Plans.TRIAL.days, lang)} يوم ببلاش · من غير كارت · بياناتك مش بتتمسح`, `${Plans.TRIAL.days} days free · no card · your data is never deleted`)}</p>
 </section>
@@ -108,7 +108,7 @@ function mountLanding(app, { pool, assets }) {
             robots: "index, follow",
             scripts: false,
             manifest: false,
-            head: html`<meta name="description" content="${T(lang, "WehdatHub: مساعد الوحدات والعملاء للبروكرز والوكالات العقارية في مصر، على تيليجرام والموقع.", "WehdatHub: the units and clients assistant for real estate brokers and agencies in Egypt, on Telegram and the web.")}">
+            head: html`<meta name="description" content="${T(lang, "WehdatHub: مساعد الوحدات والعملاء للبروكرز والشركات العقارية في مصر، على تيليجرام والموقع.", "WehdatHub: the units and clients assistant for real estate brokers and agencies in Egypt, on Telegram and the web.")}">
 <meta property="og:title" content="${BRAND.name}">
 <link rel="alternate" hreflang="${other}" href="/?lang=${other}">`,
             body: html`<nav class="top lp-top"><span class="brand"><img src="${assets.url(BRAND.logo)}" alt="" width="28" height="28">${BRAND.name}</span><a class="logout" href="/?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a class="btn small" href="/app/">${T(lang, "دخول", "Sign in")}</a></nav>

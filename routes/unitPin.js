@@ -31,7 +31,7 @@ async function offerPin(broker, message, ctx) {
   }
   await replyButtons(
     broker,
-    en ? "📍 Which unit is this location for? It stays inside the agency (never in search or client links)." : "📍 اللوكيشن ده لأنهي وحدة؟ هيفضل جوه الوكالة بس (مش في البحث ولا روابط العملاء).",
+    en ? "📍 Which unit is this location for? It stays inside the agency (never in search or client links)." : "📍 اللوكيشن ده لأنهي وحدة؟ هيفضل جوه الشركة بس (مش في البحث ولا روابط العملاء).",
     units.map((u) => ({ id: `pin:${u.code}:${round(lat)}:${round(lng)}`, title: `📍 ${u.code}`.slice(0, 20) }))
   );
   return true;
@@ -48,7 +48,7 @@ async function handlePinButton(broker, replyId, ctx) {
   await reply(
     broker,
     out.ok
-      ? en ? `✅ Location saved on ${m[1]} (agency only).` : `✅ اللوكيشن اتحفظ على ${m[1]} (للوكالة بس).`
+      ? en ? `✅ Location saved on ${m[1]} (agency only).` : `✅ اللوكيشن اتحفظ على ${m[1]} (للشركة بس).`
       : en ? "⚠️ You can't change that unit." : "⚠️ مش مسموح تعدل الوحدة دي."
   );
   return true;

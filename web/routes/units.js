@@ -384,7 +384,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     if (!(await Privacy.canSee(pool, broker, listing))) {
       const asked = await Privacy.hasPending(pool, broker, listing);
       return html`<section class="card private" id="private">
-  <h2>${icon("lock", 20)} ${L(lang, "بيانات خاصة بالوكالة", "Agency-only details")}</h2>
+  <h2>${icon("lock", 20)} ${L(lang, "بيانات خاصة بالشركة", "Agency-only details")}</h2>
   ${notice && notes[notice] ? html`<p class="notice ok">${notes[notice]}</p>` : ""}
   <p class="muted">${L(lang, "المالك والعمولة ورقم الوحدة والعنوان واللوكيشن بيشوفهم صاحب الوحدة والمديرين بس.", "The owner, commission, unit number, address and pin are for the unit's broker and the managers.")}</p>
   ${asked
@@ -397,7 +397,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const editable = Authz.canEdit(broker, listing);
     const asks = await Privacy.pendingFor(pool, broker, listing);
     return html`<section class="card private stack" id="private">
-  <h2>${icon("lock", 20)} ${L(lang, "اللوكيشن والعنوان (للوكالة بس)", "Location and address (agency only)")}</h2>
+  <h2>${icon("lock", 20)} ${L(lang, "اللوكيشن والعنوان (للشركة بس)", "Location and address (agency only)")}</h2>
   ${notice && notes[notice] ? html`<p class="notice ${notice.startsWith("bad") ? "bad" : "ok"}">${notes[notice]}</p>` : ""}
   <p class="muted small">${L(lang, "مش بيظهر في البحث ولا في روابط العملاء.", "Never shown in search or client links.")}</p>
   ${pin ? html`<p><a class="btn secondary" href="${Privacy.mapsUrl(pin)}" target="_blank" rel="noopener" data-pin>${icon("pin", 18)} ${L(lang, "افتح على الخريطة", "Open the map")}</a>${pin.from === "project" ? html` <span class="muted small">${L(lang, "(لوكيشن المشروع)", "(the project's pin)")}</span>` : ""}</p>` : ""}

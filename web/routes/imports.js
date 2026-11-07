@@ -150,7 +150,7 @@ function excelPlanPage(imp, lang, query = {}) {
     <button class="secondary">${L(lang, "انسَ اختياراتي المحفوظة", "Forget my saved choices")}</button></form>`
     : ""}
   ${stats.dollars
-    ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار. بيتسجلوا بالدولار من غير تحويل، والبحث بيحولهم بسعر الوكالة.`, `${stats.dollars} rows are priced in dollars. They are saved in dollars, not converted; search converts them at the agency rate.`)}</p>`
+    ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار. بيتسجلوا بالدولار من غير تحويل، والبحث بيحولهم بسعر الشركة.`, `${stats.dollars} rows are priced in dollars. They are saved in dollars, not converted; search converts them at the agency rate.`)}</p>`
     : ""}
 </section>`
       : "";

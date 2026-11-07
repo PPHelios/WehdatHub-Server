@@ -14,7 +14,7 @@ const { html } = require("../html");
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const SIGNUP_IP = { limit: 3, windowSec: 3600 };
 const ERRORS = {
-  agency: ["اكتب اسم الوكالة.", "Enter the agency name."],
+  agency: ["اكتب اسم الشركة.", "Enter the agency name."],
   name: ["اكتب اسمك.", "Enter your name."],
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
   referral: ["كود الدعوة ده مش موجود؛ راجعه أو سيبه فاضي.", "That invite code doesn't exist; check it or leave it empty."],
@@ -25,28 +25,28 @@ const ERRORS = {
 
 function closedPage(lang) {
   return html`<div class="card auth"><h1>${L(lang, "التسجيل مقفول دلوقتي", "Sign-up is closed for now")}</h1>
-<p>${L(lang, "سيب بياناتك في فورم «جرّبه مع وكالتك» وهنكلمك.", "Leave your details in the \"Try it with your agency\" form and we'll call you.")}</p>
-<p><a class="btn" href="/?lang=${lang}#try">${L(lang, "جرّبه مع وكالتك", "Try it with your agency")}</a></p></div>`;
+<p>${L(lang, "سيب بياناتك في فورم «جرّبه مع شركتك» وهنكلمك.", "Leave your details in the \"Try it with your agency\" form and we'll call you.")}</p>
+<p><a class="btn" href="/?lang=${lang}#try">${L(lang, "جرّبه مع شركتك", "Try it with your agency")}</a></p></div>`;
 }
 
 function signupForm(lang, { error, values = {} } = {}) {
   return html`<form method="post" action="/app/signup" class="card stack auth" id="signup">
-  <h1>${L(lang, "سجّل وكالتك", "Sign up your agency")}</h1>
+  <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
   <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب بعد موافقتنا. بعدها تختار باقة أو تكمّل على الباقة المجانية.`, `A ${Plans.TRIAL.days}-day free trial on the Office plan once we approve it. Then pick a plan or carry on with the Free plan.`)}</p>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}</p>` : ""}
-  <label>${L(lang, "اسم الوكالة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
+  <label>${L(lang, "اسم الشركة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
   <label>${L(lang, "اسمك", "Your name")} <input name="name" required maxlength="80" autocomplete="name" value="${values.name || ""}"></label>
   <label>${L(lang, "موبايلك (هو اللي هتدخل بيه)", "Your mobile (you'll sign in with it)")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="20" value="${values.phone || ""}"></label>
-  <label>${L(lang, "كود دعوة من وكالة تانية (اختياري)", "Invite code from another agency (optional)")} <input name="referral" maxlength="12" dir="ltr" autocapitalize="characters" autocomplete="off" value="${values.referral || ""}"></label>
-  ${values.referral ? html`<p class="muted">🎁 ${L(lang, "لما تدفع أول باقة، إنت والوكالة اللي دعتك تاخدوا شهر مجاني.", "When you pay for your first plan, you and the agency that invited you each get a free month.")}</p>` : ""}
+  <label>${L(lang, "كود دعوة من شركة تانية (اختياري)", "Invite code from another agency (optional)")} <input name="referral" maxlength="12" dir="ltr" autocapitalize="characters" autocomplete="off" value="${values.referral || ""}"></label>
+  ${values.referral ? html`<p class="muted">🎁 ${L(lang, "لما تدفع أول باقة، إنت والشركة اللي دعتك تاخدوا شهر مجاني.", "When you pay for your first plan, you and the agency that invited you each get a free month.")}</p>` : ""}
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
-  <label class="check"><input type="checkbox" name="consent" value="1" required> ${L(lang, "موافق إن بيانات الوكالة وعملاءها تتحفظ على WehdatHub عشان الخدمة، وإن رقمي يتستخدم للتواصل بخصوص الحساب.", "I agree that the agency's and its clients' data are stored on WehdatHub to provide the service, and that my number is used to contact me about the account.")}</label>
+  <label class="check"><input type="checkbox" name="consent" value="1" required> ${L(lang, "موافق إن بيانات الشركة وعملاءها تتحفظ على WehdatHub عشان الخدمة، وإن رقمي يتستخدم للتواصل بخصوص الحساب.", "I agree that the agency's and its clients' data are stored on WehdatHub to provide the service, and that my number is used to contact me about the account.")}</label>
   <button type="submit">${L(lang, "ابعت الطلب", "Send the request")}</button>
 </form>`;
 }
 
 function register(web, { pool, page }) {
-  const title = (lang) => L(lang, "سجّل وكالتك", "Sign up your agency");
+  const title = (lang) => L(lang, "سجّل شركتك", "Sign up your agency");
 
   web.get("/signup", async (req, res) => {
     const lang = req.lang;

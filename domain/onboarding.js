@@ -23,18 +23,18 @@ function welcome({ manager = false, telegram = false } = {}, lang = "ar") {
 const TIPS = {
   search: [
     ["اكتب طلب العميل بكلامك، أو اضغط المايك واتكلم: النوع، المكان، الغرف، السعر.", "Type the client's request in your own words, or tap the mic and speak: type, place, bedrooms, price."],
-    ["النتايج من وحدات وكالتك والكتالوج بس.", "Results come from your agency's units and the catalogue only."],
+    ["النتايج من وحدات شركتك والكتالوج بس.", "Results come from your agency's units and the catalogue only."],
     ["افتح الوحدة وابعت رابطها أو صورها للعميل.", "Open a unit to send its link or photos to the client."],
     ["مفيش نتيجة؟ احفظه طلب عميل ويوصلك تنبيه لما تنزل وحدة مناسبة.", "Nothing found? Save it as a client request and get alerted when a unit fits."]
   ],
   ask: [
     ["اسأل عن مشروع أو عملائك أو وحداتك.", "Ask about a project, your clients or your units."],
-    ["الإجابة من بيانات وكالتك بس، ومعاها تاريخ البيانات.", "Answers come from your agency's data only, with the data's date."],
+    ["الإجابة من بيانات شركتك بس، ومعاها تاريخ البيانات.", "Answers come from your agency's data only, with the data's date."],
     ["لو الإجابة مش عندنا هتقولك كده بوضوح، والمدير يضيف المعلومة من نفس الصفحة.", "If we don't have it, it says so plainly, and a manager can add the information on this page."],
     ["الرد من الإنترنت اختياري وليه حد شهري ومكتوب عليه غير مؤكد.", "A web answer is optional, has a monthly limit and is labelled unverified."]
   ],
   units: [
-    ["كل وحدات وكالتك المتاحة، ودوّر بالكود أو المكان.", "All your agency's available units; search by code or place."],
+    ["كل وحدات شركتك المتاحة، ودوّر بالكود أو المكان.", "All your agency's available units; search by code or place."],
     ["افتح الوحدة للتعديل أو الفلاير أو إرسال الصور.", "Open a unit to edit it, make a flyer or send its photos."],
     ["اللي اتباعت أو اتأرشف بيفضل في السجل ومش بيظهر للعملاء.", "Sold or archived units stay on record and are hidden from clients."]
   ],
@@ -72,7 +72,7 @@ const TIPS = {
     ["المدير يشوف الإجمالي للفريق.", "Managers see the team's total."]
   ],
   dashboard: [
-    ["أرقام وكالتك: وحدات، عملاء، صفقات.", "Your agency's numbers: units, clients, deals."],
+    ["أرقام شركتك: وحدات، عملاء، صفقات.", "Your agency's numbers: units, clients, deals."],
     ["مين بيرد على العملاء أسرع ومين متأخر.", "Who answers clients fastest and who is late."],
     ["اضغط على أي رقم تشوف تفاصيله.", "Tap any number for its details."]
   ]
@@ -123,13 +123,13 @@ function nudge(day, progress, lang = "ar") {
     },
     !progress.searches && {
       title: ["🔍 جرّب البحث", "🔍 Try a search"],
-      body: ["اكتب طلب عميل زي ما بتقوله، والنتايج تطلع من وحدات وكالتك.", "Type a client's request the way you'd say it; results come from your agency's units."],
+      body: ["اكتب طلب عميل زي ما بتقوله، والنتايج تطلع من وحدات شركتك.", "Type a client's request the way you'd say it; results come from your agency's units."],
       url: "/app/search"
     }
   ].filter(Boolean);
   const next = steps[0] || (day === 7 && {
     title: ["⭐ نصيحة الأسبوع", "⭐ Tip of the week"],
-    body: ["اكتب «اسأل» وسؤالك عن أي مشروع أو عميل، والإجابة من بيانات وكالتك.", "Type \"ask\" and your question about any project or client; the answer comes from your agency's data."],
+    body: ["اكتب «اسأل» وسؤالك عن أي مشروع أو عميل، والإجابة من بيانات شركتك.", "Type \"ask\" and your question about any project or client; the answer comes from your agency's data."],
     url: "/app/ask"
   });
   if (!next) return null;
