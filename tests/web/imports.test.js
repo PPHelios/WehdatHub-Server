@@ -115,7 +115,7 @@ describe("Excel diff import", () => {
     const { agent, csrf } = await signIn(h, "manager");
     const page = await agent.get((await upload(agent, csrf, exported, "Inventory.xlsx")).headers.location);
     const [{ payload }] = await h.query("SELECT payload FROM web_imports ORDER BY created_at DESC LIMIT 1");
-    expect(payload.items.map((i) => [i.code, i.kind])).toEqual([["EX-1", "unchanged"], ["EX-2", "unchanged"]]);
+    expect(payload.items.map((i) => [i.code, i.kind]).sort()).toEqual([["EX-1", "unchanged"], ["EX-2", "unchanged"]]); // row order follows the export, which is not part of the check
     expect(page.text).toMatch(/data-kind="unchanged"/);
     expect(page.text).not.toMatch(/data-kind="(changed|new|invalid)"/);
   });

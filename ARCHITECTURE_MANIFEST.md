@@ -107,6 +107,7 @@
   | `084_board_periods.sql` | `admin_board_snapshots.period_days` now allows 1 (Yesterday), 7 and 30 (Month); 90 is dropped. |
   | `085_cleanup_unused.sql` | Drops seven unused indexes (operation log by listing code, listing drafts by time, projects and commissions by developer, lead intake log by intake, search log disagreements, share links by recipient). Only indexes; no data is changed. |
   | `086_audit_log.sql` | Protects the audit log table: adds IP, device and target columns, blocks edits and deletes of rows under 12 months old, keeps the trail when an agency is removed. |
+| `087_list_indexes.sql` | One index so the units list reads only the 20 rows it shows instead of sorting every unit of the agency. |
   | `079_developer_profile.sql` | Developer profile free text (about, past projects, delivery record, usual payment terms, warnings), each up to 2,000 characters. Ask reads them; clients never do. |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 

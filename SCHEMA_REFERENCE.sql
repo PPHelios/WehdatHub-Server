@@ -1991,6 +1991,7 @@ CREATE INDEX idx_listings_project ON public.listings USING btree (project_id) WH
 CREATE INDEX idx_listings_search_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(search_text_normalized, search_text, ''::text)) gin_trgm_ops) WITH (fastupdate=off);
 CREATE INDEX idx_listings_unit_check ON public.listings USING btree (agency_id, confirmed_at) WHERE (status = 'active'::text);
 CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id, lower(code));
+CREATE INDEX listings_agency_status_confirmed_idx ON public.listings USING btree (agency_id, status, confirmed_at DESC NULLS LAST, created_at DESC, id DESC);
 CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);
 CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
 CREATE INDEX listings_deleted_idx ON public.listings USING btree (agency_id, deleted_at) WHERE (status = 'deleted'::text);

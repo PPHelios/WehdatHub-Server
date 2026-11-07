@@ -120,6 +120,9 @@ function leaseSection(listing, lease, lang, csrf, notice, tenants = []) {
 }
 
 /** F10: the agency's leads to pick a tenant from (tenants first, then the most recent), as "L-0042 Name". */
+// The list shows cards only: the long text and cached-flyer columns are not read (every other column stays, so cards render as before).
+const LIST_COLS = "id,code,agency_id,broker_id,status,title,property_type,listing_type,price_value,price_display,area_value,bedrooms,location,features,language,lat,lng,location_name,details,flyer_url,hero_position,is_primary_developer,down_payment_value,installment_years,installment_value,payment_frequency,delivery_date,maintenance_pct,created_at,updated_at,compound,district,city,location_keywords,flyer_wa_media_id,flyer_wa_media_at,project_id,inventory_type,developer_unit_code,payment_terms,bathrooms,compound_en,delivery_year,delivery_quarter,delivery_month,is_ready,delivery_raw,feature_keys,features_other,remaining_amount,installments_end,confirmed_at,market,finishing,furnishing,floor_level,version,code_norm,compound_key,developer_key,area_key,stale_asked_at,stale_hidden_at,phase_id,is_private,owner_id,portal_listing_no,deleted_at,deleted_by";
+
 function register(web, { pool, page }) {
   /** The units list; a bulk edit's answer shows on top of it (notice). */
   async function unitsList(req, res, { notice = null, code = 200 } = {}) {
@@ -159,7 +162,7 @@ function register(web, { pool, page }) {
     const cond = where.join(" AND ");
     const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
     const { rows } = await pool.query(
-      `SELECT * FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
+      `SELECT ${LIST_COLS} FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
       args
     );
     const link = (over = {}) => {
