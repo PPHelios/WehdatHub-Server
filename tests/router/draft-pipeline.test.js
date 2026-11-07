@@ -12,6 +12,8 @@ jest.setTimeout(30000);
 let h;
 beforeEach(async () => {
   h = await createHarness();
+  // The compounds these cards use are on the approved list (a compound outside it asks first).
+  await h.query("INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved) VALUES ('mivida', 'Mivida', 'ميفيدا', 30.0058, 31.5377, true)");
 });
 afterAll(closeHarness);
 

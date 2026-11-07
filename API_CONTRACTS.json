@@ -213,6 +213,7 @@
       "reviewDraft": ["broker", "ctx"],
       "answerInstallments": ["broker", "ctx", "yes"],
       "answerOwner": ["broker", "ctx", "choice"],
+      "answerCompound": ["broker", "ctx", "choice"],
       "commitStagedReview": ["broker", "ctx"],
       "commitDraftToDatabase": ["broker", "_draft", "ctx"],
       "commitDraftToListing": ["broker", "_draft", "ctx"],
@@ -2406,6 +2407,9 @@
       "addAlias": ["pool", "id", "alias"],
       "importSeed": ["pool", "rows"],
       "unmatched": ["pool", "limit"],
+      "approve": ["pool", "id"],
+      "recheck": ["pool", "params"],
+      "dismiss": ["pool", "name"],
       "TYPES": "Array"
     },
     "web/routes/map.js": {
@@ -2416,7 +2420,8 @@
     },
     "services/compoundResolve.js": {
       "resolve": ["db", "fields"],
-      "normalize": ["db", "fields"]
+      "normalize": ["db", "fields"],
+      "suggest": ["db", "typed", "limit"]
     }
   },
   "invariant_variable_names": {

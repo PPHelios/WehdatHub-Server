@@ -171,6 +171,11 @@ async function handleInteractive(broker, message, ctx) {
     return await Drafts.answerOwner(broker, ctx, choice);
   }
 
+  // Answer to the review's compound card: a listed compound, or add it as new.
+  if (replyId.startsWith("draft_comp:") || replyId === "draft_comp_new") {
+    return await Drafts.answerCompound(broker, ctx, replyId === "draft_comp_new" ? "new" : replyId.slice("draft_comp:".length));
+  }
+
   // 5. DRAFT: review (DRAFT_SAVE / draft_save_exit) or commit the staged review (draft_confirm)
   if (
     replyId === "DRAFT_SAVE" ||
