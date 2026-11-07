@@ -116,7 +116,11 @@ async function respond(pool, token, { action, proposedAt = null, note = null, no
   if (action === "confirm") {
     ({ rows } = await pool.query("UPDATE viewings SET status = 'confirmed', responded_at = $2, updated_at = $2 WHERE id = $1 RETURNING *", [v.id, now.toISOString()]));
   } else {
-    if (proposedAt && (Number.isNaN(proposedAt.getTime()) || proposedAt < now)) return { error: "time" };
+    // The picker starts at "now": a time that is already past with a written note is just the note.
+    if (proposedAt && (Number.isNaN(proposedAt.getTime()) || proposedAt < now)) {
+      if (!clean(note, 300)) return { error: "time" };
+      proposedAt = null;
+    }
     if (!proposedAt && !clean(note, 300)) return { error: "time" };
     ({ rows } = await pool.query(
       "UPDATE viewings SET status = 'reschedule', client_proposed_at = $2, client_note = $3, responded_at = $4, updated_at = $4 WHERE id = $1 RETURNING *",

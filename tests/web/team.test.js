@@ -58,7 +58,7 @@ test("bad input, another agency's mobile and non-managers are refused", async ()
   expect((await post({ name: "X", phone: "01099887766", role: "owner" })).status).toBe(400);
   const taken = await post({ name: "Stolen", phone: `0${h.BROKERS.rival.phone.slice(2)}`, role: "broker" });
   expect(taken.status).toBe(400);
-  expect(taken.text).toMatch(/وكالة تانية|another agency/);
+  expect(taken.text).toMatch(/شركة تانية|another agency/);
   const [rival] = await h.query("SELECT agency_id, name FROM brokers WHERE id = $1", [h.BROKERS.rival.id]);
   expect(rival).toEqual({ agency_id: h.AGENCY_B, name: "Rival Broker" });
 

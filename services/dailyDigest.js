@@ -120,7 +120,7 @@ function opsSection(person, ops) {
   if (ops.uncontactedOld) lines.push(L(person, `⏰ محدش كلمهم من أكتر من 24 ساعة: ${ops.uncontactedOld}`, `⏰ Not contacted for over 24 hours: ${ops.uncontactedOld}`));
   if (ops.overdue) lines.push(L(person, `⚠️ متابعات متأخرة: ${ops.overdue}`, `⚠️ Overdue follow-ups: ${ops.overdue}`));
   if (!lines.length) return [];
-  return [L(person, ops.team ? "👥 فريقك" : "🏢 الوكالة", ops.team ? "👥 Your team" : "🏢 The agency"), ...lines];
+  return [L(person, ops.team ? "👥 فريقك" : "🏢 الشركة", ops.team ? "👥 Your team" : "🏢 The agency"), ...lines];
 }
 
 /** The brief as a notification message, or null when there's nothing to say. */
@@ -283,7 +283,7 @@ function digestMessage(manager, d) {
     if (d.brokers.length > 10) lines.push(more(manager, d.brokers.length - 10));
   }
   return {
-    title: d.team ? L(manager, "🌙 ملخص فريقك النهارده", "🌙 Today in your team") : L(manager, "🌙 ملخص اليوم للوكالة", "🌙 Today at the agency"),
+    title: d.team ? L(manager, "🌙 ملخص فريقك النهارده", "🌙 Today in your team") : L(manager, "🌙 ملخص اليوم للشركة", "🌙 Today at the agency"),
     body: lines.join("\n"),
     url: "/app/dashboard?days=7",
     buttons: null

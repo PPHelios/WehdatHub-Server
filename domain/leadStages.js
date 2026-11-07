@@ -27,7 +27,7 @@ const LAWFUL_BASES = ["client_request", "consent", "existing_client"];
 const BASIS_LABELS = {
   client_request: ["العميل طلب التواصل", "The client asked to be contacted"],
   consent: ["موافقة العميل", "The client's consent"],
-  existing_client: ["عميل حالي للوكالة", "An existing client of the agency"]
+  existing_client: ["عميل حالي للشركة", "An existing client of the agency"]
 };
 
 const FOLLOW_UP_KINDS = ["call", "viewing"];

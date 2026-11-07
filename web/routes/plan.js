@@ -30,7 +30,7 @@ const REQUEST_STATUS = { pending: ["مستني الرد", "Waiting"], approved: 
 const CREDIT_ERRORS = {
   credits: ["اكتب عدد رصيد من 1 لـ 100,000.", "Enter a number of credits from 1 to 100,000."],
   too_many: ["عندك 3 طلبات مستنية. استنى الرد.", "You already have 3 open requests. Wait for an answer."],
-  forbidden: ["صاحب الوكالة بس يقدر يطلب رصيد.", "Only the agency owner can ask for credits."]
+  forbidden: ["صاحب الشركة بس يقدر يطلب رصيد.", "Only the agency owner can ask for credits."]
 };
 const ERRORS = {
   plan: ["اختار باقة ومدة.", "Pick a plan and a period."],
@@ -63,15 +63,15 @@ const INVITED = {
 };
 
 function referralSection(r, lang) {
-  const text = L(lang, `جرّب WehdatHub لوكالتك. سجّل بالكود ${r.code} وناخد إحنا الاتنين شهر مجاني لما تشترك: ${r.link}`, `Try WehdatHub for your agency. Sign up with code ${r.code} and we both get a free month when you subscribe: ${r.link}`);
+  const text = L(lang, `جرّب WehdatHub لشركتك. سجّل بالكود ${r.code} وناخد إحنا الاتنين شهر مجاني لما تشترك: ${r.link}`, `Try WehdatHub for your agency. Sign up with code ${r.code} and we both get a free month when you subscribe: ${r.link}`);
   return html`<section class="card stack" id="referral" data-referral="${r.code}">
-  <h2>🎁 ${L(lang, "ادعي وكالة تانية", "Invite another agency")}</h2>
-  <p>${L(lang, "لما الوكالة اللي دعيتها تدفع أول باقة، إنتوا الاتنين تاخدوا شهر مجاني.", "When an agency you invite pays for its first plan, you both get a free month.")}</p>
+  <h2>🎁 ${L(lang, "ادعي شركة تانية", "Invite another agency")}</h2>
+  <p>${L(lang, "لما الشركة اللي دعيتها تدفع أول باقة، إنتوا الاتنين تاخدوا شهر مجاني.", "When an agency you invite pays for its first plan, you both get a free month.")}</p>
   <p>${L(lang, "كود الدعوة", "Invite code")}: <strong dir="ltr">${r.code}</strong></p>
   <label>${L(lang, "لينك التسجيل", "Sign-up link")} <span class="row"><input readonly dir="ltr" value="${r.link}" id="referral-link"> <button type="button" class="secondary" data-copy="#referral-link">📋 ${L(lang, "نسخ", "Copy")}</button></span></label>
   <p><a class="btn secondary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
   ${r.credit ? html`<p class="notice ok">${L(lang, `عندك ${r.credit} شهر مجاني هيتضاف لأول دفعة جاية.`, `You have ${r.credit} free month(s) that will be added to your next payment.`)}</p>` : ""}
-  ${r.referredBy ? html`<p class="muted">${L(lang, `وكالتك اتدعت من ${r.referredBy}`, `Your agency was invited by ${r.referredBy}`)}${r.rewarded ? "" : L(lang, " — أول دفعة ليك فيها شهر مجاني.", " — your first payment includes a free month.")}</p>` : ""}
+  ${r.referredBy ? html`<p class="muted">${L(lang, `شركتك اتدعت من ${r.referredBy}`, `Your agency was invited by ${r.referredBy}`)}${r.rewarded ? "" : L(lang, " — أول دفعة ليك فيها شهر مجاني.", " — your first payment includes a free month.")}</p>` : ""}
   ${r.invited.length
     ? html`<table><tbody>${r.invited.map((x) => html`<tr data-invited><td>${x.name}</td><td>${INVITED[x.referral_rewarded_at ? "rewarded" : x.approval][lang === "en" ? 1 : 0]}</td></tr>`)}</tbody></table>`
     : ""}
@@ -124,7 +124,7 @@ ${manager
   <button type="submit" class="secondary">${L(lang, "ابعت الطلب", "Send request")}</button>
   ${requests.length ? html`<table data-credit-requests><tbody>${requests.map((x) => html`<tr data-request="${x.id}"><td>${num(x.credits)}</td><td>${(REQUEST_STATUS[x.status] || REQUEST_STATUS.pending)[lang === "en" ? 1 : 0]}</td><td dir="ltr">${day(x.created_at)}</td></tr>`)}</tbody></table>` : ""}
 </form>`
-  : html`<p class="muted">${L(lang, "صاحب الوكالة بس يقدر يغيّر الباقة.", "Only the agency owner can change the plan.")}</p>`}
+  : html`<p class="muted">${L(lang, "صاحب الشركة بس يقدر يغيّر الباقة.", "Only the agency owner can change the plan.")}</p>`}
 ${referral ? referralSection(referral, lang) : ""}
 ${payments.length
   ? html`<section class="card"><h2>${L(lang, "المدفوعات", "Payments")}</h2><div class="scroll"><table><tbody>${payments.map(

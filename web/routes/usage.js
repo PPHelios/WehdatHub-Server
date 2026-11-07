@@ -54,7 +54,7 @@ function aiLogPage(lang, log, filters, base, title, balance = null) {
 <section class="card">
   <p data-ai-log-totals>${L(lang, `نص: ${log.totals.text} · فويس: ${log.totals.voice} · صفحات: ${log.totals.page}`, `Text: ${log.totals.text} · Voice: ${log.totals.voice} · Pages: ${log.totals.page}`)}</p>
   <p data-ai-log-credits><strong>${L(lang, `الرصيد المستخدم: ${log.totals.credits}`, `Credits used: ${log.totals.credits}`)}</strong>${balance ? L(lang, ` من ${balance.limit} · المتبقي ${Math.max(0, balance.limit - balance.used)}`, ` of ${balance.limit} · ${Math.max(0, balance.limit - balance.used)} left`) : ""}</p>
-  <p class="muted">${L(lang, "كل عملية بالذكاء الاصطناعي بتاخد رصيد من رصيد الوكالة الشهري.", "Every AI action uses credits from the agency's monthly pool.")}</p>
+  <p class="muted">${L(lang, "كل عملية بالذكاء الاصطناعي بتاخد رصيد من رصيد الشركة الشهري.", "Every AI action uses credits from the agency's monthly pool.")}</p>
   ${log.rows.length
     ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "المستخدم", "User")}</th><th>${L(lang, "الخاصية", "Feature")}</th><th>${L(lang, "اتحسب من", "Counted as")}</th><th>${L(lang, "الرصيد", "Credits")}</th></tr></thead>
   <tbody>${log.rows.map((r) => html`<tr data-ai-row="${r.feature}"><td dir="ltr">${AiLog.cairoTime(r.at)}</td><td>${r.broker}</td><td>${AiLog.featureLabel(r.feature, lang)}</td><td>${KIND[r.kind][lang === "en" ? 1 : 0]}</td><td>${r.credits}</td></tr>`)}</tbody></table></div>`
@@ -127,7 +127,7 @@ function register(web, { pool, page }) {
       body: html`<h1>${L(lang, "الاستهلاك", "Usage")}</h1>
 ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
 <section class="card usage-hero" data-credits-used="${state.used}" data-credits-limit="${state.limit}" data-level="${state.level}">
-  <h2>${L(lang, "رصيد رسايل واتساب للوكالة (الشهر الحالي)", "Agency WhatsApp credits (this month)")}</h2>
+  <h2>${L(lang, "رصيد رسايل واتساب للشركة (الشهر الحالي)", "Agency WhatsApp credits (this month)")}</h2>
   <meter class="${cls}" min="0" max="${state.limit}" low="${Math.round(state.limit * 0.8)}" high="${state.limit}" value="${Math.min(state.used, state.limit)}">${state.pct}%</meter>
   <p class="big"><strong>${state.used}</strong> / ${state.limit} · ${L(lang, `باقي ${state.remaining}`, `${state.remaining} left`)} (${state.pct}%)</p>
   <details class="how"><summary>${L(lang, "الرصيد بيتحسب إزاي؟", "How credits work")}</summary><p class="muted">${L(
@@ -140,7 +140,7 @@ ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L
   <h2>🤖 ${L(lang, "رصيد الذكاء الاصطناعي (الشهر الحالي)", "AI credits (this month)")}</h2>
   <meter min="0" max="${ai.credits.limit}" value="${Math.min(ai.credits.used, ai.credits.limit)}"></meter>
   <p class="big"><strong>${ai.credits.used}</strong> / ${ai.credits.limit} · ${L(lang, `باقي ${Math.max(0, ai.credits.limit - ai.credits.used)}`, `${Math.max(0, ai.credits.limit - ai.credits.used)} left`)}</p>
-  <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${isAgencyOwner(broker) ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : manager ? html` · <span class="muted">${L(lang, "لزيادة الرصيد كلّم مالك الوكالة", "To add credits, ask your agency owner")}</span>` : ""}</p>
+  <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${isAgencyOwner(broker) ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : manager ? html` · <span class="muted">${L(lang, "لزيادة الرصيد كلّم مالك الشركة", "To add credits, ask your agency owner")}</span>` : ""}</p>
   ${creditTable(aiActions, lang)}
 </section>
 ${manager
@@ -153,7 +153,7 @@ ${manager
   <p class="muted">${L(lang, `روابط الدخول (مش محسوبة من الرصيد): ${agency.login}`, `Sign-in links (not counted in the credits): ${agency.login}`)}</p>
 </section>`],
       [L(lang, "الإعدادات", "Settings"), html`${fxCard}<form method="post" action="/app/usage/agency" class="card stack">
-  <h2>${L(lang, "رصيد الوكالة وحدود الوسطاء", "Agency credits and broker caps")}</h2>
+  <h2>${L(lang, "رصيد الشركة وحدود الوسطاء", "Agency credits and broker caps")}</h2>
   <label>${L(lang, "الرصيد الشهري (رسايل)", "Monthly credits (messages)")} <input type="number" name="monthly" min="0" max="100000" value="${state.limit}"></label>
   <label>${L(lang, "حد يومي لكل وسيط (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
   <label>${L(lang, "حد أسبوعي لكل وسيط (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>

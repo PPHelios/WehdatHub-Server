@@ -61,7 +61,7 @@ ${notice || ""}
 <form method="post" action="/app/sources" class="card stack">
   <input type="hidden" name="month" value="${ym}">
   <div class="scroll"><table>
-    <thead><tr><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "عمولة الوكالة", "Agency commission")}</th><th>${L(lang, "مصروف الإعلانات (ج.م)", "Ad spend (EGP)")}</th><th>${L(lang, "تكلفة العميل", "Cost per lead")}</th><th>${L(lang, "تكلفة الصفقة", "Cost per deal")}</th></tr></thead>
+    <thead><tr><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "عمولة الشركة", "Agency commission")}</th><th>${L(lang, "مصروف الإعلانات (ج.م)", "Ad spend (EGP)")}</th><th>${L(lang, "تكلفة العميل", "Cost per lead")}</th><th>${L(lang, "تكلفة الصفقة", "Cost per deal")}</th></tr></thead>
     <tbody>${r.rows.map(
       (x) => html`<tr data-source="${x.source}"><td>${name(x.source)}</td><td>${x.leads}</td><td>${x.deals}</td><td>${money(x.commission, lang)}</td>
       <td>${x.source === Sources.NONE ? "—" : html`<input type="hidden" name="source" value="${x.source}"><input name="amount" inputmode="numeric" dir="ltr" size="9" value="${x.spend || ""}" aria-label="${name(x.source)}">`}</td>

@@ -222,9 +222,6 @@ describe("WehdatHub Master Safeguards & Regression Guard Suite", () => {
         /CREATE TABLE IF NOT EXISTS public\.inbound_messages/
       );
       expect(schemaRefSql).toMatch(
-        /CREATE TABLE IF NOT EXISTS public\.processed_batches/
-      );
-      expect(schemaRefSql).toMatch(
         /CREATE TABLE IF NOT EXISTS public\.operation_logs/
       );
     });

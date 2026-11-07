@@ -33,7 +33,7 @@ function register(web, { pool, page }) {
     const en = broker.preferred_lang === "en";
     const groups = [
       ["work", en ? "Work" : "الشغل"],
-      ["agency", en ? "Agency" : "الوكالة"],
+      ["agency", en ? "Agency" : "الشركة"],
       ["account", en ? "Account" : "الحساب"]
     ];
     const items = navFor(broker);
@@ -79,7 +79,7 @@ ${groups.map(([g, label]) => {
       title: en ? "App" : "التطبيق",
       body: html`<h1>${en ? "WehdatHub app" : "تطبيق WehdatHub"}</h1>
 <div class="tiles">
-  <a class="tile-link" href="/app/owner">${icon("chart", 28)}<span><b>${en ? "Tracking" : "المتابعة"}</b><span class="muted">${en ? "Agencies, plans, credits, payments" : "الوكالات والباقات والرصيد والمدفوعات"}</span></span></a>
+  <a class="tile-link" href="/app/owner">${icon("chart", 28)}<span><b>${en ? "Tracking" : "المتابعة"}</b><span class="muted">${en ? "Agencies, plans, credits, payments" : "الشركات والباقات والرصيد والمدفوعات"}</span></span></a>
   <a class="tile-link" href="/app/owner/board">${icon("gauge", 28)}<span><b>${en ? "Board" : "اللوحة"}</b><span class="muted">${en ? "Money, AI, performance, search, operations" : "الفلوس والذكاء الاصطناعي والأداء والبحث والتشغيل"}</span></span></a>
 </div>
 <section class="card" data-app-alerts>
@@ -155,7 +155,7 @@ ${welcome ? welcomeCard(welcome, en) : ""}
   ${tasks.length > shown.length ? html`<a class="btn secondary" href="/app/leads?tab=overdue">${en ? `${tasks.length - shown.length} more` : `${tasks.length - shown.length} كمان`}</a>` : ""}
 </section>
 ${Dash.isManager(broker)
-  ? html`<div class="row shortcuts"><a class="btn secondary" href="/app/dashboard">${icon("chart", 20)} ${en ? "Agency dashboard" : "لوحة الوكالة"}</a>${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${icon("tools", 20)} ${en ? "App tracking" : "متابعة التطبيق"}</a>` : ""}</div>`
+  ? html`<div class="row shortcuts"><a class="btn secondary" href="/app/dashboard">${icon("chart", 20)} ${en ? "Agency dashboard" : "لوحة الشركة"}</a>${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${icon("tools", 20)} ${en ? "App tracking" : "متابعة التطبيق"}</a>` : ""}</div>`
   : ""}`;
 }
 

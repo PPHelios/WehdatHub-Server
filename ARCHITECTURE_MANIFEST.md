@@ -110,6 +110,7 @@
 | `087_list_indexes.sql` | One index so the units list reads only the 20 rows it shows instead of sorting every unit of the agency. |
 | `088_search_review.sql` | Search review upgrade: more word kinds (furnishing, finishing, sale/rent) and expected filters on test cases, so a parser rule problem is kept as a failing case. |
 | `089_owner_requests.sql` | Owner codes (O-0042, per agency) and owner change requests: a broker's rename goes to the approver (data entry, else a manager, else the agency owner; VIP owners: the agency owner). |
+| `090_drop_unused.sql` | Drops five empty unused tables (broker_search_state, listing_drafts, payment_plans, processed_batches, processed_messages) and the duplicate `fk_listings_agency` link. |
   | `079_developer_profile.sql` | Developer profile free text (about, past projects, delivery record, usual payment terms, warnings), each up to 2,000 characters. Ask reads them; clients never do. |
   | `072_admin_board.sql` | `admin_board_snapshots`: the owner board's stored results per tab and period (filled nightly and on refresh). `fixed_costs`: monthly costs the owner enters for the Money tab. |
 

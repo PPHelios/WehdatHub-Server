@@ -31,9 +31,9 @@ async function loadBroker(pool, broker) {
 /** Managers: the agency's logo (shown on client pages and payment-schedule PDFs). */
 function brandSection(lang, agency, notice) {
   return html`<section class="card stack" id="brand">
-  <h2>🏢 ${L(lang, "شعار الوكالة", "Agency logo")}</h2>
+  <h2>🏢 ${L(lang, "شعار الشركة", "Agency logo")}</h2>
   ${notice || ""}
-  <p class="muted">${L(lang, "بيظهر للعملاء على صفحات الوحدات وجداول الدفع PDF مع اسم الوكالة ورقم البروكر.", "Clients see it on unit pages and payment-schedule PDFs, with the agency's name and the broker's number.")}</p>
+  <p class="muted">${L(lang, "بيظهر للعملاء على صفحات الوحدات وجداول الدفع PDF مع اسم الشركة ورقم البروكر.", "Clients see it on unit pages and payment-schedule PDFs, with the agency's name and the broker's number.")}</p>
   ${agency.logo_url ? html`<img class="logo" src="${Storage.photoUrl(agency.logo_url)}" alt="" data-agency-logo>` : html`<p class="muted" data-agency-logo="none">${L(lang, "لسه مفيش شعار.", "No logo yet.")}</p>`}
   <form method="post" action="/app/settings/logo" enctype="multipart/form-data" class="row">
     <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
@@ -101,7 +101,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   ${kinds.length ? html`  <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
   <p class="muted">${L(
     lang,
-    "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الوكالة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
+    "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الشركة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
     "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
   )}</p>
   ${kinds.map((k) => notifyRow(k, policy, broker, lang, tgOn))}

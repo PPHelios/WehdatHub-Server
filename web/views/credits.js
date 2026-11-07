@@ -7,7 +7,7 @@ const { html } = require("../html");
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 
 const FREE_ACTIONS = [
-  ["صفحة اتقرت قبل كده من أي وكالة، وفلاير تاني لنفس الوحدة", "A page any agency already read, and a later flyer for the same unit"],
+  ["صفحة اتقرت قبل كده من أي شركة، وفلاير تاني لنفس الوحدة", "A page any agency already read, and a later flyer for the same unit"],
   ["الإضافة والتعديل من الموقع، استيراد إكسل أو CSV، لينك العميل، فلاتر البحث", "Adding and editing on the website, Excel or CSV import, client links, search filters"],
   ["البحث بالكتابة لما الرصيد يخلص (بالمحلل المحلي)", "Typed search when credits run out (local parser)"]
 ];

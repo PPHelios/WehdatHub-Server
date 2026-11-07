@@ -9,7 +9,7 @@
 const PLANS = [
   { id: "solo", name: ["سولو", "Solo"], priceEgp: 199, seats: 1, units: 300, credits: 400 },
   { id: "office", name: ["مكتب", "Office"], priceEgp: 830, seats: 5, units: 1500, credits: 2000 },
-  { id: "agency", name: ["وكالة", "Agency"], priceEgp: 2090, seats: 15, units: 5000, credits: 6000 }
+  { id: "agency", name: ["شركة", "Agency"], priceEgp: 2090, seats: 15, units: 5000, credits: 6000 }
 ];
 // After the trial: a small plan that keeps every record readable (never deleted) with a little room to keep working.
 const FREE = { id: "free", name: ["مجاني", "Free"], priceEgp: 0, seats: 1, units: 25, credits: 80 };

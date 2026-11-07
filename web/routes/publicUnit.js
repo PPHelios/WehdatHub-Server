@@ -55,7 +55,7 @@ function interestForm(u, { action, error, values = {}, sent }) {
   <label>${L(lang, "رسالة (اختياري)", "Message (optional)")} <textarea name="message" maxlength="500" rows="2">${values.message || ""}</textarea></label>
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
   <button type="submit">${L(lang, "ابعت", "Send")}</button>
-  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الوكالة تتواصل معاك بخصوص الوحدة دي وتحتفظ بالاسم والرقم لده.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
+  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الشركة تتواصل معاك بخصوص الوحدة دي وتحتفظ بالاسم والرقم لده.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
 </form>`;
 }
 
@@ -110,7 +110,7 @@ function unitBody(u, { otherLangUrl, interest = null, plans = {} }) {
   if (u.status !== "active") {
     return html`<article class="card" data-public-unit="${u.code}">
   <h1>${L(lang, "الوحدة دي مبقتش متاحة", "This unit is no longer available")}</h1>
-  <p>${L(lang, "تواصل مع الوكالة لوحدات مشابهة.", "Contact the agency for similar units.")}</p>
+  <p>${L(lang, "تواصل مع الشركة لوحدات مشابهة.", "Contact the agency for similar units.")}</p>
   ${u.agency.name ? html`<p><strong>${u.agency.name}</strong>${u.agency.phone ? html` · <a href="tel:${u.agency.phone}" dir="ltr">${u.agency.phone}</a>` : ""}</p>` : ""}
 </article>`;
   }

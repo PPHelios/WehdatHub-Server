@@ -93,7 +93,7 @@ ${dealsSwitch(lang, "/app/deals")}
 <section class="card" id="totals"><h2>📊 ${manager ? L(lang, "إجمالي الشهور", "Monthly totals") : L(lang, "نصيبك كل شهر", "Your share per month")}</h2>
 ${totals.length
   ? html`<table class="table"><thead><tr><th>${L(lang, "الشهر", "Month")}</th><th>${L(lang, "صفقات", "Deals")}</th>${manager
-      ? html`<th>${L(lang, "حجم المبيعات", "Volume")}</th><th>${L(lang, "العمولة", "Commission")}</th><th>${L(lang, "خارجي", "External")}</th><th>${L(lang, "للوكالة", "Agency")}</th>`
+      ? html`<th>${L(lang, "حجم المبيعات", "Volume")}</th><th>${L(lang, "العمولة", "Commission")}</th><th>${L(lang, "خارجي", "External")}</th><th>${L(lang, "للشركة", "Agency")}</th>`
       : html`<th>${L(lang, "نصيبك", "Your share")}</th>`}</tr></thead><tbody>${totals.map(
       (t) => html`<tr><td>${t.month}</td><td>${t.deals}</td>${manager
         ? html`<td>${money(t.volume, lang)}</td><td>${money(t.commission, lang)}</td><td>${money(t.external, lang)}</td><td>${money(t.agency, lang)}</td>`

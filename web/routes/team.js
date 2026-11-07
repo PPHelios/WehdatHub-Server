@@ -30,7 +30,7 @@ const ERRORS = {
   name: ["اكتب الاسم.", "Enter the name."],
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
   role: ["الدور مش مظبوط.", "The role isn't valid."],
-  phone_taken: ["الرقم ده مسجل مع وكالة تانية.", "This number is registered with another agency."],
+  phone_taken: ["الرقم ده مسجل مع شركة تانية.", "This number is registered with another agency."],
   not_found: ["الوسيط مش موجود.", "Broker not found."],
   inactive: ["الوسيط موقوف؛ رجّعه الأول.", "The broker is deactivated; bring them back first."],
   self: ["مينفعش توقف نفسك.", "You can't deactivate yourself."],

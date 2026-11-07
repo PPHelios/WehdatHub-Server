@@ -19,7 +19,7 @@ const uploadDoc = uploads([DOC], { maxMb: 25 });
 Session.allowMultipart(/^\/catalogue\/projects\/[^/]+\/brochure$/);
 
 const ERRORS = {
-  OFF: ["قراءة الملفات مش مفعّلة لوكالتك.", "Document reading isn't switched on for your agency."],
+  OFF: ["قراءة الملفات مش مفعّلة لشركتك.", "Document reading isn't switched on for your agency."],
   NO_FILE: ["اختار ملف PDF أو صور.", "Choose a PDF or photos."],
   ONE_PDF: ["ملف PDF واحد بس في المرة.", "One PDF at a time."],
   NOT_PDF: ["الملف ده مش PDF مقروء.", "That file isn't a readable PDF."],

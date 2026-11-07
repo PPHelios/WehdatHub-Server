@@ -13,7 +13,7 @@ const TAB_LABELS = {
   ai: ["الذكاء الاصطناعي", "AI"],
   performance: ["الأداء والتأخير", "Performance and delays"],
   search: ["جودة البحث", "Search quality"],
-  agencies: ["الوكالات", "Agencies"],
+  agencies: ["الشركات", "Agencies"],
   operations: ["التشغيل", "Operations"]
 };
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -30,7 +30,7 @@ const table = (heads, rows, lang) => (rows.length
 
 function tabBody(tab, data, lang, { agency = "" } = {}) {
   if (tab === "overview") {
-    return kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م تقريبًا)", "AI cost (EGP, est.)"), data.aiEgp], [L(lang, "مكالمات الذكاء", "AI calls"), data.aiCalls], [L(lang, "وكالات نشطة", "Active agencies"), data.agencies], [L(lang, "بروكرز نشطين", "Active brokers"), data.brokers], [L(lang, "وحدات جديدة", "New units"), data.units], [L(lang, "عملاء جدد", "New leads"), data.leads], [L(lang, "أخطاء", "Errors"), data.errors]], lang);
+    return kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م تقريبًا)", "AI cost (EGP, est.)"), data.aiEgp], [L(lang, "مكالمات الذكاء", "AI calls"), data.aiCalls], [L(lang, "شركات نشطة", "Active agencies"), data.agencies], [L(lang, "بروكرز نشطين", "Active brokers"), data.brokers], [L(lang, "وحدات جديدة", "New units"), data.units], [L(lang, "عملاء جدد", "New leads"), data.leads], [L(lang, "أخطاء", "Errors"), data.errors]], lang);
   }
   if (tab === "money") {
     return html`${kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م)", "AI cost (EGP)"), data.aiEgp], [L(lang, "تكاليف ثابتة (ج.م)", "Fixed costs (EGP)"), data.fixedEgp], [L(lang, "الصافي (ج.م)", "Net (EGP)"), data.netEgp], [L(lang, "مدفوعات مستنية", "Payments waiting"), data.pendingPayments]], lang)}
@@ -39,8 +39,8 @@ function tabBody(tab, data, lang, { agency = "" } = {}) {
   if (tab === "ai") {
     const list = data.agencies.filter((a) => !agency || a.id === agency);
     return html`${kv([[L(lang, "إجمالي تقريبي (دولار)", "Total (USD, est.)"), data.totalUsd], [L(lang, "إجمالي (ج.م)", "Total (EGP)"), data.totalEgp], [L(lang, "مكالمات", "Calls"), data.totalCalls]], lang)}
-<h3>${L(lang, "الحصة من الباقة لكل وكالة", "Quota used per agency")}</h3>
-${table([L(lang, "الوكالة", "Agency"), L(lang, "الباقة", "Plan"), L(lang, "مكالمات", "Calls"), L(lang, "فشل", "Failed"), L(lang, "ج.م", "EGP"), L(lang, "نسبة من الإجمالي", "Share %"), L(lang, "الباقة المستخدمة", "Quota used"), L(lang, "نسبة الباقة", "Quota %")],
+<h3>${L(lang, "الحصة من الباقة لكل شركة", "Quota used per agency")}</h3>
+${table([L(lang, "الشركة", "Agency"), L(lang, "الباقة", "Plan"), L(lang, "مكالمات", "Calls"), L(lang, "فشل", "Failed"), L(lang, "ج.م", "EGP"), L(lang, "نسبة من الإجمالي", "Share %"), L(lang, "الباقة المستخدمة", "Quota used"), L(lang, "نسبة الباقة", "Quota %")],
     list.map((a) => [a.name, a.plan, num(a.calls), num(a.failed), num(a.egp), `${a.sharePct}%`, `${num(a.quotaUsed)} / ${num(a.quotaTotal)}`, `${a.quotaPct}%`]), lang)}
 <h3>${L(lang, "أكتر إجراءات بتكلف", "Most expensive actions")}</h3>
 ${table([L(lang, "الإجراء", "Action"), L(lang, "مكالمات", "Calls"), L(lang, "ج.م", "EGP"), L(lang, "نسبة %", "Share %")], data.actions.map((x) => [x.action, num(x.calls), num(x.egp), `${x.sharePct}%`]), lang)}`;
@@ -61,7 +61,7 @@ ${table([L(lang, "الفلتر", "Filter"), L(lang, "مرات", "Times")], data.
 ${table([L(lang, "المكتوب", "Typed"), L(lang, "اتقرى على إنه", "Read as"), L(lang, "مرات", "Times")], data.guessedSpellings.map((x) => [x.typed, x.as, num(x.n)]), lang)}`;
   }
   if (tab === "agencies") {
-    return table([L(lang, "الوكالة", "Agency"), L(lang, "الباقة", "Plan"), L(lang, "بروكرز", "Brokers"), L(lang, "نشطين", "Active"), L(lang, "وحدات", "Units"), L(lang, "عملاء", "Leads"), L(lang, "ذكاء (ج.م)", "AI (EGP)"), L(lang, "آخر نشاط", "Last active")],
+    return table([L(lang, "الشركة", "Agency"), L(lang, "الباقة", "Plan"), L(lang, "بروكرز", "Brokers"), L(lang, "نشطين", "Active"), L(lang, "وحدات", "Units"), L(lang, "عملاء", "Leads"), L(lang, "ذكاء (ج.م)", "AI (EGP)"), L(lang, "آخر نشاط", "Last active")],
       data.filter((a) => !agency || a.id === agency).map((a) => [a.name, a.plan, num(a.brokers), num(a.activeBrokers), num(a.units), num(a.leads), num(a.aiEgp), when(a.lastActive)]), lang);
   }
   return kv([[L(lang, "أخطاء مفتوحة", "Open errors"), data.openErrors], [L(lang, "بلاغات مفتوحة", "Open reports"), data.openReports], [L(lang, "مدفوعات مستنية", "Payments waiting"), data.pendingPayments], [L(lang, "طلبات رصيد مستنية", "Credit requests waiting"), data.pendingCreditRequests], [L(lang, "تسجيلات مستنية", "Sign-ups waiting"), data.pendingSignups]], lang);
@@ -102,7 +102,7 @@ function register(web, { pool, page }) {
   ${table([L(lang, "الشهر", "Month"), L(lang, "البند", "Label"), L(lang, "ج.م", "EGP"), ""], money.map((c) => [c.month, c.label, num(c.amount), html`<form method="post" action="/app/owner/board/fixed-costs/${c.id}/delete" data-confirm="${L(lang, "تمسح البند ده؟", "Delete this cost?")}"><input type="hidden" name="_csrf" value="${csrf}"><button type="submit" class="secondary">${L(lang, "امسح", "Delete")}</button></form>`]), lang)}
 </section>` : "";
     const agencyPick = ["ai", "agencies"].includes(tab) ? html`<form method="get" action="${PATH}" class="row"><input type="hidden" name="tab" value="${tab}"><input type="hidden" name="days" value="${days}">
-  <select name="agency" data-autosubmit aria-label="${L(lang, "الوكالة", "Agency")}"><option value="">${L(lang, "كل الوكالات", "All agencies")}</option>${agencies.map((a) => html`<option value="${a.id}"${a.id === agency ? html` selected` : ""}>${a.name}</option>`)}</select></form>` : "";
+  <select name="agency" data-autosubmit aria-label="${L(lang, "الشركة", "Agency")}"><option value="">${L(lang, "كل الشركات", "All agencies")}</option>${agencies.map((a) => html`<option value="${a.id}"${a.id === agency ? html` selected` : ""}>${a.name}</option>`)}</select></form>` : "";
     const refresh = html`<form method="post" action="/app/owner/board/refresh" class="row"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="tab" value="${tab}"><input type="hidden" name="days" value="${days}">
   <button type="submit" class="secondary">🔄 ${L(lang, "حدّث التبويب دي", "Refresh this tab")}</button>
   <span class="muted small">${L(lang, "آخر تحديث", "Last updated")}: <time>${stored ? when(stored.computedAt) : L(lang, "أبدًا", "never")}</time></span></form>`;

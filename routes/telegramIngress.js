@@ -9,12 +9,12 @@ const TapGuard = require("../lib/tapGuard");
 
 const TG_COPY = {
   linkAsk:
-    "👋 أهلاً! عشان نوصّل حسابك اضغط «📱 ابعت رقمي» تحت (لازم يكون نفس الرقم المسجل في وكالتك)، أو افتح رابط البداية اللي وصلك من مديرك.\n" +
+    "👋 أهلاً! عشان نوصّل حسابك اضغط «📱 ابعت رقمي» تحت (لازم يكون نفس الرقم المسجل في شركتك)، أو افتح رابط البداية اللي وصلك من مديرك.\n" +
     "👋 Hi! To link your account, tap \"📱 Share my number\" below (the number your agency registered), or open the start link your manager sent you.",
   shareButton: "📱 ابعت رقمي / Share my number",
   invalid: "⚠️ الرابط ده مش صالح أو اتستخدم قبل كده. اطلب رابط جديد من مديرك، أو اضغط «📱 ابعت رقمي».\n⚠️ This link is invalid or already used. Ask your manager for a new one, or tap \"📱 Share my number\".",
   notOwn: "⚠️ ابعت رقمك إنت من زرار «📱 ابعت رقمي».\n⚠️ Please share your own number with the \"📱 Share my number\" button.",
-  unknown: "⚠️ الرقم ده مش متسجل كوسيط في WehdatHub. كلم مدير وكالتك.\n⚠️ This number isn't registered as a WehdatHub broker. Ask your agency admin.",
+  unknown: "⚠️ الرقم ده مش متسجل كوسيط في WehdatHub. كلم مدير شركتك.\n⚠️ This number isn't registered as a WehdatHub broker. Ask your agency admin.",
   linked: (b) => (b.preferred_lang === "en" ? `✅ Linked. Welcome, ${b.name}!` : `✅ تم ربط حسابك. أهلاً يا ${b.name}!`)
 };
 

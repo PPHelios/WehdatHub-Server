@@ -83,14 +83,14 @@ function agencyPage(d, lang) {
   ];
   const maxStage = Math.max(1, ...Object.values(d.pipeline));
   const maxWeek = Math.max(1, ...(d.weekly || []));
-  return html`<h1>${L(lang, "لوحة الوكالة", "Agency dashboard")}</h1>
+  return html`<h1>${L(lang, "لوحة الشركة", "Agency dashboard")}</h1>
 <form method="get" action="/app/dashboard" class="stack" data-dash-filters>
   <nav class="seg" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
     (p) => html`<a href="/app/dashboard?days=${p}${q}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
   )}</nav>
   <input type="hidden" name="days" value="${d.days}">
   <select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select>
-  ${d.teamLeads.length ? html`<select name="team" data-autosubmit aria-label="${L(lang, "فريق تيم ليد", "Team lead's team")}"><option value="">${L(lang, "كل الوكالة", "Whole agency")}</option>${d.teamLeads.map((t) => html`<option value="${t.id}"${t.id === d.teamLeadId ? html` selected` : ""}>${L(lang, `فريق ${t.name}`, `${t.name}'s team`)}</option>`)}</select>` : ""}
+  ${d.teamLeads.length ? html`<select name="team" data-autosubmit aria-label="${L(lang, "فريق تيم ليد", "Team lead's team")}"><option value="">${L(lang, "كل الشركة", "Whole agency")}</option>${d.teamLeads.map((t) => html`<option value="${t.id}"${t.id === d.teamLeadId ? html` selected` : ""}>${L(lang, `فريق ${t.name}`, `${t.name}'s team`)}</option>`)}</select>` : ""}
   <noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript>
 </form>
 <div class="kpis">
@@ -147,9 +147,9 @@ function privacySection(scope, lang, csrf, notice, canSwitch = false) {
   ${notice === "saved" ? html`<p class="notice ok">${L(lang, "✅ اتحفظ.", "✅ Saved.")}</p>` : ""}
   <form method="post" action="/app/dashboard/secret-details" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
     <p>${L(lang, "مين يشوف المالك والعمولة ورقم الوحدة والعنوان واللوكيشن؟", "Who sees the owner, commission, unit number, address and pin?")}</p>
-    <div class="pills">${opt("restricted", L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers"))}${opt("all", L(lang, "كل البروكرز في الوكالة", "Every broker in the agency"))}</div>
+    <div class="pills">${opt("restricted", L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers"))}${opt("all", L(lang, "كل البروكرز في الشركة", "Every broker in the agency"))}</div>
     <p class="muted small">${L(lang, "لو مقفولة، أي بروكر تاني يقدر يطلب يشوفها، وصاحب الوحدة أو مدير يوافق. كل طلب ورد بيتسجل.", "When closed, another broker can ask; the unit's broker or a manager answers. Every ask and answer is logged.")}</p>
-    ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الوكالة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
+    ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
   <p><a class="btn secondary" href="/app/units-export.xlsx" download>${icon("import", 18)} ${L(lang, "نزّل كل الوحدات (إكسيل)", "Download all units (Excel)")}</a> <span class="muted small">${L(lang, "للمديرين بس، وكل تنزيل بيتسجل.", "Managers only; every download is logged.")}</span></p>
 </section>`;
@@ -159,11 +159,11 @@ function privacySection(scope, lang, csrf, notice, canSwitch = false) {
 /** CRM owner only: add an agency by hand (name, logo URL, owner's mobile, plan). The owner's start link is shown once. */
 function newAgencySection(lang, csrf) {
   return html`<section class="card" id="new-agency">
-  <h2>➕ ${L(lang, "وكالة جديدة", "New agency")}</h2>
-  <p class="muted">${L(lang, "اكتب بيانات الوكالة ورقم مالكها. هتطلع لينك تيليجرام واحد للمالك (صالح ٧ أيام)، ابعته له بنفسك.", "Enter the agency and its owner's mobile. You get one Telegram link for the owner (valid 7 days); send it yourself.")}</p>
+  <h2>➕ ${L(lang, "شركة جديدة", "New agency")}</h2>
+  <p class="muted">${L(lang, "اكتب بيانات الشركة ورقم مالكها. هتطلع لينك تيليجرام واحد للمالك (صالح ٧ أيام)، ابعته له بنفسك.", "Enter the agency and its owner's mobile. You get one Telegram link for the owner (valid 7 days); send it yourself.")}</p>
   <form method="post" action="/app/owner/agencies" class="stack" data-new-agency>
     <input type="hidden" name="_csrf" value="${csrf}">
-    <label>${L(lang, "اسم الوكالة", "Agency name")} <input name="agency" required maxlength="120"></label>
+    <label>${L(lang, "اسم الشركة", "Agency name")} <input name="agency" required maxlength="120"></label>
     <label>${L(lang, "لينك اللوجو (https، اختياري)", "Logo link (https, optional)")} <input name="logo" type="url" dir="ltr" maxlength="500" placeholder="https://"></label>
     <label>${L(lang, "اسم المالك", "Owner's name")} <input name="ownerName" required maxlength="80"></label>
     <label>${L(lang, "موبايل المالك", "Owner's mobile")} <input name="ownerPhone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="20"></label>
@@ -171,7 +171,7 @@ function newAgencySection(lang, csrf) {
       <label><input type="radio" name="plan" value="pilot" checked> ${L(lang, "تجريبي مجاني (Office لحد ما الـPOC يخلص)", "Pilot (free Office until the POC ends)")}</label>
       <label><input type="radio" name="plan" value="trial"> ${L(lang, `تجربة ${Plans.TRIAL.days} يوم`, `${Plans.TRIAL.days}-day trial`)}</label>
     </fieldset>
-    <button type="submit">${L(lang, "اعمل الوكالة وطلّع اللينك", "Create agency and get the link")}</button>
+    <button type="submit">${L(lang, "اعمل الشركة وطلّع اللينك", "Create agency and get the link")}</button>
   </form>
 </section>
 `;
@@ -195,7 +195,7 @@ function billingSections(b, lang) {
     : html`<p class="muted">${L(lang, "مفيش طلبات مستنية.", "No requests waiting.")}</p>`}
 </section>
 <section class="card" id="trial-agencies">
-  <h2>⏳ ${L(lang, "وكالات في التجربة", "Agencies on a trial")}</h2>
+  <h2>⏳ ${L(lang, "شركات في التجربة", "Agencies on a trial")}</h2>
   ${b.trials.length
     ? html`<div class="scroll"><table><tbody>${b.trials.map(
         (t) => html`<tr data-trial-agency="${t.id}"><td>${t.name}</td><td>${new Date(t.trial_ends_at) > new Date() ? L(lang, "تنتهي", "Ends") : L(lang, "انتهت", "Ended")} <span dir="ltr">${day(t.trial_ends_at)}</span></td>
@@ -213,7 +213,7 @@ function billingSections(b, lang) {
       )}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
   <form method="post" action="/app/owner/pay-to" class="stack">
-    <h3>${L(lang, "الوكالات تدفع فين", "Where agencies pay")}</h3>
+    <h3>${L(lang, "الشركات تدفع فين", "Where agencies pay")}</h3>
     <label>InstaPay <input name="instapay" maxlength="120" dir="ltr" placeholder="name@instapay" value="${b.payTo.instapay}"></label>
     <label>${L(lang, "تحويل بنكي (اختياري)", "Bank transfer (optional)")} <textarea name="bank" maxlength="300" rows="2">${b.payTo.bank}</textarea></label>
     <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
@@ -225,9 +225,9 @@ function billingSections(b, lang) {
 function readingSection(rows, lang) {
   return html`<section class="card" id="price-reading">
   <h2>🤖 ${L(lang, "قراية قوايم الأسعار PDF والصور", "Reading PDF and photo price lists")}</h2>
-  <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير ما نقراها تاني، والوكالة بتدفع رصيدها عادي. الوكالات مش شايفة ده.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused without a new AI call, and the agency is charged as usual. Agencies don't see this.")}</p>
+  <p class="muted">${L(lang, "مقفولة لكل شركة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي شركة) بتتعاد من غير ما نقراها تاني، والشركة بتدفع رصيدها عادي. الشركات مش شايفة ده.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused without a new AI call, and the agency is charged as usual. Agencies don't see this.")}</p>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر الحالي", "This month")}</th><th></th></tr></thead>
+  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "الشهر الحالي", "This month")}</th><th></th></tr></thead>
   <tbody>${rows.map(
     (a) => html`<tr data-reading="${a.id}"><td>${a.name}</td><td>${a.used} ${L(lang, "صفحة", "pages")}${a.reused ? html` <span class="muted">(+${a.reused} ${L(lang, "متعادة", "reused")})</span>` : ""}</td>
     <td><form method="post" action="/app/owner/price-reading/${a.id}" class="row">
@@ -243,17 +243,17 @@ function intakeSection(rows, lang) {
   const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
   return html`<section class="card" id="lead-intake">
   <h2>📨 ${L(lang, "استقبال العملاء الأوتوماتيك (Make / فورم)", "Automatic lead intake (Make / forms)")}</h2>
-  <p class="muted">${L(lang, "لكل وكالة لينك سري. في Make: سيناريو Facebook Lead Ads ← HTTP POST على اللينك ده (JSON). العميل بياخد المصدر، وبيروح للوسيط اللي عليه الدور، والوسيط بيوصله تنبيه. اللينك بيظهر مرة واحدة بس.", "One secret URL per source. In Make: a Facebook Lead Ads scenario → HTTP POST (JSON) to this URL. Leads get the source and go to the next broker in turn, who is alerted. The URL is shown once only.")}
+  <p class="muted">${L(lang, "لكل شركة لينك سري. في Make: سيناريو Facebook Lead Ads ← HTTP POST على اللينك ده (JSON). العميل بياخد المصدر، وبيروح للوسيط اللي عليه الدور، والوسيط بيوصله تنبيه. اللينك بيظهر مرة واحدة بس.", "One secret URL per source. In Make: a Facebook Lead Ads scenario → HTTP POST (JSON) to this URL. Leads get the source and go to the next broker in turn, who is alerted. The URL is shown once only.")}
 </p>
-  <details><summary>${L(lang, "خطوات ربط وكالة (Make + إعلانات فيسبوك)", "Agency setup steps (Make + Facebook lead ads)")}</summary><ol>
-    <li>${L(lang, "الوكالة تضيف حسابك على فيسبوك لصفحتها بصلاحية العملاء (Leads)، ولو «Leads Access Manager» مقفول تسمح لـ Make.", "The agency adds your Facebook account to its Page with leads access; if Leads Access Manager is restricted, it also allows Make.")}</li>
-    <li>${L(lang, "اعمل لينك جديد هنا للوكالة وانسخه.", "Make a new URL here for the agency and copy it.")}</li>
-    <li>${L(lang, "في Make: انسخ سيناريو القالب (docs/make-lead-ads.md)، اختار صفحة الوكالة والفورم، وحط اللينك في موديول HTTP.", "In Make: clone the template scenario (docs/make-lead-ads.md), pick the agency's Page and form, and paste the URL into the HTTP module.")}</li>
+  <details><summary>${L(lang, "خطوات ربط شركة (Make + إعلانات فيسبوك)", "Agency setup steps (Make + Facebook lead ads)")}</summary><ol>
+    <li>${L(lang, "الشركة تضيف حسابك على فيسبوك لصفحتها بصلاحية العملاء (Leads)، ولو «Leads Access Manager» مقفول تسمح لـ Make.", "The agency adds your Facebook account to its Page with leads access; if Leads Access Manager is restricted, it also allows Make.")}</li>
+    <li>${L(lang, "اعمل لينك جديد هنا للشركة وانسخه.", "Make a new URL here for the agency and copy it.")}</li>
+    <li>${L(lang, "في Make: انسخ سيناريو القالب (docs/make-lead-ads.md)، اختار صفحة الشركة والفورم، وحط اللينك في موديول HTTP.", "In Make: clone the template scenario (docs/make-lead-ads.md), pick the agency's Page and form, and paste the URL into the HTTP module.")}</li>
     <li>${L(lang, "دوس 🧪 تجربة هنا، وبعدها ابعت عميل تجربة من أداة Meta Lead Ads Testing Tool واتأكد إنه ظهر عند وسيط.", "Press 🧪 Test here, then send a test lead from Meta's Lead Ads Testing Tool and check it reaches a broker.")}</li>
     <li>${L(lang, "شغّل السيناريو (Immediately). خطة Make المجانية فيها سيناريوهين شغالين بس.", "Turn the scenario on (Immediately). Make's free plan runs 2 active scenarios only.")}</li>
   </ol></details>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "آخر عميل", "Last lead")}</th><th>${L(lang, "30 يوم", "30 days")}</th><th></th></tr></thead>
+  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "آخر عميل", "Last lead")}</th><th>${L(lang, "30 يوم", "30 days")}</th><th></th></tr></thead>
   <tbody>${rows.flatMap(({ agency, intakes }) =>
     intakes.map(
       (i) => html`<tr data-intake="${i.id}"${i.revoked_at ? html` class="muted"` : ""}><td>${agency.name}</td><td>${i.name} <span class="muted" dir="ltr">…${i.token_hint}</span></td><td>${i.source}</td><td dir="ltr">${day(i.last_lead_at)}</td>
@@ -265,7 +265,7 @@ function intakeSection(rows, lang) {
     )
   )}</tbody></table></div>
   <form method="post" action="/app/owner/intake" class="row">
-    <label>${L(lang, "الوكالة", "Agency")} <select name="agency" required>${rows.map(({ agency }) => html`<option value="${agency.id}">${agency.name}</option>`)}</select></label>
+    <label>${L(lang, "الشركة", "Agency")} <select name="agency" required>${rows.map(({ agency }) => html`<option value="${agency.id}">${agency.name}</option>`)}</select></label>
     <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="60" value="Facebook ads (Make)"></label>
     <label>${L(lang, "المصدر", "Source")} <input name="source" required maxlength="60" value="Facebook"></label>
     <label>${L(lang, "تنبيه لو مفيش عملاء (أيام)", "Alert after quiet days")} <input name="quiet_days" type="number" min="1" max="60" value="3" size="3"></label>
@@ -278,7 +278,7 @@ function intakeSection(rows, lang) {
 function referralsSection(r, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
   return html`<section class="card" id="referrals">
-  <h2>🎁 ${L(lang, "الدعوات بين الوكالات", "Agency referrals")}</h2>
+  <h2>🎁 ${L(lang, "الدعوات بين الشركات", "Agency referrals")}</h2>
   ${r.referrals.length
     ? html`<div class="scroll"><table><tbody>${r.referrals.map(
         (x) => html`<tr data-referral-row="${x.id}"><td>${x.name}</td><td>← ${x.referrer_name}</td><td>${x.referral_rewarded_at ? html`🎁 ${L(lang, "الشهرين اتحسبوا", "Both months given")} <span dir="ltr">${day(x.referral_rewarded_at)}</span>` : L(lang, "مستنية أول دفعة", "Waiting for its first payment")}</td></tr>`
@@ -286,12 +286,12 @@ function referralsSection(r, lang) {
     : html`<p class="muted">${L(lang, "مفيش دعوات لسه.", "No referrals yet.")}</p>`}
   ${r.linkable.length
     ? html`<form method="post" action="/app/owner/referrals" class="row">
-    <label>${L(lang, "الوكالة", "Agency")} <select name="agency">${r.linkable.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
-    <label>${L(lang, "كود الوكالة اللي دعتها", "Inviting agency's code")} <input name="code" required maxlength="12" dir="ltr"></label>
+    <label>${L(lang, "الشركة", "Agency")} <select name="agency">${r.linkable.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
+    <label>${L(lang, "كود الشركة اللي دعتها", "Inviting agency's code")} <input name="code" required maxlength="12" dir="ltr"></label>
     <button type="submit" class="secondary">${L(lang, "اربط", "Link")}</button>
   </form>`
     : ""}
-  <p class="muted">${L(lang, "الوكالة اللي اتدعت وتدفع أول باقة تاخد شهر زيادة، واللي دعتها تاخد شهر (على باقتها لو بتدفع، أو رصيد لأول دفعة جاية).", "An invited agency gets an extra month on its first plan payment, and its inviter gets one (on its paid plan, or as a credit for its next payment).")}</p>
+  <p class="muted">${L(lang, "الشركة اللي اتدعت وتدفع أول باقة تاخد شهر زيادة، واللي دعتها تاخد شهر (على باقتها لو بتدفع، أو رصيد لأول دفعة جاية).", "An invited agency gets an extra month on its first plan payment, and its inviter gets one (on its paid plan, or as a credit for its next payment).")}</p>
 </section>`;
 }
 
@@ -308,7 +308,7 @@ function stuckSection(stuck, lang) {
   <h2>🧭 ${L(lang, `وسطاء محتاجين مساعدة (${stuck.length})`, `Brokers who need a hand (${stuck.length})`)}</h2>
   ${stuck.length
     ? html`<div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "انضم", "Joined")}</th><th>${L(lang, "آخر نشاط", "Last active")}</th><th>${L(lang, "واقف عند", "Stuck at")}</th><th></th></tr></thead>
+  <thead><tr><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "انضم", "Joined")}</th><th>${L(lang, "آخر نشاط", "Last active")}</th><th>${L(lang, "واقف عند", "Stuck at")}</th><th></th></tr></thead>
   <tbody>${stuck.map(
     (b) => html`<tr data-stuck="${b.id}"><td>${b.name} <span class="muted">(${b.role})</span></td><td>${b.agency_name}</td><td dir="ltr">${day(b.created_at)}</td><td dir="ltr">${day(b.last_active_at)}</td>
     <td>${b.reasons.map((r) => (STUCK[r] || [r, r])[lang === "en" ? 1 : 0]).join(" · ")}</td>
@@ -326,7 +326,7 @@ function creditsSection(o, lang) {
   return html`<section class="card stack" id="credit-requests" data-credit-requests>
   <h2>🙋 ${L(lang, "طلبات زيادة الرصيد", "Credit requests")}</h2>
   ${o.requests.length
-    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "المدير", "Manager")}</th><th>${L(lang, "الطلب", "Asked")}</th><th></th></tr></thead>
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "المدير", "Manager")}</th><th>${L(lang, "الطلب", "Asked")}</th><th></th></tr></thead>
   <tbody>${o.requests.map(
     (r) => html`<tr data-credit-request="${r.id}"><td>${r.agency_name}</td><td>${r.broker_name || "—"}</td><td>${r.credits}${r.note ? html` <span class="muted">${r.note}</span>` : ""} <span class="muted" dir="ltr">${day(r.created_at)}</span></td>
     <td><form method="post" action="/app/owner/credit-requests/${r.id}" class="row"><input name="credits" type="number" min="1" value="${r.credits}" size="6" aria-label="${L(lang, "الرصيد", "Credits")}">
@@ -335,7 +335,7 @@ function creditsSection(o, lang) {
   )}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش طلبات.", "No requests.")}</p>`}
   <form method="post" action="/app/owner/credit-grant" class="row" data-credit-grant>
-    <label>${L(lang, "الوكالة", "Agency")} <select name="agency" required>${o.agencies.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
+    <label>${L(lang, "الشركة", "Agency")} <select name="agency" required>${o.agencies.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
     <label>${L(lang, "رصيد إضافي (للشهر الحالي)", "Extra credits (this month)")} <input name="credits" type="number" min="1" required size="6"></label>
     <label>${L(lang, "ملاحظة", "Note")} <input name="note" maxlength="100"></label>
     <button type="submit">${L(lang, "ادّي رصيد", "Give credits")}</button>
@@ -399,7 +399,7 @@ function creditsSection(o, lang) {
 function agenciesSection(agencies, lang) {
   const src = { pilot: L(lang, "تجريبي مجاني", "Pilot"), paid: L(lang, "مدفوع", "Paid"), trial: L(lang, "تجربة", "Trial"), free: L(lang, "مجاني", "Free") };
   const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
-  return html`<section class="card list" id="agencies"><h2>${L(lang, `الوكالات (${agencies.length})`, `Agencies (${agencies.length})`)}</h2>
+  return html`<section class="card list" id="agencies"><h2>${L(lang, `الشركات (${agencies.length})`, `Agencies (${agencies.length})`)}</h2>
   <ul class="rows">${agencies.map(
     (a) => html`<li data-agency-row="${a.id}"><a class="listrow" href="/app/owner/agencies/${a.id}"><span><strong>${a.name}</strong><br><span class="muted small">${Plans.planName(a.effective.plan, lang)} · ${src[a.effective.source]}${a.effective.until ? ` ${L(lang, "لحد", "until")} ${day(a.effective.until)}` : ""} · ${L(lang, `${a.brokers} بروكر · ${a.units} وحدة · ${a.leads30} عميل/30 يوم`, `${a.brokers} brokers · ${a.units} units · ${a.leads30} leads/30d`)}</span></span>${a.suspended_at ? html`<b class="chip late">${L(lang, "موقوفة", "Suspended")}</b>` : a.approval === "pending" ? html`<b class="chip new">${L(lang, "مستنية", "Pending")}</b>` : html`<b class="muted small">${day(a.last_seen)}</b>`}</a></li>`
   )}</ul></section>`;
@@ -427,13 +427,13 @@ ${notice || ""}
     <label class="check"><input type="checkbox" name="pilot" value="1"${a.pilot ? html` checked` : ""}> ${L(lang, "تجريبي مجاني (Pilot)", "Free pilot")}</label>
     <button type="submit">${L(lang, "حفظ الباقة", "Save the plan")}</button>
   </form>
-  <p class="muted small">${L(lang, "الأسعار في ملف الباقات؛ هنا بتغير باقة الوكالة ومدتها بس.", "Prices live in the plans file; this only changes this agency's plan and dates.")}</p>
+  <p class="muted small">${L(lang, "الأسعار في ملف الباقات؛ هنا بتغير باقة الشركة ومدتها بس.", "Prices live in the plans file; this only changes this agency's plan and dates.")}</p>
 </section>
 <section class="card list" id="team"><h2>${L(lang, "الفريق", "Team")}</h2><ul class="rows">${a.team.map((b) => html`<li class="listrow">${b.name} <span class="muted small">${b.role}</span><b class="${b.is_active ? "muted small" : "chip late"}">${b.is_active ? L(lang, "نشط", "Active") : L(lang, "مقفول", "Off")}</b></li>`)}</ul></section>
 ${a.payments.length ? html`<section class="card list"><h2>${L(lang, "المدفوعات", "Payments")}</h2><ul class="rows">${a.payments.map((p) => html`<li class="listrow"><span dir="ltr">${p.reference}</span> ${money(p.amount_egp, lang)}<b class="muted small">${p.status}</b></li>`)}</ul></section>` : ""}
-<section class="card stack" id="suspend"><h2>${a.suspended_at ? L(lang, "الوكالة موقوفة", "Suspended") : L(lang, "إيقاف الوكالة", "Suspend the agency")}</h2>
+<section class="card stack" id="suspend"><h2>${a.suspended_at ? L(lang, "الشركة موقوفة", "Suspended") : L(lang, "إيقاف الشركة", "Suspend the agency")}</h2>
   <p class="muted">${a.suspended_at ? L(lang, `اتوقفت ${day(a.suspended_at)}. الرجوع بيرجّع نفس البروكرز اللي كانوا شغالين.`, `Suspended ${day(a.suspended_at)}. Resuming brings back the same brokers.`) : L(lang, "كل البروكرز بيقفوا عن الشغل (البيانات بتفضل كما هي) لحد ما ترجعها.", "Every broker stops working (all data stays) until you resume it.")}</p>
-  <form method="post" action="/app/owner/agencies/${a.id}/${a.suspended_at ? "resume" : "suspend"}" data-confirm="${a.suspended_at ? L(lang, "ترجع الوكالة؟", "Resume this agency?") : L(lang, `توقف ${a.name}؟`, `Suspend ${a.name}?`)}">${hidden}<button type="submit" class="${a.suspended_at ? "" : "danger"}">${a.suspended_at ? L(lang, "رجّع الوكالة", "Resume") : L(lang, "أوقف الوكالة", "Suspend")}</button></form>
+  <form method="post" action="/app/owner/agencies/${a.id}/${a.suspended_at ? "resume" : "suspend"}" data-confirm="${a.suspended_at ? L(lang, "ترجع الشركة؟", "Resume this agency?") : L(lang, `توقف ${a.name}؟`, `Suspend ${a.name}?`)}">${hidden}<button type="submit" class="${a.suspended_at ? "" : "danger"}">${a.suspended_at ? L(lang, "رجّع الشركة", "Resume") : L(lang, "أوقف الشركة", "Suspend")}</button></form>
 </section>
 <p><a href="/app/owner/agencies/${a.id}/ai-log">${L(lang, "سجل الذكاء الاصطناعي", "AI log")}</a></p>`;
 }
@@ -467,7 +467,7 @@ function ownerPage(d, lang, { billing = null, notice = null, reading = [], credi
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${tabs("owner_tab", [
-  [L(lang, "الوكالات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
+  [L(lang, "الشركات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
   [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${credits ? creditsSection(credits, lang) : ""}`],
   [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}`],
   [L(lang, "الأسماء", "Names"), namesSection(names, lang, csrf)],
@@ -479,16 +479,16 @@ function healthSections(d, lang, usd) {
   return html`<section class="card">
   <h2>${L(lang, "كل أسبوع", "Weekly")}</h2>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الأسبوع", "Week")}</th><th>${L(lang, "وكالات نشطة", "Active agencies")}</th><th>${L(lang, "وسطاء نشطين", "Active brokers")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "أخطاء", "Errors")}</th><th>${L(lang, "بلاغات", "Bug reports")}</th></tr></thead>
+  <thead><tr><th>${L(lang, "الأسبوع", "Week")}</th><th>${L(lang, "شركات نشطة", "Active agencies")}</th><th>${L(lang, "وسطاء نشطين", "Active brokers")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "أخطاء", "Errors")}</th><th>${L(lang, "بلاغات", "Bug reports")}</th></tr></thead>
   <tbody>${d.weeks.map(
     (w) => html`<tr data-week="${w.week}"><td dir="ltr">${w.week}</td><td>${w.agencies}</td><td>${w.brokers}</td><td>${w.units}</td><td>${w.leads}</td><td>${w.deals}</td><td>${w.errors}</td><td>${w.reports}</td></tr>`
   )}</tbody></table></div>
   <p class="muted">${L(lang, "نشط = استخدم البوت أو الموقع في الأسبوع الحالي (الأسبوع بيبدأ الاتنين).", "Active = used the bot or the website that week (weeks start on Monday).")}</p>
 </section>
 <section class="card">
-  <h2>${L(lang, "الذكاء الاصطناعي لكل وكالة (آخر 30 يوم)", "AI per agency (last 30 days)")}</h2>
+  <h2>${L(lang, "الذكاء الاصطناعي لكل شركة (آخر 30 يوم)", "AI per agency (last 30 days)")}</h2>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "وسطاء", "Brokers")}</th><th>Telegram</th><th>${L(lang, "طلبات AI", "AI calls")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "التكلفة", "Cost")}</th></tr></thead>
+  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "وسطاء", "Brokers")}</th><th>Telegram</th><th>${L(lang, "طلبات AI", "AI calls")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "التكلفة", "Cost")}</th></tr></thead>
   <tbody>${d.agencies.map(
     (a) => html`<tr data-agency="${a.id}"><td><a href="/app/owner/agencies/${a.id}/ai-log" title="${L(lang, "سجل الذكاء الاصطناعي", "AI log")}">${a.name}</a></td><td>${a.brokers ?? 0}</td><td>${a.telegram ?? 0}</td><td>${a.calls}</td><td>${a.failed}</td><td dir="ltr">${usd(a.usd)}</td></tr>`
   )}</tbody>
@@ -538,13 +538,13 @@ function register(web, { pool, page }) {
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null, teamLeadId: String(req.query.team || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   // Who sees a unit's private details (services/unitPrivacy.js); the agency owner only.
   web.post("/dashboard/secret-details", async (req, res) => {
     const out = await Privacy.setScope(pool, req.session.broker, String(req.body.scope || ""));
-    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الوكالة بس", "Agency owner only"));
+    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
     return res.redirect(303, "/app/dashboard?privacy=saved#data-security");
   });
 
@@ -573,7 +573,7 @@ function register(web, { pool, page }) {
     const per = Period.parse(req.query.period);
     const pf = await Dash.ownerPeriod(pool, req.session.broker, per);
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
-    const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("وكالات نشطة", "Active agencies", "agencies")}${cell("سماسرة نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
+    const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("سماسرة نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
     const [agencies, log, names] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceNames.pending(pool)]);
     return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, names, csrf: req.session.csrf })}` }, status);
@@ -629,7 +629,7 @@ function register(web, { pool, page }) {
   web.post("/owner/agencies", ownerOnly(async (req, res, lang) => {
     const r = await AgencyCreate.createAgency(pool, req.session.broker, { agency: req.body.agency, logo: req.body.logo, ownerName: req.body.ownerName, ownerPhone: req.body.ownerPhone, plan: req.body.plan });
     if (r.error) {
-      const msg = { agency: L(lang, "اكتب اسم الوكالة.", "Enter the agency name."), logo: L(lang, "اللوجو لازم يكون لينك https.", "The logo must be an https link."), name: L(lang, "اكتب اسم المالك.", "Enter the owner's name."), phone: L(lang, "رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."), plan: L(lang, "اختار باقة.", "Pick a plan."), phone_taken: L(lang, "الرقم ده مسجل بالفعل في وكالة تانية.", "That number is already registered to another agency."), slug: L(lang, "مش قادر أعمل رابط للوكالة دي؛ غيّر الاسم.", "Couldn't make a link for this agency name; change the name."), forbidden: L(lang, "مش مسموح.", "Not allowed.") }[r.error] || r.error;
+      const msg = { agency: L(lang, "اكتب اسم الشركة.", "Enter the agency name."), logo: L(lang, "اللوجو لازم يكون لينك https.", "The logo must be an https link."), name: L(lang, "اكتب اسم المالك.", "Enter the owner's name."), phone: L(lang, "رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."), plan: L(lang, "اختار باقة.", "Pick a plan."), phone_taken: L(lang, "الرقم ده مسجل بالفعل في شركة تانية.", "That number is already registered to another agency."), slug: L(lang, "مش قادر أعمل رابط للشركة دي؛ غيّر الاسم.", "Couldn't make a link for this agency name; change the name."), forbidden: L(lang, "مش مسموح.", "Not allowed.") }[r.error] || r.error;
       return ownerView(req, res, bad(msg), r.error === "forbidden" ? 403 : 400);
     }
     const link = r.url
@@ -695,9 +695,9 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const r = id ? await Referrals.link(pool, id, req.body.code) : { error: "referral" };
     const why = {
       referral: L(lang, "الكود ده مش موجود.", "That code doesn't exist."),
-      self: L(lang, "الوكالة مينفعش تدعي نفسها.", "An agency can't invite itself."),
-      paid: L(lang, "الوكالة دي دفعت قبل كده.", "That agency has already paid."),
-      already: L(lang, "الوكالة دي مربوطة بدعوة بالفعل.", "That agency is already linked to an invite.")
+      self: L(lang, "الشركة مينفعش تدعي نفسها.", "An agency can't invite itself."),
+      paid: L(lang, "الشركة دي دفعت قبل كده.", "That agency has already paid."),
+      already: L(lang, "الشركة دي مربوطة بدعوة بالفعل.", "That agency is already linked to an invite.")
     };
     if (r.error) return ownerView(req, res, bad(why[r.error]), 400);
     return ownerView(req, res, ok(L(lang, `اتربطت بدعوة ${r.referrer.name}.`, `Linked to ${r.referrer.name}'s invite.`)));
@@ -739,7 +739,7 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
   web.post("/owner/credit-grant", ownerOnly(async (req, res, lang) => {
     const id = /^[0-9a-f-]{36}$/i.test(String(req.body.agency || "")) ? req.body.agency : null;
     const r = id ? await Credits.grant(pool, id, req.body.credits, { note: String(req.body.note || "").slice(0, 100) || null }) : { error: "credits" };
-    return creditsDone(req, res, lang, r, L(lang, "الرصيد اتضاف للوكالة.", "Credits added to the agency."), L(lang, "اختار وكالة ورصيد من 1 لـ 1,000,000.", "Pick an agency and credits from 1 to 1,000,000."));
+    return creditsDone(req, res, lang, r, L(lang, "الرصيد اتضاف للشركة.", "Credits added to the agency."), L(lang, "اختار شركة ورصيد من 1 لـ 1,000,000.", "Pick an agency and credits from 1 to 1,000,000."));
   }));
 
   web.post("/owner/intake", ownerOnly(async (req, res, lang) => {

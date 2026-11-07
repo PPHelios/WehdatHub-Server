@@ -43,7 +43,7 @@ function register(web, { pool, page }) {
       title: L(lang, "اسأل", "Ask"),
       nav: "ask",
       body: html`<h1>💬 ${L(lang, "اسأل المساعد", "Ask the assistant")}</h1>
-<p class="muted">${L(lang, "بيرد من بيانات الوكالة بس (المشاريع، الأسعار، البروشور، عملاءك، متابعاتك، الوحدات) ومعاه تاريخ البيانات. لو المعلومة مش عندنا هيقولك كده ومش هيخمّن.", "Answers only from the agency's data (projects, prices, brochures, your clients, follow-ups, units), with the data's date. If we don't have it, it says so and never guesses.")}</p>
+<p class="muted">${L(lang, "بيرد من بيانات الشركة بس (المشاريع، الأسعار، البروشور، عملاءك، متابعاتك، الوحدات) ومعاه تاريخ البيانات. لو المعلومة مش عندنا هيقولك كده ومش هيخمّن.", "Answers only from the agency's data (projects, prices, brochures, your clients, follow-ups, units), with the data's date. If we don't have it, it says so and never guesses.")}</p>
 ${saved ? html`<p class="notice ok card" data-info-saved>✅ ${L(lang, `اتضافت المعلومة على ${saved.kind === "unit" ? "الوحدة" : "المشروع"} ${saved.name}. المساعد هيستخدمها من دلوقتي.`, `Added to ${saved.kind === "unit" ? "unit" : "project"} ${saved.name}. The assistant will use it from now on.`)}</p>` : ""}
 ${error ? html`<p class="notice bad card" data-assistant-error="${error}">${["quota", "daily", "off"].includes(error) ? AiBlock.text(error, lang, { owner: isAgencyOwner(req.session.broker) }) : (ERRORS[error] || ERRORS.ai)[lang === "en" ? 1 : 0]}</p>` : ""}
 <form method="post" action="/app/ask" class="card stack">

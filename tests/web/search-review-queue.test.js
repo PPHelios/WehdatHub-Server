@@ -115,3 +115,15 @@ test("the old tab links still open the queue or the vocabulary, and a broker is 
   expect((await owner.agent.get("/app/owner/searches?view=words&lang=en")).text).toContain('data-view-body="vocab"');
   expect((await (await signIn(h, "broker")).agent.post("/app/owner/searches/teach").type("form").send({ _csrf: "x" })).status).toBeGreaterThanOrEqual(400);
 });
+
+test("marking a search report fixed re-tests the text and tells the reporter; a text that still reads badly tells nobody", async () => {
+  const [log] = await h.query("INSERT INTO search_log (agency_id, channel, query_text, source, total) VALUES ($1, 'web', 'فيلا للبيع في التجمع', 'parser', 0) RETURNING id", [h.AGENCY_A]);
+  await h.query("INSERT INTO search_reports (search_log_id, agency_id, broker_id, note) VALUES ($1, $2, $3, 'x')", [log.id, h.AGENCY_A, h.BROKERS.broker.id]);
+  const [rep] = await h.query("SELECT id FROM search_reports");
+  const Review = require("../../services/searchReview");
+  expect(await Review.decideReport(h.pool, rep.id, "fixed")).toBe(true);
+  const sent = await h.query("SELECT title, url FROM notifications WHERE broker_id = $1 AND dedupe_key LIKE 'search_fixed:%'", [h.BROKERS.broker.id]);
+  expect(sent.length).toBe(1);
+  expect(sent[0].title).toContain("فيلا للبيع في التجمع");
+  expect(sent[0].url).toBe("/app/search");
+});

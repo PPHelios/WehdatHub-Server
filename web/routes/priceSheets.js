@@ -38,7 +38,7 @@ const READ_ERRORS = {
   TOO_MANY_ROWS: ["الشيت فيه أكتر من 2000 صف.", "The sheet has more than 2,000 rows."],
   NO_HEADER: ["مش لاقيين صف العناوين (كود الوحدة، النوع، المساحة، السعر…).", "No header row found (unit code, type, area, price…)."],
   NO_PRICE: ["الشيت مفيهوش عمود سعر.", "The sheet has no price column."],
-  OFF: ["قراءة ملفات PDF والصور مش مفعّلة لوكالتك.", "Reading PDFs and photos isn't switched on for your agency."],
+  OFF: ["قراءة ملفات PDF والصور مش مفعّلة لشركتك.", "Reading PDFs and photos isn't switched on for your agency."],
   NO_FILE: ["اختار ملف PDF أو صور.", "Choose a PDF or photos."],
   ONE_PDF: ["ملف PDF واحد بس في المرة.", "One PDF at a time."],
   NOT_PDF: ["الملف ده مش PDF مقروء.", "That file isn't a readable PDF."],
@@ -208,7 +208,7 @@ function register(web, { pool, page }) {
     if (r.error) return res.json({ error: r.error, text: (READ_ERRORS[r.error] || ["", ""])[lang === "en" ? 1 : 0] });
     const text = L(
       lang,
-      `${r.pages} صفحة = ${r.credits} رصيد. المتبقي ${r.left}${r.enough ? "" : " — مش كفاية، اطلب رصيد زيادة من صفحة الباقة"}.${r.repeat ? " الوكالة قرت الملف ده قبل كده، والرصيد بيتحسب تاني." : ""}`,
+      `${r.pages} صفحة = ${r.credits} رصيد. المتبقي ${r.left}${r.enough ? "" : " — مش كفاية، اطلب رصيد زيادة من صفحة الباقة"}.${r.repeat ? " الشركة قرت الملف ده قبل كده، والرصيد بيتحسب تاني." : ""}`,
       `${r.pages} page(s) = ${r.credits} credits. ${r.left} left${r.enough ? "" : " — not enough, ask for more on the Plan page"}.${r.repeat ? " Your agency already read this document; it is charged again." : ""}`
     );
     return res.json({ ...r, text });

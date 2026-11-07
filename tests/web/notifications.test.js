@@ -231,7 +231,7 @@ describe("message credits", () => {
     // «دخول» at the login ceiling gets no link (and no reply counted in the credits).
     const r = await h.text("broker", "دخول");
     expect(textOf(r)).not.toMatch(/\/app\/login\/confirm/);
-    expect(textOf(r)).toMatch(/روابط الدخول الشهرية للوكالة خلصت/);
+    expect(textOf(r)).toMatch(/روابط الدخول الشهرية للشركة خلصت/);
   });
 
   test("every paid send counts with its action; the usage page shows the same numbers", async () => {

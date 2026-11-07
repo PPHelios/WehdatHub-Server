@@ -98,6 +98,18 @@ describe("the client's page", () => {
     expect(n.title).toMatch(/أكّد المعاينة|confirmed the viewing/);
   });
 
+  test("the reschedule picker starts at the current Cairo time, and a past time with a note counts as just the note", async () => {
+    const l = await lead({ lang: "en" });
+    const s = await Viewings.schedule(h.pool, broker(), l.id, { at: future() });
+    const path = new URL(s.url).pathname;
+    const page = (await request(h.app.app).get(path)).text;
+    expect(page).toMatch(/name="at" value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"/);
+    const r = await request(h.app.app).post(path).type("form").send({ action: "reschedule", at: "2020-01-01T10:00", note: "call me" });
+    expect(r.status).toBe(303);
+    const [v] = await h.query("SELECT status, client_proposed_at, client_note FROM viewings WHERE lead_id = $1", [l.id]);
+    expect(v).toMatchObject({ status: "reschedule", client_proposed_at: null, client_note: "call me" });
+  });
+
   test("asking for another time stores the suggestion and note and tells the broker; a past suggestion is refused", async () => {
     const l = await lead({ lang: "en" });
     const s = await Viewings.schedule(h.pool, broker(), l.id, { at: future() });

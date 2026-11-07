@@ -35,8 +35,8 @@ const COMMANDS = [
   { id: "delete", group: "units", ar: ["حذف"], en: ["delete"], arg: "CODE", code: true, help: ["احذف وحدة (بعد تأكيد)", "Delete a unit (after you confirm)"] },
   { id: "deal", group: "units", ar: ["صفقة"], en: ["deal"], arg: "L-0042 CODE 8.5M", help: ["سجّل صفقة وعمولتها", "Record a deal and its commission"] },
   { id: "update", group: "units", ar: ["تحديث"], en: ["update"], manager: true, help: ["تحديث مشروع أو الكتالوج (زيادة أسعار، اتباع...)", "Update a project or the catalogue (price rise, sold...)"] },
-  { id: "flyer", group: "send", ar: ["فلاير"], en: ["flyer"], arg: "CODE", code: true, to: "flyer", help: ["فلاير باسم الوكالة", "Flyer with the agency's brand"] },
-  { id: "broker_flyer", group: "send", ar: ["فلاير بروكر"], en: ["broker flyer"], arg: "CODE", code: true, to: "unbranded", toEn: "unbranded", help: ["فلاير من غير بيانات الوكالة (للبروكرز)", "Flyer without the agency's details (for brokers)"] },
+  { id: "flyer", group: "send", ar: ["فلاير"], en: ["flyer"], arg: "CODE", code: true, to: "flyer", help: ["فلاير باسم الشركة", "Flyer with the agency's brand"] },
+  { id: "broker_flyer", group: "send", ar: ["فلاير بروكر"], en: ["broker flyer"], arg: "CODE", code: true, to: "unbranded", toEn: "unbranded", help: ["فلاير من غير بيانات الشركة (للبروكرز)", "Flyer without the agency's details (for brokers)"] },
   { id: "client", group: "send", ar: ["عميل"], en: ["client"], arg: "CODE", code: true, help: ["نص الوحدة جاهز تبعته للعميل", "The unit's text, ready to send to a client"] },
   { id: "plans", group: "send", ar: ["أنظمة"], en: ["plans"], arg: "CODE", code: true, to: "انظمة السداد", help: ["أنظمة السداد (شيت إكسيل)", "Payment plans (Excel sheet)"] },
   { id: "layout", group: "send", ar: ["مخطط"], en: ["layout"], arg: "CODE", code: true, help: ["المخطط وملفات المشروع", "The layout and the project's files"] },
@@ -58,7 +58,7 @@ const COMMANDS = [
   { id: "lang_ar", group: "general", ar: ["عربي"], en: [], enHint: "lang ar", to: "العربية", help: ["البوت بالعربي", "The bot in Arabic"] },
   { id: "lang_en", group: "general", ar: [], en: ["english"], toEn: "lang en", help: ["البوت بالإنجليزي", "The bot in English"] },
   { id: "login", group: "general", ar: ["دخول"], en: ["login"], help: ["لينك دخول للموقع", "A sign-in link for the website"] },
-  { id: "ask", group: "general", ar: ["اسأل"], en: ["ask"], arg: "…", help: ["اسأل المساعد عن بيانات وكالتك", "Ask the assistant about your agency's data"] },
+  { id: "ask", group: "general", ar: ["اسأل"], en: ["ask"], arg: "…", help: ["اسأل المساعد عن بيانات شركتك", "Ask the assistant about your agency's data"] },
   { id: "bug", group: "general", ar: ["عطل"], en: ["bug"], arg: "…", to: "بلاغ", help: ["بلّغ عن مشكلة (هيوصلك رقم زي #R12)", "Report a problem (you get a number like #R12)"] }
 ];
 const GROUPS = {

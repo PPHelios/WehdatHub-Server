@@ -48,7 +48,7 @@ ${v.status === "confirmed"
 <form method="post" action="/app/v/${token}" class="card stack">
   <h2>🔁 ${L(lang, "الميعاد مش مناسب؟", "That time doesn't suit you?")}</h2>
   <input type="hidden" name="action" value="reschedule">
-  <label>${L(lang, "اقترح ميعاد (بتوقيت القاهرة)", "Suggest a time (Cairo time)")} <input type="datetime-local" name="at"></label>
+  <label>${L(lang, "اقترح ميعاد (بتوقيت القاهرة)", "Suggest a time (Cairo time)")} <input type="datetime-local" name="at" value="${Stages.toCairoLocal(new Date())}"></label>
   <label>${L(lang, "أو اكتب للوسيط", "Or write to the broker")} <input name="note" maxlength="300"></label>
   <button type="submit" class="secondary">${L(lang, "ابعت للوسيط", "Send to the broker")}</button>
 </form>`;

@@ -24,11 +24,11 @@ const SECTIONS = [
     id: "limits",
     title: ["🚦 الحدود والرصيد", "🚦 Limits and credits"],
     items: [
-      ["باقتك ليها رصيد شهري واحد للذكاء الاصطناعي لكل الوكالة (طلب نصي ١، فويس ٣، أول فلاير للوحدة ٣، صفحة ملف جديدة ١٠)، وعدد وحدات متاحة، وعدد مستخدمين. لو الرصيد خلص: الإضافة والبحث بيفضلوا شغالين من الموقع. الوحدات المباعة والمؤرشفة مش بتتحسب.", "Your plan has one monthly AI credit pool for the whole agency (text request 1, voice note 3, a unit's first flyer 3, a new document page 10), a number of available units and a number of users. When credits run out, adding and searching on the website still work. Sold and archived units don't count."],
+      ["باقتك ليها رصيد شهري واحد للذكاء الاصطناعي لكل الشركة (طلب نصي ١، فويس ٣، أول فلاير للوحدة ٣، صفحة ملف جديدة ١٠)، وعدد وحدات متاحة، وعدد مستخدمين. لو الرصيد خلص: الإضافة والبحث بيفضلوا شغالين من الموقع. الوحدات المباعة والمؤرشفة مش بتتحسب.", "Your plan has one monthly AI credit pool for the whole agency (text request 1, voice note 3, a unit's first flyer 3, a new document page 10), a number of available units and a number of users. When credits run out, adding and searching on the website still work. Sold and archived units don't count."],
       ["قراية قوايم الأسعار (PDF وصور) بالذكاء الاصطناعي ليها حد صفحات شهري ومقفولة لحد ما صاحب التطبيق يفتحها. الصفحة اللي اتقرت قبل كده ببلاش، وشيت الإكسيل بيتقرا ببلاش.", "AI reading of price lists (PDF and photos) has a monthly page limit and is off until the app owner switches it on. A page read before is free, and an Excel sheet is read free."],
-      ["ردود المساعد من الإنترنت اختيارية، ليها حد شهري، ومكتوب عليها غير مؤكد. الرد من بيانات وكالتك مش بيتحسب منها.", "Assistant web answers are optional, have a monthly limit and are labelled unverified. Answers from your agency's data don't use it."],
-      ["ترتيب الصور بإيدك (سحب وإفلات) بيوفر رصيد الذكاء الاصطناعي. المدير يقفل ترتيب الصور بالذكاء الاصطناعي لكل الوكالة من صفحة استخدامي.", "Ordering photos by hand (drag and drop) saves AI credits. A manager can switch AI photo ordering off for the whole agency on My usage."],
-      ["المدير يشوف كل الحدود وكام استهلكت من لوحة الوكالة، وصفحة الباقة فيها الأسعار والترقية. لو الحد خلص، كل حاجة بتفضل شغالة بإيدك وبياناتك مش بتتمسح.", "Managers see every limit and how much is used on the agency dashboard; the Plan page has prices and upgrades. When a limit is reached everything keeps working by hand and your data is never deleted."]
+      ["ردود المساعد من الإنترنت اختيارية، ليها حد شهري، ومكتوب عليها غير مؤكد. الرد من بيانات شركتك مش بيتحسب منها.", "Assistant web answers are optional, have a monthly limit and are labelled unverified. Answers from your agency's data don't use it."],
+      ["ترتيب الصور بإيدك (سحب وإفلات) بيوفر رصيد الذكاء الاصطناعي. المدير يقفل ترتيب الصور بالذكاء الاصطناعي لكل الشركة من صفحة استخدامي.", "Ordering photos by hand (drag and drop) saves AI credits. A manager can switch AI photo ordering off for the whole agency on My usage."],
+      ["المدير يشوف كل الحدود وكام استهلكت من لوحة الشركة، وصفحة الباقة فيها الأسعار والترقية. لو الحد خلص، كل حاجة بتفضل شغالة بإيدك وبياناتك مش بتتمسح.", "Managers see every limit and how much is used on the agency dashboard; the Plan page has prices and upgrades. When a limit is reached everything keeps working by hand and your data is never deleted."]
     ]
   },
   {
@@ -36,13 +36,13 @@ const SECTIONS = [
     title: ["🏠 الوحدات", "🏠 Units"],
     items: [
       ["ابعت «إضافة»، بعدين الصور، بعدين فويس أو رسالة بالتفاصيل (الكمبوند، المساحة، السعر، الغرف)، واكتب «تم». البوت يوريك فهم إيه وتأكد.", "Send \"add\", then the photos, then a voice note or a message with the details (compound, area, price, bedrooms), and send \"done\". The bot shows what it understood for you to confirm."],
-      ["كل وحدة بتاخد كود قصير زي NH-V12 (حروف الوكالة + نوع الوحدة + رقم). ابعت الكود في أي وقت يطلعلك الكارت.", "Every unit gets a short code like NH-V12 (agency letters + unit type + number). Send the code any time to get its card."],
+      ["كل وحدة بتاخد كود قصير زي NH-V12 (حروف الشركة + نوع الوحدة + رقم). ابعت الكود في أي وقت يطلعلك الكارت.", "Every unit gets a short code like NH-V12 (agency letters + unit type + number). Send the code any time to get its card."],
       ["وانت بتضيف وحدة، ابعت جهة اتصال المالك (Share contact) وهتتحط كاسم ورقم المالك في المراجعة، من غير ما يتعمل عميل. المالك بيتسجل كبروفايل مالك لما تحفظ.", "While adding a unit, share the owner's contact: it fills the owner's name and phone on the review, and no lead is created. The owner is saved as an owner profile when you save the unit."],
       ["من الكارت: تعديل، تم البيع، أرشفة، لينك للعميل، بروشور.", "From the card: edit, mark sold, archive, a client link, a flyer."],
       ["لو وحدة متعدلتش ٢١ يوم، البوت يسألك «لسه متاحة؟». لو محدش رد لحد ٣٠ يوم بتتخفى من البحث (مش بتتمسح).", "If a unit hasn't changed for 21 days the bot asks \"still available?\". With no answer by day 30 it is hidden from search (never deleted)."],
       ["الاستيراد (شيت إكسيل، جروب، أو شات متصدّر بالصور) للمديرين بس، من الموقع: «الوحدات ← استيراد». قبل الحفظ بتشوف كل صف هيعمل إيه. القالب فيه أمثلة، والأعمدة الحمرا مطلوبة والرمادي اختياري.", "Importing (an Excel sheet, a group post, or an exported chat with photos) is for managers only, on the website under Units → Import. You see what every row will do before anything is saved. The template has samples: red columns are mandatory, grey ones optional."],
-      ["البيانات الخاصة (المالك، رقم الوحدة، العنوان، اللوكيشن، العمولة) بتظهر للوسيط بتاع الوحدة والمديرين بس. وسيط تاني يضغط «🔒 اطلب البيانات» على نتيجة البحث أو الكارت؛ المدير بيرد، ولو الوكالة فتحت البيانات للكل مفيش طلبات.", "Secret details (owner, unit number, address, location, commission) show to the unit's broker and managers only. Another broker taps \"🔒 Ask for private details\" on a search result or card; a manager answers. If the agency opened them to all brokers, there are no requests."],
-      ["مالك الوكالة ممكن يعلّم وحدة «خاصة»: بتتخفى من البحث والقوايم لأي حد غيره، حتى المديرين.", "The agency owner can mark a unit private: it is hidden from search and lists for everyone else, managers included."],
+      ["البيانات الخاصة (المالك، رقم الوحدة، العنوان، اللوكيشن، العمولة) بتظهر للوسيط بتاع الوحدة والمديرين بس. وسيط تاني يضغط «🔒 اطلب البيانات» على نتيجة البحث أو الكارت؛ المدير بيرد، ولو الشركة فتحت البيانات للكل مفيش طلبات.", "Secret details (owner, unit number, address, location, commission) show to the unit's broker and managers only. Another broker taps \"🔒 Ask for private details\" on a search result or card; a manager answers. If the agency opened them to all brokers, there are no requests."],
+      ["مالك الشركة ممكن يعلّم وحدة «خاصة»: بتتخفى من البحث والقوايم لأي حد غيره، حتى المديرين.", "The agency owner can mark a unit private: it is hidden from search and lists for everyone else, managers included."],
       ["مالك الوحدة (البروفايل) متسجل لوحده بمكالماته ومتابعاته، ومتربط بوحداته. المدير يقدر يعدّل المالك، أو ينقل الوحدة لمالك تاني، أو لعميل اشترى.", "Each unit owner has their own profile, separate from clients, listing their units. A manager can edit the owner, move a unit to another owner, or to a client who bought it."]
     ]
   },
@@ -77,7 +77,7 @@ const SECTIONS = [
     title: ["⏰ رسايل اليوم", "⏰ Daily messages"],
     items: [
       ["الصبح (٩–١٢): ملخص متابعاتك وعملائك الجداد.", "Morning (9–12): your follow-ups and new clients."],
-      ["المسا (٧–١٠) للمديرين: ملخص يوم الوكالة.", "Evening (7–10), managers: the agency's day."],
+      ["المسا (٧–١٠) للمديرين: ملخص يوم الشركة.", "Evening (7–10), managers: the agency's day."],
       ["من «الإعدادات» تختار القناة لكل نوع تنبيه وساعات الهدوء؛ التنبيهات اللي بتيجي وقت الهدوء بتتجمع في رسالة واحدة بعده.", "In Settings you pick the channel for each alert and your quiet hours; alerts during quiet hours arrive together in one message afterwards."]
     ]
   },
@@ -86,8 +86,8 @@ const SECTIONS = [
     who: "crm",
     title: ["🛠️ لمالك التطبيق", "🛠️ For the app owner"],
     items: [
-      ["«متابعة التطبيق» و«اللوحة»: أرقام التطبيق كله (الوكالات، الفلوس، الذكاء الاصطناعي، الأداء، جودة البحث، التشغيل). أرقام بس، من غير أسماء عملاء أو تليفونات.", "\"Tracking\" and \"Board\": numbers for the whole app (agencies, money, AI, performance, search quality, operations). Numbers only, no client names or phones."],
-      ["تنبيهات التطبيق بتوصلك لو الأخطاء زادت فجأة، أو مكالمات الذكاء الاصطناعي بتفشل، أو وكالة قربت تخلص رصيدها، أو دفعة مستنية أكتر من يوم. التنبيه الواحد مش بيتكرر قبل ٦ ساعات.", "App alerts reach you when errors jump, AI calls start failing, an agency nears the end of its credits, or a payment waits over a day. The same alert is not repeated within 6 hours."],
+      ["«متابعة التطبيق» و«اللوحة»: أرقام التطبيق كله (الشركات، الفلوس، الذكاء الاصطناعي، الأداء، جودة البحث، التشغيل). أرقام بس، من غير أسماء عملاء أو تليفونات.", "\"Tracking\" and \"Board\": numbers for the whole app (agencies, money, AI, performance, search quality, operations). Numbers only, no client names or phones."],
+      ["تنبيهات التطبيق بتوصلك لو الأخطاء زادت فجأة، أو مكالمات الذكاء الاصطناعي بتفشل، أو شركة قربت تخلص رصيدها، أو دفعة مستنية أكتر من يوم. التنبيه الواحد مش بيتكرر قبل ٦ ساعات.", "App alerts reach you when errors jump, AI calls start failing, an agency nears the end of its credits, or a payment waits over a day. The same alert is not repeated within 6 hours."],
       ["الأرقام دي بتتظبط من إعدادات السيرفر: SYSTEM_ALERT_ERRORS_PER_HOUR وSYSTEM_ALERT_AI_FAIL_PCT وSYSTEM_ALERT_QUOTA_PCT وSYSTEM_ALERT_PAYMENT_HOURS وSYSTEM_ALERT_COOLDOWN_HOURS.", "The numbers are server settings: SYSTEM_ALERT_ERRORS_PER_HOUR, SYSTEM_ALERT_AI_FAIL_PCT, SYSTEM_ALERT_QUOTA_PCT, SYSTEM_ALERT_PAYMENT_HOURS and SYSTEM_ALERT_COOLDOWN_HOURS."]
     ]
   },
@@ -97,11 +97,11 @@ const SECTIONS = [
     title: ["👥 للمديرين", "👥 For managers"],
     items: [
       ["«فريقي»: ضيف وسيط، اعمله لينك تيليجرام، أو أوقفه (عملاؤه بيرجعوا للمديرين).", "\"My team\": add a broker, make their Telegram link, or deactivate them (their clients come back to the managers)."],
-      ["«لوحة الوكالة»: العملاء والصفقات والعمولة وترتيب البروكرز لآخر ٧ أو ٣٠ أو ٩٠ يوم.", "\"Agency dashboard\": leads, deals, commission and the broker leaderboard for the last 7, 30 or 90 days."],
+      ["«لوحة الشركة»: العملاء والصفقات والعمولة وترتيب البروكرز لآخر ٧ أو ٣٠ أو ٩٠ يوم.", "\"Agency dashboard\": leads, deals, commission and the broker leaderboard for the last 7, 30 or 90 days."],
       ["حوّل عميل لبروكر: «حول L-0042 لـ سارة».", "Hand a client to a broker: \"assign L-0042 to Sara\"."],
-      ["«سجل النشاط» (من القايمة): كل اللي اتعمل في الوكالة لآخر ٩٠ يوم؛ طلبات البيانات الخاصة والتعديلات بتتسجل هنا.", "\"Activity log\" (in the menu): everything done in the agency for the last 90 days; requests for private details and edits are recorded there."],
-      ["طلبات البيانات الخاصة بيرد عليها أي مدير؛ ولو مفيش مدير غير مالك الوكالة، المالك هو اللي بيرد.", "Any manager can answer a private-details request; if the agency has no manager other than its owner, the owner answers."],
-      ["مالك الوكالة (أول حساب اتسجل للوكالة): بيدير الخطة والدفع، وبيضيف أو بيشيل المديرين، وبيحدد هل البيانات الخاصة مفتوحة للكل أو للمديرين بس، وبيعلّم الوحدات الخاصة. وبيشوف كل اللي المديرين بيشوفوه.", "The agency owner (the first account of the agency): manages the plan and payments, adds or removes managers, chooses whether secret details are open to all brokers or to managers only, and marks units private. Sees everything the managers see."]
+      ["«سجل النشاط» (من القايمة): كل اللي اتعمل في الشركة لآخر ٩٠ يوم؛ طلبات البيانات الخاصة والتعديلات بتتسجل هنا.", "\"Activity log\" (in the menu): everything done in the agency for the last 90 days; requests for private details and edits are recorded there."],
+      ["طلبات البيانات الخاصة بيرد عليها أي مدير؛ ولو مفيش مدير غير مالك الشركة، المالك هو اللي بيرد.", "Any manager can answer a private-details request; if the agency has no manager other than its owner, the owner answers."],
+      ["مالك الشركة (أول حساب اتسجل للشركة): بيدير الخطة والدفع، وبيضيف أو بيشيل المديرين، وبيحدد هل البيانات الخاصة مفتوحة للكل أو للمديرين بس، وبيعلّم الوحدات الخاصة. وبيشوف كل اللي المديرين بيشوفوه.", "The agency owner (the first account of the agency): manages the plan and payments, adds or removes managers, chooses whether secret details are open to all brokers or to managers only, and marks units private. Sees everything the managers see."]
     ]
   },
 
@@ -109,10 +109,10 @@ const SECTIONS = [
     id: "voice",
     title: ["🎙️ البحث بالصوت", "🎙️ Voice search"],
     items: [
-      ["اضغط المايك جنب خانة البحث مرة عشان يبدأ، واتكلم، واضغط تاني عشان يقف ويدور. الصوت بيتكتب بالذكاء الاصطناعي ويتحسب من رصيد الفويس بتاع وكالتك.", "Tap the mic beside the search box once to start, speak, then tap again to stop and search. The AI writes the speech down and it counts against your agency's voice allowance."],
+      ["اضغط المايك جنب خانة البحث مرة عشان يبدأ، واتكلم، واضغط تاني عشان يقف ويدور. الصوت بيتكتب بالذكاء الاصطناعي ويتحسب من رصيد الفويس بتاع شركتك.", "Tap the mic beside the search box once to start, speak, then tap again to stop and search. The AI writes the speech down and it counts against your agency's voice allowance."],
       ["Enter على الكيبورد (أو زرار «بحث» على الآيفون) بيدور على الكلام المكتوب بس، ومبيفتحش المايك.", "Enter on the keyboard (or the Go key on iPhone) searches what you typed and never starts the mic."],
       ["لو مسمعناش حاجة بيقولك «مسمعناش كويس». لو الصوت فيه دوشة، الذكاء بيكتب أحسن تخمين وممكن يغلط، فراجع الكلام قبل ما تفتح النتايج.", "If nothing is heard, it says \"Couldn't hear you\". With noise, the AI writes its best guess, which can be wrong, so check the search before you act on the results."],
-      ["لو الذكاء الاصطناعي مش متاح أو رصيد الوكالة خلص، اضغط المايك تاني وهيستخدم صوت التليفون بتاعك بدل الذكاء. صوت التليفون بيقف لوحده بعد سكتة ويدور على اللي اتسمع.", "If the AI is down or your agency is out of credits, tap the mic again and your phone's own voice is used instead. The phone's voice stops by itself after a pause and searches what it heard."],
+      ["لو الذكاء الاصطناعي مش متاح أو رصيد الشركة خلص، اضغط المايك تاني وهيستخدم صوت التليفون بتاعك بدل الذكاء. صوت التليفون بيقف لوحده بعد سكتة ويدور على اللي اتسمع.", "If the AI is down or your agency is out of credits, tap the mic again and your phone's own voice is used instead. The phone's voice stops by itself after a pause and searches what it heard."],
       ["المايك بيطلب إذن الميكروفون أول مرة بس؛ لو كل مرة بيطلبه، اسمح له من إعدادات المتصفح أو التليجرام.", "The microphone asks for permission the first time only; if it asks every time, allow it in your browser or Telegram settings."]
     ]
   },
@@ -121,11 +121,11 @@ const SECTIONS = [
 const FAQ = [
   [["البحث بالصوت بيوقف لوحده؟", "Does voice search stop by itself?"], ["صوت التليفون بيوقف بعد سكتة. الذكاء بيسجّل لحد ما تضغط المايك تاني، فاضغط عشان يبدأ يدور.", "The phone's voice stops after a pause. The AI records until you tap the mic again, so tap it to start the search."]],
   [["إيه اللي بيحصل لو الرصيد خلص؟", "What happens when credits run out?"], ["المايك بيرجع يستخدم صوت التليفون، والبحث بالكتابة شغال زي ما هو.", "The mic falls back to your phone's voice, and typed search keeps working."]],
-  [["هل بياناتي بيشوفها حد من وكالة تانية؟", "Can another agency see my data?"], ["لأ. كل وكالة شايفة وحداتها وعملاءها بس.", "No. Every agency sees only its own units and clients."]],
-  [["العميل بيشوف إيه لما أبعتله لينك وحدة؟", "What does a client see when I send a unit link?"], ["صفحة فيها الصور والتفاصيل ورقم تواصل الوكالة، من غير أي بيانات داخلية. لو الوحدة اتباعت اللينك بيقول إنها مبقتش متاحة.", "A page with the photos, the details and the agency's contact number, with no internal data. If the unit is sold the link says it's no longer available."]],
+  [["هل بياناتي بيشوفها حد من شركة تانية؟", "Can another agency see my data?"], ["لأ. كل شركة شايفة وحداتها وعملاءها بس.", "No. Every agency sees only its own units and clients."]],
+  [["العميل بيشوف إيه لما أبعتله لينك وحدة؟", "What does a client see when I send a unit link?"], ["صفحة فيها الصور والتفاصيل ورقم تواصل الشركة، من غير أي بيانات داخلية. لو الوحدة اتباعت اللينك بيقول إنها مبقتش متاحة.", "A page with the photos, the details and the agency's contact number, with no internal data. If the unit is sold the link says it's no longer available."]],
   [["العميل طلب يمسح بياناته؛ أعمل إيه؟", "A client asked us to delete their data. What do I do?"], ["المدير يفتح العميل على الموقع ويختار «مسح نهائي» ويكتب آخر ٤ أرقام من رقمه. وتقدر تصدّر بياناته الأول لو طلبها.", "A manager opens the client on the website, chooses \"Erase for good\" and types the last 4 digits of their number. You can export their data first if they ask for it."]],
   [["مين بيشوف البيانات الخاصة للوحدة؟", "Who sees a unit's private details?"], ["الوسيط بتاع الوحدة والمديرين. أي وسيط تاني بيطلبها، والمدير بيرد، وكل طلب بيتسجل.", "The unit's broker and the managers. Any other broker asks, a manager answers, and every request is logged."]],
-  [["المدير بيشوف الوحدات الخاصة بمالك الوكالة؟", "Can managers see units the agency owner marked private?"], ["لأ. الوحدة الخاصة مخفية عن أي حد غير مالك الوكالة، حتى المديرين.", "No. A private unit is hidden from everyone except the agency owner, managers included."]],
+  [["المدير بيشوف الوحدات الخاصة بمالك الشركة؟", "Can managers see units the agency owner marked private?"], ["لأ. الوحدة الخاصة مخفية عن أي حد غير مالك الشركة، حتى المديرين.", "No. A private unit is hidden from everyone except the agency owner, managers included."]],
   [["البوت فهم غلط؛ أصلّحه إزاي؟", "The bot got something wrong. How do I fix it?"], ["قبل الحفظ دوس «✏️ تعديل». بعد الحفظ: «تعديل الكود السعر ٩٫٥ مليون» أو من الموقع.", "Before saving tap \"✏️ Edit\". After saving: \"edit CODE price 9.5M\" or use the website."]],
   [["في حاجة مش شغالة.", "Something isn't working."], ["ابعت «عطل» واللي حصل للبوت، أو «🐞 بلّغ عن مشكلة» تحت أي صفحة. هيوصلك رقم البلاغ.", "Send \"bug\" and what happened to the bot, or use \"🐞 Report a problem\" at the bottom of any page. You get a report number."]],
   [["ليه تيليجرام مش واتساب؟", "Why Telegram and not WhatsApp?"], ["تيليجرام مجاني للرسايل والصور والأزرار، فالتنبيهات مش بتتكلف. واتساب بيفضل للتواصل مع العملاء.", "Telegram is free for messages, photos and buttons, so alerts cost nothing. WhatsApp stays for talking to clients."]],

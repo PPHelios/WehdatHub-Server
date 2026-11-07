@@ -237,7 +237,7 @@ function register(web, { pool, page, assets }) {
     }
     if (result.conflict) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
-      return again(409, L10n(lang, `⚠️ الكود #${result.code} مستخدم لوحدة أخرى في الوكالة. اكتب كود مختلف.`, `⚠️ Code #${result.code} is already used by another unit. Choose another code.`));
+      return again(409, L10n(lang, `⚠️ الكود #${result.code} مستخدم لوحدة أخرى في الشركة. اكتب كود مختلف.`, `⚠️ Code #${result.code} is already used by another unit. Choose another code.`));
     }
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "web_unit_create", metadata: { photos: photos.urls.length, photo_failures: photos.failed } });
     return res.redirect(303, `/app/units/${encodeURIComponent(result.listing.code)}?saved=1`);
