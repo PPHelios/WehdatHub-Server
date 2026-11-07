@@ -72,3 +72,4 @@ dist.zip
 # Eval voice recordings (personal voice; kept local, not committed)
 tests/eval/audio/
 tests/eval/results/
+test-results/
