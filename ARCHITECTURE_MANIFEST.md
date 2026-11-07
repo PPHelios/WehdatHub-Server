@@ -80,6 +80,7 @@
   | `064_portal_owner_mute.sql` | Drops `agencies.portal_alerts`: the owner's portal alerts mute is for himself only (`brokers.notify_prefs.portal_muted`). |
   | `057_first_user_owner.sql` | The first user of an agency is its agency owner; older agencies without an owner get their earliest admin promoted. |
   | `058_place_names.sql` | New English compound names waiting for the CRM owner's Arabic name (`place_names`, pending or approved). |
+  | `091_map_places.sql` | Map places (`map_places`): one row per compound with coordinates, Arabic and English names and aliases; global, edited only by the CRM owner (`/app/owner/map`). Units show on a pin when their compound name equals one of the place's names (`domain/mapPlaces.js`). The map itself is one `.pmtiles` file in Cloudflare R2 (`MAP_TILES_URL`), read in ranges by the browser. |
   | `060_import_rows.sql` | Import review rows (`import_rows`): one row per sheet or post in a plan, with its kind (new, changed, unchanged, invalid, forbidden, duplicate), the ticked state and the reasons; the review pages read a tab at a time from here. Cascades with the plan. |
   | `059_owner_private.sql` | Owner profiles get a private flag (`unit_owners.is_private`); only the agency owner sets it, and a private profile is hidden from managers and brokers. |
   | `061_owner_private_default.sql` | Owner profiles are visible to the team by default (the flag defaults to false). Existing rows keep their value. |

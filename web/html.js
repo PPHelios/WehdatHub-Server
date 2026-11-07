@@ -111,6 +111,7 @@ function footer(broker, lang) {
 const NAV = [
   { key: "deals", href: "/app/deals", ar: "الصفقات", en: "Deals", icon: "deal", group: "work" },
   { key: "catalogue", href: "/app/catalogue", ar: "كتالوج المطورين", en: "Developer catalogue", icon: "catalogue", group: "work" },
+  { key: "map", href: "/app/map", ar: "الخريطة", en: "Map", icon: "pin", group: "work" },
   { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
   { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", who: "manager" },
@@ -125,6 +126,7 @@ const NAV = [
   { key: "insights", href: "/app/insights", ar: "أسعار المتر", en: "Price per m²", icon: "chart", group: "agency" },
   { key: "usage", href: "/app/usage", ar: "استخدامي والحصص", en: "My usage and limits", icon: "gauge", group: "agency" },
   { key: "owner", href: "/app/owner", ar: "متابعة التطبيق", en: "App tracking", icon: "tools", group: "agency", who: "owner" },
+  { key: "ownermap", href: "/app/owner/map", ar: "أماكن الخريطة", en: "Map places", icon: "pin", group: "agency", who: "owner" },
   { key: "searchreview", href: "/app/owner/searches", ar: "مراجعة البحث", en: "Search review", icon: "tools", group: "agency", who: "owner" },
   { key: "plan", href: "/app/plan", ar: "الاشتراك", en: "Plan", icon: "card", group: "account" },
   { key: "invite", href: "/app/plan#referral", ar: "ادعُ شركة واكسب شهر مجاني", en: "Invite an agency, get a free month", icon: "gift", group: "account" },
@@ -147,7 +149,7 @@ const DATA_ENTRY_BAR = [
 ];
 
 // The CRM owner (OWNER_BROKER_IDS) is not part of any agency: their menu is the app-tracking pages and their account.
-const CRM_NAV = new Set(["owner", "searchreview", "settings", "notifications", "guide"]);
+const CRM_NAV = new Set(["owner", "ownermap", "searchreview", "settings", "notifications", "guide"]);
 
 function navFor(broker) {
   const Dash = require("../services/dashboards");
@@ -173,7 +175,7 @@ function tabOf(path, nav) {
   const p = String(path || "").split("?")[0].replace(/\/+$/, "") || "/app";
   if (p === "/app") return "home";
   if (/^\/app\/(units\/new|leads\/new|deals\/new|add|import|leads\/import)(\/|$)/.test(p)) return "add";
-  if (/^\/app\/(search|searches|ask|compare)(\/|$)/.test(p)) return "search";
+  if (/^\/app\/(search|searches|ask|compare|map)(\/|$)/.test(p)) return "search";
   if (/^\/app\/leads(\/|$)/.test(p)) return "leads";
   if (/^\/app\/units(\/|$)/.test(p)) return "units";
   if (/^\/app\/team(\/|$)/.test(p)) return "team";

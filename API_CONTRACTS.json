@@ -2372,6 +2372,42 @@
     },
     "web/routes/accessRequests.js": {
       "register": ["web", "params"]
+    },
+    "domain/mapPlaces.js": {
+      "placeKey": ["name"],
+      "keysOf": ["place"],
+      "buildIndex": ["places"],
+      "matchCompound": ["index", "names"],
+      "parseMapsLink": ["text"],
+      "parseAliases": ["text"],
+      "cleanPlace": ["input"],
+      "inEgypt": ["lat", "lng"],
+      "BOUNDS": "Object"
+    },
+    "services/mapPlaces.js": {
+      "FINISHING": "Array",
+      "FURNISHING": "Array",
+      "allPlaces": ["pool"],
+      "clearCache": [],
+      "cleanFilters": ["q"],
+      "pins": ["pool", "broker", "query"],
+      "facets": ["pool", "broker", "query"],
+      "unitsAt": ["pool", "broker", "placeId", "query", "limit"],
+      "place": ["pool", "id"],
+      "findByName": ["pool", "text"],
+      "list": ["pool", "params"],
+      "save": ["pool", "id", "input"],
+      "remove": ["pool", "id"],
+      "addAlias": ["pool", "id", "alias"],
+      "importSeed": ["pool", "rows"],
+      "unmatched": ["pool", "limit"],
+      "TYPES": "Array"
+    },
+    "web/routes/map.js": {
+      "register": ["web", "params"],
+      "drawerBody": ["lang", "units", "place"],
+      "words": ["lang"],
+      "MapRules": "Object"
     }
   },
   "invariant_variable_names": {
