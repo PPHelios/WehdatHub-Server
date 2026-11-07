@@ -154,3 +154,45 @@ test("a compound is matched to the approved list on save: details move to the no
   const bad = await Store.applyListingPatch(h.pool, admin, { listing, patch: { compound: "Mivida" } });
   expect(bad.listing).toMatchObject({ compound: "Mivida", compound_state: "needs_fix", place_id: null });
 });
+
+test("the owner's queue: approve a seed place, re-check units, and mark a name as not a compound", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('eastown', 'Eastown', 30.02, 31.5, 'seed', false)`);
+  await h.insertListing({ code: "ET-1", compound: "Eastown, 3rd floor" });
+  await h.insertListing({ code: "OS-1", compound: "outside" });
+  const crm = await signIn(h, "admin");
+  const page = await crm.agent.get("/app/owner/map?lang=en");
+  expect(page.text).toMatch(/Approve &quot;Eastown&quot;|Approve "Eastown"/);
+  const id = (await h.query("SELECT id FROM map_places WHERE name_key = 'eastown'"))[0].id;
+  expect((await crm.agent.post(`/app/owner/map/${id}/approve`).type("form").send({ _csrf: crm.csrf })).headers.location).toMatch(/msg=approved/);
+  const count = await crm.agent.post("/app/owner/map/recheck").type("form").send({ _csrf: crm.csrf });
+  expect(count.headers.location).toMatch(/msg=wouldfix&n=1/);
+  await crm.agent.post("/app/owner/map/recheck").type("form").send({ _csrf: crm.csrf, apply: "1" });
+  const u = (await h.query("SELECT compound, place_id, details FROM listings WHERE code = 'ET-1'"))[0];
+  expect(u.place_id).toBe(id);
+  expect(u.compound).toBe("Eastown");
+  expect(u.details.notes).toMatch(/3rd floor/);
+  const gone = await crm.agent.post("/app/owner/map/dismiss").type("form").send({ _csrf: crm.csrf, name: "outside" });
+  expect(gone.headers.location).toMatch(/msg=dismissed&n=1/);
+  expect((await h.query("SELECT compound FROM listings WHERE code = 'OS-1'"))[0].compound).toBeNull();
+});
+
+test("the master list approves places by name: a place the map has keeps its position, a new one has no pin yet", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('mivida', 'Mivida', 30.0058, 31.5377, 'seed', false)`);
+  const crm = await signIn(h, "admin");
+  const out = await crm.agent.post("/app/owner/map/master").type("form").send({ _csrf: crm.csrf });
+  expect(out.headers.location).toMatch(/msg=master&n=\d+/);
+  const [mv] = await h.query("SELECT approved, lat, name_ar, developer FROM map_places WHERE name_key = 'mivida'");
+  expect(mv).toMatchObject({ approved: true, lat: 30.0058, name_ar: "ميفيدا" });
+  const fresh = (await h.query("SELECT count(*)::int AS n FROM map_places WHERE lat IS NULL AND approved"))[0].n;
+  expect(fresh).toBeGreaterThan(50);
+  await h.insertListing({ code: "BF-1", compound: "Bloomfields" });
+  const b = await signIn(h, "broker");
+  const pins = (await b.agent.get("/app/map/pins")).body;
+  expect(pins.pins.map((p) => p.name)).not.toContain("Bloomfields");
+  expect(pins.unmapped).toBe(1);
+  expect((await crm.agent.get("/app/owner/map?lang=en")).status).toBe(200);
+});
