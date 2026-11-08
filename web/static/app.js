@@ -592,6 +592,20 @@
     setTimeout(unlock, 15000);
   });
   window.addEventListener("pageshow", unlock);
+  // Any submit button locks at the tap, even when the page handles its form itself (AJAX or htmx), so the spinner shows
+  // until the answer. A button whose form is not valid sends nothing, so it is not locked. Unlocked after 15 s at the latest.
+  document.addEventListener("click", function (e) {
+    var b = e.target && e.target.closest ? e.target.closest("button[type=submit], button:not([type]), input[type=submit]") : null;
+    if (!b || !b.form || b.disabled || b.hasAttribute("data-no-lock") || b.hasAttribute("data-confirm") || b.form.hasAttribute("data-no-lock")) return;
+    if (b.form.getAttribute("target") || !b.form.checkValidity()) return;
+    setTimeout(function () {
+      if (b.disabled) return;
+      b.disabled = true;
+      b.setAttribute("data-locked", "");
+      b.classList.add("busy");
+    }, 0);
+    setTimeout(unlock, 15000);
+  }, true);
   // <select data-autosubmit>: changing it applies the filter at once (no inline handlers under the CSP).
   document.addEventListener("change", function (e) {
     var t = e.target;
