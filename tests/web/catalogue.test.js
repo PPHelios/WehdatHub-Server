@@ -235,3 +235,17 @@ describe("F20 uploaded files", () => {
     expect(checked.some((u) => u.startsWith("https://storage.test/"))).toBe(false);
   });
 });
+
+test("clarify: a manager is asked about an unreadable notes line, the answer is saved with its date, a broker cannot answer", async () => {
+  const { admin, project } = await seedProject();
+  const line = "كراج 2,500,000 جنيه";
+  await h.query("UPDATE projects SET notes = $2 WHERE id = $1", [project.id, line]);
+  const { agent, csrf } = await signIn(h, "admin");
+  const page = await agent.get(`/app/catalogue/projects/${project.id}`);
+  expect(page.text).toContain("data-clarify");
+  await agent.post(`/app/catalogue/projects/${project.id}/clarify`).type("form").send({ _csrf: csrf, line, answer: "جراج 2.5 مليون" });
+  const notes = (await h.query("SELECT notes FROM projects WHERE id = $1", [project.id]))[0].notes;
+  expect(notes).toMatch(/\d{4}-\d{2}-\d{2} توضيح عن «كراج 2,500,000 جنيه»: جراج 2.5 مليون/);
+  expect((await agent.get(`/app/catalogue/projects/${project.id}`)).text).not.toContain("data-clarify-q");
+  expect(await Catalogue.addClarification(h.pool, await row("broker"), project.id, { line, answer: "x" })).toEqual({ error: "forbidden" });
+});

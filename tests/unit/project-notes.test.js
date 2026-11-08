@@ -47,3 +47,17 @@ describe("offers in project notes", () => {
     expect(PN.matchUnits([{ project: JAZEEL, units: PN.parseUnits(NOTES) }], { listing_type: "rent" })).toEqual([]);
   });
 });
+
+describe("calculated installment and new place names", () => {
+  test("monthly is estimated from price, down payment and years when not written", () => {
+    const [u] = PN.parseUnits("وحدة 120 م سعرها = 4,800,000 مقدم 10% = 480,000 تقسيط 8 سنين");
+    expect(u).toMatchObject({ monthly: null, monthly_est: 45000 });
+    expect(PN.matchUnits([{ project: JAZEEL, units: [u] }], { max_installment: 46000 })).toHaveLength(1);
+    expect(PN.matchUnits([{ project: JAZEEL, units: [u] }], { max_installment: 40000 })).toHaveLength(0);
+  });
+
+  test("new capital and new Obour spellings find the place", () => {
+    expect(PN.matchesPlace({ city: "New Administrative Capital" }, ["العاصمه الاداريه"])).toBe(true);
+    expect(PN.matchesPlace({ district: "New Obour" }, ["العبور"])).toBe(true);
+  });
+});

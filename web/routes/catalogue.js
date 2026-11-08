@@ -19,6 +19,7 @@ const Gallery = require("../../services/projectGallery");
 const PlanReading = require("../../services/planReading");
 const PR = require("../../domain/planReading");
 const RateLimit = require("../../lib/rateLimit");
+const Clarify = require("../../domain/projectClarify");
 const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 const { uploads } = require("../uploads");
@@ -307,6 +308,18 @@ function rulesForm(lang, p, base) {
   </form></details>`;
 }
 
+/** Questions about the notes Ask could not read or found conflicting (managers). Answering is optional. */
+function clarifyCard(lang, base, notes) {
+  const issues = Clarify.findIssues(notes);
+  if (!issues.length) return "";
+  return html`<section class="card" id="clarify" data-clarify><h3>❓ ${L(lang, "محتاجين توضيحك", "Please clarify")}</h3>
+  <p class="muted">${L(lang, "ردك بيتحفظ في الملاحظات بتاريخه، والمساعد هيستخدمه. تقدر تتجاهل أي سؤال.", "Your answer is saved in the notes with its date and Ask will use it. You can ignore any question.")}</p>
+  ${issues.map((q) => html`<form method="post" action="${base}/clarify" class="stack" data-clarify-q="${q.kind}"><p>${L(lang, q.question.ar, q.question.en)}</p>
+    <input type="hidden" name="line" value="${q.line}">
+    <input name="answer" maxlength="300" required aria-label="${L(lang, "الإجابة", "Answer")}"><button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button></form>`)}
+</section>`;
+}
+
 function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null, gallery = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
@@ -323,6 +336,7 @@ ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل ا�
 <h2 id="assistant-knows">🤖 ${L(lang, "اللي المساعد (اسأل) عارفه", "What the assistant (Ask) knows")}</h2>
 <p class="muted">${L(lang, "الوسطاء بيشوفوا كل ده، والمساعد بيجاوب منه. مفيش هنا حاجة سرية: العمولة لوحدها تحت وللمديرين بس.", "Brokers see all of this and Ask answers from it. Nothing secret goes here: commission terms are kept apart below, managers only.")}</p>
 ${p.notes ? html`<section class="card" id="project-notes" data-project-notes><h3>📝 ${L(lang, "ملاحظات المشروع", "Project notes")}</h3><p>${p.notes}</p></section>` : ""}
+${manager ? clarifyCard(lang, base, p.notes) : ""}
 ${highlights || ""}
 ${prices || ""}
 
@@ -631,6 +645,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   });
   web.get("/catalogue/projects/:id", (req, res) => showProject(req, res));
   web.post("/catalogue/projects/:id", write((req) => Catalogue.saveProject(pool, actorOf(req), { ...req.body, id: req.params.id }), { show: showProject, done: (req) => projectUrl(req) }));
+  web.post("/catalogue/projects/:id/clarify", write((req) => Catalogue.addClarification(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#clarify` }));
   web.post("/catalogue/projects/:id/archive", write((req) => Catalogue.archiveProject(pool, actorOf(req), req.params.id, req.body.archived === "1"), { show: showProject, done: (req) => projectUrl(req) }));
   web.post("/catalogue/projects/:id/phases", write((req) => Catalogue.savePhase(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));
   web.post("/catalogue/projects/:id/phases/:phaseId/delete", write((req) => Catalogue.deletePhase(pool, actorOf(req), req.params.id, req.params.phaseId), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));

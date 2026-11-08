@@ -121,6 +121,7 @@ function notesReply(hits, lang = "ar") {
       `${unit.area} m²${unit.floor ? (en ? `, floor ${unit.floor}` : `، الدور ${unit.floor}`) : ""}`,
       `${money(unit.price)} ${en ? "EGP" : "جنيه"}`,
       unit.down != null ? (en ? `down ${money(unit.down)}` : `مقدم ${money(unit.down)}`) : null,
+      unit.monthly == null && unit.monthly_est != null ? (en ? `≈${money(unit.monthly_est)}/month (calculated, no interest)` : `≈${money(unit.monthly_est)} شهريًا (حساب تقريبي بدون فوايد)`) : null,
       unit.monthly != null ? (en ? `${money(unit.monthly)}/month${unit.years ? " for " + unit.years + " years" : ""}` : `قسط ${money(unit.monthly)} شهريًا${unit.years ? " على " + unit.years + " سنين" : ""}`) : null
     ].filter(Boolean);
     return `• *${name}*: ${bits.join(" · ")}`;

@@ -88,7 +88,7 @@ function developerFields(input) {
       name_en: text(input.name_en, 120),
       contact_name: text(input.contact_name, 120),
       contact_phone: phone ? normalizeArabicDigits(phone) : null,
-      notes: text(input.notes, 1000),
+      notes: text(input.notes, 4000),
       about: text(input.about, 2000),
       past_projects: text(input.past_projects, 2000),
       delivery_record: text(input.delivery_record, 2000),
@@ -198,7 +198,7 @@ function projectFields(input) {
       delivery_year: year,
       delivery_quarter: year ? quarter : null,
       maintenance_pct: maint,
-      notes: text(input.notes, 1000)
+      notes: text(input.notes, 4000)
     }
   };
 }
@@ -264,6 +264,22 @@ async function archiveProject(db, actor, id, archived = true) {
   const { rowCount } = await db.query(
     "UPDATE projects SET archived_at = CASE WHEN $3 THEN now() ELSE NULL END, updated_at = now() WHERE id = $1 AND agency_id = $2",
     [id, actor.agency_id, Boolean(archived)]
+  );
+  return rowCount ? { ok: true } : { error: "not_found" };
+}
+
+/** A manager's answer to a question about the project's notes, saved as a dated line (the notes stay the one source). */
+async function addClarification(db, actor, id, input = {}) {
+  const { line, answer } = input;
+  if (!isManager(actor)) return { error: "forbidden" };
+  if (!isId(id)) return { error: "not_found" };
+  const a = String(answer || "").trim();
+  if (!a) return { error: "empty" };
+  const day = new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10);
+  const entry = require("../domain/projectClarify").answerLine(day, line, a);
+  const { rowCount } = await db.query(
+    "UPDATE projects SET notes = right(concat_ws(E'\\n', NULLIF(notes, ''), $3::text), 4000), updated_at = now() WHERE id = $1 AND agency_id = $2",
+    [id, actor.agency_id, entry]
   );
   return rowCount ? { ok: true } : { error: "not_found" };
 }
@@ -786,6 +802,7 @@ const linkCheckJob = () => ({
 });
 
 module.exports = {
+  addClarification,
   STATUSES,
   KINDS,
   MAX_FILE_MB,

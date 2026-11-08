@@ -8,8 +8,9 @@ const { normalizeDigits } = require("../lib/text");
 
 // Area names in the notes that a search may write differently (the project's district is stored in English).
 const LOCATION_ALIASES = {
-  obour: ["العبور", "عبور", "obour"],
+  obour: ["العبور", "عبور", "obour", "new obour", "العبور الجديده", "نيو عبور"],
   "new cairo": ["new cairo", "القاهره الجديده", "التجمع"],
+  "new capital": ["العاصمه الاداريه", "العاصمة الإدارية", "العاصمه الاداريه الجديده", "new capital", "new administrative capital"],
   "6th of october": ["6 اكتوبر", "السادس من اكتوبر", "6th of october"],
   "sheikh zayed": ["الشيخ زايد", "sheikh zayed"]
 };
@@ -31,7 +32,9 @@ function parseUnits(notes) {
     const down = num((raw.match(/مقدم\s*\d+(?:\.\d+)?\s*%\s*=?\s*([\d,٬]+)/) || [])[1]);
     const monthly = num((raw.match(/قسط\s*شهري[^=]*=\s*([\d,٬]+)/) || [])[1]);
     const years = num((raw.match(/(\d{1,2})\s*(?:سنين|سنوات|سنه|سنة)/) || [])[1]);
-    out.push({ area, floor, price, down, monthly, years, raw });
+    // No monthly installment written: estimate it from the rest (no interest), and keep it apart from a written one.
+    const monthly_est = monthly == null && down != null && years ? Math.round((price - down) / (years * 12)) : null;
+    out.push({ area, floor, price, down, monthly, monthly_est, years, raw });
   }
   return out;
 }
@@ -73,7 +76,7 @@ function matchUnits(projects, f = {}) {
       if (f.area_min != null && f.area_max != null && (u.area < f.area_min || u.area > f.area_max)) continue;
       if (f.price_max != null && u.price > f.price_max) continue;
       if (f.price_min != null && u.price < f.price_min) continue;
-      if (f.max_installment != null && (u.monthly == null || u.monthly > f.max_installment)) continue;
+      if (f.max_installment != null && ((u.monthly ?? u.monthly_est) == null || (u.monthly ?? u.monthly_est) > f.max_installment)) continue;
       if (f.max_down_payment != null && (u.down == null || u.down > f.max_down_payment)) continue;
       hits.push({ project, unit: u });
     }
