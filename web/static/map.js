@@ -31,7 +31,14 @@
   };
 
   ready(function () {
-    var map = L.map(root, { zoomControl: true, attributionControl: false, minZoom: 5, maxZoom: 17, tap: true }).setView([30.05, 31.45], 9);
+    // Going to a unit and back returns here: the view, filters, search and open place are kept for this tab.
+    var KEY = "wh-map-state";
+    var saved = null;
+    if (!root.hasAttribute("data-pick")) {
+      try { saved = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) { saved = null; }
+    }
+    var map = L.map(root, { zoomControl: true, attributionControl: false, minZoom: 5, maxZoom: 17, tap: true })
+      .setView(saved && saved.c ? saved.c : [30.05, 31.45], saved && saved.z ? saved.z : 9);
     protomapsL.leafletLayer({ url: tiles, flavor: "light", lang: lang }).addTo(map);
 
     // The owner's picker: tap the map to drop the pin into the latitude and longitude fields.
@@ -87,6 +94,17 @@
     var maxBox = app.querySelector("[data-pmax-box]");
     var fill = app.querySelector("[data-dual-fill]");
     var pending = 0;
+    var openId = null;
+    var restoring = !!saved;
+    function remember() {
+      try {
+        var c = map.getCenter();
+        sessionStorage.setItem(KEY, JSON.stringify({ c: [c.lat, c.lng], z: map.getZoom(), s: state, slider: [sMin.value, sMax.value], q: input.value, fin: finSel.value, furn: furnSel.value, deal: dealSel.value, place: openId }));
+      } catch (e) { /* storage can be off: the page still works */ }
+    }
+    function markChips(attr, val) {
+      app.querySelectorAll("[" + attr + "]").forEach(function (b) { b.classList.toggle("on", b.getAttribute(attr) === String(val || "")); });
+    }
 
     function query() {
       var q = [];
@@ -181,12 +199,20 @@
           if (first || !facets.types.length) setFacets(d.facets);
           else if (d.facets && !state.ptype && state.pmin === null && state.pmax === null) setFacets(d.facets);
           countEl.textContent = d.total + " " + (tr.units || "units") + " · " + pinsData.length + " " + (lang === "en" ? "places" : "مكان");
-          render(first);
+          render(first && !restoring);
+          if (restoring) {
+            restoring = false;
+            var sp = saved && saved.place;
+            saved = null;
+            var hit = sp && pinsData.concat(idleData).filter(function (p) { return p.id === sp; })[0];
+            if (hit) openDrawer(hit, true);
+          }
+          remember();
         })
         .catch(function () { countEl.textContent = tr.loadFail || ""; });
     }
 
-    function openDrawer(p) {
+    function openDrawer(p, quiet) {
       drawerTitle.textContent = lang === "en" ? p.name_en || p.name_ar : p.name_ar || p.name_en;
       drawerBody.innerHTML = "";
       drawer.hidden = false;
@@ -196,10 +222,14 @@
         .then(function (r) { return r.text(); })
         .then(function (h) { drawerBody.innerHTML = h; })
         .catch(function () { drawerBody.textContent = tr.loadFail || ""; });
-      map.panTo([p.lat, p.lng]);
+      if (!quiet) map.panTo([p.lat, p.lng]);
+      openId = p.id;
+      remember();
     }
     function closeDrawer() {
       drawer.classList.remove("open");
+      openId = null;
+      remember();
       setTimeout(function () { drawer.hidden = true; }, 200);
     }
     app.querySelector("[data-drawer-close]").addEventListener("click", closeDrawer);
@@ -313,6 +343,17 @@
     document.addEventListener("click", function (e) { if (!app.querySelector(".map-search").contains(e.target)) hideList(); });
 
     map.on("zoomend", function () { root.classList.toggle("zoomed", map.getZoom() >= 12); });
+    map.on("moveend", remember);
+    if (saved) {
+      if (saved.s) state = saved.s;
+      if (saved.slider) { sMin.value = saved.slider[0]; sMax.value = saved.slider[1]; }
+      if (saved.fin) finSel.value = saved.fin;
+      if (saved.furn) furnSel.value = saved.furn;
+      if (saved.deal) dealSel.value = saved.deal;
+      input.value = saved.q || "";
+      markChips("data-f-type", state.type);
+      markChips("data-f-rooms", state.rooms);
+    }
     load(true);
   });
 })();
