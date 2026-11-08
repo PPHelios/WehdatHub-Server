@@ -190,6 +190,7 @@
 
     function load(first) {
       var id = ++pending;
+      root.classList.add("is-busy"); // the map shows a spinner while the pins load
       fetch("/app/map/pins?" + query(), { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -209,7 +210,8 @@
           }
           remember();
         })
-        .catch(function () { countEl.textContent = tr.loadFail || ""; });
+        .catch(function () { countEl.textContent = tr.loadFail || ""; })
+        .finally(function () { if (id === pending) root.classList.remove("is-busy"); });
     }
 
     function openDrawer(p, quiet) {

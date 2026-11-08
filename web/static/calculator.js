@@ -13,6 +13,7 @@
   form.addEventListener("change", function () {
     var params = new URLSearchParams(new FormData(form));
     params.set("format", "json");
+    form.classList.add("is-busy"); // the figures show a spinner until the server answers
     fetch(form.action + "?" + params.toString(), { headers: { Accept: "application/json" }, credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
@@ -24,6 +25,7 @@
         var w = document.querySelector('[data-out="warning"]');
         if (w) w.style.display = d.exception ? "" : "none";
       })
-      .catch(function () { form.requestSubmit ? form.requestSubmit() : form.submit(); });
+      .catch(function () { form.requestSubmit ? form.requestSubmit() : form.submit(); })
+      .finally(function () { form.classList.remove("is-busy"); });
   });
 })();
