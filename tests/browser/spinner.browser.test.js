@@ -21,6 +21,7 @@ const PAGES = [["search", "/app/search"], ["ask", "/app/ask"], ["units", "/app/u
 
 let h, browser, server, base;
 const gaps = [];
+const unsent = []; // clicked, but no request reached the server: listed for review, not counted as gaps
 
 async function session(who) {
   const br = h.BROKERS[who];
@@ -56,6 +57,10 @@ async function checkControl(ctx, path, index, where) {
     await btn.scrollIntoViewIfNeeded().catch(() => {});
     // A click that cannot happen is reported as such, so it is not counted as a missing spinner.
     // A click that is covered by another element still counts as a click: the spinner is about the request, not the overlay.
+    // Counts requests to the app from the click on: a click that sends nothing has no wait to show, so it is reported apart.
+    let sent = 0;
+    const onRequest = (r) => { if (LOCAL.test(r.url()) && !/\/static\//.test(r.url())) sent++; };
+    pg.on("request", onRequest);
     const clicked = await btn.click({ noWaitAfter: true, timeout: 5000, force: true }).then(() => "", (e) => String(e.message || e).split("\n")[0]);
     if (clicked) {
       gaps.push(`${where} · "${label || "(no text)"}" · click failed: ${clicked.slice(0, 120)}`);
@@ -67,6 +72,11 @@ async function checkControl(ctx, path, index, where) {
       b.classList.contains("busy") || b.disabled || b.hasAttribute("data-locked") || b.classList.contains("htmx-request") ||
       Boolean(b.closest(".is-busy, .htmx-request, [data-locked]"))
     )).catch(() => true); // a button that already left the page is not a gap
+    pg.off("request", onRequest);
+    if (!sent) {
+      unsent.push(`${where} · "${label || "(no text)"}"`);
+      return;
+    }
     if (!shown) gaps.push(`${where} · "${label || "(no text)"}"`);
   } finally {
     await pg.close().catch(() => {});
@@ -100,6 +110,7 @@ test("every request button on the broker pages shows a spinner while it waits", 
   }
   await ctx.close();
   // Reports gaps only, by page and button; an empty list means every checked button shows a spinner.
+  if (unsent.length) process.stdout.write(`NO REQUEST SENT (review):\n${unsent.join("\n")}\n`);
   if (gaps.length) process.stdout.write(`SPINNER GAPS:\n${gaps.join("\n")}\n`);
   expect(gaps).toEqual([]);
 });
