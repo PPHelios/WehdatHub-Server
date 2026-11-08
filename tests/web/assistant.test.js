@@ -170,6 +170,17 @@ test("a named client's request is matched against the written offers in project 
   expect(prompt).toContain("110 m² · 2,900,000 EGP");
 });
 
+test("the model says not found but the agency's own offers fit: the offers are the answer and the question is not listed as unanswered", async () => {
+  const { admin, project } = await seed();
+  await h.query("UPDATE projects SET notes = $2, district = 'Obour' WHERE id = $1", [project.id, "يونت 110 م الدور التاني بسعر 2,862,554 ومقدم 143,127"]);
+  FakeAI.respond(() => ({ answer: "That's not in our data.", found: false }));
+  const out = await Assistant.ask(h.pool, await row("broker"), "شقه في العبور مقدم اقل من ٣ مليون");
+  expect(out).toMatchObject({ found: true });
+  expect(out.answer).toContain("2,862,554");
+  expect(out.answer).not.toMatch(/not in our data/);
+  expect((await Assistant.unanswered(h.pool, admin)).map((m) => m.question)).not.toContain("شقه في العبور مقدم اقل من ٣ مليون");
+});
+
 describe("answer formatting", () => {
   test("the prompt asks for a short chat layout and leaves the dates to the footer", () => {
     const p = A.prompt("امتى استلام بادية؟", [{ title: "Project Badya", as_of: "2026-10-27", text: "Badya by Palm Hills." }], { lang: "ar", today: "2026-10-31" });

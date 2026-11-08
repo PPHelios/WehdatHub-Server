@@ -23,13 +23,17 @@ function parseUnits(notes) {
   const parts = text.split(/\n|__|🔥/).map((s) => s.replace(/\s+/g, " ").trim()).filter((s) => s.length > 3);
   const out = [];
   for (const raw of parts) {
-    const price = num((raw.match(/سعرها[^=]*=\s*([\d,٬]+)/) || [])[1]);
+    // "سعرها = 3,000,000", "بسعر 3,180,590", "السعر: 3000000", "price 3,000,000".
+    const priceM = raw.match(/سعرها[^=]*=\s*([\d,٬]+)/) || raw.match(/(?:بسعر|السعر|سعر|price)\s*[:=]?\s*([\d,٬]{6,})/i);
+    const price = num(priceM && priceM[1]);
     if (!price || price < 100000) continue;
     const areaM = raw.match(/(?:يونت|يومت|وحده|وحدة|شقه|شقة)\s*(\d{2,4})(?!\d)/) || raw.match(/(\d{2,4})\s*(?:م|متر)(?![؀-ۿ])/);
     const area = areaM ? Number(areaM[1]) : null;
     if (!area) continue;
     const floor = (raw.match(/الدور\s+([^\s=]+(?:\s+(?:الاول|التاني|التالت|الرابع|الخامس|الارضي))?)/) || [])[1] || null;
-    const down = num((raw.match(/مقدم\s*\d+(?:\.\d+)?\s*%\s*=?\s*([\d,٬]+)/) || [])[1]);
+    // "مقدم 10% = 290,000" or "ومقدم 159,029"; a percentage with no amount is not a down payment.
+    const downRaw = num((raw.match(/مقدم\s*(?:\d+(?:\.\d+)?\s*%\s*(?:=|-|:)?\s*)?([\d,٬]{4,})/) || [])[1]);
+    const down = downRaw && downRaw >= 1000 ? downRaw : null;
     const monthly = num((raw.match(/قسط\s*شهري[^=]*=\s*([\d,٬]+)/) || [])[1]);
     const years = num((raw.match(/(\d{1,2})\s*(?:سنين|سنوات|سنه|سنة)/) || [])[1]);
     // No monthly installment written: estimate it from the rest (no interest), and keep it apart from a written one.
