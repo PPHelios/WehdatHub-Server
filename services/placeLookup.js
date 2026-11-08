@@ -4,6 +4,7 @@
 "use strict";
 
 const P = require("../domain/mapPlaces");
+const Vis = require("../lib/visibility");
 
 const UA = "WehdatHub/1.0 (map place lookup)";
 
@@ -22,31 +23,42 @@ async function osm(name, fetchFn) {
   return pos && P.inEgypt(pos.lat, pos.lng) ? pos : null;
 }
 
+/** Returns { pos, status }: status is "no_key", "OK", "ZERO_RESULTS", "REQUEST_DENIED", "HTTP_<code>" or "outside_egypt". */
 async function google(name, key, fetchFn) {
-  if (!key) return null;
+  if (!key) return { pos: null, status: "no_key" };
   const url = `https://maps.googleapis.com/maps/api/geocode/json?region=eg&address=${encodeURIComponent(`${name}, Egypt`)}&key=${encodeURIComponent(key)}`;
   const res = await fetchFn(url);
-  if (!res.ok) return null;
+  if (!res.ok) return { pos: null, status: `HTTP_${res.status}` };
   const body = await res.json();
-  const loc = body.status === "OK" && body.results?.[0]?.geometry?.location;
+  if (body.status !== "OK") return { pos: null, status: body.status || "unknown" };
+  const loc = body.results?.[0]?.geometry?.location;
   const pos = loc && { lat: Number(loc.lat), lng: Number(loc.lng) };
-  return pos && P.inEgypt(pos.lat, pos.lng) ? pos : null;
+  const address = body.results?.[0]?.formatted_address || null;
+  if (pos && P.inEgypt(pos.lat, pos.lng)) return { pos, status: "OK", address };
+  return { pos: null, status: "outside_egypt", address };
 }
 
 /** Approved places with no pin, 20 at a time. */
 async function missing(pool, { offset = 0, limit = 20 } = {}) {
   const { rows } = await pool.query(
-    "SELECT id, name_en, name_ar FROM map_places WHERE approved AND (lat IS NULL OR lng IS NULL) ORDER BY lower(coalesce(name_en, name_ar)) LIMIT $1 OFFSET $2",
+    `SELECT m.id, m.name_en, m.name_ar, m.district, m.lat, m.lng, ${UNITS_SQL} AS units FROM map_places m
+     WHERE m.approved AND (m.lat IS NULL OR m.lng IS NULL) ORDER BY ${ORDER_SQL} LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
   const { rows: [{ n }] } = await pool.query("SELECT count(*)::int AS n FROM map_places WHERE approved AND (lat IS NULL OR lng IS NULL)");
   return { rows, total: n };
 }
 
+// Owner lists: Cairo areas first, then the places with the most units, then by name.
+// The owner counts every unit (not a broker's view): the all-units rule, written out.
+const UNITS_SQL = `(SELECT count(*)::int FROM listings l WHERE ${Vis.allUnits()} AND l.place_id = m.id AND l.status <> 'deleted')`;
+const ORDER_SQL = "(CASE WHEN m.district ILIKE '%cairo%' THEN 0 ELSE 1 END), units DESC, lower(coalesce(m.name_en, m.name_ar))";
+
 /** Approved places that already have a pin the owner has not double-checked yet, 20 at a time. */
 async function unchecked(pool, { limit = 20 } = {}) {
   const { rows } = await pool.query(
-    "SELECT id, name_en, name_ar, lat, lng FROM map_places WHERE approved AND lat IS NOT NULL AND lng IS NOT NULL AND pin_checked_at IS NULL ORDER BY lower(coalesce(name_en, name_ar)) LIMIT $1",
+    `SELECT m.id, m.name_en, m.name_ar, m.district, m.lat, m.lng, ${UNITS_SQL} AS units FROM map_places m
+     WHERE m.approved AND m.lat IS NOT NULL AND m.lng IS NOT NULL AND m.pin_checked_at IS NULL ORDER BY ${ORDER_SQL} LIMIT $1`,
     [limit]
   );
   const { rows: [{ n }] } = await pool.query("SELECT count(*)::int AS n FROM map_places WHERE approved AND lat IS NOT NULL AND lng IS NOT NULL AND pin_checked_at IS NULL");
@@ -82,9 +94,11 @@ async function suggest(places, { fetchFn = fetch, key = process.env.GOOGLE_MAPS_
     let g = null;
     try { o = await osm(`${name} compound`, fetchFn); } catch { o = null; }
     if (!o) { try { o = await osm(name, fetchFn); } catch { o = null; } }
-    try { g = await google(name, key, fetchFn); } catch { g = null; }
+    let gs = "error";
+    let ga = null;
+    try { ({ pos: g, status: gs, address: ga } = await google(p.district ? `${name}, ${p.district}` : name, key, fetchFn)); } catch { g = null; }
     const pos = o || g;
-    out.push({ id: p.id, name, saved: p.lat != null ? { lat: p.lat, lng: p.lng } : null, osm: o, pos, source: o ? "osm" : g ? "google" : null, google: g, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
+    out.push({ id: p.id, name, units: p.units ?? null, district: p.district ?? null, saved: p.lat != null ? { lat: p.lat, lng: p.lng } : null, osm: o, pos, source: o ? "osm" : g ? "google" : null, google: g, google_status: gs, google_address: ga, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
     if (pauseMs) await new Promise((r) => setTimeout(r, pauseMs)); // Nominatim allows one request a second
   }
   return out;

@@ -47,7 +47,7 @@ const ERRORS = (lang) => ({
   outside_egypt: L(lang, "الإحداثيات برة مصر.", "These coordinates are outside Egypt."),
   link_short: L(lang, "الرابط مختصر. افتحه في جوجل ماب وانسخ الرابط الكامل.", "That is a short link. Open it in Google Maps and copy the full link."),
   link_unreadable: L(lang, "مش قادر أقرأ الرابط ده.", "I can't read that link."),
-  duplicate: L(lang, "المكان ده موجود بالفعل.", "That place already exists."),
+  duplicate: L(lang, "المكان ده موجود بالفعل. الأماكن المشابهة تحت، اضغط على واحد تعدله.", "That place already exists. The similar places are listed below: tap one to edit it."),
   missing: L(lang, "المكان مش موجود.", "That place was not found.")
 });
 
@@ -236,7 +236,7 @@ function register(web, { pool, page, assets }) {
 
   const savePlace = (id) => ownerOnly(async (req, res) => {
     const out = await Maps.save(pool, id, req.body || {});
-    return goOwner(res, out.ok ? "msg=saved" : `err=${out.error}${id ? `&edit=${id}` : ""}`);
+    return goOwner(res, out.ok ? "msg=saved" : `err=${out.error}${id ? `&edit=${id}` : out.error === "duplicate" ? `&q=${encodeURIComponent(String(req.body.name_en || req.body.name_ar || "").slice(0, 80))}` : ""}`);
   });
   web.post("/owner/map", savePlace(null));
 
@@ -253,24 +253,55 @@ function register(web, { pool, page, assets }) {
     return goQueue(res, "msg=alias");
   }));
 
+  // What Google answered, in words the owner can act on.
+  const googleStatusText = (s) => ({
+    ZERO_RESULTS: "no match",
+    REQUEST_DENIED: "key rejected (check the key and its restrictions)",
+    OVER_QUERY_LIMIT: "quota used up",
+    outside_egypt: "result outside Egypt",
+    no_key: "no key set",
+    error: "request failed"
+  })[s] || (String(s || "").startsWith("HTTP_") ? `HTTP error ${String(s).slice(5)}` : s || "no answer");
+  // A slow page opens at once with a spinner; app.js then fetches the same address with ?part=1 and fills it in.
+  const lazyShell = (lang, title, url) => html`<h1>📍 ${title}</h1>
+<div class="card row" data-lazy="${url}" role="status"><span class="spinner"></span> <span>${L(lang, "بندوّر على الأماكن… ممكن ياخد دقيقة.", "Looking the places up… this can take about a minute.")}</span></div>`;
+  const reviewHead = () =>
+    html`<link rel="stylesheet" href="${assets.url("leaflet.css")}"><script src="${assets.url("leaflet.js")}" defer></script><script src="${assets.url("protomaps-leaflet.js")}" defer></script><script src="${assets.url("pinreview.js")}" defer></script>`;
+  const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+  // Links that open each pin in Google Maps (satellite is one tap away there).
+  const pinLinks = (lang, r) => html`<span class="small">${r.saved ? html`<a href="${gm(r.saved)}" target="_blank" rel="noopener">${L(lang, "المحفوظ", "Saved")} ↗</a> ` : ""}${r.osm ? html`<a href="${gm(r.osm)}" target="_blank" rel="noopener">OpenStreetMap ↗</a> ` : ""}${r.google ? html`<a href="${gm(r.google)}" target="_blank" rel="noopener">Google ↗</a>` : ""}</span>`;
+  // One map above the list: tap a place in the list to see its saved, OpenStreetMap and Google pins; tap the map to set your own spot.
+  const reviewMap = (lang, rows) => tiles()
+    ? html`<div class="map-view" data-review data-tiles="${tiles()}" data-lang="${lang}" data-sat-key="${process.env.GOOGLE_MAPS_BROWSER_KEY || ""}" data-i18n="${JSON.stringify({ saved: L(lang, "المحفوظ", "Saved"), osm: "OpenStreetMap", google: "Google", mine: L(lang, "مكانك", "Your spot") })}" data-rows="${JSON.stringify(rows.map((r) => ({ id: r.id, name: r.name, saved: r.saved || null, osm: r.osm || null, google: r.google || null })))}" role="application" aria-label="${L(lang, "خريطة المراجعة", "Review map")}"></div>
+<img class="sat" data-sat alt="" hidden>
+<p class="muted small">${L(lang, "اختار مكان من القايمة عشان يظهر على الخريطة. اضغط على الخريطة لتحديد مكانك بإيدك.", "Pick a place in the list to see it on the map. Tap the map to set your own spot.")}</p>`
+    : "";
   // Missing pins: 20 places at a time; OpenStreetMap suggests, Google fills the gaps and checks; the owner approves each.
   web.get("/owner/map/find", ownerOnly(async (req, res, lang) => {
     const offset = Math.max(0, Math.floor(Number(req.query.offset) || 0));
+    const title = L(lang, "الأماكن من غير دبوس", "Missing pins");
+    if (req.query.part !== "1") {
+      return page(req, res, { title, nav: "ownermap", head: tiles() ? reviewHead() : null, body: lazyShell(lang, title, `/app/owner/map/find?part=1&offset=${offset}`) });
+    }
     const found = await Lookup.missing(pool, { offset, limit: 20 });
     const rows = await Lookup.suggest(found.rows);
     const hasKey = Boolean(process.env.GOOGLE_MAPS_API_KEY);
-    const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
-    const badge = (r) => (r.apart_km == null ? (r.source === "google" ? L(lang, "من جوجل بس", "Google only") : hasKey ? L(lang, "جوجل مالقاش", "Google found nothing") : "") : r.apart_km < 0.5 ? L(lang, "جوجل موافق", "Google agrees") : L(lang, `جوجل مختلف ${r.apart_km} كم`, `Google differs by ${r.apart_km} km`));
-    return page(req, res, { title: L(lang, "الأماكن من غير دبوس", "Missing pins"), nav: "ownermap", body: html`<h1>📍 ${L(lang, "الأماكن من غير دبوس", "Missing pins")}</h1>
-<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")} <a href="/app/owner/map/check">${L(lang, "راجع الدبابيس المحفوظة", "Check saved pins")}</a></p>
+    const badge = (r) => (r.apart_km == null ? (r.source === "google" ? L(lang, "من جوجل بس", "Google only") : hasKey ? `Google: ${googleStatusText(r.google_status)}` : "") : r.apart_km < 0.5 ? L(lang, "جوجل موافق", "Google agrees") : L(lang, `جوجل مختلف ${r.apart_km} كم`, `Google differs by ${r.apart_km} km`));
+    const fragment = html`<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")}<br>${L(lang, "الخدمات:", "Services:")} OpenStreetMap ✓ · Google ${hasKey ? "✓ (key set)" : "✗ (no GOOGLE_MAPS_API_KEY)"} <a href="/app/owner/map/check">${L(lang, "راجع الدبابيس المحفوظة", "Check saved pins")}</a></p>
+${reviewMap(lang, rows)}
 <form method="post" action="/app/owner/map/find" class="stack">
-  <ul class="stack">${rows.map((r) => html`<li class="card row">${r.pos ? html`<label><input type="checkbox" name="pick" value="${r.id},${r.pos.lat},${r.pos.lng}"> <strong>${r.name}</strong></label> <span class="muted">${r.source === "osm" ? "OpenStreetMap" : "Google"} · ${badge(r)}</span> <a href="${gm(r.pos)}" target="_blank" rel="noopener">${L(lang, "افتح في جوجل ماب", "Open in Google Maps")}</a>` : html`<strong>${r.name}</strong> <span class="muted">${L(lang, "ملقيناش مكان. حطه بإيدك.", "Not found. Place it by hand.")} <a href="/app/owner/map?q=${encodeURIComponent(r.name)}">${L(lang, "تعديل", "Edit")}</a></span>`}</li>`)}</ul>
+  <ul class="stack">${rows.map((r) => html`<li class="card row" data-row="${r.id}"><input type="checkbox" name="pick" value="" hidden data-custom="${r.id}">${r.pos ? html`<label><input type="checkbox" name="pick" value="${r.id},${r.pos.lat},${r.pos.lng}"> <strong>${r.name}</strong></label> <span class="muted">${r.units != null ? r.units + " " + L(lang, "وحدة", "units") + " · " : ""}${r.source === "osm" ? "OpenStreetMap" : "Google"} · ${badge(r)}</span> ${pinLinks(lang, r)} ${r.google_address ? html`<span class="muted small">${r.google_address}</span> ` : ""}<button type="submit" name="pick" class="small" value="${r.id},${r.pos.lat},${r.pos.lng}">${L(lang, "اعتمد ده بس", "Approve this one")}</button>` : html`<strong>${r.name}</strong> <span class="muted">${L(lang, "ملقيناش مكان. اضغط على الخريطة أو حطه بإيدك.", "Not found. Tap the map to set a spot, or place it by hand.")} <a href="/app/owner/map?q=${encodeURIComponent(r.name)}">${L(lang, "تعديل", "Edit")}</a></span>`} <span class="muted small" data-custom-note="${r.id}" hidden></span></li>`)}</ul>
   <div class="row"><button type="submit">${L(lang, "اعتمد المحدد", "Approve ticked")}</button>
   ${offset + 20 < found.total ? html`<a class="btn secondary" href="/app/owner/map/find?offset=${offset + 20}">${L(lang, "العشرين اللي بعدهم", "Next 20")}</a>` : ""}</div>
-</form>` });
+</form>`;
+    return res.type("html").send(String(fragment));
   }));
   // One-time double check of the pins already saved: how far each is from what OpenStreetMap and Google find.
   web.get("/owner/map/check", ownerOnly(async (req, res, lang) => {
+    const title = L(lang, "مراجعة الدبابيس المحفوظة", "Check saved pins");
+    if (req.query.part !== "1") {
+      return page(req, res, { title, nav: "ownermap", head: tiles() ? reviewHead() : null, body: lazyShell(lang, title, "/app/owner/map/check?part=1") });
+    }
     const found = await Lookup.unchecked(pool, { limit: 20 });
     const rows = (await Lookup.suggest(found.rows)).map((r) => {
       const dOsm = r.saved && r.osm ? Math.round(Lookup.km(r.saved, r.osm) * 10) / 10 : null;
@@ -278,18 +309,19 @@ function register(web, { pool, page, assets }) {
       const known = [dOsm, dGoogle].filter((d) => d !== null);
       return { ...r, dOsm, dGoogle, ok: known.length > 0 && Math.min(...known) < 1, unknown: known.length === 0 };
     }).sort((a, b) => Number(a.ok) - Number(b.ok));
-    const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
-    return page(req, res, { title: L(lang, "مراجعة الدبابيس", "Check pins"), nav: "ownermap", body: html`<h1>📍 ${L(lang, "مراجعة الدبابيس المحفوظة", "Check saved pins")}</h1>
-<p class="muted">${found.total} ${L(lang, "مكان لسه ماتراجعش. الدبوس بيفضل مكانه إلا لو اخترت تنقله.", "places not checked yet. A pin stays where it is unless you choose to move it.")}</p>
+    const fragment = html`<p class="muted">${found.total} ${L(lang, "مكان لسه ماتراجعش. الدبوس بيفضل مكانه إلا لو اخترت تنقله.", "places not checked yet. A pin stays where it is unless you choose to move it.")}</p>
+${reviewMap(lang, rows)}
 <form method="post" action="/app/owner/map/check" class="stack">
-  <ul class="stack">${rows.map((r) => html`<li class="card stack"><input type="hidden" name="ids" value="${r.id}">
-    <strong>${r.name}</strong> <span class="muted">${r.ok ? L(lang, "مطابق", "Looks right") : r.unknown ? L(lang, "ملقيناش للمقارنة", "Nothing to compare") : L(lang, "مش مطابق", "Does not match")}</span>
-    <span class="muted small">${r.dOsm !== null ? html`OSM ${r.dOsm} km · ` : ""}${r.dGoogle !== null ? html`Google ${r.dGoogle} km · ` : ""}<a href="${gm(r.saved)}" target="_blank" rel="noopener">${L(lang, "الدبوس الحالي", "Current pin")}</a></span>
+  <ul class="stack">${rows.map((r) => html`<li class="card stack" data-row="${r.id}"><input type="hidden" name="ids" value="${r.id}">
+    <strong>${r.name}</strong> <span class="muted">${r.units != null ? r.units + " " + L(lang, "وحدة", "units") + " · " : ""}${r.ok ? L(lang, "مطابق", "Looks right") : r.unknown ? L(lang, "ملقيناش للمقارنة", "Nothing to compare") : L(lang, "مش مطابق", "Does not match")}</span>
+    <span class="muted small">${r.dOsm !== null ? html`OSM ${r.dOsm} km · ` : ""}${r.dGoogle !== null ? html`Google ${r.dGoogle} km · ` : ""}${pinLinks(lang, r)}${r.google_address ? html` · ${r.google_address}` : ""}</span>
     <label class="row"><input type="radio" name="c_${r.id}" value="keep" checked> ${L(lang, "سيبه", "Keep")}</label>
-    ${r.osm ? html`<label class="row"><input type="radio" name="c_${r.id}" value="${r.osm.lat},${r.osm.lng}"> ${L(lang, "انقل لـ OSM", "Move to OSM")} <a href="${gm(r.osm)}" target="_blank" rel="noopener">↗</a></label>` : ""}
-    ${r.google ? html`<label class="row"><input type="radio" name="c_${r.id}" value="${r.google.lat},${r.google.lng}"> ${L(lang, "انقل لجوجل", "Move to Google")} <a href="${gm(r.google)}" target="_blank" rel="noopener">↗</a></label>` : ""}</li>`)}</ul>
+    ${r.osm ? html`<label class="row"><input type="radio" name="c_${r.id}" value="${r.osm.lat},${r.osm.lng}"> ${L(lang, "انقل لـ OSM", "Move to OSM")}</label>` : ""}
+    ${r.google ? html`<label class="row"><input type="radio" name="c_${r.id}" value="${r.google.lat},${r.google.lng}"> ${L(lang, "انقل لجوجل", "Move to Google")}</label>` : ""}
+    <input type="radio" name="c_${r.id}" value="" hidden data-custom="${r.id}"><span class="muted small" data-custom-note="${r.id}" hidden></span></li>`)}</ul>
   <button type="submit">${L(lang, "تمام، خلّص الدفعة دي", "Done with this batch")}</button>
-</form>` });
+</form>`;
+    return res.type("html").send(String(fragment));
   }));
   web.post("/owner/map/check", ownerOnly(async (req, res) => {
     const ids = [].concat(req.body.ids || []).slice(0, 50);

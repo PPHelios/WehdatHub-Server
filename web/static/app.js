@@ -294,6 +294,39 @@
     var el = document.querySelector("[data-search-url]");
     if (el && window.history && history.replaceState) history.replaceState(null, "", el.getAttribute("data-search-url"));
   });
+  // Slow pages (data-lazy="address"): the page opens at once with a spinner, then the content is fetched and put in its place.
+  (function () {
+    var T = document.documentElement.lang === "ar"
+      ? { fail: "ما اتحملش. جرب تاني.", retry: "حاول تاني" }
+      : { fail: "It did not load.", retry: "Try again" };
+    function fill(el) {
+      var url = el.getAttribute("data-lazy");
+      if (!url || !window.fetch) return;
+      fetch(url, { credentials: "same-origin", headers: { Accept: "text/html" } })
+        .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+        .then(function (t) {
+          el.removeAttribute("data-lazy");
+          el.removeAttribute("role");
+          el.className = "lazy-done";
+          el.innerHTML = t;
+          document.dispatchEvent(new CustomEvent("lazy:loaded", { detail: el }));
+        })
+        .catch(function () {
+          el.textContent = "";
+          var p = document.createElement("p");
+          p.className = "warn";
+          p.textContent = T.fail + " ";
+          var b = document.createElement("button");
+          b.type = "button";
+          b.textContent = T.retry;
+          b.addEventListener("click", function () { window.location.reload(); });
+          p.appendChild(b);
+          el.appendChild(p);
+        });
+    }
+    var pending = document.querySelectorAll("[data-lazy]");
+    for (var i = 0; i < pending.length; i++) fill(pending[i]);
+  })();
   // Search: pressing Enter or Search shows a spinner at once (the AI reading can take a moment), until the page answers.
   document.addEventListener("submit", function (e) {
     var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
