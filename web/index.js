@@ -130,7 +130,7 @@ function mountWeb(app, { pool, config }) {
     if (!(TestRole.canView(req.session.broker) && TestRole.isViewing(req.sid))) return next();
     req.session.broker = TestRole.asViewer(req.session.broker);
     if (TestRole.VIEW_OPEN.test(req.path)) return next();
-    if (req.method !== "GET") return res.status(403).type("text/plain").send("Read only while viewing another agency");
+    if (req.method !== "GET" && !TestRole.viewPostAllowed(req.method, req.path)) return res.status(403).type("text/plain").send("Read only while viewing another agency");
     return ViewGuard.runReadOnly(() => next());
   });
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
