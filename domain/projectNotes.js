@@ -62,6 +62,9 @@ function matchUnits(projects, f = {}) {
   const places = [...(f.locations || []), ...(f.places || []).map((p) => p.key), ...(f.place_terms || [])]
     .map((p) => normalizeSearch(p))
     .filter(Boolean);
+  // A request with no area, place, price or installment asked is not a question about one offer: nothing is listed.
+  const asked = places.length || [f.area_min, f.area_max, f.price_min, f.price_max, f.max_installment, f.max_down_payment].some((v) => v != null);
+  if (!asked) return [];
   const hits = [];
   for (const { project, units } of projects) {
     if (!matchesPlace(project, places)) continue;

@@ -39,6 +39,10 @@ describe("offers in project notes", () => {
     expect(PN.matchUnits(all, { max_installment: 23000 }).map((h) => h.unit.area)).toEqual([153]);
   });
 
+  test("a request with nothing specific (no area, place, budget or installment) lists no notes offers", () => {
+    expect(PN.matchUnits([{ project: JAZEEL, units: PN.parseUnits(NOTES) }], { installments: true })).toEqual([]);
+  });
+
   test("rent searches are not answered from notes", () => {
     expect(PN.matchUnits([{ project: JAZEEL, units: PN.parseUnits(NOTES) }], { listing_type: "rent" })).toEqual([]);
   });
