@@ -52,10 +52,12 @@ async function checkControl(ctx, path, index, where) {
     const valid = await btn.evaluate((b) => (b.form ? b.form.checkValidity() : false)).catch(() => false);
     if (!valid) return; // a form that needs input first sends nothing, so there is no wait to show
     await btn.click({ noWaitAfter: true }).catch(() => {});
-    const shown = await btn.evaluate((b) => {
-      const form = b.form;
-      return b.classList.contains("busy") || b.disabled || b.hasAttribute("data-locked") || Boolean(form && form.classList.contains("is-busy"));
-    }).catch(() => true); // a button that already left the page is not a gap
+    await pg.waitForTimeout(100);
+    // The app's own markers: the busy class, a lock, an htmx request, or a busy search form around the button.
+    const shown = await btn.evaluate((b) => (
+      b.classList.contains("busy") || b.disabled || b.hasAttribute("data-locked") || b.classList.contains("htmx-request") ||
+      Boolean(b.closest(".is-busy, .htmx-request, [data-locked]"))
+    )).catch(() => true); // a button that already left the page is not a gap
     if (!shown) gaps.push(`${where} · "${label || "(no text)"}"`);
   } finally {
     await pg.close().catch(() => {});
