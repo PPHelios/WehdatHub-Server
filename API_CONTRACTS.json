@@ -471,7 +471,7 @@
       "LOCATION_ALIASES": "Object"
     },
     "services/projectAnswer.js": {
-      "offersFor": ["pool", "agencyId", "filters", "opts"],
+      "offersFor": ["pool", "agencyId", "filters", "params"],
       "clientText": ["hits", "lang"],
       "answer": ["pool", "agencyId", "text", "lang", "filters"],
       "nameWords": ["text"],
