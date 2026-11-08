@@ -244,6 +244,7 @@
       return fetch(path, { method: "POST", credentials: "same-origin", body: new URLSearchParams(fields) });
     };
     btn.disabled = true;
+    btn.classList.add("busy");
     send("/app/passkey/login/options", {})
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("options")); })
       .then(function (o) { o.challenge = b64ToBytes(o.challenge); return navigator.credentials.get({ publicKey: o }); })
@@ -260,7 +261,7 @@
       })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("refused")); })
       .then(function (j) { location.replace(j.next || "/app/"); })
-      .catch(function () { pkSay(box, "Passkey sign-in didn't work. Turn passkeys on in Settings first, or use a bot link."); btn.disabled = false; });
+      .catch(function () { pkSay(box, "Passkey sign-in didn't work. Turn passkeys on in Settings first, or use a bot link."); btn.disabled = false; btn.classList.remove("busy"); });
   });
   // Unit photos to a client (/app/units/<code>/share-media): files through the share sheet, one tap to WhatsApp.
   document.addEventListener("click", function (e) {
