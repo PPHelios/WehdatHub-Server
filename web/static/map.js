@@ -45,6 +45,15 @@
         if (move) map.setView([lat, lng], Math.max(map.getZoom(), 14));
       };
       put(parseFloat(latEl.value), parseFloat(lngEl.value), true);
+      // Every approved place that has a position: its name on hover, tap to edit it.
+      var all = [];
+      try { all = JSON.parse(root.getAttribute("data-places") || "[]"); } catch (e) { all = []; }
+      all.forEach(function (p) {
+        L.circleMarker([p.lat, p.lng], { radius: 6, weight: 1, color: "#1d4ed8", fillColor: "#3b82f6", fillOpacity: 0.8 })
+          .bindTooltip(String(p.n), { direction: "top" })
+          .on("click", function () { window.location.href = "/app/owner/map?edit=" + encodeURIComponent(p.id) + "#place-form"; })
+          .addTo(map);
+      });
       map.on("click", function (e) {
         latEl.value = e.latlng.lat.toFixed(6);
         lngEl.value = e.latlng.lng.toFixed(6);
