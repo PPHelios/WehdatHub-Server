@@ -70,8 +70,14 @@ function filterBar(lang) {
   <label class="map-field"><span class="muted small">${L(lang, "نوع الصفقة", "Deal type")}</span><select data-f-deal><option value="">${L(lang, "الكل", "Any")}</option>${DealRules.DEALS.map((d) => html`<option value="${d}">${DealRules.label(d, lang)}</option>`)}</select></label>
   <div class="map-budget" data-budget hidden>
     <div class="row between"><span class="muted small">${L(lang, "الميزانية", "Budget")}</span><output data-budget-text></output></div>
-    <input type="range" data-f-pmin min="0" max="100" value="0" aria-label="${L(lang, "أقل ميزانية", "Minimum budget")}">
-    <input type="range" data-f-pmax min="0" max="100" value="100" aria-label="${L(lang, "أعلى ميزانية", "Maximum budget")}">
+    <div class="row budget-boxes">
+      <label class="map-field"><span class="muted small">${L(lang, "من", "From")}</span><input data-pmin-box inputmode="text" dir="ltr" autocomplete="off" placeholder="${L(lang, "مثلا 3m", "e.g. 3m")}"></label>
+      <label class="map-field"><span class="muted small">${L(lang, "إلى", "To")}</span><input data-pmax-box inputmode="text" dir="ltr" autocomplete="off" placeholder="${L(lang, "مثلا 6m", "e.g. 6m")}"></label>
+    </div>
+    <div class="dual"><div class="dual-fill" data-dual-fill></div>
+      <input type="range" data-f-pmin min="0" max="100" value="0" aria-label="${L(lang, "أقل ميزانية", "Minimum budget")}">
+      <input type="range" data-f-pmax min="0" max="100" value="100" aria-label="${L(lang, "أعلى ميزانية", "Maximum budget")}">
+    </div>
   </div>
 </div>`;
 }
@@ -158,7 +164,7 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   ]);
   const msg = String(req.query.msg || "");
   const err = ERRORS(lang)[String(req.query.err || "")];
-  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", pinned: `اتحط ${req.query.n || 0} دبوس.`, approved: "اتعتمد.", master: `اتعتمد ${req.query.n || 0} مكان.`, dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", pinned: `${req.query.n || 0} pins saved.`, approved: "Approved.", master: `${req.query.n || 0} places approved from the master list.`, dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
+  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", pinned: `اتحط ${req.query.n || 0} دبوس.`, moved: `اتنقل ${req.query.n || 0} دبوس.`, approved: "اتعتمد.", master: `اتعتمد ${req.query.n || 0} مكان.`, dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", pinned: `${req.query.n || 0} pins saved.`, moved: `${req.query.n || 0} pins moved.`, approved: "Approved.", master: `${req.query.n || 0} places approved from the master list.`, dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
   const next = list.rows.length === 50 ? html`<a class="btn secondary" href="/app/owner/map?q=${encodeURIComponent(q)}&p=${pageNo + 1}">${L(lang, "التالي", "Next")}</a>` : "";
   return html`<h1>🗺️ ${L(lang, "أماكن الخريطة", "Map places")}</h1>
 ${notice}
@@ -256,12 +262,45 @@ function register(web, { pool, page, assets }) {
     const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
     const badge = (r) => (r.apart_km == null ? (r.source === "google" ? L(lang, "من جوجل بس", "Google only") : hasKey ? L(lang, "جوجل مالقاش", "Google found nothing") : "") : r.apart_km < 0.5 ? L(lang, "جوجل موافق", "Google agrees") : L(lang, `جوجل مختلف ${r.apart_km} كم`, `Google differs by ${r.apart_km} km`));
     return page(req, res, { title: L(lang, "الأماكن من غير دبوس", "Missing pins"), nav: "ownermap", body: html`<h1>📍 ${L(lang, "الأماكن من غير دبوس", "Missing pins")}</h1>
-<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")}</p>
+<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")} <a href="/app/owner/map/check">${L(lang, "راجع الدبابيس المحفوظة", "Check saved pins")}</a></p>
 <form method="post" action="/app/owner/map/find" class="stack">
   <ul class="stack">${rows.map((r) => html`<li class="card row">${r.pos ? html`<label><input type="checkbox" name="pick" value="${r.id},${r.pos.lat},${r.pos.lng}"> <strong>${r.name}</strong></label> <span class="muted">${r.source === "osm" ? "OpenStreetMap" : "Google"} · ${badge(r)}</span> <a href="${gm(r.pos)}" target="_blank" rel="noopener">${L(lang, "افتح في جوجل ماب", "Open in Google Maps")}</a>` : html`<strong>${r.name}</strong> <span class="muted">${L(lang, "ملقيناش مكان. حطه بإيدك.", "Not found. Place it by hand.")} <a href="/app/owner/map?q=${encodeURIComponent(r.name)}">${L(lang, "تعديل", "Edit")}</a></span>`}</li>`)}</ul>
   <div class="row"><button type="submit">${L(lang, "اعتمد المحدد", "Approve ticked")}</button>
   ${offset + 20 < found.total ? html`<a class="btn secondary" href="/app/owner/map/find?offset=${offset + 20}">${L(lang, "العشرين اللي بعدهم", "Next 20")}</a>` : ""}</div>
 </form>` });
+  }));
+  // One-time double check of the pins already saved: how far each is from what OpenStreetMap and Google find.
+  web.get("/owner/map/check", ownerOnly(async (req, res, lang) => {
+    const found = await Lookup.unchecked(pool, { limit: 20 });
+    const rows = (await Lookup.suggest(found.rows)).map((r) => {
+      const dOsm = r.saved && r.osm ? Math.round(Lookup.km(r.saved, r.osm) * 10) / 10 : null;
+      const dGoogle = r.saved && r.google ? Math.round(Lookup.km(r.saved, r.google) * 10) / 10 : null;
+      const known = [dOsm, dGoogle].filter((d) => d !== null);
+      return { ...r, dOsm, dGoogle, ok: known.length > 0 && Math.min(...known) < 1, unknown: known.length === 0 };
+    }).sort((a, b) => Number(a.ok) - Number(b.ok));
+    const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+    return page(req, res, { title: L(lang, "مراجعة الدبابيس", "Check pins"), nav: "ownermap", body: html`<h1>📍 ${L(lang, "مراجعة الدبابيس المحفوظة", "Check saved pins")}</h1>
+<p class="muted">${found.total} ${L(lang, "مكان لسه ماتراجعش. الدبوس بيفضل مكانه إلا لو اخترت تنقله.", "places not checked yet. A pin stays where it is unless you choose to move it.")}</p>
+<form method="post" action="/app/owner/map/check" class="stack">
+  <ul class="stack">${rows.map((r) => html`<li class="card stack"><input type="hidden" name="ids" value="${r.id}">
+    <strong>${r.name}</strong> <span class="muted">${r.ok ? L(lang, "مطابق", "Looks right") : r.unknown ? L(lang, "ملقيناش للمقارنة", "Nothing to compare") : L(lang, "مش مطابق", "Does not match")}</span>
+    <span class="muted small">${r.dOsm !== null ? html`OSM ${r.dOsm} km · ` : ""}${r.dGoogle !== null ? html`Google ${r.dGoogle} km · ` : ""}<a href="${gm(r.saved)}" target="_blank" rel="noopener">${L(lang, "الدبوس الحالي", "Current pin")}</a></span>
+    <label class="row"><input type="radio" name="c_${r.id}" value="keep" checked> ${L(lang, "سيبه", "Keep")}</label>
+    ${r.osm ? html`<label class="row"><input type="radio" name="c_${r.id}" value="${r.osm.lat},${r.osm.lng}"> ${L(lang, "انقل لـ OSM", "Move to OSM")} <a href="${gm(r.osm)}" target="_blank" rel="noopener">↗</a></label>` : ""}
+    ${r.google ? html`<label class="row"><input type="radio" name="c_${r.id}" value="${r.google.lat},${r.google.lng}"> ${L(lang, "انقل لجوجل", "Move to Google")} <a href="${gm(r.google)}" target="_blank" rel="noopener">↗</a></label>` : ""}</li>`)}</ul>
+  <button type="submit">${L(lang, "تمام، خلّص الدفعة دي", "Done with this batch")}</button>
+</form>` });
+  }));
+  web.post("/owner/map/check", ownerOnly(async (req, res) => {
+    const ids = [].concat(req.body.ids || []).slice(0, 50);
+    const choices = ids.map((id) => {
+      const v = String(req.body[`c_${id}`] || "keep");
+      const [lat, lng] = v === "keep" ? [null, null] : v.split(",");
+      return { id, lat, lng };
+    });
+    const out = await Lookup.finishCheck(pool, choices);
+    Maps.clearCache();
+    return goOwner(res, `msg=moved&n=${out.moved}`);
   }));
   web.post("/owner/map/find", ownerOnly(async (req, res) => {
     const picks = [].concat(req.body.pick || []).slice(0, 50);

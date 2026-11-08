@@ -594,3 +594,13 @@ label.field-missing input, label.field-missing select, label.field-missing texta
   .map-drawer { inset-inline: auto 24px; inset-block-end: 24px; width: 380px; max-height: 60dvh; border-radius: var(--radius); }
 }
 .pin-idle .pin-n { background: #6b7280; }
+.budget-boxes { gap: 8px; }
+.budget-boxes input { width: 100%; }
+.dual { position: relative; height: 28px; }
+.dual::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 4px; border-radius: 2px; background: var(--line, #d5dbe3); }
+.dual-fill { position: absolute; top: 12px; height: 4px; border-radius: 2px; background: var(--brand); }
+.dual input[type="range"] { position: absolute; left: 0; width: 100%; top: 0; margin: 0; height: 28px; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.dual input[type="range"]::-webkit-slider-runnable-track { background: none; }
+.dual input[type="range"]::-moz-range-track { background: none; }
+.dual input[type="range"]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(14, 21, 33, 0.4); }
+.dual input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%; background: var(--brand); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(14, 21, 33, 0.4); }

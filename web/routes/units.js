@@ -139,6 +139,8 @@ function register(web, { pool, page }) {
     const furnishing = oneOf(req.query.furnishing, [...FURNISHING_STATUSES, "none"]);
     const finishing = oneOf(req.query.finishing, [...FINISHING_STATUSES, "none"]);
     const deal = Deal.clean(req.query.deal);
+    const pmin = String(req.query.pmin || "").slice(0, 20);
+    const pmax = String(req.query.pmax || "").slice(0, 20);
     const q = String(req.query.q || "").trim().slice(0, 40);
     const pageNo = Math.max(0, Math.min(parseInt(req.query.page, 10) || 0, 10000));
     const { rows: compounds } = await pool.query(
@@ -163,6 +165,8 @@ function register(web, { pool, page }) {
     if (finishing === "none") where.push("finishing IS NULL");
     else if (finishing) add("finishing = ?", finishing);
     if (deal) where.push(Deal.sql(deal, ""));
+    if (Deal.parseMoney(pmin)) add("price_value >= ?", Deal.parseMoney(pmin));
+    if (Deal.parseMoney(pmax)) add("price_value <= ?", Deal.parseMoney(pmax));
     if (q) add("(code ILIKE '%' || ? || '%' OR developer_unit_code ILIKE '%' || ? || '%')", q.replace(/[%_\\]/g, (c) => `\\${c}`));
     const cond = where.join(" AND ");
     const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
@@ -172,12 +176,12 @@ function register(web, { pool, page }) {
     );
     const link = (over = {}) => {
       const p = new URLSearchParams();
-      const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, deal, ...over };
+      const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, deal, pmin, pmax, ...over };
       for (const [k, v] of Object.entries(all)) if (v !== "" && v !== null && v !== undefined) p.set(k, v);
       return `/app/units?${p.toString()}`;
     };
     const tab = (st, label) => html`<a href="${link({ status: st, page: "" })}"${st === status ? html` aria-current="page"` : ""}>${label}</a>`;
-    const active = [compound, type, furnishing, finishing, deal].filter(Boolean).length;
+    const active = [compound, type, furnishing, finishing, deal, pmin, pmax].filter(Boolean).length;
     const opt = (v, cur, label) => html`<option value="${v}"${v === cur ? html` selected` : ""}>${label}</option>`;
     const lab = (map, key) => (lang === "en" ? map[key][1] : map[key][0]);
     const pages = Math.max(1, Math.ceil(total / UNITS_PAGE));
@@ -200,8 +204,10 @@ ${notice || ""}
     <label>${L(lang, "الفرش", "Furnishing")}<select name="furnishing"><option value="">${L(lang, "الكل", "All")}</option>${FURNISHING_STATUSES.map((t) => opt(t, furnishing, lab(Describe.FURNISHING_LABELS, t)))}${opt("none", furnishing, L(lang, "مش محدد", "Not stated"))}</select></label>
     <label>${L(lang, "التشطيب", "Finishing")}<select name="finishing"><option value="">${L(lang, "الكل", "All")}</option>${FINISHING_STATUSES.map((t) => opt(t, finishing, lab(Describe.FINISHING_LABELS, t)))}${opt("none", finishing, L(lang, "مش محدد", "Not stated"))}</select></label>
     <label>${L(lang, "نوع الصفقة", "Deal type")}<select name="deal"><option value="">${L(lang, "الكل", "All")}</option>${Deal.DEALS.map((t) => opt(t, deal, Deal.label(t, lang)))}</select></label>
+    <label>${L(lang, "السعر من", "Price from")}<input name="pmin" value="${pmin}" inputmode="text" dir="ltr" placeholder="${L(lang, "مثلا 3m", "e.g. 3m")}"></label>
+    <label>${L(lang, "السعر إلى", "Price to")}<input name="pmax" value="${pmax}" inputmode="text" dir="ltr" placeholder="${L(lang, "مثلا 6m", "e.g. 6m")}"></label>
   </div>
-  <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="${link({ q: "", compound: "", type: "", furnishing: "", finishing: "", deal: "" })}">${L(lang, "مسح", "Clear")}</a></div>
+  <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="${link({ q: "", compound: "", type: "", furnishing: "", finishing: "", deal: "", pmin: "", pmax: "" })}">${L(lang, "مسح", "Clear")}</a></div>
   </details>
 </form>
 <p class="row between small">

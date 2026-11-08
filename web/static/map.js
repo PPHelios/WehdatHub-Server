@@ -83,6 +83,9 @@
     var sMin = app.querySelector("[data-f-pmin]");
     var sMax = app.querySelector("[data-f-pmax]");
     var budgetText = app.querySelector("[data-budget-text]");
+    var minBox = app.querySelector("[data-pmin-box]");
+    var maxBox = app.querySelector("[data-pmax-box]");
+    var fill = app.querySelector("[data-dual-fill]");
     var pending = 0;
 
     function query() {
@@ -104,9 +107,25 @@
       if (!lo || !hi || hi <= lo) return lo || 0;
       return lo * Math.pow(hi / lo, t / 100);
     }
+    function fromPrice(p) {
+      var lo = facets.pmin, hi = facets.pmax;
+      if (!lo || !hi || hi <= lo || p <= lo) return 0;
+      if (p >= hi) return 100;
+      return (100 * Math.log(p / lo)) / Math.log(hi / lo);
+    }
+    // "5m", "250k", "5,000,000" -> a number, or null.
+    function parseMoney(t) {
+      var m = String(t || "").toLowerCase().replace(/[,\s]/g, "").match(/^(\d+(?:\.\d+)?)([mk]?)$/);
+      if (!m) return null;
+      return Number(m[1]) * (m[2] === "m" ? 1e6 : m[2] === "k" ? 1e3 : 1);
+    }
     function budgetLabel() {
       var a = Number(sMin.value), b = Number(sMax.value);
       budgetText.textContent = a <= 0 && b >= 100 ? tr.allBudget : fmtMoney(toPrice(a)) + " – " + fmtMoney(toPrice(b)) + " " + (tr.egp || "");
+      fill.style.left = a + "%";
+      fill.style.width = Math.max(0, b - a) + "%";
+      if (document.activeElement !== minBox) minBox.value = state.pmin === null ? "" : fmtMoney(state.pmin);
+      if (document.activeElement !== maxBox) maxBox.value = state.pmax === null ? "" : fmtMoney(state.pmax);
     }
 
     function setFacets(f) {
@@ -227,6 +246,18 @@
       s.addEventListener("input", sliderChange);
       s.addEventListener("change", function () { sliderChange.call(s); load(false); });
     });
+    // The boxes take exact numbers and move the handles.
+    function boxChange() {
+      var a = parseMoney(minBox.value), b = parseMoney(maxBox.value);
+      state.pmin = a && a > 0 ? a : null;
+      state.pmax = b && b > 0 ? b : null;
+      if (state.pmin !== null && state.pmax !== null && state.pmin > state.pmax) { var t = state.pmin; state.pmin = state.pmax; state.pmax = t; }
+      sMin.value = state.pmin === null ? 0 : fromPrice(state.pmin);
+      sMax.value = state.pmax === null ? 100 : fromPrice(state.pmax);
+      budgetLabel();
+      load(false);
+    }
+    [minBox, maxBox].forEach(function (b) { b.addEventListener("change", boxChange); });
     var toggle = app.querySelector("[data-map-filter-toggle]");
     var bar = app.querySelector("[data-map-filters]");
     toggle.addEventListener("click", function () {

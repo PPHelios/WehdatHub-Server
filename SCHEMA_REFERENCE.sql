@@ -1466,7 +1466,8 @@ CREATE TABLE IF NOT EXISTS public.map_places (
   source text DEFAULT 'manual'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  approved boolean DEFAULT false NOT NULL
+  approved boolean DEFAULT false NOT NULL,
+  pin_checked_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.global_projects (
