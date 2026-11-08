@@ -4,6 +4,7 @@
 "use strict";
 
 const P = require("../domain/mapPlaces");
+const Vis = require("../lib/visibility");
 
 const UA = "WehdatHub/1.0 (map place lookup)";
 
@@ -49,7 +50,8 @@ async function missing(pool, { offset = 0, limit = 20 } = {}) {
 }
 
 // Owner lists: Cairo areas first, then the places with the most units, then by name.
-const UNITS_SQL = "(SELECT count(*)::int FROM listings l WHERE l.place_id = m.id AND l.status <> 'deleted')";
+// The owner counts every unit (not a broker's view): the all-units rule, written out.
+const UNITS_SQL = `(SELECT count(*)::int FROM listings l WHERE ${Vis.allUnits()} AND l.place_id = m.id AND l.status <> 'deleted')`;
 const ORDER_SQL = "(CASE WHEN m.district ILIKE '%cairo%' THEN 0 ELSE 1 END), units DESC, lower(coalesce(m.name_en, m.name_ar))";
 
 /** Approved places that already have a pin the owner has not double-checked yet, 20 at a time. */
