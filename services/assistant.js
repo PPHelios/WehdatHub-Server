@@ -9,6 +9,7 @@
 
 const AI = require("../lib/ai");
 const AiBlock = require("../lib/aiBlock");
+const ViewGuard = require("../lib/viewGuard");
 const A = require("../domain/assistant");
 const Card = require("../domain/leadCard");
 const Describe = require("../domain/describe");
@@ -163,14 +164,16 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
       contents: A.prompt(q, blocks, { lang, today: cairoDay(now) }),
       config: { responseMimeType: "application/json", temperature: 0 },
       operationType: "assistant",
-      ctx: { pool, broker }
+      // Viewing another agency: no pool or broker in the AI context, so no usage log and no credit is charged there.
+      ctx: ViewGuard.active() ? {} : { pool, broker }
     });
     res = A.parseAnswer(r.text, lang);
   } catch (err) {
     return { error: AiBlock.kindOf(err) };
   }
 
-  await pool.query("INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", [
+  // Viewing another agency writes nothing: the question is not recorded there.
+  if (!ViewGuard.active()) await pool.query("INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", [
     broker.agency_id,
     broker.id,
     q,
