@@ -47,6 +47,6 @@ function uploads(fields, { maxMb = 10, fieldSizeKb = 256 } = {}) {
 }
 
 const PHOTO = { name: "photos", maxCount: 15, accept: /^image\// };
-const VOICE = { name: "voice", maxCount: 1, accept: /^(audio|video)\/(ogg|webm|mp4|mpeg|aac|wav|x-m4a|m4a)/ };
+const VOICE = { name: "voice", maxCount: 1, accept: /^(audio|video)\/(ogg|webm|mp4|mpeg|aac|wav|x-wav|x-m4a|m4a)/ };
 
 module.exports = { MB, uploads, PHOTO, VOICE };
