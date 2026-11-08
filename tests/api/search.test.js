@@ -61,3 +61,9 @@ test("voice search: no audio is refused, a note comes back as text, silence is n
   const long = await post().attach("voice", Buffer.from("abc"), { filename: "v.m4a", contentType: "audio/mp4" });
   expect(long.status).toBe(422);
 });
+
+test("the public config tells old apps the lowest supported version", async () => {
+  const r = await request(h.app.app).get("/api/v1/config");
+  expect(r.status).toBe(200);
+  expect(r.body.minAppVersion).toMatch(/^\d+\.\d+\.\d+$/);
+});

@@ -42,6 +42,11 @@ function mountApi(app, { pool }) {
     res.set({ "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
     next();
   });
+  // The oldest app version the server still supports: an older app shows "Update the app" instead of failing in odd ways.
+  // Raise APP_MIN_VERSION (e.g. 1.2.0) on Render when an API change breaks old apps. Public, no sign-in.
+  api.get("/config", (_req, res) =>
+    res.json({ minAppVersion: /^\d+\.\d+\.\d+$/.test(process.env.APP_MIN_VERSION || "") ? process.env.APP_MIN_VERSION : "0.0.0", storeUrl: { android: process.env.APP_STORE_URL_ANDROID || null, ios: process.env.APP_STORE_URL_IOS || null } })
+  );
   api.use(loadBearer(pool));
   require("./auth").register(api, { pool });
 
@@ -51,6 +56,8 @@ function mountApi(app, { pool }) {
   require("./units").register(priv, { pool });
   require("./today").register(priv, { pool });
   require("./search").register(priv, { pool });
+  require("./leads").register(priv, { pool });
+  require("./unitsWrite").register(priv, { pool });
   api.use(priv);
 
   api.use((_req, res) => res.status(404).json({ error: "not_found" }));
