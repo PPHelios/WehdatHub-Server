@@ -244,6 +244,7 @@
       return fetch(path, { method: "POST", credentials: "same-origin", body: new URLSearchParams(fields) });
     };
     btn.disabled = true;
+    btn.classList.add("busy");
     send("/app/passkey/login/options", {})
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("options")); })
       .then(function (o) { o.challenge = b64ToBytes(o.challenge); return navigator.credentials.get({ publicKey: o }); })
@@ -260,7 +261,7 @@
       })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("refused")); })
       .then(function (j) { location.replace(j.next || "/app/"); })
-      .catch(function () { pkSay(box, "Passkey sign-in didn't work. Turn passkeys on in Settings first, or use a bot link."); btn.disabled = false; });
+      .catch(function () { pkSay(box, "Passkey sign-in didn't work. Turn passkeys on in Settings first, or use a bot link."); btn.disabled = false; btn.classList.remove("busy"); });
   });
   // Unit photos to a client (/app/units/<code>/share-media): files through the share sheet, one tap to WhatsApp.
   document.addEventListener("click", function (e) {
@@ -330,7 +331,12 @@
   // Search: pressing Enter or Search shows a spinner at once (the AI reading can take a moment), until the page answers.
   document.addEventListener("submit", function (e) {
     var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
-    if (f) f.classList.add("is-busy");
+    if (!f) return;
+    f.classList.add("is-busy");
+    // The search button is locked while the answer is on its way (the page replaces itself when it arrives).
+    var sb = e.submitter;
+    // Locked a moment later, so the button's own name and value still go with the form.
+    if (sb) setTimeout(function () { sb.disabled = true; sb.classList.add("busy"); }, 0);
   });
   // Uploads with a progress bar (forms with data-progress): the file goes up with XMLHttpRequest so the bar shows how much has
   // gone; then the server reads it. The answer replaces the page (a redirect is followed).
@@ -586,6 +592,20 @@
     setTimeout(unlock, 15000);
   });
   window.addEventListener("pageshow", unlock);
+  // Any submit button locks at the tap, even when the page handles its form itself (AJAX or htmx), so the spinner shows
+  // until the answer. A button whose form is not valid sends nothing, so it is not locked. Unlocked after 15 s at the latest.
+  document.addEventListener("click", function (e) {
+    var b = e.target && e.target.closest ? e.target.closest("button[type=submit], button:not([type]), input[type=submit]") : null;
+    if (!b || !b.form || b.disabled || b.hasAttribute("data-no-lock") || b.hasAttribute("data-confirm") || b.form.hasAttribute("data-no-lock")) return;
+    if (b.form.getAttribute("target") || !b.form.checkValidity()) return;
+    setTimeout(function () {
+      if (b.disabled) return;
+      b.disabled = true;
+      b.setAttribute("data-locked", "");
+      b.classList.add("busy");
+    }, 0);
+    setTimeout(unlock, 15000);
+  }, true);
   // <select data-autosubmit>: changing it applies the filter at once (no inline handlers under the CSP).
   document.addEventListener("change", function (e) {
     var t = e.target;

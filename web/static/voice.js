@@ -41,6 +41,8 @@
         data.append("voice", blob, "note");
         var meta = document.querySelector('meta[name="csrf-token"]');
         var target = document.querySelector(btn.getAttribute("data-voice-target"));
+        btn.classList.add("busy");
+        btn.disabled = true;
         fetch(btn.getAttribute("data-voice-url"), {
           method: "POST",
           body: data,
@@ -49,11 +51,14 @@
         })
           .then(function (r) { return r.text(); })
           .then(function (htmlText) {
+            btn.classList.remove("busy");
+            btn.disabled = false;
             if (target) {
               target.outerHTML = htmlText;
               if (window.htmx) window.htmx.process(document.body);
             }
-          });
+          })
+          .catch(function () { btn.classList.remove("busy"); btn.disabled = false; });
       };
       rec.start();
     });

@@ -428,8 +428,8 @@ ${draft
   <input type="radio" name="lead_tab" id="lt-next" class="tab-radio" checked>
   <input type="radio" name="lead_tab" id="lt-req" class="tab-radio">
   <input type="radio" name="lead_tab" id="lt-hist" class="tab-radio">
-  <input type="radio" name="lead_tab" id="lt-more" class="tab-radio">
-  <div class="tab-bar" role="tablist"><label for="lt-next" role="tab">${L(lang, "الخطوة الجاية", "Next step")}</label><label for="lt-req" role="tab">${L(lang, "الطلبات", "Requests")}${requests.length ? ` (${requests.length})` : ""}</label><label for="lt-hist" role="tab">${L(lang, "السجل", "History")}</label><label for="lt-more" role="tab">${L(lang, "المزيد", "More")}</label></div>
+  ${manager ? html`<input type="radio" name="lead_tab" id="lt-more" class="tab-radio">` : ""}
+  <div class="tab-bar" role="tablist"><label for="lt-next" role="tab">${L(lang, "الخطوة الجاية", "Next step")}</label><label for="lt-req" role="tab">${L(lang, "الطلبات", "Requests")}${requests.length ? ` (${requests.length})` : ""}</label><label for="lt-hist" role="tab">${L(lang, "السجل", "History")}</label>${manager ? html`<label for="lt-more" role="tab">${L(lang, "تحويل", "Reassign")}</label>` : ""}</div>
   <div class="tab-panel" data-tab="lt-next">
 <section class="card" id="follow-up"><h2>📅 ${L(lang, "المتابعة", "Follow-up")}</h2>
   <form method="post" action="${path}/follow-up" class="grid">${hidden}
@@ -443,6 +443,11 @@ ${draft
   <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
 ${viewingSection({ lead, viewing, unit, path, hidden, lang, pickedAt: validPicked(req.query.at) })}
+${leases.length
+  ? html`<section class="card" id="leases"><h2>🔑 ${L(lang, "إيجار", "Lease")}</h2><ul>${leases.map(
+      (z) => html`<li data-tenant-lease="${z.code}"><a href="/app/units/${encodeURIComponent(z.code)}#lease">${z.code}</a> · ${L(lang, `من ${Stages.cairoDay(new Date(z.start_date))} لحد ${Stages.cairoDay(z.end)}`, `${Stages.cairoDay(new Date(z.start_date))} to ${Stages.cairoDay(z.end)}`)}</li>`
+    )}</ul></section>`
+  : ""}
   </div>
   <div class="tab-panel" data-tab="lt-req">
 ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
@@ -479,11 +484,6 @@ ${manager
     <button type="submit">${L(lang, "تسليم", "Assign")}</button>
   </form>
 </section>`
-  : ""}
-${leases.length
-  ? html`<section class="card" id="leases"><h2>🔑 ${L(lang, "إيجار", "Lease")}</h2><ul>${leases.map(
-      (z) => html`<li data-tenant-lease="${z.code}"><a href="/app/units/${encodeURIComponent(z.code)}#lease">${z.code}</a> · ${L(lang, `من ${Stages.cairoDay(new Date(z.start_date))} لحد ${Stages.cairoDay(z.end)}`, `${Stages.cairoDay(new Date(z.start_date))} to ${Stages.cairoDay(z.end)}`)}</li>`
-    )}</ul></section>`
   : ""}
 ${manager
   ? html`<section class="card" id="merge"><h2>🔗 ${L(lang, "دمج عميل مكرر", "Merge a duplicate")}</h2>
