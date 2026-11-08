@@ -43,6 +43,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <div class="row">
       <button type="button" class="secondary" data-ai="unit_fill" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
       <button type="button" class="secondary" data-ai="voice_unit_add" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
+      <label class="btn secondary">📎 ${L(lang, "ارفع ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" hidden data-voice-file></label>
       <span class="spinner" aria-hidden="true"></span>
     </div>
   </section>

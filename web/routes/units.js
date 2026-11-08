@@ -170,6 +170,10 @@ function register(web, { pool, page }) {
     if (q) add("(code ILIKE '%' || ? || '%' OR developer_unit_code ILIKE '%' || ? || '%')", q.replace(/[%_\\]/g, (c) => `\\${c}`));
     const cond = where.join(" AND ");
     const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
+    // Counts for the three status tabs (same visibility rule as the list itself).
+    const statusCounts = Object.fromEntries(
+      (await pool.query(`SELECT status, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status IN ('active', 'sold', 'archived') GROUP BY status`, [broker.agency_id])).rows.map((r) => [r.status, r.n])
+    );
     const { rows } = await pool.query(
       `SELECT ${LIST_COLS} FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
       args
@@ -180,7 +184,7 @@ function register(web, { pool, page }) {
       for (const [k, v] of Object.entries(all)) if (v !== "" && v !== null && v !== undefined) p.set(k, v);
       return `/app/units?${p.toString()}`;
     };
-    const tab = (st, label) => html`<a href="${link({ status: st, page: "" })}"${st === status ? html` aria-current="page"` : ""}>${label}</a>`;
+    const tab = (st, label, n) => html`<a href="${link({ status: st, page: "" })}"${st === status ? html` aria-current="page"` : ""}>${label}${n !== undefined ? html` <span class="muted">(${n})</span>` : ""}</a>`;
     const active = [compound, type, furnishing, finishing, deal, pmin, pmax].filter(Boolean).length;
     const opt = (v, cur, label) => html`<option value="${v}"${v === cur ? html` selected` : ""}>${label}</option>`;
     const lab = (map, key) => (lang === "en" ? map[key][1] : map[key][0]);
@@ -191,7 +195,7 @@ function register(web, { pool, page }) {
       body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a><a class="btn secondary small" href="/app/owners">👤 ${L(lang, "المُلّاك", "Owners")}</a></div>
 ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
-  ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}${Authz.isManager(broker) ? tab("deleted", L(lang, "🗑️ المحذوفة", "🗑️ Recently deleted")) : ""}
+  ${tab("active", L(lang, "نشطة", "Active"), statusCounts.active || 0)}${tab("sold", L(lang, "مباعة", "Sold"), statusCounts.sold || 0)}${tab("archived", L(lang, "مؤرشفة", "Archived"), statusCounts.archived || 0)}${Authz.isManager(broker) ? tab("deleted", L(lang, "🗑️ المحذوفة", "🗑️ Recently deleted")) : ""}
 </nav>
 <form method="get" action="/app/units" class="stack" data-unit-filters>
   <input type="hidden" name="status" value="${status}">
@@ -253,6 +257,23 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     if (out.error) return res.status(out.error === "forbidden" ? 403 : 400).type("text/plain").send(out.error);
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: "unit_restore", metadata: {} });
     return res.redirect(303, `/app/units/${encodeURIComponent(out.code)}`);
+  });
+
+  /* Status from the unit page: active, sold or archived. Brokers change their own units; managers and data entry change any non-VIP unit. */
+  web.post("/units/:code/status", async (req, res) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return res.status(404).type("text/plain").send("Not found");
+    const status = String(req.body.status || "");
+    if (!["active", "sold", "archived"].includes(status)) return res.status(400).type("text/plain").send("Unknown status");
+    if (listing.status === "deleted") return res.status(400).type("text/plain").send("Unit is deleted");
+    if (!Authz.canEdit(broker, listing)) return res.status(403).type("text/plain").send("Not allowed");
+    if (listing.status !== status) {
+      const out = await Store.applyListingPatch(pool, broker, { listing, patch: { status } });
+      if (out.conflict) return res.status(409).type("text/plain").send("Changed by someone else, try again");
+      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: `listing_status_${status}`, metadata: { from: listing.status } });
+    }
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
   });
 
   /* Bulk edit from the units list: the answer shows on the list itself. */
@@ -488,7 +509,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const images = await imagesOf(pool, listing);
     const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
     const [project, prices] = await Promise.all([Catalogue.projectForUnit(pool, listing), PriceSheets.history(pool, listing)]);
-    const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived"), deleted: L(lang, "🗑️ محذوفة", "🗑️ Deleted") }[listing.status] || listing.status;
+    const status = { active: L(lang, "🟢 نشطة", "🟢 Active"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived"), deleted: L(lang, "🗑️ محذوفة", "🗑️ Deleted") }[listing.status] || listing.status;
     const linkable = !listing.details?.catalogue && listing.market === "resale" && listing.status === "active" && Authz.canEdit(broker, listing);
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     const view = await Privacy.forBroker(pool, broker, listing);
@@ -507,6 +528,10 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
+  ${Authz.canEdit(broker, listing) && listing.status !== "deleted" ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/status" class="row" data-unit-status><input type="hidden" name="_csrf" value="${req.session.csrf}">
+    <label>${L(lang, "الحالة", "Status")} <select name="status">${[["active", L(lang, "نشطة", "Active")], ["sold", L(lang, "مباعة", "Sold")], ["archived", L(lang, "مؤرشفة", "Archived")]].map(([v, t]) => html`<option value="${v}"${v === listing.status ? html` selected` : ""}>${t}</option>`)}</select></label>
+    <button type="submit" class="secondary">${L(lang, "احفظ الحالة", "Save status")}</button>
+  </form>` : ""}
   <div class="row" id="unit-actions">
     ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}

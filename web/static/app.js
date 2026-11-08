@@ -952,6 +952,15 @@
       mics[m].addEventListener("click", function () { listen(this); });
     }
   }
+  // A voice file picked on the unit form runs the same "fill from a voice note" request as the record button.
+  document.addEventListener("change", function (e) {
+    var input = e.target;
+    if (!input || !input.matches || !input.matches("[data-voice-file]")) return;
+    var box = input.closest("section") || input.form;
+    var fill = box && box.querySelector('[data-ai="unit_fill"]');
+    if (fill && window.htmx) htmx.trigger(fill, "click");
+    else if (input.form) input.form.submit();
+  });
   // The home page's mic opens search with ?voice=1. Listening never starts on page load: browsers ask for the
   // microphone then, on every visit and back-navigation. Focus the box and let the user tap the mic.
   var start = document.querySelector("[data-voice-start]");
