@@ -81,7 +81,7 @@ function register(api, { pool }) {
     const bedrooms = parseInt(q.bedrooms, 10);
     if (bedrooms >= 0 && bedrooms <= 20) add("listings.bedrooms = ?", bedrooms);
     const code = String(q.q || "").trim().slice(0, 40);
-    if (code) add("(listings.code ILIKE '%' || ? || '%' OR listings.developer_unit_code ILIKE '%' || ? || '%')", code.replace(/[%_\\]/g, (c) => `\\${c}`));
+    if (code) add("(listings.code ILIKE '%' || ? || '%' OR listings.developer_unit_code ILIKE '%' || ? || '%' OR listings.compound ILIKE '%' || ? || '%')", code.replace(/[%_\\]/g, (c) => `\\${c}`));
     const cond = where.join(" AND ");
     const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
     const { rows } = await pool.query(
