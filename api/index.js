@@ -49,6 +49,7 @@ function mountApi(app, { pool }) {
   priv.use(requireAuth);
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   require("./units").register(priv, { pool });
+  require("./today").register(priv, { pool });
   api.use(priv);
 
   api.use((_req, res) => res.status(404).json({ error: "not_found" }));
