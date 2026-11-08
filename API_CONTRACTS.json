@@ -2432,6 +2432,7 @@
       "BOUNDS": "Object"
     },
     "services/mapPlaces.js": {
+      "termsFor": ["place", "aliasRows"],
       "syncApproved": ["pool"],
       "FINISHING": "Array",
       "FURNISHING": "Array",
