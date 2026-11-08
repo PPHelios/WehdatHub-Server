@@ -55,11 +55,11 @@ const UNITS_SQL = `(SELECT count(*)::int FROM listings l WHERE ${Vis.allUnits()}
 const ORDER_SQL = "(CASE WHEN m.district ILIKE '%cairo%' THEN 0 ELSE 1 END), units DESC, lower(coalesce(m.name_en, m.name_ar))";
 
 /** Approved places that already have a pin the owner has not double-checked yet, 20 at a time. */
-async function unchecked(pool, { limit = 20 } = {}) {
+async function unchecked(pool, { limit = 20, offset = 0 } = {}) {
   const { rows } = await pool.query(
     `SELECT m.id, m.name_en, m.name_ar, m.district, m.lat, m.lng, ${UNITS_SQL} AS units FROM map_places m
-     WHERE m.approved AND m.lat IS NOT NULL AND m.lng IS NOT NULL AND m.pin_checked_at IS NULL ORDER BY ${ORDER_SQL} LIMIT $1`,
-    [limit]
+     WHERE m.approved AND m.lat IS NOT NULL AND m.lng IS NOT NULL AND m.pin_checked_at IS NULL ORDER BY ${ORDER_SQL} LIMIT $1 OFFSET $2`,
+    [limit, Math.max(0, offset)]
   );
   const { rows: [{ n }] } = await pool.query("SELECT count(*)::int AS n FROM map_places WHERE approved AND lat IS NOT NULL AND lng IS NOT NULL AND pin_checked_at IS NULL");
   return { rows, total: n };
@@ -116,4 +116,17 @@ async function setPosition(pool, id, lat, lng) {
   return rowCount > 0;
 }
 
-module.exports = { missing, unchecked, finishCheck, suggest, setPosition, km };
+/**
+ * What the comparison says about a saved pin. "ok": a service finds it within 0.5 km. "move": both services agree with each other
+ * (within 0.5 km) and are both over 1 km from the saved pin. Anything else is "review": a person decides.
+ */
+function verdict(r) {
+  if (!r.saved) return "review";
+  const dO = r.osm ? km(r.saved, r.osm) : null;
+  const dG = r.google ? km(r.saved, r.google) : null;
+  if ((dO !== null && dO < 0.5) || (dG !== null && dG < 0.5)) return "ok";
+  if (r.osm && r.google && km(r.osm, r.google) < 0.5 && dO > 1 && dG > 1) return "move";
+  return "review";
+}
+
+module.exports = { missing, unchecked, finishCheck, suggest, setPosition, km, verdict };

@@ -2442,7 +2442,8 @@
       "finishCheck": ["pool", "choices"],
       "suggest": ["places", "params"],
       "setPosition": ["pool", "id", "lat", "lng"],
-      "km": ["a", "b"]
+      "km": ["a", "b"],
+      "verdict": ["r"]
     },
     "services/globalProjects.js": {
       "syncFile": ["pool", "file"],

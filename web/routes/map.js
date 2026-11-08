@@ -309,7 +309,7 @@ ${reviewMap(lang, rows)}
       const known = [dOsm, dGoogle].filter((d) => d !== null);
       return { ...r, dOsm, dGoogle, ok: known.length > 0 && Math.min(...known) < 1, unknown: known.length === 0 };
     }).sort((a, b) => Number(a.ok) - Number(b.ok));
-    const fragment = html`<p class="muted">${found.total} ${L(lang, "مكان لسه ماتراجعش. الدبوس بيفضل مكانه إلا لو اخترت تنقله.", "places not checked yet. A pin stays where it is unless you choose to move it.")}</p>
+    const fragment = html`<p class="muted">${found.total} ${L(lang, "مكان لسه ماتراجعش. الدبوس بيفضل مكانه إلا لو اخترت تنقله.", "places not checked yet. A pin stays where it is unless you choose to move it.")} <a href="/app/owner/map/compare">${L(lang, "راجع الكل مرة واحدة", "Check all at once")}</a></p>
 ${reviewMap(lang, rows)}
 <form method="post" action="/app/owner/map/check" class="stack">
   <ul class="stack">${rows.map((r) => html`<li class="card stack" data-row="${r.id}"><input type="hidden" name="ids" value="${r.id}">
@@ -333,6 +333,49 @@ ${reviewMap(lang, rows)}
     const out = await Lookup.finishCheck(pool, choices);
     Maps.clearCache();
     return goOwner(res, `msg=moved&n=${out.moved}`);
+  }));
+  // Check all: compares every unchecked pin with OpenStreetMap and Google, 10 places at a time, in the page with a progress bar.
+  // Nothing is saved until the owner applies: places that look right are marked checked, confident moves are ticked.
+  web.get("/owner/map/compare", ownerOnly(async (req, res, lang) => {
+    const total = (await Lookup.unchecked(pool, { limit: 1 })).total;
+    const hasKey = Boolean(process.env.GOOGLE_MAPS_API_KEY);
+    const title = L(lang, "مراجعة كل الدبابيس", "Check all pins");
+    const i18n = {
+      start: L(lang, "ابدأ المراجعة", "Start"), stop: L(lang, "وقف", "Stop"), running: L(lang, "بنراجع", "Checking"), done: L(lang, "خلصنا", "Done"),
+      ok: L(lang, "الدبوس مظبوط", "Looks right"), move: L(lang, "نقل مؤكد (الخدمتين متفقين)", "Confident moves (both services agree)"), review: L(lang, "محتاج مراجعتك", "Needs your review"),
+      apply: L(lang, "طبّق", "Apply"), applied: L(lang, "اتطبق", "Applied"), units: L(lang, "وحدة", "units"), saved: L(lang, "المحفوظ", "Saved"), fail: L(lang, "حصلت مشكلة. جرب تاني.", "Something went wrong. Try again."),
+      none: L(lang, "مفيش حاجة تتراجع.", "Nothing left to check.")
+    };
+    return page(req, res, { title, nav: "ownermap", head: html`<script src="${assets.url("compare.js")}" defer></script>`, body: html`<h1>📍 ${title}</h1>
+<p class="muted">${total} ${L(lang, "مكان لسه ماتراجعش. الترتيب: القاهرة الأول، وبعدين الأكتر وحدات.", "places not checked yet, Cairo first, then by number of units.")}<br>${L(lang, "الخدمات:", "Services:")} OpenStreetMap ✓ · Google ${hasKey ? "✓ (key set)" : "✗ (no GOOGLE_MAPS_API_KEY)"}</p>
+<p class="muted small">${L(lang, "الدبوس بيتنقل بس لو الخدمتين متفقين على مكان بعيد أكتر من 1 كم. أي حاجة تانية بتفضل مكانها.", "A pin moves only when both services agree on a spot over 1 km away. Everything else stays where it is.")}</p>
+<section data-compare data-batch="/app/owner/map/compare/batch" data-apply="/app/owner/map/compare/apply" data-csrf="${req.session.csrf}" data-total="${total}" data-i18n="${JSON.stringify(i18n)}">
+  <div class="row"><button type="button" data-start>${i18n.start}</button> <button type="button" class="secondary" data-stop hidden>${i18n.stop}</button> <span class="spinner" data-spin></span></div>
+  <progress data-bar max="1" value="0" hidden></progress>
+  <p class="muted small" data-status role="status"></p>
+  <div data-results></div>
+</section>` });
+  }));
+  web.get("/owner/map/compare/batch", ownerOnly(async (req, res) => {
+    const offset = Math.max(0, Math.floor(Number(req.query.offset) || 0));
+    const found = await Lookup.unchecked(pool, { limit: 10, offset });
+    const rows = await Lookup.suggest(found.rows);
+    const d = (a, b) => (a && b ? Math.round(Lookup.km(a, b) * 10) / 10 : null);
+    return res.json({
+      total: found.total,
+      count: found.rows.length,
+      rows: rows.map((r) => ({ id: r.id, name: r.name, units: r.units, saved: r.saved, osm: r.osm, google: r.google, dOsm: d(r.saved, r.osm), dGoogle: d(r.saved, r.google), verdict: Lookup.verdict(r), google_status: r.google_status }))
+    });
+  }));
+  web.post("/owner/map/compare/apply", ownerOnly(async (req, res) => {
+    const ok = String(req.body.ok || "").split(",").filter(Boolean).slice(0, 500).map((id) => ({ id }));
+    const moves = [].concat(req.body.move || []).slice(0, 500).map((v) => {
+      const [id, lat, lng] = String(v).split(",");
+      return { id, lat, lng };
+    });
+    const out = await Lookup.finishCheck(pool, [...ok, ...moves]);
+    Maps.clearCache();
+    return res.json({ ok: true, checked: ok.length + moves.length, moved: out.moved });
   }));
   web.post("/owner/map/find", ownerOnly(async (req, res) => {
     const picks = [].concat(req.body.pick || []).slice(0, 50);

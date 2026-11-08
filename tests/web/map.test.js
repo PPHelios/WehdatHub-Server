@@ -286,3 +286,31 @@ test("Missing pins and Check saved pins open at once with a spinner, then load t
   expect(check.status).toBe(200);
   expect(check.text).toContain("data-review");
 });
+
+test("Check all: the page, the batch and the apply step (looks-right pins are marked checked, only ticked moves move)", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  const broker = await signIn(h, "broker");
+  expect((await broker.agent.get("/app/owner/map/compare")).status).toBe(404);
+  const crm = await signIn(h, "admin");
+  const shell = await crm.agent.get("/app/owner/map/compare");
+  expect(shell.status).toBe(200);
+  expect(shell.text).toContain("data-compare");
+  expect(shell.text).toContain("compare.js");
+  // Past the last place nothing is looked up, so no outside request is made.
+  const empty = await crm.agent.get("/app/owner/map/compare/batch?offset=100000");
+  expect(empty.status).toBe(200);
+  expect(empty.body.count).toBe(0);
+  await h.query("DELETE FROM map_places WHERE name_key IN ('cmp-a', 'cmp-b')");
+  const [a] = await h.query("INSERT INTO map_places (name_key, name_en, lat, lng, aliases, approved) VALUES ('cmp-a', 'Cmp A', 30, 31, '{}', true) RETURNING id");
+  const [b] = await h.query("INSERT INTO map_places (name_key, name_en, lat, lng, aliases, approved) VALUES ('cmp-b', 'Cmp B', 30, 31, '{}', true) RETURNING id");
+  const out = await crm.agent.post("/app/owner/map/compare/apply").type("form").send({ _csrf: crm.csrf, ok: a.id, move: `${b.id},30.5,31.5` });
+  expect(out.status).toBe(200);
+  expect(out.body.checked).toBe(2);
+  expect(out.body.moved).toBe(1);
+  const rows = await h.query("SELECT id, lat, pin_checked_at FROM map_places WHERE id IN ($1, $2)", [a.id, b.id]);
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  expect(byId[a.id].lat).toBe(30);
+  expect(byId[a.id].pin_checked_at).not.toBeNull();
+  expect(byId[b.id].lat).toBe(30.5);
+});
