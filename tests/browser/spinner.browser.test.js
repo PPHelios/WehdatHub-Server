@@ -51,7 +51,12 @@ async function checkControl(ctx, path, index, where) {
     const label = ((await btn.textContent().catch(() => "")) || "").trim().slice(0, 40);
     const valid = await btn.evaluate((b) => (b.form ? b.form.checkValidity() : false)).catch(() => false);
     if (!valid) return; // a form that needs input first sends nothing, so there is no wait to show
-    await btn.click({ noWaitAfter: true }).catch(() => {});
+    // A click that cannot happen is reported as such, so it is not counted as a missing spinner.
+    const clicked = await btn.click({ noWaitAfter: true, timeout: 5000 }).then(() => "", (e) => String(e.message || e).split("\n")[0]);
+    if (clicked) {
+      gaps.push(`${where} · "${label || "(no text)"}" · click failed: ${clicked.slice(0, 120)}`);
+      return;
+    }
     await pg.waitForTimeout(100);
     // The app's own markers: the busy class, a lock, an htmx request, or a busy search form around the button.
     const shown = await btn.evaluate((b) => (
