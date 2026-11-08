@@ -376,6 +376,12 @@
     if (importId && !run.cancelled) window.location.href = "/app/import/" + importId;
   }
 
-  $("read").addEventListener("click", load);
+  // The Read button is locked and shows a spinner until the unit list and the reading are done.
+  $("read").addEventListener("click", function () {
+    var b = this;
+    b.classList.add("busy");
+    b.disabled = true;
+    Promise.resolve(load()).finally(function () { b.classList.remove("busy"); b.disabled = false; });
+  });
   ["window", "pattern", "same", "since"].forEach(function (n) { $(n).addEventListener("change", function () { if (state) compute(); }); });
 })();
