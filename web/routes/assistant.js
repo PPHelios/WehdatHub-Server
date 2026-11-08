@@ -46,10 +46,10 @@ function register(web, { pool, page }) {
 <p class="muted">${L(lang, "بيرد من بيانات الشركة بس (المشاريع، الأسعار، البروشور، عملاءك، متابعاتك، الوحدات) ومعاه تاريخ البيانات. لو المعلومة مش عندنا هيقولك كده ومش هيخمّن.", "Answers only from the agency's data (projects, prices, brochures, your clients, follow-ups, units), with the data's date. If we don't have it, it says so and never guesses.")}</p>
 ${saved ? html`<p class="notice ok card" data-info-saved>✅ ${L(lang, `اتضافت المعلومة على ${saved.kind === "unit" ? "الوحدة" : "المشروع"} ${saved.name}. المساعد هيستخدمها من دلوقتي.`, `Added to ${saved.kind === "unit" ? "unit" : "project"} ${saved.name}. The assistant will use it from now on.`)}</p>` : ""}
 ${error ? html`<p class="notice bad card" data-assistant-error="${error}">${["quota", "daily", "off"].includes(error) ? AiBlock.text(error, lang, { owner: isAgencyOwner(req.session.broker) }) : (ERRORS[error] || ERRORS.ai)[lang === "en" ? 1 : 0]}</p>` : ""}
-<form method="post" action="/app/ask" class="card stack">
+<form method="post" action="/app/ask" class="card stack" data-search-form>
   <label>${L(lang, "سؤالك", "Your question")}
   <textarea name="q" rows="3" maxlength="${A.MAX_QUESTION}" required placeholder="${L(lang, "مثلا: امتى استلام بادية؟ مين من عملائي عايز 3 أوض في زايد؟ ورايا إيه النهارده؟", "e.g. When is Badya's delivery? Which of my clients want 3 bedrooms in Zayed? What's due today?")}">${question}</textarea></label>
-  <button type="submit" data-ai="ask">${L(lang, "اسأل", "Ask")}</button>
+  <button type="submit" data-ai="ask" data-no-tg-main>${L(lang, "اسأل", "Ask")}<span class="spin" aria-hidden="true"></span></button>
 </form>
 ${out ? answerCard(out, question, lang) : ""}
 ${missed

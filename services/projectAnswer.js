@@ -6,6 +6,7 @@
 const { normalizeSearch } = require("../domain/searchText");
 const { normalizeDigits } = require("../lib/text");
 const ProjectNotes = require("../domain/projectNotes");
+const { fuzzyMatch } = require("../domain/projectNames");
 
 // Words that name a kind of place or unit, not a project: they must not match every project.
 const GENERIC = new Set(
@@ -101,7 +102,7 @@ async function answer(pool, agencyId, text, lang = "ar", filters = {}) {
     [agencyId]
   );
   // A project named in the request: its own answer.
-  const [best] = matchProjects(rows, words);
+  const best = matchProjects(rows, words)[0] || fuzzyMatch(text, rows)[0];
   if (best) return projectReply(best, text, lang);
   // Otherwise: the offers written in the notes that fit the area, place, budget, installment or down payment asked.
   const projects = rows.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);

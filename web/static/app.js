@@ -509,7 +509,7 @@
       var all = document.querySelectorAll("[data-tg-main]");
       for (var i = 0; i < all.length; i++) if (shown(all[i])) return all[i];
       // No marked button: a page with exactly one primary save button in a POST form gets it as the Main button.
-      var subs = document.querySelectorAll("main form[method=post] button[type=submit]:not(.secondary):not(.link):not(.danger):not([data-confirm])");
+      var subs = document.querySelectorAll("main form[method=post] button[type=submit]:not(.secondary):not(.link):not(.danger):not([data-confirm]):not([data-no-tg-main])");
       var ok = [];
       for (var j = 0; j < subs.length; j++) if (shown(subs[j])) ok.push(subs[j]);
       return ok.length === 1 ? ok[0] : null;

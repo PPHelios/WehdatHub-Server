@@ -114,6 +114,10 @@ test("website: ask, Send on WhatsApp, unanswered list", async () => {
     expect(page.text).toContain('data-found="yes"');
     expect(page.text).toContain("data-send-whatsapp");
     expect(page.text).toContain("prices 2026-10-01");
+    // The Ask button shows a spinner while the answer is on its way, and Telegram's lower Main button is not used here.
+    expect(page.text).toContain("data-search-form");
+    expect(page.text).toContain('data-ai="ask" data-no-tg-main');
+    expect(page.text).toContain('class="spin"');
     const miss = await agent.post("/app/ask").type("form").send({ _csrf: csrf, q: "Badya club fee?" });
     expect(miss.text).toContain('data-found="no"');
     expect(miss.text).not.toContain("data-send-whatsapp");
