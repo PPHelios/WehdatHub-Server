@@ -59,25 +59,35 @@ async function checkControl(ctx, path, index, where) {
     // A click that is covered by another element still counts as a click: the spinner is about the request, not the overlay.
     // Counts requests to the app from the click on: a click that sends nothing has no wait to show, so it is reported apart.
     let sent = 0;
-    const onRequest = (r) => { if (LOCAL.test(r.url()) && !/\/static\//.test(r.url())) sent++; };
+    const sentList = [];
+    const onRequest = (r) => { if (LOCAL.test(r.url()) && !/\/static\//.test(r.url())) { sent++; sentList.push(`${r.method()} ${new URL(r.url()).pathname}`); } };
     pg.on("request", onRequest);
+    // Records the tapped button's state 15 ms after the tap, inside the page.
+    await pg.evaluate(() => {
+      window.__snap = null;
+      document.addEventListener("click", (e) => {
+        const b = e.target && e.target.closest ? e.target.closest("button") : null;
+        if (!b) return;
+        setTimeout(() => { window.__snap = { disabled: b.disabled, busy: b.classList.contains("busy"), locked: b.hasAttribute("data-locked") }; }, 15);
+      }, true);
+    }).catch(() => {});
     const clicked = await btn.click({ noWaitAfter: true, timeout: 5000, force: true }).then(() => "", (e) => String(e.message || e).split("\n")[0]);
     if (clicked) {
       gaps.push(`${where} · "${label || "(no text)"}" · click failed: ${clicked.slice(0, 120)}`);
       return;
     }
-    await pg.waitForTimeout(100);
-    // The app's own markers: the busy class, a lock, an htmx request, or a busy search form around the button.
-    const shown = await btn.evaluate((b) => (
-      b.classList.contains("busy") || b.disabled || b.hasAttribute("data-locked") || b.classList.contains("htmx-request") ||
-      Boolean(b.closest(".is-busy, .htmx-request, [data-locked]"))
-    )).catch(() => true); // a button that already left the page is not a gap
+    // The state is read on the page itself a moment after the tap, before any reply can replace the page.
+    await pg.waitForTimeout(60);
+    const snap = await pg.evaluate(() => window.__snap || null).catch(() => null);
+    const shown = snap ? Boolean(snap.disabled || snap.busy || snap.locked) : true; // no reading taken: not counted as a gap
+    // What the button is, what it sent, and its state, so a gap can be traced to its form.
+    const info = await btn.evaluate((b) => `form ${b.form ? b.form.getAttribute("action") : "none"}, method ${b.form ? b.form.getAttribute("method") : "-"}, disabled ${b.disabled}, class "${b.className}"`).catch(() => "");
     pg.off("request", onRequest);
     if (!sent) {
-      unsent.push(`${where} · "${label || "(no text)"}"`);
+      unsent.push(`${where} · "${label || "(no text)"}" · ${info}`);
       return;
     }
-    if (!shown) gaps.push(`${where} · "${label || "(no text)"}"`);
+    if (!shown) gaps.push(`${where} · "${label || "(no text)"}" · ${info} · requests: ${sentList.join(" ")}`);
   } finally {
     await pg.close().catch(() => {});
   }
