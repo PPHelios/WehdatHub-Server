@@ -151,7 +151,7 @@ const DATA_ENTRY_BAR = [
 ];
 
 // The CRM owner (OWNER_BROKER_IDS) is not part of any agency: their menu is the app-tracking pages and their account.
-const CRM_NAV = new Set(["owner", "ownermap", "searchreview", "settings", "notifications", "guide"]);
+const CRM_NAV = new Set(["owner", "ownermap", "ownerqueue", "ownerlibrary", "searchreview", "settings", "notifications", "guide"]);
 
 function navFor(broker) {
   const Dash = require("../services/dashboards");
