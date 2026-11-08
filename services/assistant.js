@@ -14,6 +14,8 @@ const A = require("../domain/assistant");
 const Card = require("../domain/leadCard");
 const Describe = require("../domain/describe");
 const ProjectContext = require("./projectContext");
+const ProjectNotes = require("../domain/projectNotes");
+const ProjectAnswer = require("./projectAnswer");
 const { isManager } = require("../lib/authz");
 const Vis = require("../lib/visibility");
 
@@ -35,7 +37,7 @@ const typeLabel = (t) => (Describe.TYPE_LABELS?.[t] ? Describe.TYPE_LABELS[t][1]
 
 async function projectBlocks(pool, broker, question, scopes) {
   const { rows: projects } = await pool.query(
-    `SELECT p.id, p.name, p.name_en, COALESCE(d.name, p.developer_name) AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
+    `SELECT p.id, p.name, p.name_en, p.district, p.city, p.notes, p.updated_at, COALESCE(d.name, p.developer_name) AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
       WHERE p.agency_id = $1 AND p.archived_at IS NULL ORDER BY p.name`,
     [broker.agency_id]
   );
@@ -54,6 +56,17 @@ async function projectBlocks(pool, broker, question, scopes) {
   // Nothing named and nothing personal asked: the list of projects we have, so "not in our data" is accurate.
   if (!named.length && !scopes.clients && !scopes.followups && projects.length) {
     blocks.push({ title: "Projects in our catalogue (names only)", as_of: cairoDay(), text: projects.slice(0, 80).map((p) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}${p.developer_name ? ` by ${p.developer_name}` : ""}`).join("; ") });
+  }
+  // No project named: the offers written in every project's notes, so "apartment 110 m in Obour" or a budget question can compare projects.
+  if (!named.length && !scopes.clients && !scopes.followups) {
+    const withOffers = projects.map((p) => ({ p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length).slice(0, 12);
+    if (withOffers.length) {
+      const text = withOffers
+        .map(({ p, units }) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}, ${[p.district, p.city].filter(Boolean).join(" ")} [notes updated ${cairoDay(new Date(p.updated_at || Date.now()))}]:\n` + units.slice(0, 12).map((u) => `- ${u.raw}${u.monthly == null && u.monthly_est != null ? ` (calculated monthly about ${u.monthly_est})` : ""}`).join("\n"))
+        .join("\n");
+      blocks.push({ title: "Offers written in project notes (not unit records; check before quoting)", as_of: cairoDay(), text });
+      for (const { p } of withOffers) dates.push({ project: p.name, prices: null, brochure: null, plans: null, notes: cairoDay(new Date(p.updated_at || Date.now())) });
+    }
   }
   return { blocks, dates, named };
 }
@@ -169,6 +182,9 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     });
     res = A.parseAnswer(r.text, lang);
   } catch (err) {
+    // The AI is off or out of credit: a project named in the question is still answered from its catalog data, built by code.
+    const plain = named.length ? await ProjectAnswer.answer(pool, broker.agency_id, q, lang, {}).catch(() => null) : null;
+    if (plain) return { answer: plain, found: true, lang, dates: [] };
     return { error: AiBlock.kindOf(err) };
   }
 
@@ -190,7 +206,7 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
 function datesLine(dates, lang) {
   const en = lang === "en";
   const parts = dates.map((d) => {
-    const bits = [d.prices ? (en ? `prices ${d.prices}` : `الأسعار ${d.prices}`) : null, d.brochure ? (en ? `brochure ${d.brochure}` : `البروشور ${d.brochure}`) : null, d.plans ? (en ? `plans file ${d.plans}` : `ملف الأنظمة ${d.plans}`) : null].filter(Boolean);
+    const bits = [d.notes ? (en ? `notes ${d.notes}` : `الملاحظات ${d.notes}`) : null, d.prices ? (en ? `prices ${d.prices}` : `الأسعار ${d.prices}`) : null, d.brochure ? (en ? `brochure ${d.brochure}` : `البروشور ${d.brochure}`) : null, d.plans ? (en ? `plans file ${d.plans}` : `ملف الأنظمة ${d.plans}`) : null].filter(Boolean);
     return bits.length ? `${d.project}: ${bits.join(en ? ", " : "، ")}` : null;
   });
   const list = parts.filter(Boolean);
@@ -228,7 +244,7 @@ async function addInfo(pool, manager, { questionId = null, project = null, unit 
     target = { kind: "unit", name: listing.code };
   } else if (/^[0-9a-f-]{36}$/i.test(String(project || ""))) {
     const { rows } = await pool.query(
-      "UPDATE projects SET notes = left(concat_ws(E'\n', NULLIF(notes, ''), $3::text), 1500), updated_at = now() WHERE id = $1 AND agency_id = $2 RETURNING name",
+      "UPDATE projects SET notes = left(concat_ws(E'\n', NULLIF(notes, ''), $3::text), 4000), updated_at = now() WHERE id = $1 AND agency_id = $2 RETURNING name",
       [project, manager.agency_id, note]
     );
     if (!rows[0]) return { error: "not_found" };

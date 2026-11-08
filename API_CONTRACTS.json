@@ -459,6 +459,11 @@
       "keyedWords": ["text"],
       "fuzzyMatch": ["text", "projects"]
     },
+    "domain/projectClarify.js": {
+      "findIssues": ["notes"],
+      "answerLine": ["day", "line", "answer"],
+      "MAX_QUESTIONS": "Number"
+    },
     "domain/projectNotes.js": {
       "parseUnits": ["notes"],
       "matchUnits": ["projects", "f"],
@@ -1590,6 +1595,7 @@
       "listProjects": ["db", "actor", "params"],
       "saveProject": ["db", "actor", "input"],
       "archiveProject": ["db", "actor", "id", "archived"],
+      "addClarification": ["db", "actor", "id", "input"],
       "getProject": ["db", "actor", "id"],
       "savePhase": ["db", "actor", "projectId", "input"],
       "deletePhase": ["db", "actor", "projectId", "phaseId"],
