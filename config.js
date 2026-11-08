@@ -131,6 +131,17 @@ function loadConfig(env = process.env) {
       privateKey: env.WEB_PUSH_PRIVATE_KEY || "",
       subject: env.WEB_PUSH_SUBJECT || "mailto:support@wehdathub.com"
     },
+    // Alerts to the mobile app (lib/channels/apppush.js): the Firebase service account JSON (FIREBASE_SERVICE_ACCOUNT). Empty = off.
+    appPush: {
+      serviceAccount: (() => {
+        try {
+          const j = JSON.parse(String(env.FIREBASE_SERVICE_ACCOUNT || ""));
+          return j && j.project_id && j.client_email && j.private_key ? { projectId: j.project_id, clientEmail: j.client_email, privateKey: j.private_key } : null;
+        } catch {
+          return null;
+        }
+      })()
+    },
     // Error alerts to the owner (lib/errorReports.js): a Telegram message through the bot, to the owner's chat.
     alerts: {
       telegramToken: env.TELEGRAM_BOT_TOKEN || "",

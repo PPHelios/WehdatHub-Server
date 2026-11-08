@@ -13,6 +13,23 @@ const bearerOf = (req) => {
   return m ? m[1] : null;
 };
 
+/** The phone's Firebase identifiers from FIREBASE_CLIENT_CONFIG, only well-formed entries; null when not set. */
+function firebaseClientConfig() {
+  let raw;
+  try {
+    raw = JSON.parse(process.env.FIREBASE_CLIENT_CONFIG || "");
+  } catch {
+    return null;
+  }
+  const out = {};
+  for (const os of ["android", "ios"]) {
+    const c = raw && raw[os];
+    const ok = c && ["apiKey", "appId", "projectId", "messagingSenderId"].every((k) => typeof c[k] === "string" && c[k].length > 0 && c[k].length < 200);
+    if (ok) out[os] = { apiKey: c.apiKey, appId: c.appId, projectId: c.projectId, messagingSenderId: c.messagingSenderId };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /** Loads req.token and req.session from the Bearer header (null when missing, unknown, expired or revoked). */
 function loadBearer(pool) {
   return async (req, _res, next) => {
@@ -44,8 +61,10 @@ function mountApi(app, { pool }) {
   });
   // The oldest app version the server still supports: an older app shows "Update the app" instead of failing in odd ways.
   // Raise APP_MIN_VERSION (e.g. 1.2.0) on Render when an API change breaks old apps. Public, no sign-in.
+  // "firebase": the phone's public Firebase identifiers (not secrets), set once on Render as FIREBASE_CLIENT_CONFIG
+  // ({"android":{apiKey,appId,projectId,messagingSenderId},"ios":{...}}) so alerts and crash reports switch on without a new app build.
   api.get("/config", (_req, res) =>
-    res.json({ minAppVersion: /^\d+\.\d+\.\d+$/.test(process.env.APP_MIN_VERSION || "") ? process.env.APP_MIN_VERSION : "0.0.0", storeUrl: { android: process.env.APP_STORE_URL_ANDROID || null, ios: process.env.APP_STORE_URL_IOS || null } })
+    res.json({ minAppVersion: /^\d+\.\d+\.\d+$/.test(process.env.APP_MIN_VERSION || "") ? process.env.APP_MIN_VERSION : "0.0.0", storeUrl: { android: process.env.APP_STORE_URL_ANDROID || null, ios: process.env.APP_STORE_URL_IOS || null }, firebase: firebaseClientConfig() })
   );
   api.use(loadBearer(pool));
   require("./auth").register(api, { pool });
@@ -59,6 +78,7 @@ function mountApi(app, { pool }) {
   require("./leads").register(priv, { pool });
   require("./unitsWrite").register(priv, { pool });
   require("./map").register(priv, { pool });
+  require("./devices").register(priv, { pool });
   api.use(priv);
 
   api.use((_req, res) => res.status(404).json({ error: "not_found" }));

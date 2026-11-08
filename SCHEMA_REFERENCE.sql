@@ -11,6 +11,7 @@ CREATE SEQUENCE IF NOT EXISTS public.broker_passkeys_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.broker_team_history_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.credit_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.device_tokens_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_intake_log_id_seq;
@@ -1484,6 +1485,17 @@ CREATE TABLE IF NOT EXISTS public.global_projects (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.device_tokens (
+  id bigint DEFAULT nextval('device_tokens_id_seq'::regclass) NOT NULL,
+  broker_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  token text NOT NULL,
+  platform text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_ok_at timestamp with time zone,
+  failed_count integer DEFAULT 0 NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1509,6 +1521,7 @@ ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pkey PRIMARY KEY (deal_id, br
 ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pkey PRIMARY KEY (id);
 ALTER TABLE developers ADD CONSTRAINT developers_pkey PRIMARY KEY (id);
+ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_pkey PRIMARY KEY (id);
 ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_pkey PRIMARY KEY (id);
 ALTER TABLE global_projects ADD CONSTRAINT global_projects_pkey PRIMARY KEY (id);
@@ -1570,6 +1583,7 @@ ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_numb
 ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_key UNIQUE (deal_id);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_idem_key_key UNIQUE (agency_id, idem_key);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref);
+ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_token_key UNIQUE (token);
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_import_id_seq_key UNIQUE (import_id, seq);
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_token_hash_key UNIQUE (token_hash);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_listing_id_key UNIQUE (search_id, listing_id);
@@ -1667,6 +1681,8 @@ ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS N
 ALTER TABLE developers ADD CONSTRAINT developers_past_projects_check CHECK (((past_projects IS NULL) OR (length(past_projects) <= 2000)));
 ALTER TABLE developers ADD CONSTRAINT developers_usual_payment_terms_check CHECK (((usual_payment_terms IS NULL) OR (length(usual_payment_terms) <= 2000)));
 ALTER TABLE developers ADD CONSTRAINT developers_warnings_check CHECK (((warnings IS NULL) OR (length(warnings) <= 2000)));
+ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_platform_check CHECK ((platform = ANY (ARRAY['android'::text, 'ios'::text])));
+ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_token_check CHECK (((length(token) >= 20) AND (length(token) <= 4096)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_amount_egp_check CHECK ((amount_egp >= (0)::numeric));
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_label_check CHECK (((length(label) >= 1) AND (length(label) <= 120)));
@@ -1823,6 +1839,8 @@ ALTER TABLE deals ADD CONSTRAINT deals_created_by_broker_id_fkey FOREIGN KEY (cr
 ALTER TABLE deals ADD CONSTRAINT deals_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
 ALTER TABLE deals ADD CONSTRAINT deals_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
 ALTER TABLE developers ADD CONSTRAINT developers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE error_events ADD CONSTRAINT error_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE error_events ADD CONSTRAINT error_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_import_id_fkey FOREIGN KEY (import_id) REFERENCES web_imports(id) ON DELETE CASCADE;
@@ -1970,6 +1988,7 @@ CREATE INDEX idx_deals_agency_closer_closed ON public.deals USING btree (agency_
 CREATE INDEX idx_deals_lead ON public.deals USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX demo_requests_created_idx ON public.demo_requests USING btree (created_at DESC);
 CREATE UNIQUE INDEX uq_developers_agency_name ON public.developers USING btree (agency_id, lower(btrim(name)));
+CREATE INDEX idx_device_tokens_broker ON public.device_tokens USING btree (broker_id);
 CREATE INDEX error_events_fingerprint ON public.error_events USING btree (fingerprint, created_at DESC);
 CREATE INDEX error_events_recent ON public.error_events USING btree (created_at DESC);
 CREATE INDEX fixed_costs_month ON public.fixed_costs USING btree (month);
