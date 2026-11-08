@@ -454,6 +454,11 @@
       "placeName": ["kind", "key"],
       "snapCompound": ["name", "agencyNames"]
     },
+    "domain/projectNames.js": {
+      "skeleton": ["word"],
+      "keyedWords": ["text"],
+      "fuzzyMatch": ["text", "projects"]
+    },
     "domain/projectNotes.js": {
       "parseUnits": ["notes"],
       "matchUnits": ["projects", "f"],

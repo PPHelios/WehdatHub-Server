@@ -5,6 +5,7 @@
 "use strict";
 
 const { normalizeSearch } = require("./searchText");
+const { fuzzyMatch } = require("./projectNames");
 
 const MAX_QUESTION = 500;
 const ASK = /^(?:اسأل|إسأل|اسال|سؤال|سوال|يا مساعد|ask|question)\s*[:：\-,،]?\s+(.+)$/is;
@@ -28,13 +29,17 @@ const langOf = (q) => (/[؀-ۿ]/.test(q) ? "ar" : "en");
 /** Words of a name worth matching (2+ letters, normalized). */
 const tokens = (s) => normalizeSearch(s).split(/\s+/).filter((w) => w.length >= 3);
 
-/** Projects whose name (Arabic or English) or developer appears in the question. */
+/**
+ * Projects whose name (Arabic or English) or developer appears in the question. When none does, spelling variants and
+ * partial names (domain/projectNames.js): "جزيل ريزيدنس" finds "جزيل ريزدنس".
+ */
 function matchProjects(question, projects) {
   const q = ` ${normalizeSearch(question)} `;
-  return projects.filter((p) => [p.name, p.name_en].filter(Boolean).some((n) => {
+  const exact = projects.filter((p) => [p.name, p.name_en].filter(Boolean).some((n) => {
     const t = normalizeSearch(n).trim();
     return t.length >= 3 && q.includes(t);
   }) || (p.developer_name && tokens(p.developer_name).some((w) => q.includes(` ${w} `))));
+  return exact.length ? exact : fuzzyMatch(question, projects);
 }
 
 /** Leads whose name appears in the question. */
