@@ -454,6 +454,21 @@
       "placeName": ["kind", "key"],
       "snapCompound": ["name", "agencyNames"]
     },
+    "domain/projectNotes.js": {
+      "parseUnits": ["notes"],
+      "matchUnits": ["projects", "f"],
+      "matchesPlace": ["project", "places"],
+      "LOCATION_ALIASES": "Object"
+    },
+    "services/projectAnswer.js": {
+      "answer": ["pool", "agencyId", "text", "lang", "filters"],
+      "nameWords": ["text"],
+      "requestNumbers": ["text"],
+      "matchProjects": ["projects", "words"],
+      "noteLines": ["notes", "numbers"],
+      "projectReply": ["project", "text", "lang"],
+      "notesReply": ["hits", "lang"]
+    },
     "domain/searchText.js": {
       "normalizeSearch": ["text"],
       "foldLetters": ["text"],
