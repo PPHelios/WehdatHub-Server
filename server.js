@@ -19,6 +19,7 @@ const { dispatchMessage } = require("./routes/dispatch");
 const { createTurnPipeline } = require("./routes/turns");
 const { createTelegramIngress } = require("./routes/telegramIngress");
 const { mountWeb } = require("./web");
+const { mountApi } = require("./api");
 const { createScheduler } = require("./lib/scheduler");
 const { buildJobs } = require("./lib/jobs");
 
@@ -173,6 +174,8 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
 
   // Release 2: the broker web app (/app/) and the public pages, after /webhook and /health.
   mountWeb(app, { pool, config });
+  // The mobile app's JSON API (/api/v1), same sessions and rules as the website.
+  mountApi(app, { pool, config });
 
   // Anything else that throws (webhooks, public pages): recorded and alerted, then a plain 500.
   // eslint-disable-next-line no-unused-vars
