@@ -13,6 +13,7 @@ jest.setTimeout(90000);
 let h;
 beforeEach(async () => {
   h = await createHarness();
+  await h.seedBroker("manager");
 });
 afterAll(closeHarness);
 
@@ -41,6 +42,6 @@ describe("unit status on the web", () => {
     await h.insertListing({ code: "VIL-43", compound: "Hyde Park", status: "sold" });
     const { agent } = await signIn(h, "manager");
     const r = await agent.get("/app/units?status=sold");
-    expect(r.text).toMatch(/Sold[^<]*<\/span>\s*\(1\)|\(1\)/);
+    expect(r.text).toContain("(1)");
   });
 });
