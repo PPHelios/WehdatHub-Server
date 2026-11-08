@@ -49,3 +49,9 @@ test("project names in several spellings", () => {
   expect(fuzzyMatch("شقه في جزيل ريزيدنس", [JAZEEL, ARABISK, PMC])).toEqual([JAZEEL]);
   expect(fuzzyMatch("apartment in jezel", [JAZEEL, ARABISK, PMC])).toEqual([JAZEEL]);
 });
+
+test("the prompt tells the model that offers in notes are data, so it never says 'not in our data' beside them", () => {
+  const p = require("../../domain/assistant").prompt("شقه في العبور مقدم اقل من ٣ مليون", [], { lang: "ar", today: "2026-11-08" });
+  expect(p).toMatch(/Offers written in project notes ARE the agency's data/);
+  expect(p).toMatch(/never say "not in our data"/);
+});

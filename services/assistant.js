@@ -64,7 +64,7 @@ async function projectBlocks(pool, broker, question, scopes) {
       const text = withOffers
         .map(({ p, units }) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}, ${[p.district, p.city].filter(Boolean).join(" ")} [notes updated ${cairoDay(new Date(p.updated_at || Date.now()))}]:\n` + units.slice(0, 12).map((u) => `- ${u.raw}${u.monthly == null && u.monthly_est != null ? ` (calculated monthly about ${u.monthly_est})` : ""}`).join("\n"))
         .join("\n");
-      blocks.push({ title: "Offers written in project notes (not unit records; check before quoting)", as_of: cairoDay(), text });
+      blocks.push({ title: "Offers written in project notes (agency data; check before quoting)", as_of: cairoDay(), text });
       for (const { p } of withOffers) dates.push({ project: p.name, prices: null, brochure: null, plans: null, notes: cairoDay(new Date(p.updated_at || Date.now())) });
     }
   }
