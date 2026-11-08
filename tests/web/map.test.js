@@ -247,3 +247,26 @@ test("check saved pins: a kept pin is marked checked and not asked again; a move
   expect((await h.query("SELECT lat FROM map_places WHERE id = $1", [b.id]))[0].lat).toBe(30.5);
   expect((await h.query("SELECT lat FROM map_places WHERE id = $1", [a.id]))[0].lat).toBe(30);
 });
+
+test("Missing pins and Check saved pins open at once with a spinner, then load their content; the review map is on both", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  const broker = await signIn(h, "broker");
+  expect((await broker.agent.get("/app/owner/map/find")).status).toBe(404);
+  const crm = await signIn(h, "admin");
+  for (const path of ["/app/owner/map/find", "/app/owner/map/check"]) {
+    const shell = await crm.agent.get(path);
+    expect(shell.text).toContain(`data-lazy="${path}?part=1`);
+    expect(shell.text).toContain("pinreview.js");
+    expect(shell.text).not.toContain("data-review");
+  }
+  // Past the last place nothing is looked up, so no outside request is made.
+  const find = await crm.agent.get("/app/owner/map/find?part=1&offset=100000");
+  expect(find.status).toBe(200);
+  expect(find.text).toContain("data-review");
+  expect(find.text).toContain("Services:");
+  await h.query("UPDATE map_places SET pin_checked_at = now()"); // none left to look up: no outside request
+  const check = await crm.agent.get("/app/owner/map/check?part=1");
+  expect(check.status).toBe(200);
+  expect(check.text).toContain("data-review");
+});

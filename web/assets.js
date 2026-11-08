@@ -38,6 +38,8 @@ const FILES = {
   "leaflet.css": require.resolve("leaflet/dist/leaflet.css"),
   "protomaps-leaflet.js": path.join(path.dirname(require.resolve("protomaps-leaflet/package.json")), "dist", "protomaps-leaflet.js"),
   "map.js": path.join(STATIC_DIR, "map.js"),
+  // The owner's pin review map (Check saved pins, Missing pins).
+  "pinreview.js": path.join(STATIC_DIR, "pinreview.js"),
   // Cairo, self-hosted (CSP font-src 'self'): regular and bold; 600 renders with the bold face.
   "fonts/cairo-400.woff2": path.join(STATIC_DIR, "fonts", "cairo-400.woff2"),
   "fonts/cairo-700.woff2": path.join(STATIC_DIR, "fonts", "cairo-700.woff2"),
@@ -50,7 +52,7 @@ const FILES = {
 };
 
 // Fetched when the Map page opens, not with every install of the app.
-const LAZY = new Set(["leaflet.js", "leaflet.css", "protomaps-leaflet.js", "map.js"]);
+const LAZY = new Set(["leaflet.js", "leaflet.css", "protomaps-leaflet.js", "map.js", "pinreview.js"]);
 
 const hash = (buf) => crypto.createHash("sha256").update(buf).digest("hex").slice(0, 10);
 

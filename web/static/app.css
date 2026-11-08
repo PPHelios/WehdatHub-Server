@@ -604,3 +604,10 @@ label.field-missing input, label.field-missing select, label.field-missing texta
 .dual input[type="range"]::-moz-range-track { background: none; }
 .dual input[type="range"]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(14, 21, 33, 0.4); }
 .dual input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%; background: var(--brand); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(14, 21, 33, 0.4); }
+
+/* Slow owner pages: the spinner shows while the content loads; the review map and the selected row. */
+[data-lazy] .spinner { display: inline-block; }
+[data-review] { height: 320px; border-radius: 12px; overflow: hidden; margin-block: 8px; }
+.sat { max-width: 100%; border-radius: 12px; margin-block: 8px; }
+[data-row] { cursor: pointer; }
+[data-row].is-selected { outline: 2px solid var(--brand); }
