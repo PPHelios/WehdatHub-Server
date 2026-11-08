@@ -41,7 +41,7 @@
       var marker = null;
       var put = function (lat, lng, move) {
         if (!isFinite(lat) || !isFinite(lng)) return;
-        if (!marker) marker = L.marker([lat, lng]).addTo(map); else marker.setLatLng([lat, lng]);
+        if (!marker) marker = L.circleMarker([lat, lng], { radius: 9, weight: 3, color: "#b91c1c", fillColor: "#ef4444", fillOpacity: 0.9 }).addTo(map); else marker.setLatLng([lat, lng]);
         if (move) map.setView([lat, lng], Math.max(map.getZoom(), 14));
       };
       put(parseFloat(latEl.value), parseFloat(lngEl.value), true);
