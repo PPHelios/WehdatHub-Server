@@ -23,7 +23,7 @@ function findIssues(notes) {
   for (const line of all) {
     if (read.has(line) || CLARIFIED.test(line) || isAnswered(line)) continue;
     // A number that looks like a price (6+ digits once commas are removed) on a line no offer could be read from.
-    if (/\d{1,3}(?:[,٬]\d{3}){2,}|\d{6,}/.test(line)) {
+    if (/\d{1,3}(?:[,٬]\d{3}){2,}|[1-9]\d{2}[,٬]\d{3}(?!\d)|\d{6,}/.test(line)) {
       out.push({
         kind: "unread",
         line,
