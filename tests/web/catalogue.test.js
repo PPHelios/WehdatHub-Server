@@ -249,3 +249,13 @@ test("clarify: a manager is asked about an unreadable notes line, the answer is 
   expect((await agent.get(`/app/catalogue/projects/${project.id}`)).text).not.toContain("data-clarify-q");
   expect(await Catalogue.addClarification(h.pool, await row("broker"), project.id, { line, answer: "x" })).toEqual({ error: "forbidden" });
 });
+
+test("notes: a save over 4,000 characters is refused, and a clarification that would pass the limit is refused too", async () => {
+  const { admin, project } = await seedProject();
+  const long = "أ".repeat(4001);
+  expect(await Catalogue.saveProject(h.pool, admin, { id: project.id, name: "Badya", notes: long })).toEqual({ error: "notes_too_long" });
+  await h.query("UPDATE projects SET notes = $2 WHERE id = $1", [project.id, "س".repeat(3990)]);
+  expect(await Catalogue.addClarification(h.pool, admin, project.id, { line: "x", answer: "y".repeat(100) })).toEqual({ error: "notes_full" });
+  const notes = (await h.query("SELECT notes FROM projects WHERE id = $1", [project.id]))[0].notes;
+  expect(notes).toBe("س".repeat(3990));
+});

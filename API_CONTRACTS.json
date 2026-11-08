@@ -468,7 +468,8 @@
       "parseUnits": ["notes"],
       "matchUnits": ["projects", "f"],
       "matchesPlace": ["project", "places"],
-      "LOCATION_ALIASES": "Object"
+      "LOCATION_ALIASES": "Object",
+      "NOTE_MAX": "Number"
     },
     "services/projectAnswer.js": {
       "offersFor": ["pool", "agencyId", "filters", "params"],

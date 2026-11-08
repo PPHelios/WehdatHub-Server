@@ -148,6 +148,7 @@ const FIELD = {
 const errorText = (r, lang) => {
   if (r.error === "duplicate") return L(lang, "الاسم ده موجود قبل كده.", "That name is already used.");
   if (r.error === "upload_failed") return L(lang, "الملف مارفعش. جرب تاني.", "The file did not upload. Try again.");
+  if (r.error === "notes_too_long" || r.error === "notes_full") return L(lang, "الملاحظات وصلت للحد (4000 حرف). اختصرها الأول، وبعدين ضيف.", "These notes are full (4,000 characters). Trim them first, then add.");
   const f = FIELD[r.field];
   return f ? f[lang === "en" ? 1 : 0] : L(lang, "في حاجة مش مظبوطة.", "Something is not right.");
 };

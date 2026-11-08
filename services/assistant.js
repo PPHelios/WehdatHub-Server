@@ -262,17 +262,21 @@ async function addInfo(pool, manager, { questionId = null, project = null, unit 
     const Store = require("../lib/listingStore");
     const listing = await Store.findByCode(pool, manager.agency_id, String(unit).trim());
     if (!listing) return { error: "not_found" };
-    await pool.query(
-      `UPDATE listings SET details = jsonb_set(details, '{notes}', to_jsonb(left(concat_ws(E'\n', NULLIF(details->>'notes', ''), $3::text), 1000))), updated_at = now() WHERE id = $1 AND agency_id = $2`,
+    const { rowCount } = await pool.query(
+      `UPDATE listings SET details = jsonb_set(details, '{notes}', to_jsonb(concat_ws(E'\n', NULLIF(details->>'notes', ''), $3::text))), updated_at = now() WHERE id = $1 AND agency_id = $2 AND char_length(concat_ws(E'\n', NULLIF(details->>'notes', ''), $3::text)) <= 1000`,
       [listing.id, manager.agency_id, note]
     );
+    if (!rowCount) return { error: "notes_full" };
     target = { kind: "unit", name: listing.code };
   } else if (/^[0-9a-f-]{36}$/i.test(String(project || ""))) {
     const { rows } = await pool.query(
-      "UPDATE projects SET notes = left(concat_ws(E'\n', NULLIF(notes, ''), $3::text), 4000), updated_at = now() WHERE id = $1 AND agency_id = $2 RETURNING name",
+      "UPDATE projects SET notes = concat_ws(E'\n', NULLIF(notes, ''), $3::text), updated_at = now() WHERE id = $1 AND agency_id = $2 AND char_length(concat_ws(E'\n', NULLIF(notes, ''), $3::text)) <= 4000 RETURNING name",
       [project, manager.agency_id, note]
     );
-    if (!rows[0]) return { error: "not_found" };
+    if (!rows[0]) {
+      const { rows: exists } = await pool.query("SELECT 1 FROM projects WHERE id = $1 AND agency_id = $2", [project, manager.agency_id]);
+      return { error: exists.length ? "notes_full" : "not_found" };
+    }
     target = { kind: "project", name: rows[0].name };
   } else {
     return { error: "not_found" };

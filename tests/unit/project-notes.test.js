@@ -83,3 +83,29 @@ describe("offers in other phrasings and at scale", () => {
     expect(hits[0].unit.price).toBe(2000000);
   });
 });
+
+describe("offer layouts: prices in words, installments in words, price-only lines, sizes", () => {
+  test("a price in words is read ('3 مليون ونص', '3 مليون و200 ألف', '850 ألف')", () => {
+    expect(PN.parseUnits("شقة سعرها 3 مليون ونص مقدم 10%")[0].price).toBe(3500000);
+    expect(PN.parseUnits("يونت 120 م بسعر 3 مليون و200 ألف")[0]).toMatchObject({ area: 120, price: 3200000 });
+    expect(PN.parseUnits("بسعر 850 ألف مقدم 85 ألف")[0].price).toBe(850000);
+  });
+
+  test("an installment in words ('قسط 25 ألف') is read", () => {
+    expect(PN.parseUnits("يونت 110 م سعرها = 2,900,000 قسط 25 ألف")[0].monthly).toBe(25000);
+  });
+
+  test("a size with a superscript ('110 م²') is read", () => {
+    expect(PN.parseUnits("يونت 110 م² سعرها = 2,900,000")[0].area).toBe(110);
+  });
+
+  test("a price-only line is kept: price searches find it, area searches do not", () => {
+    const all = [{ project: JAZEEL, units: PN.parseUnits("شقة بسعر 850 ألف") }];
+    expect(PN.matchUnits(all, { price_max: 900000 })).toHaveLength(1);
+    expect(PN.matchUnits(all, { area_min: 110 })).toHaveLength(0);
+  });
+
+  test("a price under 100,000 is still not an offer", () => {
+    expect(PN.parseUnits("سعر المتر 45 ألف")).toEqual([]);
+  });
+});
