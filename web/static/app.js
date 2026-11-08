@@ -331,7 +331,12 @@
   // Search: pressing Enter or Search shows a spinner at once (the AI reading can take a moment), until the page answers.
   document.addEventListener("submit", function (e) {
     var f = e.target && e.target.closest && e.target.closest("[data-search-form]");
-    if (f) f.classList.add("is-busy");
+    if (!f) return;
+    f.classList.add("is-busy");
+    // The search button is locked while the answer is on its way (the page replaces itself when it arrives).
+    var sb = e.submitter;
+    // Locked a moment later, so the button's own name and value still go with the form.
+    if (sb) setTimeout(function () { sb.disabled = true; sb.classList.add("busy"); }, 0);
   });
   // Uploads with a progress bar (forms with data-progress): the file goes up with XMLHttpRequest so the bar shows how much has
   // gone; then the server reads it. The answer replaces the page (a redirect is followed).
