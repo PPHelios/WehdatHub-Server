@@ -289,11 +289,15 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     }
   }
 
+  // An exact bedroom count (e.g. 2) lists that count first, then larger counts (3, 4...), then the rest (near matches, unknown).
+  const bedRank = f.bedrooms_min > 0 && f.bedrooms_min === f.bedrooms_max
+    ? `CASE WHEN l.bedrooms = ${add(f.bedrooms_min)} THEN 0 WHEN l.bedrooms > ${add(f.bedrooms_min)} THEN l.bedrooms - ${add(f.bedrooms_min)} ELSE 100 END, `
+    : "";
   const sql = `
     SELECT l.*, COUNT(*) OVER() AS total_count
     FROM listings l
     WHERE ${Vis.units("l")} AND ${where.join("\n      AND ")}
-    ORDER BY ${rank} ${typeRank} ${exactFirst} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
+    ORDER BY ${rank} ${bedRank} ${typeRank} ${exactFirst} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
     LIMIT ${add(limit)} OFFSET ${add(offset)}`;
   return { sql, params };
 }

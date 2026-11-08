@@ -575,6 +575,7 @@ function flyerModel(l, { agency = {}, broker = null, lang = "en" } = {}) {
 }
 
 module.exports = {
+  internalLines,
   clientCopy,
   paymentHint,
   featuresLine,
