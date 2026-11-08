@@ -671,6 +671,27 @@ async function handleInteractive(broker, message, ctx) {
     }
   }
 
+  // Owner data button on a unit card: shown only when the agency lets this broker see it (services/unitPrivacy.js);
+  // otherwise the same ask as "Ask details 🔒" is made.
+  if (replyId.startsWith("ownerdata:")) {
+    const code = T.extractCleanCode(replyId.slice(10)).toUpperCase();
+    const { rows } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = $2 LIMIT 1", [broker.agency_id, code]);
+    if (rows.length) {
+      const Privacy = require("../services/unitPrivacy");
+      const view = await Privacy.forBroker(pool, broker, rows[0]);
+      if (view.hidden) {
+        const out = await Privacy.requestAccess(pool, broker, rows[0]);
+        await reply(broker, out.already
+          ? lang === "en" ? "You can already see this unit's private details." : "تقدر تشوف البيانات الخاصة بالوحدة دي بالفعل."
+          : lang === "en" ? `🔒 Request sent for #${rows[0].code}. You'll hear when a manager answers.` : `🔒 اتبعت الطلب للوحدة #${rows[0].code}. هيوصلك الرد لما المدير يرد.`);
+        return "done";
+      }
+      const lines = Describe.internalLines(rows[0], lang);
+      await reply(broker, `👤 \`${rows[0].code}\`\n${lines.length ? lines.join("\n") : lang === "en" ? "No owner data recorded." : "مفيش بيانات مالك مسجلة."}`);
+      return "done";
+    }
+  }
+
   // Secret-details ask from a unit card (same rule and alerts as the website's button).
   if (replyId.startsWith("unitask:")) {
     const code = T.extractCleanCode(replyId.slice(8)).toUpperCase();

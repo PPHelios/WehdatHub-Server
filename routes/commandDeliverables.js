@@ -135,7 +135,6 @@ async function deliverUnitInspectionCard(listing, broker, lang, pool = null) {
   const view = pool ? await require("../services/unitPrivacy").forBroker(pool, broker, listing) : { listing: require("../services/unitPrivacy").redact(listing), hidden: false };
   const detailsCard = T.formatInternalListingDetails(view.listing, lang) + (view.hidden ? (lang === "en" ? "\n🔒 Private details: tap Ask details." : "\n🔒 البيانات الخاصة: اضغط اطلب البيانات.") : "");
   const buttons = cardButtons(listing, lang);
-  if (view.hidden) buttons[2] = require("../lib/buttons").BUTTONS.askDetails(listing.code)(lang);
 
   // Telegram (6.4): the unit's photos as an album above the card (free there; WhatsApp keeps text only).
   if (pool && broker.channel === "telegram") {
@@ -144,6 +143,13 @@ async function deliverUnitInspectionCard(listing, broker, lang, pool = null) {
   }
 
   await replyButtons(broker, detailsCard, buttons);
+  // Owner data: a button of its own (Update stays on the card). Locked units get "Ask details 🔒" instead.
+  const hasOwner = view.hidden || Boolean(listing.owner_id || (listing.details || {}).owner_name || (listing.details || {}).owner_phone);
+  if (hasOwner) {
+    const B = require("../lib/buttons").BUTTONS;
+    const ownerBtn = view.hidden ? B.askDetails(listing.code)(lang) : B.ownerData(listing.code)(lang);
+    await replyButtons(broker, lang === "en" ? "👤 Owner data" : "👤 بيانات المالك", [ownerBtn]);
+  }
   return true;
 }
 
