@@ -194,3 +194,20 @@ test("the master list approves places by name: a place the map has keeps its pos
   expect(pins.unmapped).toBe(1);
   expect((await crm.agent.get("/app/owner/map?lang=en")).status).toBe(200);
 });
+
+test("missing pins: OpenStreetMap suggests, Google fills the gap and checks, nothing saves until the owner approves", async () => {
+  const Lookup = require("../../services/placeLookup");
+  const fetchFn = async (url) => ({
+    ok: true,
+    json: async () => (url.includes("nominatim") ? (url.includes("Alpha") ? [{ lat: "30.0", lon: "31.5" }] : []) : { status: "OK", results: [{ geometry: { location: { lat: url.includes("Alpha") ? 30.001 : 30.2, lng: 31.5 } } }] })
+  });
+  const out = await Lookup.suggest([{ id: "a", name_en: "Alpha" }, { id: "b", name_en: "Beta" }], { fetchFn, key: "k", pauseMs: 0 });
+  expect(out[0]).toMatchObject({ source: "osm", pos: { lat: 30, lng: 31.5 } });
+  expect(out[0].apart_km).toBeLessThan(0.5);
+  expect(out[1]).toMatchObject({ source: "google", pos: { lat: 30.2, lng: 31.5 }, apart_km: null });
+  const [{ id }] = await h.query(`INSERT INTO map_places (name_key, name_en, source, approved) VALUES ('alpha', 'Alpha', 'manual', true) RETURNING id`);
+  expect((await Lookup.missing(h.pool)).total).toBeGreaterThan(0);
+  expect(await Lookup.setPosition(h.pool, id, 40, 31.5)).toBe(false); // outside Egypt
+  expect(await Lookup.setPosition(h.pool, id, 30, 31.5)).toBe(true);
+  expect(await Lookup.setPosition(h.pool, id, 30.1, 31.5)).toBe(false); // already has a pin
+});

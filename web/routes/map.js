@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const Dash = require("../../services/dashboards");
 const Maps = require("../../services/mapPlaces");
+const Lookup = require("../../services/placeLookup");
 const MapRules = require("../../domain/mapPlaces");
 const Describe = require("../../domain/describe");
 const { html, raw } = require("../html");
@@ -155,10 +156,11 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   ]);
   const msg = String(req.query.msg || "");
   const err = ERRORS(lang)[String(req.query.err || "")];
-  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", approved: "اتعتمد.", master: `اتعتمد ${req.query.n || 0} مكان.`, dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", approved: "Approved.", master: `${req.query.n || 0} places approved from the master list.`, dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
+  const notice = err ? html`<p class="warn" role="alert">${err}</p>` : msg ? html`<p class="ok" role="status">${L(lang, { saved: "اتحفظ.", deleted: "اتمسح.", alias: "اتضاف الاسم.", pinned: `اتحط ${req.query.n || 0} دبوس.`, approved: "اتعتمد.", master: `اتعتمد ${req.query.n || 0} مكان.`, dismissed: `اتشالت من ${req.query.n || 0} وحدة.`, rechecked: `اتصلحت ${req.query.n || 0} وحدة.`, wouldfix: `هيتصلح ${req.query.n || 0} وحدة.`, seed: `اتضاف ${req.query.n || 0} مكان من القايمة.` }[msg] || "تمام.", { saved: "Saved.", deleted: "Deleted.", alias: "Name added.", pinned: `${req.query.n || 0} pins saved.`, approved: "Approved.", master: `${req.query.n || 0} places approved from the master list.`, dismissed: `Removed from ${req.query.n || 0} units.`, rechecked: `${req.query.n || 0} units fixed.`, wouldfix: `${req.query.n || 0} units would be fixed.`, seed: `${req.query.n || 0} places added from the seed.` }[msg] || "Done.")}</p>` : "";
   const next = list.rows.length === 50 ? html`<a class="btn secondary" href="/app/owner/map?q=${encodeURIComponent(q)}&p=${pageNo + 1}">${L(lang, "التالي", "Next")}</a>` : "";
   return html`<h1>🗺️ ${L(lang, "أماكن الخريطة", "Map places")}</h1>
 ${notice}
+<p><a class="btn secondary small" href="/app/owner/map/find">📍 ${L(lang, "دوّر على الأماكن اللي من غير دبوس", "Find missing pins")}</a></p>
 <p class="muted">${L(lang, `${list.total} مكان، ${list.verified} منهم مراجَع.`, `${list.total} places, ${list.verified} checked.`)}</p>
 ${placeForm(lang, editing)}
 <div class="map-view map-pick" data-map data-pick data-places="${JSON.stringify(allPins.places.filter((x) => x.approved && x.lat != null).map((x) => ({ id: x.id, n: x.name_en || x.name_ar, lat: x.lat, lng: x.lng })))}" role="application" aria-label="${L(lang, "اختار مكان الدبوس", "Pick the pin")}" data-tiles="${tilesUrl}" data-i18n="${JSON.stringify(words(lang))}" data-lang="${lang}"></div>
@@ -243,6 +245,32 @@ function register(web, { pool, page, assets }) {
     return goQueue(res, "msg=alias");
   }));
 
+  // Missing pins: 20 places at a time; OpenStreetMap suggests, Google fills the gaps and checks; the owner approves each.
+  web.get("/owner/map/find", ownerOnly(async (req, res, lang) => {
+    const offset = Math.max(0, Math.floor(Number(req.query.offset) || 0));
+    const found = await Lookup.missing(pool, { offset, limit: 20 });
+    const rows = await Lookup.suggest(found.rows);
+    const hasKey = Boolean(process.env.GOOGLE_MAPS_API_KEY);
+    const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+    const badge = (r) => (r.apart_km == null ? (r.source === "google" ? L(lang, "من جوجل بس", "Google only") : hasKey ? L(lang, "جوجل مالقاش", "Google found nothing") : "") : r.apart_km < 0.5 ? L(lang, "جوجل موافق", "Google agrees") : L(lang, `جوجل مختلف ${r.apart_km} كم`, `Google differs by ${r.apart_km} km`));
+    return page(req, res, { title: L(lang, "الأماكن من غير دبوس", "Missing pins"), nav: "ownermap", body: html`<h1>📍 ${L(lang, "الأماكن من غير دبوس", "Missing pins")}</h1>
+<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")}</p>
+<form method="post" action="/app/owner/map/find" class="stack">
+  <ul class="stack">${rows.map((r) => html`<li class="card row">${r.pos ? html`<label><input type="checkbox" name="pick" value="${r.id},${r.pos.lat},${r.pos.lng}"> <strong>${r.name}</strong></label> <span class="muted">${r.source === "osm" ? "OpenStreetMap" : "Google"} · ${badge(r)}</span> <a href="${gm(r.pos)}" target="_blank" rel="noopener">${L(lang, "افتح في جوجل ماب", "Open in Google Maps")}</a>` : html`<strong>${r.name}</strong> <span class="muted">${L(lang, "ملقيناش مكان. حطه بإيدك.", "Not found. Place it by hand.")} <a href="/app/owner/map?q=${encodeURIComponent(r.name)}">${L(lang, "تعديل", "Edit")}</a></span>`}</li>`)}</ul>
+  <div class="row"><button type="submit">${L(lang, "اعتمد المحدد", "Approve ticked")}</button>
+  ${offset + 20 < found.total ? html`<a class="btn secondary" href="/app/owner/map/find?offset=${offset + 20}">${L(lang, "العشرين اللي بعدهم", "Next 20")}</a>` : ""}</div>
+</form>` });
+  }));
+  web.post("/owner/map/find", ownerOnly(async (req, res) => {
+    const picks = [].concat(req.body.pick || []).slice(0, 50);
+    let n = 0;
+    for (const v of picks) {
+      const [id, lat, lng] = String(v).split(",");
+      if (await Lookup.setPosition(pool, id, lat, lng)) n += 1;
+    }
+    Maps.clearCache();
+    return goOwner(res, `msg=pinned&n=${n}`);
+  }));
   web.post("/owner/map/recheck", ownerOnly(async (req, res) => {
     const out = await Maps.recheck(pool, { apply: req.body.apply === "1" });
     return goQueue(res, `msg=${req.body.apply === "1" ? "rechecked" : "wouldfix"}&n=${out.fixed}`);

@@ -2428,6 +2428,12 @@
       "normalize": ["db", "fields"],
       "suggest": ["db", "typed", "limit"]
     },
+    "services/placeLookup.js": {
+      "missing": ["pool", "params"],
+      "suggest": ["places", "params"],
+      "setPosition": ["pool", "id", "lat", "lng"],
+      "km": ["a", "b"]
+    },
     "services/globalProjects.js": {
       "syncFile": ["pool", "file"],
       "list": ["pool", "params"],
