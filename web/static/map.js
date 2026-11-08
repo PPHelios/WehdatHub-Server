@@ -39,9 +39,11 @@
       var latEl = document.querySelector("[data-lat]");
       var lngEl = document.querySelector("[data-lng]");
       var marker = null;
+      var nameEl = document.querySelector("[name=name_en]") || document.querySelector("[name=name_ar]");
       var put = function (lat, lng, move) {
         if (!isFinite(lat) || !isFinite(lng)) return;
-        if (!marker) marker = L.marker([lat, lng]).addTo(map); else marker.setLatLng([lat, lng]);
+        if (!marker) marker = L.circleMarker([lat, lng], { radius: 9, weight: 3, color: "#b91c1c", fillColor: "#ef4444", fillOpacity: 0.9 }).addTo(map); else marker.setLatLng([lat, lng]);
+        if (nameEl && nameEl.value && !marker.getTooltip()) marker.bindTooltip(nameEl.value, { permanent: true, direction: "top", offset: [0, -8] });
         if (move) map.setView([lat, lng], Math.max(map.getZoom(), 14));
       };
       put(parseFloat(latEl.value), parseFloat(lngEl.value), true);
