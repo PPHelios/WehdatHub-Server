@@ -5,6 +5,7 @@
 
 const { normalizeSearch } = require("../domain/searchText");
 const { normalizeDigits } = require("../lib/text");
+const ProjectNotes = require("../domain/projectNotes");
 
 // Words that name a kind of place or unit, not a project: they must not match every project.
 const GENERIC = new Set(
@@ -92,16 +93,42 @@ function projectReply(project, text, lang = "ar") {
  * Ask's catalog answer for a request that found no unit. Returns the reply text, or null when no project matches.
  * `text` is the request as typed; the project list is the agency's own, unarchived projects.
  */
-async function answer(pool, agencyId, text, lang = "ar") {
+async function answer(pool, agencyId, text, lang = "ar", filters = {}) {
+  if (!pool) return null;
   const words = nameWords(text);
-  if (!words.length || !pool) return null;
   const { rows } = await pool.query(
     "SELECT name, name_en, developer_name, district, city, status, delivery_year, notes, updated_at FROM projects WHERE agency_id = $1 AND archived_at IS NULL",
     [agencyId]
   );
+  // A project named in the request: its own answer.
   const [best] = matchProjects(rows, words);
-  if (!best) return null;
-  return projectReply(best, text, lang);
+  if (best) return projectReply(best, text, lang);
+  // Otherwise: the offers written in the notes that fit the area, place, budget, installment or down payment asked.
+  const projects = rows.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);
+  const hits = ProjectNotes.matchUnits(projects, filters).slice(0, 5);
+  if (!hits.length) return null;
+  return notesReply(hits, lang);
 }
 
-module.exports = { answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply };
+/** The reply for offers taken from notes: one line each, with the newest update date of the projects shown. */
+function notesReply(hits, lang = "ar") {
+  const en = lang === "en";
+  const money = (n) => (n == null ? "-" : Number(n).toLocaleString("en-US"));
+  const lines = hits.map(({ project, unit }) => {
+    const name = project.name_en || project.name;
+    const bits = [
+      `${unit.area} m²${unit.floor ? (en ? `, floor ${unit.floor}` : `، الدور ${unit.floor}`) : ""}`,
+      `${money(unit.price)} ${en ? "EGP" : "جنيه"}`,
+      unit.down != null ? (en ? `down ${money(unit.down)}` : `مقدم ${money(unit.down)}`) : null,
+      unit.monthly != null ? (en ? `${money(unit.monthly)}/month${unit.years ? " for " + unit.years + " years" : ""}` : `قسط ${money(unit.monthly)} شهريًا${unit.years ? " على " + unit.years + " سنين" : ""}`) : null
+    ].filter(Boolean);
+    return `• *${name}*: ${bits.join(" · ")}`;
+  });
+  const updated = hits.map((h) => new Date(h.project.updated_at).getTime()).filter((t) => !Number.isNaN(t));
+  const last = updated.length ? new Date(Math.max(...updated)).toISOString().slice(0, 10) : null;
+  const head = en ? "From the project notes (written offers, not unit records). Check before quoting:" : "من ملاحظات المشاريع (عروض مكتوبة، مش وحدات مسجلة). اتأكد قبل ما تقتبس السعر:";
+  const foot = last ? (en ? `Last updated: ${last}` : `آخر تحديث: ${last}`) : en ? "Last updated: not recorded" : "آخر تحديث: غير مسجل";
+  return [head, "", ...lines, "", foot].join("\n");
+}
+
+module.exports = { answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };

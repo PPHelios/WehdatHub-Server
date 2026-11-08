@@ -1,0 +1,81 @@
+// domain/projectNotes.js — Reads the unit offers written in a project's notes (price, area, down payment, installment)
+// and matches them to what a search asked for. Pure: no database, no I/O. Notes are text, so a line counts only when it
+// carries a price and an area; anything else in the notes is ignored.
+"use strict";
+
+const { normalizeSearch } = require("./searchText");
+const { normalizeDigits } = require("../lib/text");
+
+// Area names in the notes that a search may write differently (the project's district is stored in English).
+const LOCATION_ALIASES = {
+  obour: ["العبور", "عبور", "obour"],
+  "new cairo": ["new cairo", "القاهره الجديده", "التجمع"],
+  "6th of october": ["6 اكتوبر", "السادس من اكتوبر", "6th of october"],
+  "sheikh zayed": ["الشيخ زايد", "sheikh zayed"]
+};
+
+const num = (s) => (s == null ? null : Number(String(s).replace(/[,\s٬]/g, "")) || null);
+
+/** The offers in one notes text: { area, floor, price, down, monthly, years, raw }, one per line that has a price and an area. */
+function parseUnits(notes) {
+  const text = normalizeDigits(String(notes || ""));
+  const parts = text.split(/\n|__|🔥/).map((s) => s.replace(/\s+/g, " ").trim()).filter((s) => s.length > 3);
+  const out = [];
+  for (const raw of parts) {
+    const price = num((raw.match(/سعرها[^=]*=\s*([\d,٬]+)/) || [])[1]);
+    if (!price || price < 100000) continue;
+    const areaM = raw.match(/(?:يونت|يومت|وحده|وحدة|شقه|شقة)\s*(\d{2,4})(?!\d)/) || raw.match(/(\d{2,4})\s*(?:م|متر)(?![؀-ۿ])/);
+    const area = areaM ? Number(areaM[1]) : null;
+    if (!area) continue;
+    const floor = (raw.match(/الدور\s+([^\s=]+(?:\s+(?:الاول|التاني|التالت|الرابع|الخامس|الارضي))?)/) || [])[1] || null;
+    const down = num((raw.match(/مقدم\s*\d+(?:\.\d+)?\s*%\s*=?\s*([\d,٬]+)/) || [])[1]);
+    const monthly = num((raw.match(/قسط\s*شهري[^=]*=\s*([\d,٬]+)/) || [])[1]);
+    const years = num((raw.match(/(\d{1,2})\s*(?:سنين|سنوات|سنه|سنة)/) || [])[1]);
+    out.push({ area, floor, price, down, monthly, years, raw });
+  }
+  return out;
+}
+
+/** Does the project belong to the place the search named (district, city, or name)? No place named = yes. */
+function matchesPlace(project, places) {
+  if (!places.length) return true;
+  const fields = [project.district, project.city, project.name, project.name_en].map((f) => normalizeSearch(f || ""));
+  return places.some((p) => {
+    // The place and every spelling listed with it (either direction): "العبور" finds "obour".
+    const words = new Set([p]);
+    for (const [key, alts] of Object.entries(LOCATION_ALIASES)) {
+      const group = [key, ...alts].map((w) => normalizeSearch(w));
+      if (group.includes(p)) group.forEach((w) => words.add(w));
+    }
+    return [...words].some((w) => w && fields.some((f) => f.includes(w)));
+  });
+}
+
+/**
+ * The offers that fit a search: area about the asked size (±5% when one number is asked), price and installment and down
+ * payment at most the budget. Filters that are not set are not applied. Rent searches are not answered from notes.
+ * @param {Array<{project, units}>} projects parsed notes per project
+ * @param {Object} f search filters (domain/searchQuery shape)
+ */
+function matchUnits(projects, f = {}) {
+  if (f.listing_type === "rent") return [];
+  const places = [...(f.locations || []), ...(f.places || []).map((p) => p.key), ...(f.place_terms || [])]
+    .map((p) => normalizeSearch(p))
+    .filter(Boolean);
+  const hits = [];
+  for (const { project, units } of projects) {
+    if (!matchesPlace(project, places)) continue;
+    for (const u of units) {
+      if (f.area_min != null && f.area_max == null && Math.abs(u.area - f.area_min) > f.area_min * 0.05) continue;
+      if (f.area_min != null && f.area_max != null && (u.area < f.area_min || u.area > f.area_max)) continue;
+      if (f.price_max != null && u.price > f.price_max) continue;
+      if (f.price_min != null && u.price < f.price_min) continue;
+      if (f.max_installment != null && (u.monthly == null || u.monthly > f.max_installment)) continue;
+      if (f.max_down_payment != null && (u.down == null || u.down > f.max_down_payment)) continue;
+      hits.push({ project, unit: u });
+    }
+  }
+  return hits.sort((a, b) => a.unit.price - b.unit.price);
+}
+
+module.exports = { parseUnits, matchUnits, matchesPlace, LOCATION_ALIASES };
