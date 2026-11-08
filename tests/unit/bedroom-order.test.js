@@ -10,8 +10,8 @@ describe("search: exact bedroom count sorts first", () => {
     expect(sql).toMatch(/CASE WHEN l\.bedrooms = \$\d+ THEN 0 WHEN l\.bedrooms > \$\d+ THEN l\.bedrooms - \$\d+ ELSE 100 END/);
   });
 
-  it("adds no bedroom order for a 3-and-above search", () => {
-    const parsed = S.fallbackParse("شقة 3 غرف فأكثر");
+  it("adds no bedroom order for a range (2 to 3 bedrooms)", () => {
+    const parsed = { filters: { bedrooms_min: 2, bedrooms_max: 3 } };
     const { sql } = S.buildSearchQuery("agency-id", parsed, { limit: 5, offset: 0 });
     expect(sql).not.toMatch(/THEN 0 WHEN l\.bedrooms > /);
   });

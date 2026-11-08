@@ -290,7 +290,8 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
   }
 
   // An exact bedroom count (e.g. 2) lists that count first, then larger counts (3, 4...), then the rest (near matches, unknown).
-  const bedRank = f.bedrooms_min > 0 && f.bedrooms_min === f.bedrooms_max
+  // A plain count ("2 bedrooms") is parsed as 2 or more, so the open-ended form counts too.
+  const bedRank = f.bedrooms_min > 0 && (f.bedrooms_max == null || f.bedrooms_max === f.bedrooms_min)
     ? `CASE WHEN l.bedrooms = ${add(f.bedrooms_min)} THEN 0 WHEN l.bedrooms > ${add(f.bedrooms_min)} THEN l.bedrooms - ${add(f.bedrooms_min)} ELSE 100 END, `
     : "";
   const sql = `
