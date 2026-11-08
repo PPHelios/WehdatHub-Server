@@ -1,0 +1,94 @@
+// tests/browser/spinner.browser.test.js — Every button that sends a request shows a spinner (or is locked) while it waits.
+// Fake data and fake AI, no outside network. A test form post is slowed on purpose so the wait is visible.
+// Reports the gaps by page and button only. Run: npm run test:browser
+"use strict";
+
+jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
+jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
+jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
+
+const { createHarness, closeHarness } = require("../harness/app");
+const WebAuth = require("../../lib/webAuth");
+const Leads = require("../../services/leads");
+
+process.env.OWNER_BROKER_IDS = "10000000-0000-0000-0000-000000000003";
+process.env.PUBLIC_BASE_URL = "http://127.0.0.1:4572";
+jest.setTimeout(900000);
+
+const PHONE = { width: 390, height: 844 };
+const LOCAL = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//;
+const PAGES = [["search", "/app/search"], ["ask", "/app/ask"], ["units", "/app/units"], ["unit-new", "/app/units/new"], ["lead", "/app/leads/LEAD_REF"], ["leads", "/app/leads"]];
+
+let h, browser, server, base;
+const gaps = [];
+
+async function session(who) {
+  const br = h.BROKERS[who];
+  const ctx = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+  await ctx.route(/.*/, async (route) => {
+    const req = route.request();
+    if (!LOCAL.test(req.url())) return route.abort();
+    // A post waits a moment, so the spinner shows long enough to be seen.
+    if (req.method() === "POST") await new Promise((r) => setTimeout(r, 500));
+    return route.continue();
+  });
+  const pg = await ctx.newPage();
+  pg.setDefaultTimeout(15000);
+  const token = await WebAuth.issueLoginToken(h.pool, { id: br.id, agency_id: br.agency_id });
+  await pg.goto(`${base}/app/login/confirm?t=${token}`);
+  await pg.click("form button[type=submit], form input[type=submit]");
+  await pg.waitForURL((u) => u.pathname.startsWith("/app") && !u.pathname.includes("login"), { timeout: 10000 }).catch(() => {});
+  await pg.waitForLoadState("networkidle");
+  return { ctx, pg };
+}
+
+// Each control is checked on a fresh load of its page, so one click cannot change what the next one sees.
+async function checkControl(ctx, path, index, where) {
+  const pg = await ctx.newPage();
+  try {
+    await pg.goto(base + path, { waitUntil: "networkidle" });
+    const btn = pg.locator("main button[type=submit]:not([data-confirm]):not(.link)").nth(index);
+    const label = ((await btn.textContent().catch(() => "")) || "").trim().slice(0, 40);
+    const valid = await btn.evaluate((b) => (b.form ? b.form.checkValidity() : false)).catch(() => false);
+    if (!valid) return; // a form that needs input first sends nothing, so there is no wait to show
+    await btn.click({ noWaitAfter: true }).catch(() => {});
+    const shown = await btn.evaluate((b) => {
+      const form = b.form;
+      return b.classList.contains("busy") || b.disabled || b.hasAttribute("data-locked") || Boolean(form && form.classList.contains("is-busy"));
+    }).catch(() => true); // a button that already left the page is not a gap
+    if (!shown) gaps.push(`${where} · "${label || "(no text)"}"`);
+  } finally {
+    await pg.close().catch(() => {});
+  }
+}
+
+beforeAll(async () => {
+  h = await createHarness();
+  const { chromium } = require("playwright");
+  browser = await chromium.launch({ args: ["--no-sandbox"] });
+  for (let i = 0; i < 3; i++) await h.insertListing({ code: `NH-A${20 + i}`, title: `NH-A${20 + i} unit`, compound: "Hyde Park", price_value: 4e6 + i * 1e5, area_value: 90 + i * 10, bedrooms: 2 + (i % 3) });
+  const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  const lead = (await Leads.captureLead(h.pool, broker, { phones: ["01012345678"], name: "محمد سامي", quiet: true })).lead;
+  PAGES.forEach((p) => { p[1] = p[1].replace("LEAD_REF", lead.ref); });
+  server = h.app.app.listen(4572);
+  base = "http://127.0.0.1:4572";
+});
+
+afterAll(async () => {
+  if (browser) await browser.close();
+  if (server) server.close();
+  await closeHarness();
+});
+
+test("every request button on the broker pages shows a spinner while it waits", async () => {
+  const { ctx, pg } = await session("broker");
+  for (const [name, path] of PAGES) {
+    await pg.goto(base + path, { waitUntil: "networkidle" }).catch(() => {});
+    const count = await pg.locator("main button[type=submit]:not([data-confirm]):not(.link)").count().catch(() => 0);
+    for (let i = 0; i < count; i++) await checkControl(ctx, path, i, name);
+  }
+  await ctx.close();
+  // Reports gaps only, by page and button; an empty list means every checked button shows a spinner.
+  if (gaps.length) process.stdout.write(`SPINNER GAPS:\n${gaps.join("\n")}\n`);
+  expect(gaps).toEqual([]);
+});
