@@ -117,26 +117,26 @@ test("only the CRM owner opens the places window; it saves a place from a pasted
 
   const crm = await signIn(h, "admin");
   expect((await crm.agent.get("/app/owner/map?lang=en")).status).toBe(200);
-  const bad = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Mivida", maps_link: "https://maps.app.goo.gl/x" });
+  const bad = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark", maps_link: "https://maps.app.goo.gl/x" });
   expect(bad.headers.location).toMatch(/err=link_short/);
-  const ok = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Mivida", name_ar: "ميفيدا", maps_link: "https://www.google.com/maps/@30.0058,31.5377,15z", verified: "on" });
+  const ok = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark", name_ar: "زيتا", maps_link: "https://www.google.com/maps/@30.0058,31.5377,15z", verified: "on" });
   expect(ok.headers.location).toMatch(/msg=saved/);
-  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Mivida Compound", lat: "30", lng: "31" });
+  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark Compound", lat: "30", lng: "31" });
   expect(dup.headers.location).toMatch(/err=duplicate/);
 
-  await h.insertListing({ code: "EM-1", compound: "Emaar Mivida" });
-  expect((await crm.agent.get("/app/owner/map?lang=en")).text).toMatch(/Emaar Mivida/);
-  const link = await crm.agent.post("/app/owner/map/alias").type("form").send({ _csrf: crm.csrf, alias: "Emaar Mivida", place: "Mivida" });
+  await h.insertListing({ code: "EM-1", compound: "Emaar Zetapark" });
+  expect((await crm.agent.get("/app/owner/queue?lang=en")).text).toMatch(/Emaar Zetapark/);
+  const link = await crm.agent.post("/app/owner/map/alias").type("form").send({ _csrf: crm.csrf, alias: "Emaar Zetapark", place: "Zetapark" });
   expect(link.headers.location).toMatch(/msg=alias/);
   Maps.clearCache();
   const pins = await signIn(h, "broker");
-  expect((await pins.agent.get("/app/map/pins")).body.pins[0]).toMatchObject({ name: "Mivida", n: 1 });
+  expect((await pins.agent.get("/app/map/pins")).body.pins[0]).toMatchObject({ name: "Zetapark", n: 1 });
 
   const seed = await crm.agent.post("/app/owner/map/import").type("form").send({ _csrf: crm.csrf });
   expect(seed.headers.location).toMatch(/msg=seed&n=\d+/);
   expect(Number(seed.headers.location.match(/n=(\d+)/)[1])).toBeGreaterThan(1000);
-  expect((await h.query("SELECT count(*)::int AS n FROM map_places WHERE name_key = 'mivida'"))[0].n).toBe(1);
-  const gone = await crm.agent.post(`/app/owner/map/${ok.headers.location.includes("saved") ? (await h.query("SELECT id FROM map_places WHERE name_key='mivida'"))[0].id : ""}/delete`).type("form").send({ _csrf: crm.csrf });
+  expect((await h.query("SELECT count(*)::int AS n FROM map_places WHERE name_key = 'zetapark'"))[0].n).toBe(1);
+  const gone = await crm.agent.post(`/app/owner/map/${ok.headers.location.includes("saved") ? (await h.query("SELECT id FROM map_places WHERE name_key='zetapark'"))[0].id : ""}/delete`).type("form").send({ _csrf: crm.csrf });
   expect(gone.headers.location).toMatch(/msg=deleted/);
 });
 
@@ -158,18 +158,18 @@ test("a compound is matched to the approved list on save: details move to the no
 test("the owner's queue: approve a seed place, re-check units, and mark a name as not a compound", async () => {
   process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
   resetConfig();
-  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('eastown', 'Eastown', 30.02, 31.5, 'seed', false)`);
-  await h.insertListing({ code: "ET-1", compound: "Eastown, 3rd floor" });
+  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('zedtown', 'Zedtown', 30.02, 31.5, 'seed', false)`);
+  await h.insertListing({ code: "ET-1", compound: "Zedtown, 3rd floor" });
   await h.insertListing({ code: "OS-1", compound: "outside" });
   const crm = await signIn(h, "admin");
-  const page = await crm.agent.get("/app/owner/map?lang=en");
-  expect(page.text).toMatch(/Approve &quot;Eastown&quot;|Approve "Eastown"/);
-  const id = (await h.query("SELECT id FROM map_places WHERE name_key = 'eastown'"))[0].id;
+  const page = await crm.agent.get("/app/owner/queue?lang=en");
+  expect(page.text).toMatch(/Approve &quot;Zedtown&quot;|Approve "Zedtown"/);
+  const id = (await h.query("SELECT id FROM map_places WHERE name_key = 'zedtown'"))[0].id;
   expect((await crm.agent.post(`/app/owner/map/${id}/approve`).type("form").send({ _csrf: crm.csrf })).headers.location).toMatch(/msg=approved/);
-  expect((await crm.agent.get("/app/owner/map?lang=en")).text).not.toMatch(/Fix units now|Approve the master list/);
+  expect((await crm.agent.get("/app/owner/queue?lang=en")).text).not.toMatch(/Fix units now|Approve the master list/);
   const u = (await h.query("SELECT compound, place_id, details FROM listings WHERE code = 'ET-1'"))[0];
   expect(u.place_id).toBe(id);
-  expect(u.compound).toBe("Eastown");
+  expect(u.compound).toBe("Zedtown");
   expect(u.details.notes).toMatch(/3rd floor/);
   const gone = await crm.agent.post("/app/owner/map/dismiss").type("form").send({ _csrf: crm.csrf, name: "outside" });
   expect(gone.headers.location).toMatch(/msg=dismissed&n=1/);
@@ -193,4 +193,21 @@ test("the master list approves places by name: a place the map has keeps its pos
   expect(pins.pins.map((p) => p.name)).not.toContain("Bloomfields");
   expect(pins.unmapped).toBe(1);
   expect((await crm.agent.get("/app/owner/map?lang=en")).status).toBe(200);
+});
+
+test("missing pins: OpenStreetMap suggests, Google fills the gap and checks, nothing saves until the owner approves", async () => {
+  const Lookup = require("../../services/placeLookup");
+  const fetchFn = async (url) => ({
+    ok: true,
+    json: async () => (url.includes("nominatim") ? (url.includes("Alpha") ? [{ lat: "30.0", lon: "31.5" }] : []) : { status: "OK", results: [{ geometry: { location: { lat: url.includes("Alpha") ? 30.001 : 30.2, lng: 31.5 } } }] })
+  });
+  const out = await Lookup.suggest([{ id: "a", name_en: "Alpha" }, { id: "b", name_en: "Beta" }], { fetchFn, key: "k", pauseMs: 0 });
+  expect(out[0]).toMatchObject({ source: "osm", pos: { lat: 30, lng: 31.5 } });
+  expect(out[0].apart_km).toBeLessThan(0.5);
+  expect(out[1]).toMatchObject({ source: "google", pos: { lat: 30.2, lng: 31.5 }, apart_km: null });
+  const [{ id }] = await h.query(`INSERT INTO map_places (name_key, name_en, source, approved) VALUES ('alpha', 'Alpha', 'manual', true) RETURNING id`);
+  expect((await Lookup.missing(h.pool)).total).toBeGreaterThan(0);
+  expect(await Lookup.setPosition(h.pool, id, 40, 31.5)).toBe(false); // outside Egypt
+  expect(await Lookup.setPosition(h.pool, id, 30, 31.5)).toBe(true);
+  expect(await Lookup.setPosition(h.pool, id, 30.1, 31.5)).toBe(false); // already has a pin
 });

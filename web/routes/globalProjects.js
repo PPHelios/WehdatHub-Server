@@ -13,6 +13,9 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const facts = (g) => [g.developer, g.region, g.status, g.unit_types].filter(Boolean).join(" · ");
 
 function register(web, { pool, page }) {
+  // The library file is read once per process, the first time someone opens the library (never at start-up).
+  let synced = null;
+  const syncOnce = () => (synced ||= Lib.syncFile(pool).catch((e) => { synced = null; console.warn("Library sync failed:", e.message); }));
   const guard = (check, fn) => async (req, res, next) => {
     try {
       if (!check(req.session.broker)) return res.status(404).send("Not found");
@@ -23,6 +26,7 @@ function register(web, { pool, page }) {
   };
 
   web.get("/library", guard(isManager, async (req, res, lang) => {
+    await syncOnce();
     const items = await Lib.list(pool, { agencyId: req.session.broker.agency_id });
     const msg = { copied: L(lang, "اتنسخ لمشاريعك.", "Copied to your projects."), duplicate: L(lang, "المشروع ده عندك بالفعل.", "You already have this project.") }[req.query.msg];
     return page(req, res, { title: L(lang, "مكتبة المشاريع", "Project library"), nav: "catalogue", body: html`<h1>📚 ${L(lang, "مكتبة المشاريع", "Project library")}</h1>
@@ -40,8 +44,9 @@ ${items.length ? html`<ul class="stack">${items.map((g) => html`<li class="card 
   }));
 
   web.get("/owner/library", guard(Dash.isOwner, async (req, res, lang) => {
+    await syncOnce();
     const items = await Lib.list(pool);
-    return page(req, res, { title: L(lang, "مكتبة المشاريع", "Project library"), nav: "owner", body: html`<h1>📚 ${L(lang, "مكتبة المشاريع", "Project library")}</h1>
+    return page(req, res, { title: L(lang, "مكتبة المشاريع", "Project library"), nav: "ownerlibrary", body: html`<h1>📚 ${L(lang, "مكتبة المشاريع", "Project library")}</h1>
 <p class="muted">${L(lang, "راجع كل مشروع وانشره. المنشور بس بيظهر للمكاتب.", "Check each project, then publish it. Only published ones show to agencies.")}</p>
 <ul class="stack">${items.map((g) => html`<li class="card stack"><strong>${g.name}</strong> <span class="muted">${facts(g)}</span>
   ${g.facts ? html`<p>${g.facts}</p>` : ""}

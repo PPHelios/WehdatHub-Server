@@ -127,6 +127,8 @@ const NAV = [
   { key: "usage", href: "/app/usage", ar: "استخدامي والحصص", en: "My usage and limits", icon: "gauge", group: "agency" },
   { key: "owner", href: "/app/owner", ar: "متابعة التطبيق", en: "App tracking", icon: "tools", group: "agency", who: "owner" },
   { key: "ownermap", href: "/app/owner/map", ar: "أماكن الخريطة", en: "Map places", icon: "pin", group: "agency", who: "owner" },
+  { key: "ownerqueue", href: "/app/owner/queue", ar: "طابور الاعتماد", en: "Approval queue", icon: "tools", group: "agency", who: "owner" },
+  { key: "ownerlibrary", href: "/app/owner/library", ar: "مكتبة المشاريع", en: "Project library", icon: "tools", group: "agency", who: "owner" },
   { key: "searchreview", href: "/app/owner/searches", ar: "مراجعة البحث", en: "Search review", icon: "tools", group: "agency", who: "owner" },
   { key: "plan", href: "/app/plan", ar: "الاشتراك", en: "Plan", icon: "card", group: "account" },
   { key: "invite", href: "/app/plan#referral", ar: "ادعُ شركة واكسب شهر مجاني", en: "Invite an agency, get a free month", icon: "gift", group: "account" },
