@@ -33,4 +33,12 @@ function sql(deal, alias = "l") {
 
 const label = (deal, lang = "ar") => (LABELS[deal] ? LABELS[deal][lang === "en" ? 1 : 0] : "");
 
-module.exports = { DEALS, LABELS, clean, sql, label };
+/** "5m", "250k", "5,000,000" -> a number, or null. */
+function parseMoney(text) {
+  const m = String(text || "").toLowerCase().replace(/[,\s]/g, "").match(/^(\d+(?:\.\d+)?)([mk]?)$/);
+  if (!m) return null;
+  const n = Number(m[1]) * (m[2] === "m" ? 1e6 : m[2] === "k" ? 1e3 : 1);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+module.exports = { DEALS, LABELS, clean, sql, label, parseMoney };

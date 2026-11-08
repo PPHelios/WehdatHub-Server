@@ -46,6 +46,33 @@ async function missing(pool, { offset = 0, limit = 20 } = {}) {
   return { rows, total: n };
 }
 
+/** Approved places that already have a pin the owner has not double-checked yet, 20 at a time. */
+async function unchecked(pool, { limit = 20 } = {}) {
+  const { rows } = await pool.query(
+    "SELECT id, name_en, name_ar, lat, lng FROM map_places WHERE approved AND lat IS NOT NULL AND lng IS NOT NULL AND pin_checked_at IS NULL ORDER BY lower(coalesce(name_en, name_ar)) LIMIT $1",
+    [limit]
+  );
+  const { rows: [{ n }] } = await pool.query("SELECT count(*)::int AS n FROM map_places WHERE approved AND lat IS NOT NULL AND lng IS NOT NULL AND pin_checked_at IS NULL");
+  return { rows, total: n };
+}
+
+/** Marks the places as checked, moving the pin of those the owner chose to move. choices: [{id, lat?, lng?}] */
+async function finishCheck(pool, choices) {
+  let moved = 0;
+  for (const c of choices) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(c.id))) continue;
+    const la = Number(c.lat);
+    const ln = Number(c.lng);
+    if (c.lat != null && P.inEgypt(la, ln)) {
+      await pool.query("UPDATE map_places SET lat = $2, lng = $3, pin_checked_at = now(), updated_at = now() WHERE id = $1 AND approved", [c.id, Math.round(la * 1e6) / 1e6, Math.round(ln * 1e6) / 1e6]);
+      moved += 1;
+    } else {
+      await pool.query("UPDATE map_places SET pin_checked_at = now() WHERE id = $1 AND approved", [c.id]);
+    }
+  }
+  return { moved };
+}
+
 /**
  * A suggestion for each place. source: "osm" | "google" | null. When both answer, `apart_km` is their distance;
  * the pin offered is OSM's, or Google's only when OSM found nothing.
@@ -61,7 +88,7 @@ async function suggest(places, { fetchFn = fetch, key = process.env.GOOGLE_MAPS_
     let gs = "error";
     try { ({ pos: g, status: gs } = await google(name, key, fetchFn)); } catch { g = null; }
     const pos = o || g;
-    out.push({ id: p.id, name, pos, source: o ? "osm" : g ? "google" : null, google: g, google_status: gs, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
+    out.push({ id: p.id, name, saved: p.lat != null ? { lat: p.lat, lng: p.lng } : null, osm: o, pos, source: o ? "osm" : g ? "google" : null, google: g, google_status: gs, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
     if (pauseMs) await new Promise((r) => setTimeout(r, pauseMs)); // Nominatim allows one request a second
   }
   return out;
@@ -79,4 +106,4 @@ async function setPosition(pool, id, lat, lng) {
   return rowCount > 0;
 }
 
-module.exports = { missing, suggest, setPosition, km };
+module.exports = { missing, unchecked, finishCheck, suggest, setPosition, km };

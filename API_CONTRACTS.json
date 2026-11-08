@@ -5,7 +5,8 @@
       "LABELS": "Object",
       "clean": ["v"],
       "sql": ["deal", "alias"],
-      "label": ["deal", "lang"]
+      "label": ["deal", "lang"],
+      "parseMoney": ["text"]
     },
     "server.js": {
       "createApp": ["params"]
@@ -2437,6 +2438,8 @@
     },
     "services/placeLookup.js": {
       "missing": ["pool", "params"],
+      "unchecked": ["pool", "params"],
+      "finishCheck": ["pool", "choices"],
       "suggest": ["places", "params"],
       "setPosition": ["pool", "id", "lat", "lng"],
       "km": ["a", "b"]
