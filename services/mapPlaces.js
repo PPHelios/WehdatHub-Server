@@ -59,10 +59,18 @@ const FILTER_SQL = `l.agency_id = $1 AND l.status = 'active'
           ELSE TRUE END)`;
 const args = (agencyId, f) => [agencyId, f.type, f.rooms, f.ptype, f.pmin, f.pmax, f.fin, f.furn, f.deal];
 
+/** The words the search box matches a place by: its own aliases plus the approved search words (search_aliases) that point to it. */
+function termsFor(place, aliasRows = []) {
+  const name = String(place.name_en || "").toLowerCase();
+  const fromRows = aliasRows.filter((a) => String(a.target || "").toLowerCase() === name).map((a) => a.term);
+  return [...(place.aliases || []), ...fromRows].filter(Boolean).join(" ");
+}
+
 /** Pins for a broker: one per place that has visible units under the filters, plus what the filter bar offers. */
 async function pins(pool, broker, query = {}) {
   const f = cleanFilters(query);
   const { places, index } = await allPlaces(pool);
+  const { rows: aliasRows } = await pool.query("SELECT term, target FROM search_aliases WHERE status = 'approved' AND kind = 'place'");
   const { rows } = await pool.query(
     `SELECT l.compound, l.compound_en, count(*)::int AS n
        FROM listings l
@@ -80,12 +88,12 @@ async function pins(pool, broker, query = {}) {
   }
   const byId = new Map(places.map((p) => [p.id, p]));
   const out = [...counts.entries()]
-    .map(([id, n]) => ({ id, n, name: byId.get(id).name_en || byId.get(id).name_ar, name_ar: byId.get(id).name_ar, name_en: byId.get(id).name_en, developer: byId.get(id).developer, district: byId.get(id).district, lat: byId.get(id).lat, lng: byId.get(id).lng }))
+    .map(([id, n]) => ({ id, n, name: byId.get(id).name_en || byId.get(id).name_ar, name_ar: byId.get(id).name_ar, name_en: byId.get(id).name_en, developer: byId.get(id).developer, district: byId.get(id).district, lat: byId.get(id).lat, lng: byId.get(id).lng, terms: termsFor(byId.get(id), aliasRows) }))
     .sort((a, b) => b.n - a.n);
   // Approved places with a position but no visible units under the filters: not drawn, but found by the search box.
   const idle = places
     .filter((p) => p.approved && p.lat != null && !counts.has(p.id))
-    .map((p) => ({ id: p.id, n: 0, name: p.name_en || p.name_ar, name_ar: p.name_ar, name_en: p.name_en, developer: p.developer, district: p.district, lat: p.lat, lng: p.lng }));
+    .map((p) => ({ id: p.id, n: 0, name: p.name_en || p.name_ar, name_ar: p.name_ar, name_en: p.name_en, developer: p.developer, district: p.district, lat: p.lat, lng: p.lng, terms: termsFor(p, aliasRows) }));
   return { pins: out, idle, total: out.reduce((s, p) => s + p.n, 0), unmapped, filters: f };
 }
 
@@ -404,4 +412,4 @@ async function syncApproved(pool) {
   return { master, units };
 }
 
-module.exports = { syncApproved, FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, importMaster, TYPES };
+module.exports = { termsFor, syncApproved, FINISHING, FURNISHING, allPlaces, clearCache, cleanFilters, pins, facets, unitsAt, place, findByName, list, save, remove, addAlias, importSeed, unmatched, approve, recheck, dismiss, importMaster, TYPES };

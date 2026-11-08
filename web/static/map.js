@@ -306,7 +306,7 @@
       list.innerHTML = "";
       if (!q) return hideList();
       var hits = pinsData.concat(idleData).filter(function (p) {
-        return norm([p.name_en, p.name_ar, p.developer, p.district].join(" ")).indexOf(q) !== -1;
+        return norm([p.name_en, p.name_ar, p.developer, p.district, p.terms].join(" ")).indexOf(q) !== -1;
       }).slice(0, 8);
       if (!hits.length) {
         var li0 = document.createElement("li");
