@@ -34,6 +34,7 @@ const { PROPERTY_TYPES } = require("../../domain/fieldRules");
 const UnitDelete = require("../../services/unitDelete");
 const Recipients = require("../../services/linkRecipients");
 const Phone = require("../../domain/phone");
+const Deal = require("../../domain/dealType");
 const DAY_MS = 24 * 3600 * 1000;
 const deletedDaysLeft = (r) => Math.max(0, Math.ceil((new Date(r.deleted_at).getTime() + UnitDelete.RETENTION_DAYS * DAY_MS - Date.now()) / DAY_MS));
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../../domain/furnishingStatus");
@@ -135,8 +136,9 @@ function register(web, { pool, page }) {
     // Filters: fixed lists (type, furnishing, finishing), the agency's own compounds, and a search on the code.
     const oneOf = (v, list) => (list.includes(String(v || "")) ? String(v) : "");
     const type = oneOf(req.query.type, PROPERTY_TYPES);
-    const furnishing = oneOf(req.query.furnishing, FURNISHING_STATUSES);
-    const finishing = oneOf(req.query.finishing, FINISHING_STATUSES);
+    const furnishing = oneOf(req.query.furnishing, [...FURNISHING_STATUSES, "none"]);
+    const finishing = oneOf(req.query.finishing, [...FINISHING_STATUSES, "none"]);
+    const deal = Deal.clean(req.query.deal);
     const q = String(req.query.q || "").trim().slice(0, 40);
     const pageNo = Math.max(0, Math.min(parseInt(req.query.page, 10) || 0, 10000));
     const { rows: compounds } = await pool.query(
@@ -156,8 +158,11 @@ function register(web, { pool, page }) {
     if (onlyPrivate) where.push("is_private");
     if (compound) add("compound = ?", compound);
     if (type) add("property_type = ?", type);
-    if (furnishing) add("furnishing = ?", furnishing);
-    if (finishing) add("finishing = ?", finishing);
+    if (furnishing === "none") where.push("furnishing IS NULL");
+    else if (furnishing) add("furnishing = ?", furnishing);
+    if (finishing === "none") where.push("finishing IS NULL");
+    else if (finishing) add("finishing = ?", finishing);
+    if (deal) where.push(Deal.sql(deal, ""));
     if (q) add("(code ILIKE '%' || ? || '%' OR developer_unit_code ILIKE '%' || ? || '%')", q.replace(/[%_\\]/g, (c) => `\\${c}`));
     const cond = where.join(" AND ");
     const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
@@ -167,12 +172,12 @@ function register(web, { pool, page }) {
     );
     const link = (over = {}) => {
       const p = new URLSearchParams();
-      const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, ...over };
+      const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, deal, ...over };
       for (const [k, v] of Object.entries(all)) if (v !== "" && v !== null && v !== undefined) p.set(k, v);
       return `/app/units?${p.toString()}`;
     };
     const tab = (st, label) => html`<a href="${link({ status: st, page: "" })}"${st === status ? html` aria-current="page"` : ""}>${label}</a>`;
-    const active = [compound, type, furnishing, finishing].filter(Boolean).length;
+    const active = [compound, type, furnishing, finishing, deal].filter(Boolean).length;
     const opt = (v, cur, label) => html`<option value="${v}"${v === cur ? html` selected` : ""}>${label}</option>`;
     const lab = (map, key) => (lang === "en" ? map[key][1] : map[key][0]);
     const pages = Math.max(1, Math.ceil(total / UNITS_PAGE));
@@ -192,10 +197,11 @@ ${notice || ""}
   <div class="grid two">
     <label>${L(lang, "الكمبوند", "Compound")}<input name="compound" list="unit-compounds" value="${compound}" autocomplete="off" placeholder="${L(lang, "اكتب للبحث", "Type to search")}"><datalist id="unit-compounds">${compounds.map((c) => html`<option value="${c.compound}">${c.n}</option>`)}</datalist></label>
     <label>${L(lang, "نوع الوحدة", "Unit type")}<select name="type"><option value="">${L(lang, "الكل", "All")}</option>${PROPERTY_TYPES.map((t) => opt(t, type, lab(Describe.TYPE_LABELS, t)))}</select></label>
-    <label>${L(lang, "الفرش", "Furnishing")}<select name="furnishing"><option value="">${L(lang, "الكل", "All")}</option>${FURNISHING_STATUSES.map((t) => opt(t, furnishing, lab(Describe.FURNISHING_LABELS, t)))}</select></label>
-    <label>${L(lang, "التشطيب", "Finishing")}<select name="finishing"><option value="">${L(lang, "الكل", "All")}</option>${FINISHING_STATUSES.map((t) => opt(t, finishing, lab(Describe.FINISHING_LABELS, t)))}</select></label>
+    <label>${L(lang, "الفرش", "Furnishing")}<select name="furnishing"><option value="">${L(lang, "الكل", "All")}</option>${FURNISHING_STATUSES.map((t) => opt(t, furnishing, lab(Describe.FURNISHING_LABELS, t)))}${opt("none", furnishing, L(lang, "مش محدد", "Not stated"))}</select></label>
+    <label>${L(lang, "التشطيب", "Finishing")}<select name="finishing"><option value="">${L(lang, "الكل", "All")}</option>${FINISHING_STATUSES.map((t) => opt(t, finishing, lab(Describe.FINISHING_LABELS, t)))}${opt("none", finishing, L(lang, "مش محدد", "Not stated"))}</select></label>
+    <label>${L(lang, "نوع الصفقة", "Deal type")}<select name="deal"><option value="">${L(lang, "الكل", "All")}</option>${Deal.DEALS.map((t) => opt(t, deal, Deal.label(t, lang)))}</select></label>
   </div>
-  <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="${link({ q: "", compound: "", type: "", furnishing: "", finishing: "" })}">${L(lang, "مسح", "Clear")}</a></div>
+  <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="${link({ q: "", compound: "", type: "", furnishing: "", finishing: "", deal: "" })}">${L(lang, "مسح", "Clear")}</a></div>
   </details>
 </form>
 <p class="row between small">

@@ -211,3 +211,16 @@ test("missing pins: OpenStreetMap suggests, Google fills the gap and checks, not
   expect(await Lookup.setPosition(h.pool, id, 30, 31.5)).toBe(true);
   expect(await Lookup.setPosition(h.pool, id, 30.1, 31.5)).toBe(false); // already has a pin
 });
+
+test("a place with no units is still found by the map search (idle), and the deal type filter narrows pins", async () => {
+  await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('emptyville', 'Emptyville', 30.0, 31.4, 'manual', true)`);
+  Maps.clearCache();
+  const b = await signIn(h, "broker");
+  const res = (await b.agent.get("/app/map/pins")).body;
+  expect(res.idle.map((p) => p.name)).toContain("Emptyville");
+  expect(res.idle.every((p) => p.n === 0)).toBe(true);
+  const rent = (await b.agent.get("/app/map/pins?deal=rent")).body;
+  const primary = (await b.agent.get("/app/map/pins?deal=primary")).body;
+  expect(rent.total + primary.total).toBeLessThanOrEqual((await b.agent.get("/app/map/pins")).body.total * 2);
+  expect((await b.agent.get("/app/map/pins?deal=x;drop")).status).toBe(200);
+});

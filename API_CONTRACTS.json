@@ -1,5 +1,12 @@
 {
   "libraries": {
+    "domain/dealType.js": {
+      "DEALS": "Array",
+      "LABELS": "Object",
+      "clean": ["v"],
+      "sql": ["deal", "alias"],
+      "label": ["deal", "lang"]
+    },
     "server.js": {
       "createApp": ["params"]
     },

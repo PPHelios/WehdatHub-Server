@@ -23,6 +23,7 @@ const clearCache = () => {
 const TYPES = ["sale", "rent"];
 const FINISHING = Object.keys(Describe.FINISHING_LABELS);
 const FURNISHING = Object.keys(Describe.FURNISHING_LABELS);
+const Deal = require("../domain/dealType");
 const num = (v) => (v === "" || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
 
 /** Filters read from a query string; anything else is ignored. */
@@ -34,8 +35,9 @@ function cleanFilters(q = {}) {
     ptype: q.ptype ? String(q.ptype).slice(0, 40) : null,
     pmin: num(q.pmin) !== null && num(q.pmin) >= 0 ? num(q.pmin) : null,
     pmax: num(q.pmax) !== null && num(q.pmax) > 0 ? num(q.pmax) : null,
-    fin: FINISHING.includes(q.fin) ? q.fin : null,
-    furn: FURNISHING.includes(q.furn) ? q.furn : null
+    fin: FINISHING.includes(q.fin) || q.fin === "none" ? q.fin : null,
+    furn: FURNISHING.includes(q.furn) || q.furn === "none" ? q.furn : null,
+    deal: Deal.clean(q.deal) || null
   };
 }
 
@@ -47,9 +49,15 @@ const FILTER_SQL = `l.agency_id = $1 AND l.status = 'active'
      AND ($4::text IS NULL OR l.property_type = $4)
      AND ($5::numeric IS NULL OR l.price_value >= $5)
      AND ($6::numeric IS NULL OR l.price_value <= $6)
-     AND ($7::text IS NULL OR l.finishing = $7)
-     AND ($8::text IS NULL OR l.furnishing = $8)`;
-const args = (agencyId, f) => [agencyId, f.type, f.rooms, f.ptype, f.pmin, f.pmax, f.fin, f.furn];
+     AND ($7::text IS NULL OR l.finishing = $7 OR ($7 = 'none' AND l.finishing IS NULL))
+     AND ($8::text IS NULL OR l.furnishing = $8 OR ($8 = 'none' AND l.furnishing IS NULL))
+     AND ($9::text IS NULL OR CASE $9
+          WHEN 'rent' THEN l.listing_type = 'rent'
+          WHEN 'resale_cash' THEN (l.listing_type = 'sale' AND l.market = 'resale' AND coalesce(l.remaining_amount, 0) = 0)
+          WHEN 'resale_installments' THEN (l.listing_type = 'sale' AND l.market = 'resale' AND coalesce(l.remaining_amount, 0) > 0)
+          WHEN 'primary' THEN l.market = 'primary'
+          ELSE TRUE END)`;
+const args = (agencyId, f) => [agencyId, f.type, f.rooms, f.ptype, f.pmin, f.pmax, f.fin, f.furn, f.deal];
 
 /** Pins for a broker: one per place that has visible units under the filters, plus what the filter bar offers. */
 async function pins(pool, broker, query = {}) {
@@ -74,7 +82,11 @@ async function pins(pool, broker, query = {}) {
   const out = [...counts.entries()]
     .map(([id, n]) => ({ id, n, name: byId.get(id).name_en || byId.get(id).name_ar, name_ar: byId.get(id).name_ar, name_en: byId.get(id).name_en, developer: byId.get(id).developer, district: byId.get(id).district, lat: byId.get(id).lat, lng: byId.get(id).lng }))
     .sort((a, b) => b.n - a.n);
-  return { pins: out, total: out.reduce((s, p) => s + p.n, 0), unmapped, filters: f };
+  // Approved places with a position but no visible units under the filters: not drawn, but found by the search box.
+  const idle = places
+    .filter((p) => p.approved && p.lat != null && !counts.has(p.id))
+    .map((p) => ({ id: p.id, n: 0, name: p.name_en || p.name_ar, name_ar: p.name_ar, name_en: p.name_en, developer: p.developer, district: p.district, lat: p.lat, lng: p.lng }));
+  return { pins: out, idle, total: out.reduce((s, p) => s + p.n, 0), unmapped, filters: f };
 }
 
 /** What the filter bar offers: unit types, price range for the chosen sale/rent, and which room counts exist. */
@@ -126,7 +138,7 @@ async function unitsAt(pool, broker, placeId, query = {}, limit = 40) {
   const { rows } = await pool.query(
     `SELECT l.id, l.code, l.title, l.property_type, l.listing_type, l.bedrooms, l.bathrooms, l.area_value, l.price_value, l.price_display, l.compound, l.compound_en
        FROM listings l
-      WHERE ${FILTER_SQL} AND ${Vis.units("l")} AND (l.compound = ANY($9::text[]) OR l.compound_en = ANY($10::text[]))
+      WHERE ${FILTER_SQL} AND ${Vis.units("l")} AND (l.compound = ANY($10::text[]) OR l.compound_en = ANY($11::text[]))
       ORDER BY l.created_at DESC
       LIMIT ${Math.min(Math.max(1, limit), 100)}`,
     [...args(broker.agency_id, f), [...compounds], [...compoundsEn]]

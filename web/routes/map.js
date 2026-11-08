@@ -11,6 +11,7 @@ const Maps = require("../../services/mapPlaces");
 const Lookup = require("../../services/placeLookup");
 const MapRules = require("../../domain/mapPlaces");
 const Describe = require("../../domain/describe");
+const DealRules = require("../../domain/dealType");
 const { html, raw } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -64,8 +65,9 @@ function filterBar(lang) {
     ${rooms.map(([v, t]) => html`<button type="button" class="chip${v === "" ? " on" : ""}" data-f-rooms="${v}">${t}</button>`)}
   </div>
   <label class="map-field"><span class="muted small">${L(lang, "نوع الوحدة", "Unit type")}</span><select data-f-ptype><option value="">${L(lang, "الكل", "Any")}</option></select></label>
-  <label class="map-field"><span class="muted small">${L(lang, "التشطيب", "Finishing")}</span><select data-f-fin><option value="">${L(lang, "الكل", "Any")}</option>${Object.entries(labels(Describe.FINISHING_LABELS, lang)).map(([k, t]) => html`<option value="${k}">${t}</option>`)}</select></label>
-  <label class="map-field"><span class="muted small">${L(lang, "الفرش", "Furnishing")}</span><select data-f-furn><option value="">${L(lang, "الكل", "Any")}</option>${Object.entries(labels(Describe.FURNISHING_LABELS, lang)).map(([k, t]) => html`<option value="${k}">${t}</option>`)}</select></label>
+  <label class="map-field"><span class="muted small">${L(lang, "التشطيب", "Finishing")}</span><select data-f-fin><option value="">${L(lang, "الكل", "Any")}</option>${Object.entries(labels(Describe.FINISHING_LABELS, lang)).map(([k, t]) => html`<option value="${k}">${t}</option>`)}<option value="none">${L(lang, "مش محدد", "Not stated")}</option></select></label>
+  <label class="map-field"><span class="muted small">${L(lang, "الفرش", "Furnishing")}</span><select data-f-furn><option value="">${L(lang, "الكل", "Any")}</option>${Object.entries(labels(Describe.FURNISHING_LABELS, lang)).map(([k, t]) => html`<option value="${k}">${t}</option>`)}<option value="none">${L(lang, "مش محدد", "Not stated")}</option></select></label>
+  <label class="map-field"><span class="muted small">${L(lang, "نوع الصفقة", "Deal type")}</span><select data-f-deal><option value="">${L(lang, "الكل", "Any")}</option>${DealRules.DEALS.map((d) => html`<option value="${d}">${DealRules.label(d, lang)}</option>`)}</select></label>
   <div class="map-budget" data-budget hidden>
     <div class="row between"><span class="muted small">${L(lang, "الميزانية", "Budget")}</span><output data-budget-text></output></div>
     <input type="range" data-f-pmin min="0" max="100" value="0" aria-label="${L(lang, "أقل ميزانية", "Minimum budget")}">
@@ -200,7 +202,7 @@ function register(web, { pool, page, assets }) {
     const broker = req.session.broker;
     if (Dash.isOwner(broker)) return res.status(404).json({ error: "not_found" });
     const [p, facets] = await Promise.all([Maps.pins(pool, broker, req.query), Maps.facets(pool, broker, req.query)]);
-    return res.json({ pins: p.pins, total: p.total, unmapped: p.unmapped, facets });
+    return res.json({ pins: p.pins, idle: p.idle, total: p.total, unmapped: p.unmapped, facets });
   });
 
   web.get("/map/place/:id", async (req, res) => {
