@@ -76,3 +76,14 @@ test("the channel does nothing without Firebase set up, sends to the broker's ph
   expect(seen[0].payload.data.url).toBe("/app/leads/L-0001");
   expect((await h.pool.query("SELECT token FROM device_tokens")).rows.map((x) => x.token)).toEqual([TOKEN]);
 });
+
+test("/config tells the app its Firebase identifiers only when they are set and well formed", async () => {
+  expect((await api().get("/api/v1/config")).body.firebase).toBeNull();
+  const ok = { apiKey: "k", appId: "1:2:android:3", projectId: "p", messagingSenderId: "2" };
+  process.env.FIREBASE_CLIENT_CONFIG = JSON.stringify({ android: ok, ios: { apiKey: "k" } });
+  try {
+    expect((await api().get("/api/v1/config")).body.firebase).toEqual({ android: ok });
+  } finally {
+    delete process.env.FIREBASE_CLIENT_CONFIG;
+  }
+});
