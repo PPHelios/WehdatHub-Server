@@ -247,6 +247,15 @@ function register(web, { pool, page, assets }) {
     return goQueue(res, "msg=alias");
   }));
 
+  // What Google answered, in words the owner can act on.
+  const googleStatusText = (s) => ({
+    ZERO_RESULTS: "no match",
+    REQUEST_DENIED: "key rejected (check the key and its restrictions)",
+    OVER_QUERY_LIMIT: "quota used up",
+    outside_egypt: "result outside Egypt",
+    no_key: "no key set",
+    error: "request failed"
+  })[s] || (String(s || "").startsWith("HTTP_") ? `HTTP error ${String(s).slice(5)}` : s || "no answer");
   // Missing pins: 20 places at a time; OpenStreetMap suggests, Google fills the gaps and checks; the owner approves each.
   web.get("/owner/map/find", ownerOnly(async (req, res, lang) => {
     const offset = Math.max(0, Math.floor(Number(req.query.offset) || 0));
@@ -254,9 +263,9 @@ function register(web, { pool, page, assets }) {
     const rows = await Lookup.suggest(found.rows);
     const hasKey = Boolean(process.env.GOOGLE_MAPS_API_KEY);
     const gm = (p) => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
-    const badge = (r) => (r.apart_km == null ? (r.source === "google" ? L(lang, "من جوجل بس", "Google only") : hasKey ? L(lang, "جوجل مالقاش", "Google found nothing") : "") : r.apart_km < 0.5 ? L(lang, "جوجل موافق", "Google agrees") : L(lang, `جوجل مختلف ${r.apart_km} كم`, `Google differs by ${r.apart_km} km`));
+    const badge = (r) => (r.apart_km == null ? (r.source === "google" ? L(lang, "من جوجل بس", "Google only") : hasKey ? `Google: ${googleStatusText(r.google_status)}` : "") : r.apart_km < 0.5 ? L(lang, "جوجل موافق", "Google agrees") : L(lang, `جوجل مختلف ${r.apart_km} كم`, `Google differs by ${r.apart_km} km`));
     return page(req, res, { title: L(lang, "الأماكن من غير دبوس", "Missing pins"), nav: "ownermap", body: html`<h1>📍 ${L(lang, "الأماكن من غير دبوس", "Missing pins")}</h1>
-<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")}</p>
+<p class="muted">${found.total} ${L(lang, "مكان من غير دبوس. اختار اللي تعتمده.", "places have no pin. Tick the ones you approve.")}<br>${L(lang, "الخدمات:", "Services:")} OpenStreetMap ✓ · Google ${hasKey ? "✓ (key set)" : "✗ (no GOOGLE_MAPS_API_KEY)"}</p>
 <form method="post" action="/app/owner/map/find" class="stack">
   <ul class="stack">${rows.map((r) => html`<li class="card row">${r.pos ? html`<label><input type="checkbox" name="pick" value="${r.id},${r.pos.lat},${r.pos.lng}"> <strong>${r.name}</strong></label> <span class="muted">${r.source === "osm" ? "OpenStreetMap" : "Google"} · ${badge(r)}</span> <a href="${gm(r.pos)}" target="_blank" rel="noopener">${L(lang, "افتح في جوجل ماب", "Open in Google Maps")}</a>` : html`<strong>${r.name}</strong> <span class="muted">${L(lang, "ملقيناش مكان. حطه بإيدك.", "Not found. Place it by hand.")} <a href="/app/owner/map?q=${encodeURIComponent(r.name)}">${L(lang, "تعديل", "Edit")}</a></span>`}</li>`)}</ul>
   <div class="row"><button type="submit">${L(lang, "اعتمد المحدد", "Approve ticked")}</button>

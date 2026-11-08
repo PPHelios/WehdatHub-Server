@@ -22,15 +22,18 @@ async function osm(name, fetchFn) {
   return pos && P.inEgypt(pos.lat, pos.lng) ? pos : null;
 }
 
+/** Returns { pos, status }: status is "no_key", "OK", "ZERO_RESULTS", "REQUEST_DENIED", "HTTP_<code>" or "outside_egypt". */
 async function google(name, key, fetchFn) {
-  if (!key) return null;
+  if (!key) return { pos: null, status: "no_key" };
   const url = `https://maps.googleapis.com/maps/api/geocode/json?region=eg&address=${encodeURIComponent(`${name}, Egypt`)}&key=${encodeURIComponent(key)}`;
   const res = await fetchFn(url);
-  if (!res.ok) return null;
+  if (!res.ok) return { pos: null, status: `HTTP_${res.status}` };
   const body = await res.json();
-  const loc = body.status === "OK" && body.results?.[0]?.geometry?.location;
+  if (body.status !== "OK") return { pos: null, status: body.status || "unknown" };
+  const loc = body.results?.[0]?.geometry?.location;
   const pos = loc && { lat: Number(loc.lat), lng: Number(loc.lng) };
-  return pos && P.inEgypt(pos.lat, pos.lng) ? pos : null;
+  if (pos && P.inEgypt(pos.lat, pos.lng)) return { pos, status: "OK" };
+  return { pos: null, status: "outside_egypt" };
 }
 
 /** Approved places with no pin, 20 at a time. */
@@ -55,9 +58,10 @@ async function suggest(places, { fetchFn = fetch, key = process.env.GOOGLE_MAPS_
     let g = null;
     try { o = await osm(`${name} compound`, fetchFn); } catch { o = null; }
     if (!o) { try { o = await osm(name, fetchFn); } catch { o = null; } }
-    try { g = await google(name, key, fetchFn); } catch { g = null; }
+    let gs = "error";
+    try { ({ pos: g, status: gs } = await google(name, key, fetchFn)); } catch { g = null; }
     const pos = o || g;
-    out.push({ id: p.id, name, pos, source: o ? "osm" : g ? "google" : null, google: g, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
+    out.push({ id: p.id, name, pos, source: o ? "osm" : g ? "google" : null, google: g, google_status: gs, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
     if (pauseMs) await new Promise((r) => setTimeout(r, pauseMs)); // Nominatim allows one request a second
   }
   return out;
