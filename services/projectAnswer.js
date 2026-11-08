@@ -152,4 +152,18 @@ function clientText(hits, lang = "ar") {
   return lines.join("\n");
 }
 
-module.exports = { clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
+/**
+ * The offers in the notes of every active project of the agency that fit the filters, cheapest first. One query, no per-project limit,
+ * so it stays correct for 100+ projects. Returns { total, hits, scanned }.
+ */
+async function offersFor(pool, agencyId, filters = {}, { limit = 15 } = {}) {
+  const { rows } = await pool.query(
+    "SELECT name, name_en, district, city, notes, updated_at FROM projects WHERE agency_id = $1 AND archived_at IS NULL AND notes IS NOT NULL AND notes <> ''",
+    [agencyId]
+  );
+  const projects = rows.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);
+  const hits = ProjectNotes.matchUnits(projects, filters);
+  return { total: hits.length, hits: hits.slice(0, limit), scanned: projects.length };
+}
+
+module.exports = { offersFor, clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };

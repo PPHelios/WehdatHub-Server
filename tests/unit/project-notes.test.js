@@ -61,3 +61,25 @@ describe("calculated installment and new place names", () => {
     expect(PN.matchesPlace({ district: "New Obour" }, ["العبور"])).toBe(true);
   });
 });
+
+describe("offers in other phrasings and at scale", () => {
+  test("a price written as 'بسعر' and a down payment written without a percentage are read", () => {
+    const [u] = PN.parseUnits("يونت 153 متر الدور الأول بسعر 3,180,590 ومقدم 159,029");
+    expect(u).toMatchObject({ area: 153, price: 3180590, down: 159029 });
+  });
+
+  test("a percentage with no amount is not read as a down payment", () => {
+    const [u] = PN.parseUnits("وحدة 120 م سعرها = 2,400,000 مقدم 10%");
+    expect(u.down).toBeNull();
+  });
+
+  test("offers from many projects are matched together, cheapest first", () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({
+      project: { name: `P${i}`, district: "Obour", city: "Cairo", notes: "" },
+      units: PN.parseUnits(`يونت 110 م سعرها = ${2000000 + i * 1000} مقدم 10% = 200,000`)
+    }));
+    const hits = PN.matchUnits(many, { area_min: 110, locations: ["obour"] });
+    expect(hits).toHaveLength(120);
+    expect(hits[0].unit.price).toBe(2000000);
+  });
+});

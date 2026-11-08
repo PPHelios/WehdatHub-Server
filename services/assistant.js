@@ -16,10 +16,14 @@ const Describe = require("../domain/describe");
 const ProjectContext = require("./projectContext");
 const ProjectNotes = require("../domain/projectNotes");
 const ProjectAnswer = require("./projectAnswer");
+const Q = require("../domain/searchQuery");
 const { isManager } = require("../lib/authz");
 const Vis = require("../lib/visibility");
 
-const MAX_PROJECTS = 3;
+// Limits on what is sent to the model, not on what is searched: every active project is scanned for offers.
+const MAX_PROJECTS = 10;
+const MAX_NAMES = 200;
+const MAX_OFFER_LINES = 15;
 const MAX_LEADS = 60;
 const MAX_UNITS = 60;
 const MAX_FOLLOW_UPS = 30;
@@ -55,18 +59,7 @@ async function projectBlocks(pool, broker, question, scopes) {
   }
   // Nothing named and nothing personal asked: the list of projects we have, so "not in our data" is accurate.
   if (!named.length && !scopes.clients && !scopes.followups && projects.length) {
-    blocks.push({ title: "Projects in our catalogue (names only)", as_of: cairoDay(), text: projects.slice(0, 80).map((p) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}${p.developer_name ? ` by ${p.developer_name}` : ""}`).join("; ") });
-  }
-  // No project named: the offers written in every project's notes, so "apartment 110 m in Obour" or a budget question can compare projects.
-  if (!named.length && !scopes.clients && !scopes.followups) {
-    const withOffers = projects.map((p) => ({ p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length).slice(0, 12);
-    if (withOffers.length) {
-      const text = withOffers
-        .map(({ p, units }) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}, ${[p.district, p.city].filter(Boolean).join(" ")} [notes updated ${cairoDay(new Date(p.updated_at || Date.now()))}]:\n` + units.slice(0, 12).map((u) => `- ${u.raw}${u.monthly == null && u.monthly_est != null ? ` (calculated monthly about ${u.monthly_est})` : ""}`).join("\n"))
-        .join("\n");
-      blocks.push({ title: "Offers written in project notes (agency data; check before quoting)", as_of: cairoDay(), text });
-      for (const { p } of withOffers) dates.push({ project: p.name, prices: null, brochure: null, plans: null, notes: cairoDay(new Date(p.updated_at || Date.now())) });
-    }
+    blocks.push({ title: "Projects in our catalogue (names only)", as_of: cairoDay(), text: projects.slice(0, MAX_NAMES).map((p) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}${p.developer_name ? ` by ${p.developer_name}` : ""}`).join("; ") });
   }
   return { blocks, dates, named };
 }
@@ -184,6 +177,13 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
   const lang = A.langOf(q);
   const scopes = A.scopesOf(q);
   const { blocks, dates, named } = await projectBlocks(pool, broker, q, scopes);
+  // Offers written in any project's notes that fit the question (every active project is scanned, so 100+ projects work).
+  const offers = await ProjectAnswer.offersFor(pool, broker.agency_id, Q.fallbackParse(q).filters, { limit: MAX_OFFER_LINES });
+  const offerReply = offers.total ? ProjectAnswer.notesReply(offers.hits, lang) : null;
+  if (offers.total) {
+    blocks.push({ title: `Offers written in project notes, ${offers.total} fit (agency data; check before quoting)`, as_of: cairoDay(now), text: offers.hits.map(({ project: p, unit: u }) => `- ${p.name}${p.name_en ? ` (${p.name_en})` : ""}, ${[p.district, p.city].filter(Boolean).join(" ")}: ${u.raw} [notes updated ${cairoDay(new Date(p.updated_at || now))}]`).join("\n") });
+    for (const { project: p } of offers.hits) if (!dates.some((d) => d.project === p.name)) dates.push({ project: p.name, prices: null, brochure: null, plans: null, notes: cairoDay(new Date(p.updated_at || now)) });
+  }
   const leads = await leadBlock(pool, broker, q, scopes);
   if (leads) blocks.push(leads);
   if (leads) {
@@ -203,8 +203,11 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
       ctx: ViewGuard.active() ? {} : { pool, broker }
     });
     res = A.parseAnswer(r.text, lang);
+    // The model said "not found" but the agency's own offers fit: the code's answer is shown, so the reply never contradicts the data.
+    if (!res.found && offerReply) res = { answer: offerReply, found: true };
   } catch (err) {
-    // The AI is off or out of credit: a project named in the question is still answered from its catalog data, built by code.
+    // The AI is off or out of credit: matching offers or a named project are still answered by code from the data.
+    if (offerReply) return { answer: offerReply, found: true, lang, dates };
     const plain = named.length ? await ProjectAnswer.answer(pool, broker.agency_id, q, lang, {}).catch(() => null) : null;
     if (plain) return { answer: plain, found: true, lang, dates: [] };
     return { error: AiBlock.kindOf(err) };
