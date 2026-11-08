@@ -37,7 +37,7 @@ function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "",
 
 /** Every fact (and, for brokers, the internal lines) as a list. */
 function factList(l, lang = "ar", { internal = true } = {}) {
-  const lines = [...Describe.factLines(l, lang), ...(internal ? Describe.internalLines(l, lang) : [])].map(stripMarkdown);
+  const lines = [...Describe.factLines(l, lang, { markMissing: internal }), ...(internal ? Describe.internalLines(l, lang) : [])].map(stripMarkdown);
   return html`<ul class="facts">${lines.map((x) => html`<li>${x}</li>`)}</ul>`;
 }
 

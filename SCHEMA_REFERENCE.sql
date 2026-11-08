@@ -520,7 +520,8 @@ CREATE TABLE IF NOT EXISTS public.projects (
   plans_draft jsonb,
   lat double precision,
   lng double precision,
-  plan_rules jsonb DEFAULT '{}'::jsonb NOT NULL
+  plan_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
+  global_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_sessions (
@@ -1468,6 +1469,20 @@ CREATE TABLE IF NOT EXISTS public.map_places (
   approved boolean DEFAULT false NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.global_projects (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  name text NOT NULL,
+  developer text,
+  region text,
+  status text,
+  unit_types text,
+  area_acres numeric,
+  facts text,
+  published boolean DEFAULT false NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1495,6 +1510,7 @@ ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pkey PRIMARY KEY (id);
 ALTER TABLE developers ADD CONSTRAINT developers_pkey PRIMARY KEY (id);
 ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_pkey PRIMARY KEY (id);
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_pkey PRIMARY KEY (id);
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
@@ -1653,6 +1669,13 @@ ALTER TABLE developers ADD CONSTRAINT developers_warnings_check CHECK (((warning
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_amount_egp_check CHECK ((amount_egp >= (0)::numeric));
 ALTER TABLE fixed_costs ADD CONSTRAINT fixed_costs_label_check CHECK (((length(label) >= 1) AND (length(label) <= 120)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_area_acres_check CHECK (((area_acres IS NULL) OR (area_acres >= (0)::numeric)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_developer_check CHECK (((developer IS NULL) OR (length(developer) <= 120)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_facts_check CHECK (((facts IS NULL) OR (length(facts) <= 2000)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 120)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_region_check CHECK (((region IS NULL) OR (length(region) <= 120)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_status_check CHECK (((status IS NULL) OR (length(status) <= 60)));
+ALTER TABLE global_projects ADD CONSTRAINT global_projects_unit_types_check CHECK (((unit_types IS NULL) OR (length(unit_types) <= 300)));
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_kind_check CHECK ((kind = ANY (ARRAY['new'::text, 'changed'::text, 'unchanged'::text, 'invalid'::text, 'forbidden'::text, 'duplicate_code'::text, 'duplicate_unit'::text, 'photos_only'::text])));
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_source_check CHECK ((source = ANY (ARRAY['excel'::text, 'post'::text, 'chat'::text])));
 ALTER TABLE import_rows ADD CONSTRAINT import_rows_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'done'::text, 'failed'::text, 'conflict'::text])));
@@ -1881,6 +1904,7 @@ ALTER TABLE project_plans ADD CONSTRAINT project_plans_phase_id_fkey FOREIGN KEY
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE projects ADD CONSTRAINT projects_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE projects ADD CONSTRAINT projects_developer_id_fkey FOREIGN KEY (developer_id) REFERENCES developers(id) ON DELETE SET NULL;
+ALTER TABLE projects ADD CONSTRAINT projects_global_id_fkey FOREIGN KEY (global_id) REFERENCES global_projects(id) ON DELETE SET NULL;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1948,6 +1972,7 @@ CREATE UNIQUE INDEX uq_developers_agency_name ON public.developers USING btree (
 CREATE INDEX error_events_fingerprint ON public.error_events USING btree (fingerprint, created_at DESC);
 CREATE INDEX error_events_recent ON public.error_events USING btree (created_at DESC);
 CREATE INDEX fixed_costs_month ON public.fixed_costs USING btree (month);
+CREATE UNIQUE INDEX uq_global_projects_name ON public.global_projects USING btree (lower(btrim(name)));
 CREATE INDEX import_rows_agency_idx ON public.import_rows USING btree (agency_id);
 CREATE INDEX import_rows_tab_idx ON public.import_rows USING btree (import_id, kind, seq);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);

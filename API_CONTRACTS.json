@@ -397,7 +397,7 @@
       "paymentLines": ["l", "lang", "params"],
       "planHint": ["p", "lang"],
       "maintenanceText": ["l", "lang"],
-      "factLines": ["l", "lang"],
+      "factLines": ["l", "lang", "params"],
       "internalLines": ["l", "lang"],
       "brokerCard": ["l", "params"],
       "reviewCard": ["l", "params"],
@@ -1831,6 +1831,9 @@
       "sharedFor": ["db", "listing", "params"],
       "layoutsFor": ["db", "listing"]
     },
+    "web/routes/globalProjects.js": {
+      "register": ["web", "params"]
+    },
     "web/routes/gallery.js": {
       "register": ["web", "params"],
       "gallerySection": ["lang", "manager", "data", "params"]
@@ -2391,6 +2394,7 @@
       "BOUNDS": "Object"
     },
     "services/mapPlaces.js": {
+      "syncApproved": ["pool"],
       "FINISHING": "Array",
       "FURNISHING": "Array",
       "allPlaces": ["pool"],
@@ -2423,6 +2427,12 @@
       "resolve": ["db", "fields"],
       "normalize": ["db", "fields"],
       "suggest": ["db", "typed", "limit"]
+    },
+    "services/globalProjects.js": {
+      "syncFile": ["pool", "file"],
+      "list": ["pool", "params"],
+      "setPublished": ["pool", "id", "published"],
+      "use": ["pool", "actor", "id"]
     }
   },
   "invariant_variable_names": {

@@ -1237,5 +1237,355 @@
 "developer": "Arabia Holding",
 "district": "Fayoum Road (Pyramids View)",
 "aliases": []
+},
+{
+"name_en": "New Giza",
+"name_ar": "نيو جيزة",
+"developer": "New Giza Developments",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Dreamland",
+"name_ar": "دريم لاند",
+"developer": "Bahgat Group",
+"district": "Wahat Road",
+"aliases": []
+},
+{
+"name_en": "El Rabwa",
+"name_ar": "الربوة",
+"developer": "TMG",
+"district": "Zayed Entrance",
+"aliases": []
+},
+{
+"name_en": "Tara",
+"name_ar": "تارا",
+"developer": "Private",
+"district": "Zayed Core",
+"aliases": []
+},
+{
+"name_en": "October Plaza",
+"name_ar": "أكتوبر بلازا",
+"developer": "SODIC",
+"district": "Northern Expansions",
+"aliases": []
+},
+{
+"name_en": "Keeva",
+"name_ar": "كيفا",
+"developer": "Al Ahly Sabbour",
+"district": "Dahshour Road",
+"aliases": []
+},
+{
+"name_en": "Ashgar City",
+"name_ar": "أشجار سيتي",
+"developer": "IGC",
+"district": "Wahat Road",
+"aliases": []
+},
+{
+"name_en": "The Estates",
+"name_ar": "ذا إستيتس",
+"developer": "SODIC",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Belle Vie",
+"name_ar": "بيل في",
+"developer": "Emaar Misr",
+"district": "Dabaa Corridor",
+"aliases": []
+},
+{
+"name_en": "Lugar",
+"name_ar": "لوجار",
+"developer": "Gates Developments",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Marqville",
+"name_ar": "ماركفيل",
+"developer": "The MarQ",
+"district": "New Zayed Core",
+"aliases": []
+},
+{
+"name_en": "Arkan Plaza",
+"name_ar": "أركان بلازا",
+"developer": "El Badr Real Estate",
+"district": "26th of July Corridor",
+"aliases": []
+},
+{
+"name_en": "Capital Business Park",
+"name_ar": "كابيتال بيزنس بارك",
+"developer": "Dorra Group",
+"district": "26th of July Corridor",
+"aliases": []
+},
+{
+"name_en": "Walk of Cairo (WOC)",
+"name_ar": "ووك أوف كايرو",
+"developer": "RIG",
+"district": "Cairo-Alex Desert Road",
+"aliases": []
+},
+{
+"name_en": "Zed Strip",
+"name_ar": "زد ستريب",
+"developer": "Ora Developers",
+"district": "El Nozha Road",
+"aliases": []
+},
+{
+"name_en": "Mall of Arabia",
+"name_ar": "مول العرب",
+"developer": "Marakez",
+"district": "Juhayna Square",
+"aliases": []
+},
+{
+"name_en": "Iconic Tower",
+"name_ar": "البرج الأيقوني",
+"developer": "CSCEC / NUCA",
+"district": "Central Business District (CBD)",
+"aliases": []
+},
+{
+"name_en": "Amazon Diamond Tower",
+"name_ar": "أمازون دايموند تاور",
+"developer": "Amazon Holding",
+"district": "CBD",
+"aliases": []
+},
+{
+"name_en": "Taj Tower",
+"name_ar": "تاج تاور",
+"developer": "Taj Misr",
+"district": "CBD",
+"aliases": []
+},
+{
+"name_en": "Infinity Tower",
+"name_ar": "إنفينيتي تاور",
+"developer": "Infinity",
+"district": "CBD",
+"aliases": []
+},
+{
+"name_en": "Nile Business City",
+"name_ar": "نايل بيزنس سيتي",
+"developer": "Nile Developments",
+"district": "Downtown",
+"aliases": []
+},
+{
+"name_en": "31North",
+"name_ar": "31 نورث",
+"developer": "Nile Developments",
+"district": "Downtown",
+"aliases": []
+},
+{
+"name_en": "Oaks Egypt",
+"name_ar": "أوكس",
+"developer": "Margins",
+"district": "Downtown",
+"aliases": []
+},
+{
+"name_en": "Pyramids Mega Mall",
+"name_ar": "بيراميدز ميجا مول",
+"developer": "Pyramids Developments",
+"district": "Capital Entrance / Al Masa",
+"aliases": []
+},
+{
+"name_en": "Lafayette Village",
+"name_ar": "لافاييت",
+"developer": "Hometown",
+"district": "Downtown",
+"aliases": []
+},
+{
+"name_en": "Double Two Tower",
+"name_ar": "دابل تو 타ور",
+"developer": "Nakheel",
+"district": "Downtown",
+"aliases": []
+},
+{
+"name_en": "Paris East Mall",
+"name_ar": "باريس إيست",
+"developer": "Pyramids Developments",
+"district": "MU23",
+"aliases": []
+},
+{
+"name_en": "Epic Complex",
+"name_ar": "إيبيك",
+"developer": "EgyHolding",
+"district": "MU23",
+"aliases": []
+},
+{
+"name_en": "Audaz",
+"name_ar": "أوداز",
+"developer": "Gates Developments",
+"district": "Financial District",
+"aliases": []
+},
+{
+"name_en": "Marassi",
+"name_ar": "مراسي",
+"developer": "Emaar Misr",
+"district": "Sidi Abdel Rahman (KM 125)",
+"aliases": []
+},
+{
+"name_en": "Hacienda White",
+"name_ar": "هاسيندا وايت",
+"developer": "Palm Hills",
+"district": "Sidi Abdel Rahman",
+"aliases": []
+},
+{
+"name_en": "Hacienda Red",
+"name_ar": "هاسيندا ريد",
+"developer": "Palm Hills",
+"district": "Sidi Abdel Rahman",
+"aliases": []
+},
+{
+"name_en": "Hacienda West",
+"name_ar": "هاسيندا ويست",
+"developer": "Palm Hills",
+"district": "Ras El Hekma (KM 200)",
+"aliases": []
+},
+{
+"name_en": "Amwaj",
+"name_ar": "أمواج",
+"developer": "Al Ahly Sabbour",
+"district": "Sidi Abdel Rahman (KM 136)",
+"aliases": []
+},
+{
+"name_en": "Silversands",
+"name_ar": "سيلفر ساندس",
+"developer": "Ora Developers",
+"district": "Sidi Heneish (KM 243)",
+"aliases": []
+},
+{
+"name_en": "Almaza Bay",
+"name_ar": "ألماظة باي",
+"developer": "Travco Properties",
+"district": "Marsa Matrouh (KM 250+)",
+"aliases": []
+},
+{
+"name_en": "SouthMed",
+"name_ar": "ساوث ميد",
+"developer": "TMG",
+"district": "Dabaa (KM 165)",
+"aliases": []
+},
+{
+"name_en": "Fouka Bay",
+"name_ar": "فوكا باي",
+"developer": "Tatweer Misr",
+"district": "Ras El Hekma (KM 211)",
+"aliases": []
+},
+{
+"name_en": "Mountain View Ras El Hekma",
+"name_ar": "ماونتن فيو رأس الحكمة",
+"developer": "Mountain View",
+"district": "Ras El Hekma (KM 200)",
+"aliases": []
+},
+{
+"name_en": "Salt",
+"name_ar": "سولت",
+"developer": "Tatweer Misr",
+"district": "Ras El Hekma (KM 185)",
+"aliases": []
+},
+{
+"name_en": "Seashore (Hyde Park)",
+"name_ar": "سي شور",
+"developer": "Hyde Park",
+"district": "Ras El Hekma (KM 214)",
+"aliases": []
+},
+{
+"name_en": "June",
+"name_ar": "جون",
+"developer": "SODIC",
+"district": "Ras El Hekma (KM 193)",
+"aliases": []
+},
+{
+"name_en": "Caesar",
+"name_ar": "سيزر",
+"developer": "SODIC",
+"district": "Ras El Hekma (KM 200)",
+"aliases": []
+},
+{
+"name_en": "Alamein Towers (North Edge)",
+"name_ar": "أبراج العلمين",
+"developer": "City Edge / NUCA",
+"district": "New Alamein City",
+"aliases": []
+},
+{
+"name_en": "IL Monte Galala",
+"name_ar": "إل مونتي جلالة",
+"developer": "Tatweer Misr",
+"district": "Galala Mountain",
+"aliases": []
+},
+{
+"name_en": "Azha",
+"name_ar": "أزهى",
+"developer": "Madaar",
+"district": "Sokhna Core",
+"aliases": []
+},
+{
+"name_en": "Telal Sokhna",
+"name_ar": "تلال السخنة",
+"developer": "Roya Group",
+"district": "Sokhna Core",
+"aliases": []
+},
+{
+"name_en": "Little Venice",
+"name_ar": "ليتل فينيس",
+"developer": "Hassan Allam",
+"district": "Sokhna Core",
+"aliases": []
+},
+{
+"name_en": "Kai Sokhna",
+"name_ar": "كاي السخنة",
+"developer": "Misr Italia",
+"district": "Zafarana Road",
+"aliases": []
+},
+{
+"name_en": "Majada",
+"name_ar": "ماجادا",
+"developer": "Iwan Developments",
+"district": "Galala",
+"aliases": []
 }
 ]

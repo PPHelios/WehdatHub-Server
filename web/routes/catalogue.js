@@ -209,7 +209,7 @@ function developerForm(lang, d = {}, action = "/app/catalogue/developers") {
 function listPage(lang, manager, { projects, allProjects = [], projPage, developers, devPage, pq = "", dq = "", archived, notice }) {
   return html`<h1>🏗️ ${L(lang, "كتالوج المطورين", "Developer catalogue")}</h1>
 ${notice || ""}
-<nav class="row">${manager ? html`<a class="btn" href="/app/catalogue/updates" data-quick-updates>⚡ ${L(lang, "تحديث سريع", "Quick update")}</a>` : ""}<a class="btn secondary" href="/app/catalogue${archived ? "" : "?archived=1"}">${archived ? L(lang, "المشاريع الحالية", "Current projects") : L(lang, "المشاريع المؤرشفة", "Archived projects")}</a></nav>
+<nav class="row">${manager ? html`<a class="btn secondary" href="/app/library">📚 ${L(lang, "مكتبة المشاريع", "Project library")}</a><a class="btn" href="/app/catalogue/updates" data-quick-updates>⚡ ${L(lang, "تحديث سريع", "Quick update")}</a>` : ""}<a class="btn secondary" href="/app/catalogue${archived ? "" : "?archived=1"}">${archived ? L(lang, "المشاريع الحالية", "Current projects") : L(lang, "المشاريع المؤرشفة", "Archived projects")}</a></nav>
 <section class="card">
   <h2>${archived ? L(lang, "مؤرشفة", "Archived") : L(lang, "المشاريع", "Projects")}</h2>
   <form method="get" action="/app/catalogue" class="row" role="search">

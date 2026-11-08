@@ -37,6 +37,7 @@ const PRIVATE = [
   require("./catalogueUpdates"),
   require("./brochure"),
   require("./gallery"),
+  require("./globalProjects"),
   require("./catalogue"),
   require("./priceSheets"),
   require("./testRole"),

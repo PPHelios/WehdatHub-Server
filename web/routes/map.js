@@ -140,17 +140,11 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   const next = list.rows.length === 50 ? html`<a class="btn secondary" href="/app/owner/map?q=${encodeURIComponent(q)}&p=${pageNo + 1}">${L(lang, "التالي", "Next")}</a>` : "";
   return html`<h1>🗺️ ${L(lang, "أماكن الخريطة", "Map places")}</h1>
 ${notice}
+<p><a class="btn secondary small" href="/app/owner/library">📚 ${L(lang, "مكتبة المشاريع", "Project library")}</a></p>
 <p class="muted">${L(lang, `${list.total} مكان، ${list.verified} منهم مراجَع.`, `${list.total} places, ${list.verified} checked.`)}</p>
 ${placeForm(lang, editing)}
 <div class="map-view map-pick" data-map data-pick role="application" aria-label="${L(lang, "اختار مكان الدبوس", "Pick the pin")}" data-tiles="${tilesUrl}" data-i18n="${JSON.stringify(words(lang))}" data-lang="${lang}"></div>
-<section class="card stack" id="seed"><h2>${L(lang, "القايمة الأولى", "First list")}</h2>
-  <p class="muted">${L(lang, "بتضيف الأماكن اللي مش عندك بس. اللي موجود مبيتغيرش.", "Adds only the places you do not have yet. Existing ones are not changed.")}</p>
-  <form method="post" action="/app/owner/map/master" data-confirm="${L(lang, "تعتمد القايمة الرئيسية؟", "Approve the master list?")}"><button type="submit" class="secondary">${L(lang, "اعتمد القايمة الرئيسية", "Approve the master list")}</button></form>
-  <form method="post" action="/app/owner/map/import" data-confirm="${L(lang, "تضيف القايمة الأولى؟", "Add the first list?")}"><button type="submit" class="secondary">${L(lang, "ضيف القايمة الأولى", "Add the first list")}</button></form>
-</section>
 <section class="card stack" id="unmatched"><h2>${L(lang, "أسماء عليها وحدات ومالهاش مكان", "Unit names with no place")}</h2>
-  <div class="row"><form method="post" action="/app/owner/map/recheck"><button type="submit" class="secondary small">${L(lang, "عدّ الوحدات اللي هتتصلح", "Count units that would be fixed")}</button></form>
-  <form method="post" action="/app/owner/map/recheck" data-confirm="${L(lang, "تصلّح الوحدات؟", "Fix the units now?")}"><input type="hidden" name="apply" value="1"><button type="submit" class="small">${L(lang, "صلّح الوحدات", "Fix units now")}</button></form></div>
   ${unmatched.length
     ? html`<ul class="stack">${unmatched.map((r) => html`<li data-unmatched><strong>${r.name}</strong> <span class="muted">${r.other} · ${r.n} ${L(lang, "وحدة", "units")} · ${r.agencies} ${L(lang, "مكتب", "agencies")}</span>
       ${r.hint ? html`<form method="post" action="/app/owner/map/${r.hint.id}/approve" class="row"><button type="submit" class="small">${L(lang, `اعتمد "${r.hint.name}"`, `Approve "${r.hint.name}"`)}</button></form>` : ""}
@@ -226,6 +220,7 @@ function register(web, { pool, page, assets }) {
     const id = await Maps.findByName(pool, req.body.place);
     if (!id) return goOwner(res, "err=missing#unmatched");
     await Maps.addAlias(pool, id, req.body.alias);
+    await Maps.recheck(pool, { apply: true });
     return goOwner(res, "msg=alias#unmatched");
   }));
 
@@ -239,6 +234,7 @@ function register(web, { pool, page, assets }) {
   }));
   web.post("/owner/map/:id/approve", ownerOnly(async (req, res) => {
     await Maps.approve(pool, req.params.id);
+    await Maps.recheck(pool, { apply: true });
     return goOwner(res, "msg=approved#unmatched");
   }));
 
@@ -250,6 +246,7 @@ function register(web, { pool, page, assets }) {
       return goOwner(res, "err=missing");
     }
     const out = await Maps.importMaster(pool, rows);
+    await Maps.recheck(pool, { apply: true });
     return goOwner(res, `msg=master&n=${out.updated + out.added}`);
   }));
 
