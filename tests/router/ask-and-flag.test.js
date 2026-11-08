@@ -46,11 +46,10 @@ test("a search result hides the owner and offers an ask button; asking from ther
   expect(evil.headers.location).toContain("/app/units/HP-1");
 });
 
-test("the bot's unit card swaps the third button for 'Ask details' when secrets are hidden; tapping sends the ask", async () => {
+test("the bot's unit card offers 'Ask details' in its owner-data message when secrets are hidden; tapping sends the ask", async () => {
   await h.insertListing({ code: "HP-2", details: SECRET });
   const out = await h.tgText("colleague", "HP-2");
-  const card = out.find((e) => e.method === "sendMessage" && e.keyboard);
-  const btn = card.keyboard.flat().find((b) => /^unitask:/.test(b.callback_data));
+  const btn = out.flatMap((e) => (e.keyboard ? e.keyboard.flat() : [])).find((b) => /^unitask:/.test(b.callback_data));
   expect(btn).toBeDefined();
   const tapped = await h.tgTap("colleague", btn.callback_data);
   expect(tapped.some((e) => /HP-2/.test(e.text || ""))).toBe(true);
