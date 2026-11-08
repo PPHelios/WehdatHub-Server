@@ -224,3 +224,12 @@ test("a place with no units is still found by the map search (idle), and the dea
   expect(rent.total + primary.total).toBeLessThanOrEqual((await b.agent.get("/app/map/pins")).body.total * 2);
   expect((await b.agent.get("/app/map/pins?deal=x;drop")).status).toBe(200);
 });
+
+test("units list price boxes filter by from and to (5m, 250k)", async () => {
+  await h.insertListing({ code: "PB-1", compound: "X", price_value: 2000000 });
+  await h.insertListing({ code: "PB-2", compound: "X", price_value: 8000000 });
+  const b = await signIn(h, "admin");
+  const res = await b.agent.get("/app/units?pmin=5m&pmax=10m");
+  expect(res.text).toMatch(/PB-2/);
+  expect(res.text).not.toMatch(/PB-1/);
+});

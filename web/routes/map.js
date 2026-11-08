@@ -70,8 +70,14 @@ function filterBar(lang) {
   <label class="map-field"><span class="muted small">${L(lang, "نوع الصفقة", "Deal type")}</span><select data-f-deal><option value="">${L(lang, "الكل", "Any")}</option>${DealRules.DEALS.map((d) => html`<option value="${d}">${DealRules.label(d, lang)}</option>`)}</select></label>
   <div class="map-budget" data-budget hidden>
     <div class="row between"><span class="muted small">${L(lang, "الميزانية", "Budget")}</span><output data-budget-text></output></div>
-    <input type="range" data-f-pmin min="0" max="100" value="0" aria-label="${L(lang, "أقل ميزانية", "Minimum budget")}">
-    <input type="range" data-f-pmax min="0" max="100" value="100" aria-label="${L(lang, "أعلى ميزانية", "Maximum budget")}">
+    <div class="row budget-boxes">
+      <label class="map-field"><span class="muted small">${L(lang, "من", "From")}</span><input data-pmin-box inputmode="text" dir="ltr" autocomplete="off" placeholder="${L(lang, "مثلا 3m", "e.g. 3m")}"></label>
+      <label class="map-field"><span class="muted small">${L(lang, "إلى", "To")}</span><input data-pmax-box inputmode="text" dir="ltr" autocomplete="off" placeholder="${L(lang, "مثلا 6m", "e.g. 6m")}"></label>
+    </div>
+    <div class="dual"><div class="dual-fill" data-dual-fill></div>
+      <input type="range" data-f-pmin min="0" max="100" value="0" aria-label="${L(lang, "أقل ميزانية", "Minimum budget")}">
+      <input type="range" data-f-pmax min="0" max="100" value="100" aria-label="${L(lang, "أعلى ميزانية", "Maximum budget")}">
+    </div>
   </div>
 </div>`;
 }

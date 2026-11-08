@@ -31,3 +31,11 @@ test("deal types map to fixed SQL", () => {
   expect(Deal.sql("resale_installments", "l")).toMatch(/remaining_amount, 0\) > 0/);
   expect(Deal.sql("", "l")).toBe("TRUE");
 });
+
+test("price boxes read 5m, 250k and plain numbers", () => {
+  expect(Deal.parseMoney("5m")).toBe(5000000);
+  expect(Deal.parseMoney("250K")).toBe(250000);
+  expect(Deal.parseMoney("5,000,000")).toBe(5000000);
+  expect(Deal.parseMoney("abc")).toBeNull();
+  expect(Deal.parseMoney("0")).toBeNull();
+});
