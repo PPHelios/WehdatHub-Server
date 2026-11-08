@@ -61,7 +61,7 @@ function register(web, { pool, page }) {
   web.get("/library", guard(isManager, async (req, res, lang) => {
     await syncOnce();
     const q = askedQ(req);
-    const { items, page, pages, suggestions } = await Lib.listPage(pool, { agencyId: req.session.broker.agency_id, q, page: askedPage(req) });
+    const { items, page: pageNo, pages, suggestions } = await Lib.listPage(pool, { agencyId: req.session.broker.agency_id, q, page: askedPage(req) });
     const msg = { copied: L(lang, "اتنسخ لمشاريعك.", "Copied to your projects."), duplicate: L(lang, "المشروع ده عندك بالفعل.", "You already have this project.") }[req.query.msg];
     return page(req, res, { title: L(lang, "مكتبة المشاريع", "Project library"), nav: "catalogue", body: html`<h1>📚 ${L(lang, "مكتبة المشاريع", "Project library")}</h1>
 ${msg ? html`<p class="ok" role="status">${msg}</p>` : ""}
@@ -70,7 +70,7 @@ ${searchBox(lang, "/app/library", q, suggestions)}
 ${items.length ? html`<ul class="stack">${items.map((g) => html`<li class="card stack"><strong>${g.name}</strong> <span class="muted">${facts(g)}</span>
   ${g.facts ? html`<p>${g.facts}</p>` : ""}
   ${g.used ? html`<span class="muted">${L(lang, "عندك نسخة", "You have a copy")}</span>` : html`<form method="post" action="/app/library/${g.id}/use"><button type="submit" class="small">${L(lang, "استخدم", "Use")}</button></form>`}</li>`)}</ul>` : html`<p class="muted">${q ? L(lang, "مفيش مشروع بالاسم ده.", "No project matches that search.") : L(lang, "المكتبة فاضية لسه.", "The library is empty for now.")}</p>`}
-${pager(lang, "/app/library", q, page, pages)}` });
+${pager(lang, "/app/library", q, pageNo, pages)}` });
   }));
 
   web.post("/library/:id/use", guard(isManager, async (req, res) => {
@@ -82,7 +82,7 @@ ${pager(lang, "/app/library", q, page, pages)}` });
   web.get("/owner/library", guard(Dash.isOwner, async (req, res, lang) => {
     await syncOnce();
     const q = askedQ(req);
-    const { items, page, pages, suggestions } = await Lib.listPage(pool, { q, page: askedPage(req) });
+    const { items, page: pageNo, pages, suggestions } = await Lib.listPage(pool, { q, page: askedPage(req) });
     const msg = LIB_MSG(lang)[req.query.msg];
     return page(req, res, { title: L(lang, "مكتبة المشاريع", "Project library"), nav: "ownerlibrary", body: html`<h1>📚 ${L(lang, "مكتبة المشاريع", "Project library")}</h1>
 ${msg ? html`<p class="${req.query.msg === "created" || req.query.msg === "saved" ? "ok" : "notice bad"} card" role="status">${msg}</p>` : ""}
@@ -93,7 +93,7 @@ ${items.length ? html`<ul class="stack">${items.map((g) => html`<li class="card 
   ${g.facts ? html`<p>${g.facts}</p>` : ""}
   <p class="row"><a href="/app/owner/library/${g.id}/edit">${L(lang, "تعديل", "Edit")}</a>
   <form method="post" action="/app/owner/library/${g.id}/${g.published ? "hide" : "publish"}"><button type="submit" class="${g.published ? "secondary " : ""}small">${g.published ? L(lang, "اخفِ", "Hide") : L(lang, "انشر", "Publish")}</button></form></p></li>`)}</ul>` : html`<p class="muted">${q ? L(lang, "مفيش مشروع بالاسم ده.", "No project matches that search.") : L(lang, "المكتبة فاضية لسه.", "The library is empty for now.")}</p>`}
-${pager(lang, "/app/owner/library", q, page, pages)}` });
+${pager(lang, "/app/owner/library", q, pageNo, pages)}` });
   }));
 
   web.post("/owner/library", guard(Dash.isOwner, async (req, res) => {
