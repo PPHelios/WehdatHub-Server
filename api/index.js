@@ -58,6 +58,7 @@ function mountApi(app, { pool }) {
   require("./search").register(priv, { pool });
   require("./leads").register(priv, { pool });
   require("./unitsWrite").register(priv, { pool });
+  require("./map").register(priv, { pool });
   api.use(priv);
 
   api.use((_req, res) => res.status(404).json({ error: "not_found" }));
