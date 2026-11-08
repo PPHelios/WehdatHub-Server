@@ -247,3 +247,19 @@ test("check saved pins: a kept pin is marked checked and not asked again; a move
   expect((await h.query("SELECT lat FROM map_places WHERE id = $1", [b.id]))[0].lat).toBe(30.5);
   expect((await h.query("SELECT lat FROM map_places WHERE id = $1", [a.id]))[0].lat).toBe(30);
 });
+
+test("the owner's search lists similar places, with or without a pin, approved or not; a duplicate save shows them", async () => {
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  await h.query("DELETE FROM map_places WHERE name_key IN ('eastown', 'sodic eastown')");
+  await h.query("INSERT INTO map_places (name_key, name_en, name_ar, district, aliases, approved) VALUES ('eastown', 'Eastown', 'إيست تاون', 'South 90th', '{}', true)");
+  await h.query("INSERT INTO map_places (name_key, name_en, lat, lng, aliases, approved) VALUES ('sodic eastown', 'SODIC Eastown Compound', 30.01233, 31.51555, '{}', false)");
+  const names = async (q) => (await Maps.list(h.pool, { q })).rows.map((r) => r.name_en);
+  expect(await names("Eas-town")).toEqual(expect.arrayContaining(["Eastown", "SODIC Eastown Compound"]));
+  expect(await names("Eastown compound")).toEqual(expect.arrayContaining(["Eastown", "SODIC Eastown Compound"]));
+  const crm = await signIn(h, "admin");
+  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Eastown", lat: "30.0", lng: "31.5" });
+  expect(dup.headers.location).toMatch(/err=duplicate&q=Eastown/);
+  const page = await crm.agent.get(dup.headers.location);
+  expect(page.text).toContain("SODIC Eastown Compound");
+});

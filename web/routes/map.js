@@ -47,7 +47,7 @@ const ERRORS = (lang) => ({
   outside_egypt: L(lang, "الإحداثيات برة مصر.", "These coordinates are outside Egypt."),
   link_short: L(lang, "الرابط مختصر. افتحه في جوجل ماب وانسخ الرابط الكامل.", "That is a short link. Open it in Google Maps and copy the full link."),
   link_unreadable: L(lang, "مش قادر أقرأ الرابط ده.", "I can't read that link."),
-  duplicate: L(lang, "المكان ده موجود بالفعل.", "That place already exists."),
+  duplicate: L(lang, "المكان ده موجود بالفعل. الأماكن المشابهة تحت، اضغط على واحد تعدله.", "That place already exists. The similar places are listed below: tap one to edit it."),
   missing: L(lang, "المكان مش موجود.", "That place was not found.")
 });
 
@@ -236,7 +236,7 @@ function register(web, { pool, page, assets }) {
 
   const savePlace = (id) => ownerOnly(async (req, res) => {
     const out = await Maps.save(pool, id, req.body || {});
-    return goOwner(res, out.ok ? "msg=saved" : `err=${out.error}${id ? `&edit=${id}` : ""}`);
+    return goOwner(res, out.ok ? "msg=saved" : `err=${out.error}${id ? `&edit=${id}` : out.error === "duplicate" ? `&q=${encodeURIComponent(String(req.body.name_en || req.body.name_ar || "").slice(0, 80))}` : ""}`);
   });
   web.post("/owner/map", savePlace(null));
 

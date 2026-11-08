@@ -168,13 +168,21 @@ async function place(pool, id) {
 /** Places for the owner's list: filtered by a name, newest edits first. */
 async function list(pool, { q = "", verified = null, limit = 200, offset = 0 } = {}) {
   const text = String(q || "").trim().slice(0, 80);
+  // Spaces and punctuation are ignored, both ways: "east town" finds "Eastown", and "Eastown compound" finds "Eastown" too.
+  const key = text.toLowerCase().replace(/[\s\-_./,()&'"]+/g, "");
   const { rows } = await pool.query(
-    `SELECT * FROM map_places
-      WHERE ($1 = '' OR name_en ILIKE '%' || $1 || '%' OR name_ar ILIKE '%' || $1 || '%' OR district ILIKE '%' || $1 || '%' OR developer ILIKE '%' || $1 || '%')
+    `WITH p AS (
+       SELECT *,
+         regexp_replace(lower(coalesce(name_en, '')), '[[:space:]_./,()&''"-]+', '', 'g') AS en_k,
+         regexp_replace(coalesce(name_ar, ''), '[[:space:]_./,()&''"-]+', '', 'g') AS ar_k,
+         regexp_replace(lower(concat_ws(' ', name_en, name_ar, district, developer, array_to_string(aliases, ' '))), '[[:space:]_./,()&''"-]+', '', 'g') AS hay
+       FROM map_places)
+     SELECT * FROM p
+      WHERE ($1 = '' OR hay LIKE '%' || $1 || '%' OR (length(en_k) >= 4 AND $1 LIKE '%' || en_k || '%') OR (length(ar_k) >= 3 AND $1 LIKE '%' || ar_k || '%'))
         AND ($2::boolean IS NULL OR verified = $2)
       ORDER BY verified DESC, updated_at DESC, name_en
       LIMIT $3 OFFSET $4`,
-    [text, verified, Math.min(limit, 500), Math.max(0, offset)]
+    [key, verified, Math.min(limit, 500), Math.max(0, offset)]
   );
   const total = await pool.query("SELECT count(*)::int AS n, count(*) FILTER (WHERE verified)::int AS ok FROM map_places");
   return { rows, total: total.rows[0].n, verified: total.rows[0].ok };
