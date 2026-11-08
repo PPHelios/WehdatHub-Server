@@ -158,6 +158,18 @@ test("a manager adds the missing information to a project or unit; the assistant
   expect(await Assistant.addInfo(h.pool, admin, { unit: "NOPE-1", text: "x" })).toEqual({ error: "not_found" });
 });
 
+test("a named client's request is matched against the written offers in project notes", async () => {
+  const { admin, project } = await seed();
+  await h.query("UPDATE projects SET notes = $2, district = 'Obour' WHERE id = $1", [project.id, "يونت 110 م سعرها = 2,900,000 مقدم 10% = 290,000 تقسيط 8 سنين"]);
+  const lead = (await h.query("SELECT id FROM leads WHERE name = 'Mona Saeed'"))[0];
+  await h.query("INSERT INTO saved_searches (agency_id, broker_id, lead_id, name, filters, alerts_enabled, created_at, updated_at) VALUES ($1, $2, $3, 'req', $4::jsonb, true, now(), now())", [admin.agency_id, h.BROKERS.broker.id, lead.id, JSON.stringify({ area_min: 110, locations: ["obour"] })]);
+  FakeAI.respond(() => ({ answer: "ok", found: true }));
+  await Assistant.ask(h.pool, await row("broker"), "Which projects fit Mona clients?");
+  const prompt = String(FakeAI.calls.find((c) => c.operation === "assistant").contents);
+  expect(prompt).toContain("Written offers that fit Mona Saeed's request");
+  expect(prompt).toContain("110 m² · 2,900,000 EGP");
+});
+
 describe("answer formatting", () => {
   test("the prompt asks for a short chat layout and leaves the dates to the footer", () => {
     const p = A.prompt("امتى استلام بادية؟", [{ title: "Project Badya", as_of: "2026-10-27", text: "Badya by Palm Hills." }], { lang: "ar", today: "2026-10-31" });

@@ -62,6 +62,7 @@ Answer the broker's question using ONLY the DATA below, which is the agency's ow
 Rules:
 - Never assume or use outside knowledge. You may calculate from numbers in the DATA (down payment, monthly installment, totals) and say it is a calculation.
 - If the DATA gives two different values for the same fact, show both, each with its date; never pick one silently.
+- Offers written in project notes ARE the agency's data. If any offer in the DATA fits the question, open with those offers and never say "not in our data" or that nothing exists; say "not in our data" only when no offer or record fits at all.
 - If a fact comes only from a project's "Agency notes" or "Offers written in project notes", end the answer with one line saying it is from notes and should be checked before quoting.
 - Never assume or use outside knowledge. If the DATA does not contain the answer, set "found": false and write only: "${NOT_FOUND[lang]}" plus, if useful, what related information the DATA does have.
 - Do not write the data dates in the answer: the app shows each data block's date under the answer by itself.

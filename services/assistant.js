@@ -64,11 +64,29 @@ async function projectBlocks(pool, broker, question, scopes) {
       const text = withOffers
         .map(({ p, units }) => `${p.name}${p.name_en ? ` (${p.name_en})` : ""}, ${[p.district, p.city].filter(Boolean).join(" ")} [notes updated ${cairoDay(new Date(p.updated_at || Date.now()))}]:\n` + units.slice(0, 12).map((u) => `- ${u.raw}${u.monthly == null && u.monthly_est != null ? ` (calculated monthly about ${u.monthly_est})` : ""}`).join("\n"))
         .join("\n");
-      blocks.push({ title: "Offers written in project notes (not unit records; check before quoting)", as_of: cairoDay(), text });
+      blocks.push({ title: "Offers written in project notes (agency data; check before quoting)", as_of: cairoDay(), text });
       for (const { p } of withOffers) dates.push({ project: p.name, prices: null, brochure: null, plans: null, notes: cairoDay(new Date(p.updated_at || Date.now())) });
     }
   }
   return { blocks, dates, named };
+}
+
+/** For a client named in the question: the written offers (project notes) that fit what the client asked for. Same visibility as leadBlock. */
+async function clientFit(pool, broker, question) {
+  const { rows } = await pool.query(
+    `SELECT l.id, l.name, (SELECT array_agg(s.filters) FROM saved_searches s WHERE s.lead_id = l.id AND s.agency_id = l.agency_id) AS requests
+       FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ($2 OR l.assigned_broker_id = $3) AND l.stage NOT IN ('won', 'lost') LIMIT 400`,
+    [broker.agency_id, isManager(broker), broker.id]
+  );
+  const lead = A.matchLeads(question, rows).find((l) => (l.requests || []).some(Boolean));
+  if (!lead) return null;
+  const { rows: projects } = await pool.query("SELECT name, name_en, district, city, notes, updated_at FROM projects WHERE agency_id = $1 AND archived_at IS NULL", [broker.agency_id]);
+  const parsed = projects.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);
+  const hits = [];
+  for (const f of lead.requests.filter(Boolean)) for (const h of ProjectNotes.matchUnits(parsed, f)) if (!hits.some((x) => x.unit === h.unit)) hits.push(h);
+  if (!hits.length) return null;
+  const top = hits.slice(0, 5);
+  return { title: `Written offers that fit ${lead.name || "the client"}'s request (from project notes; check before quoting)`, as_of: cairoDay(), text: ProjectAnswer.clientText(top, "en") + `\n(notes updated ${top.map((h) => `${h.project.name} ${cairoDay(new Date(h.project.updated_at || Date.now()))}`).join(", ")})` };
 }
 
 async function leadBlock(pool, broker, question, scopes) {
@@ -168,6 +186,10 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
   const { blocks, dates, named } = await projectBlocks(pool, broker, q, scopes);
   const leads = await leadBlock(pool, broker, q, scopes);
   if (leads) blocks.push(leads);
+  if (leads) {
+    const fit = await clientFit(pool, broker, q);
+    if (fit) blocks.push(fit);
+  }
   if (scopes.followups) blocks.push(await followUpBlock(pool, broker, now));
   if (scopes.units || named.length) blocks.push(await unitBlock(pool, broker, named.map((p) => p.id)));
 

@@ -133,4 +133,23 @@ function notesReply(hits, lang = "ar") {
   return [head, "", ...lines, "", foot].join("\n");
 }
 
-module.exports = { answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
+/**
+ * Text a broker can forward to a client: only project, size, price, down payment and installment. No raw note lines,
+ * no commission, no internal remarks.
+ */
+function clientText(hits, lang = "ar") {
+  const en = lang === "en";
+  const money = (n) => Number(n).toLocaleString("en-US");
+  const lines = hits.map(({ project, unit: u }) => {
+    const bits = [
+      `${u.area} ${en ? "m²" : "م²"}`,
+      `${money(u.price)} ${en ? "EGP" : "جنيه"}`,
+      u.down != null ? (en ? `down payment ${money(u.down)}` : `مقدم ${money(u.down)}`) : null,
+      u.monthly != null || u.monthly_est != null ? (en ? `about ${money(u.monthly ?? u.monthly_est)}/month` : `قسط حوالي ${money(u.monthly ?? u.monthly_est)} شهريًا`) : null
+    ].filter(Boolean);
+    return `• ${project.name_en || project.name}: ${bits.join(" · ")}`;
+  });
+  return lines.join("\n");
+}
+
+module.exports = { clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
