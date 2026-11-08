@@ -39,7 +39,7 @@ test("Today lists the broker's own late, viewing and call tasks and counts new l
   const set = (name, ms, kind) =>
     h.query("UPDATE leads SET follow_up_status = 'open', next_follow_up_at = $2, follow_up_kind = $3 WHERE name = $1", [name, new Date(Date.now() + ms).toISOString(), kind]);
   await set("Sara Late", -3 * 24 * hour, "call");
-  await set("Omar Viewing", 0.5 * hour, "viewing");
+  await set("Omar Viewing", hour / 60, "viewing"); // one minute ahead, so it stays "today" in Cairo time even late in the evening
   await set("Not Mine", -3 * 24 * hour, "call");
   const res = await get("broker");
   expect(res.status).toBe(200);

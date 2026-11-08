@@ -94,6 +94,15 @@ test("the list shows this agency's active units only, never private or other age
   expect(sold.body.items.map((u) => u.code)).toEqual(["A-S"]);
 });
 
+test("typing part of a code or compound name finds units, and never private ones", async () => {
+  await seedUnits();
+  const token = await login("broker");
+  const byCompound = await api().get("/api/v1/units?q=ivid").set(auth(token));
+  expect(byCompound.body.items.map((u) => u.code).sort()).toEqual(["A-1", "A-2"]);
+  const byCode = await api().get("/api/v1/units?q=a-3").set(auth(token));
+  expect(byCode.body.items.map((u) => u.code)).toEqual(["A-3"]);
+});
+
 test("the agency owner alone sees private units", async () => {
   await seedUnits();
   await h.seedBroker("owner");
