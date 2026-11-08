@@ -593,3 +593,4 @@ label.field-missing input, label.field-missing select, label.field-missing texta
   [data-map-filter-toggle] { display: none; }
   .map-drawer { inset-inline: auto 24px; inset-block-end: 24px; width: 380px; max-height: 60dvh; border-radius: var(--radius); }
 }
+.pin-idle .pin-n { background: #6b7280; }

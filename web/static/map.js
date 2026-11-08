@@ -66,9 +66,11 @@
     }
 
     // ---- Pins ----
-    var state = { type: "", rooms: "", ptype: "", fin: "", furn: "", pmin: null, pmax: null };
+    var state = { type: "", rooms: "", ptype: "", fin: "", furn: "", deal: "", pmin: null, pmax: null };
     var facets = { types: [], pmin: null, pmax: null };
     var pinsData = [];
+    var idleData = [];
+    var idleMarker = null;
     var layer = L.layerGroup().addTo(map);
     var countEl = app.querySelector("[data-map-count]");
     var drawer = app.querySelector("[data-map-drawer]");
@@ -88,6 +90,7 @@
       if (state.ptype) q.push("ptype=" + encodeURIComponent(state.ptype));
       if (state.fin) q.push("fin=" + state.fin);
       if (state.furn) q.push("furn=" + state.furn);
+      if (state.deal) q.push("deal=" + state.deal);
       if (state.pmin !== null) q.push("pmin=" + Math.round(state.pmin));
       if (state.pmax !== null) q.push("pmax=" + Math.round(state.pmax));
       return q.join("&");
@@ -153,6 +156,7 @@
         .then(function (d) {
           if (id !== pending) return;
           pinsData = d.pins || [];
+          idleData = d.idle || [];
           if (first || !facets.types.length) setFacets(d.facets);
           else if (d.facets && !state.ptype && state.pmin === null && state.pmax === null) setFacets(d.facets);
           countEl.textContent = d.total + " " + (tr.units || "units") + " · " + pinsData.length + " " + (lang === "en" ? "places" : "مكان");
@@ -208,6 +212,8 @@
     var furnSel = app.querySelector("[data-f-furn]");
     finSel.addEventListener("change", function () { state.fin = finSel.value; load(false); });
     furnSel.addEventListener("change", function () { state.furn = furnSel.value; load(false); });
+    var dealSel = app.querySelector("[data-f-deal]");
+    dealSel.addEventListener("change", function () { state.deal = dealSel.value; load(false); });
     function sliderChange() {
       var a = Number(sMin.value), b = Number(sMax.value);
       if (a > b) { if (this === sMin) sMin.value = b; else sMax.value = a; a = Number(sMin.value); b = Number(sMax.value); }
@@ -236,7 +242,7 @@
       var q = norm(input.value);
       list.innerHTML = "";
       if (!q) return hideList();
-      var hits = pinsData.filter(function (p) {
+      var hits = pinsData.concat(idleData).filter(function (p) {
         return norm([p.name_en, p.name_ar, p.developer, p.district].join(" ")).indexOf(q) !== -1;
       }).slice(0, 8);
       if (!hits.length) {
@@ -254,7 +260,14 @@
         meta.className = "muted small";
         meta.textContent = [p.developer, p.district].filter(Boolean).join(" · ") + " · " + p.n;
         li.appendChild(name); li.appendChild(meta);
-        var go = function () { hideList(); input.value = name.textContent; map.setView([p.lat, p.lng], 15); openDrawer(p); };
+        var go = function () {
+          hideList(); input.value = name.textContent; map.setView([p.lat, p.lng], 15);
+          if (idleMarker) { map.removeLayer(idleMarker); idleMarker = null; }
+          if (p.n) return openDrawer(p);
+          // A place with no visible units still gets its pin, marked "0 units".
+          idleMarker = L.marker([p.lat, p.lng], { icon: pinIcon(p), title: name.textContent }).addTo(map);
+          idleMarker.getElement() && idleMarker.getElement().classList.add("pin-idle");
+        };
         li.addEventListener("click", go);
         li.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
         list.appendChild(li);

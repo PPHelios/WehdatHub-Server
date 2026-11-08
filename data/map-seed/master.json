@@ -354,15 +354,6 @@
 ]
 },
 {
-"name_en": "El Rehab City - Group 8",
-"name_ar": "مدينة الرحاب - مجموعة 8",
-"developer": "Talaat Moustafa Group (TMG)",
-"district": "Al Rehab Phase 1",
-"aliases": [
-"al rehab mgmo3a 8"
-]
-},
-{
 "name_en": "Uptown Cairo - Alto 3",
 "name_ar": "أبتاون كايرو - ألتو 3",
 "developer": "Emaar Misr",
@@ -467,25 +458,6 @@
 "developer": "La Vista Developments",
 "district": "Choueifat",
 "aliases": []
-},
-{
-"name_en": "El Rehab City - Phase 1",
-"name_ar": "مدينة الرحاب - المرحلة 1",
-"developer": "Talaat Moustafa Group (TMG)",
-"district": "Suez Road",
-"aliases": [
-"el rehab 1",
-"rehab1"
-]
-},
-{
-"name_en": "El Rehab City - Phase 2",
-"name_ar": "مدينة الرحاب - المرحلة 2",
-"developer": "Talaat Moustafa Group (TMG)",
-"district": "Suez Road",
-"aliases": [
-"el rehab 2"
-]
 },
 {
 "name_en": "El Patio 1",
@@ -672,8 +644,15 @@
 "developer": "Talaat Moustafa Group (TMG)",
 "district": "Suez Road",
 "aliases": [
+"al rehab mgmo3a 8",
+"el rehab",
+"el rehab 1",
+"el rehab 2",
+"el rehab group 8",
 "rehab",
-"el rehab"
+"rehab group 8",
+"rehab1",
+"rehab2"
 ]
 },
 {
