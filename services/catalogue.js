@@ -178,6 +178,8 @@ async function listProjects(db, actor, { archived = false, developerId = null } 
 }
 
 function projectFields(input) {
+  // Notes over the limit are refused, never cut: a cut would silently drop the newest lines.
+  if (String(input.notes ?? "").replace(/\s+/g, " ").trim().length > 4000) return { error: "notes_too_long" };
   const name = text(input.name, 120);
   if (!name) return bad("name");
   const status = input.status || "selling";
@@ -278,10 +280,12 @@ async function addClarification(db, actor, id, input = {}) {
   const day = new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10);
   const entry = require("../domain/projectClarify").answerLine(day, line, a);
   const { rowCount } = await db.query(
-    "UPDATE projects SET notes = right(concat_ws(E'\\n', NULLIF(notes, ''), $3::text), 4000), updated_at = now() WHERE id = $1 AND agency_id = $2",
+    "UPDATE projects SET notes = concat_ws(E'\\n', NULLIF(notes, ''), $3::text), updated_at = now() WHERE id = $1 AND agency_id = $2 AND char_length(concat_ws(E'\\n', NULLIF(notes, ''), $3::text)) <= 4000",
     [id, actor.agency_id, entry]
   );
-  return rowCount ? { ok: true } : { error: "not_found" };
+  if (rowCount) return { ok: true };
+  const { rows } = await db.query("SELECT 1 FROM projects WHERE id = $1 AND agency_id = $2", [id, actor.agency_id]);
+  return rows.length ? { error: "notes_full" } : { error: "not_found" };
 }
 
 async function projectRow(db, actor, id) {

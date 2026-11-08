@@ -15,6 +15,16 @@ const LOCATION_ALIASES = {
   "sheikh zayed": ["الشيخ زايد", "sheikh zayed"]
 };
 
+const NOTE_MAX = 4000;
+// "3 مليون", "3 مليون ونص", "3 مليون و200 ألف", "850 ألف" after a price word.
+function priceWords(raw) {
+  const m = raw.match(/(?:سعرها|السعر|بسعر|سعر|price)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(مليون|ألف|الف)(?:\s*و\s*(نص|\d{1,3}\s*(?:ألف|الف)))?/i);
+  if (!m) return null;
+  const base = Number(m[1]) * (m[2] === "مليون" ? 1000000 : 1000);
+  const extra = m[3] == null ? 0 : m[3] === "نص" ? 500000 : parseInt(m[3], 10) * 1000;
+  return Math.round(base + extra);
+}
+
 const num = (s) => (s == null ? null : Number(String(s).replace(/[,\s٬]/g, "")) || null);
 
 /** The offers in one notes text: { area, floor, price, down, monthly, years, raw }, one per line that has a price and an area. */
@@ -24,17 +34,20 @@ function parseUnits(notes) {
   const out = [];
   for (const raw of parts) {
     // "سعرها = 3,000,000", "بسعر 3,180,590", "السعر: 3000000", "price 3,000,000".
-    const priceM = raw.match(/سعرها[^=]*=\s*([\d,٬]+)/) || raw.match(/(?:بسعر|السعر|سعر|price)\s*[:=]?\s*([\d,٬]{6,})/i);
-    const price = num(priceM && priceM[1]);
+    const priceM = raw.match(/سعرها[^=]*=\s*([\d,٬]+)/) || raw.match(/(?:سعرها|بسعر|السعر|سعر|price)\s*[:=]?\s*([\d,٬]{6,})/i);
+    const price = priceM ? num(priceM[1]) : priceWords(raw);
     if (!price || price < 100000) continue;
+    // A price-only line (no size written) is kept: it answers price questions, and area searches skip it.
     const areaM = raw.match(/(?:يونت|يومت|وحده|وحدة|شقه|شقة)\s*(\d{2,4})(?!\d)/) || raw.match(/(\d{2,4})\s*(?:م|متر)(?![؀-ۿ])/);
     const area = areaM ? Number(areaM[1]) : null;
-    if (!area) continue;
     const floor = (raw.match(/الدور\s+([^\s=]+(?:\s+(?:الاول|التاني|التالت|الرابع|الخامس|الارضي))?)/) || [])[1] || null;
     // "مقدم 10% = 290,000" or "ومقدم 159,029"; a percentage with no amount is not a down payment.
     const downRaw = num((raw.match(/مقدم\s*(?:\d+(?:\.\d+)?\s*%\s*(?:=|-|:)?\s*)?([\d,٬]{4,})/) || [])[1]);
     const down = downRaw && downRaw >= 1000 ? downRaw : null;
-    const monthly = num((raw.match(/قسط\s*شهري[^=]*=\s*([\d,٬]+)/) || [])[1]);
+    const monthlyM = raw.match(/قسط\s*شهري[^=]*=\s*([\d,٬]+)/);
+    // "قسط 25 ألف", "قسط شهري حوالي 25 ألف".
+    const monthlyWords = raw.match(/قسط\s*(?:شهري)?\s*(?:حوالي|حوالى)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:ألف|الف)/);
+    const monthly = monthlyM ? num(monthlyM[1]) : monthlyWords ? Math.round(Number(monthlyWords[1]) * 1000) : null;
     const years = num((raw.match(/(\d{1,2})\s*(?:سنين|سنوات|سنه|سنة)/) || [])[1]);
     // No monthly installment written: estimate it from the rest (no interest), and keep it apart from a written one.
     const monthly_est = monthly == null && down != null && years ? Math.round((price - down) / (years * 12)) : null;
@@ -88,4 +101,4 @@ function matchUnits(projects, f = {}) {
   return hits.sort((a, b) => a.unit.price - b.unit.price);
 }
 
-module.exports = { parseUnits, matchUnits, matchesPlace, LOCATION_ALIASES };
+module.exports = { parseUnits, matchUnits, matchesPlace, LOCATION_ALIASES, NOTE_MAX };

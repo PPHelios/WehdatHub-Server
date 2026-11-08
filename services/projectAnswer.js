@@ -118,7 +118,7 @@ function notesReply(hits, lang = "ar") {
   const lines = hits.map(({ project, unit }) => {
     const name = project.name_en || project.name;
     const bits = [
-      `${unit.area} m²${unit.floor ? (en ? `, floor ${unit.floor}` : `، الدور ${unit.floor}`) : ""}`,
+      unit.area != null ? `${unit.area} m²${unit.floor ? (en ? `, floor ${unit.floor}` : `، الدور ${unit.floor}`) : ""}` : en ? "size not written" : "المساحة مش مكتوبة",
       `${money(unit.price)} ${en ? "EGP" : "جنيه"}`,
       unit.down != null ? (en ? `down ${money(unit.down)}` : `مقدم ${money(unit.down)}`) : null,
       unit.monthly == null && unit.monthly_est != null ? (en ? `≈${money(unit.monthly_est)}/month (calculated, no interest)` : `≈${money(unit.monthly_est)} شهريًا (حساب تقريبي بدون فوايد)`) : null,
@@ -142,7 +142,7 @@ function clientText(hits, lang = "ar") {
   const money = (n) => Number(n).toLocaleString("en-US");
   const lines = hits.map(({ project, unit: u }) => {
     const bits = [
-      `${u.area} ${en ? "m²" : "م²"}`,
+      u.area != null ? `${u.area} ${en ? "m²" : "م²"}` : null,
       `${money(u.price)} ${en ? "EGP" : "جنيه"}`,
       u.down != null ? (en ? `down payment ${money(u.down)}` : `مقدم ${money(u.down)}`) : null,
       u.monthly != null || u.monthly_est != null ? (en ? `about ${money(u.monthly ?? u.monthly_est)}/month` : `قسط حوالي ${money(u.monthly ?? u.monthly_est)} شهريًا`) : null

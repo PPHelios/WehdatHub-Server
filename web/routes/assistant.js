@@ -18,6 +18,7 @@ const day = (d) => new Date(d).toISOString().slice(0, 10);
 const ERRORS = {
   empty: ["اكتب سؤالك.", "Write your question."],
   info: ["مش لاقي المشروع أو الوحدة دي.", "That project or unit wasn't found."],
+  notes_full: ["الملاحظات وصلت للحد (4000 حرف). اختصرها من صفحة المشروع الأول.", "These notes are full (4,000 characters). Trim them on the project page first."],
   ai: ["المساعد مش متاح دلوقتي، جرب كمان شوية.", "The assistant is not available right now; try again shortly."]
 };
 
@@ -80,7 +81,7 @@ ${missed
     const lang = langOf(req);
     const r = await Assistant.addInfo(pool, req.session.broker, { questionId: req.body.question, project: req.body.project, unit: req.body.unit, text: req.body.text });
     if (r.error === "forbidden") return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    if (r.error) return show(req, res, { error: r.error === "empty" ? "empty" : "info" }, 400);
+    if (r.error) return show(req, res, { error: r.error === "empty" ? "empty" : r.error === "notes_full" ? "notes_full" : "info" }, 400);
     return show(req, res, { saved: r.target });
   });
 

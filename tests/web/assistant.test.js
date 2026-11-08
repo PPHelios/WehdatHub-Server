@@ -181,6 +181,13 @@ test("the model says not found but the agency's own offers fit: the offers are t
   expect((await Assistant.unanswered(h.pool, admin)).map((m) => m.question)).not.toContain("شقه في العبور مقدم اقل من ٣ مليون");
 });
 
+test("a manager's answer that would pass the notes limit is refused, not cut", async () => {
+  const { admin, project } = await seed();
+  await h.query("UPDATE projects SET notes = $2 WHERE id = $1", [project.id, "س".repeat(3990)]);
+  expect(await Assistant.addInfo(h.pool, admin, { project: project.id, text: "ص".repeat(50) })).toEqual({ error: "notes_full" });
+  expect((await h.query("SELECT notes FROM projects WHERE id = $1", [project.id]))[0].notes).toBe("س".repeat(3990));
+});
+
 describe("answer formatting", () => {
   test("the prompt asks for a short chat layout and leaves the dates to the footer", () => {
     const p = A.prompt("امتى استلام بادية؟", [{ title: "Project Badya", as_of: "2026-10-27", text: "Badya by Palm Hills." }], { lang: "ar", today: "2026-10-31" });

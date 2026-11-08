@@ -84,7 +84,7 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
     prices: { as_of: day(p.prices_updated_at), ranges },
     materials: materials.filter((m) => m.client_visible && m.check_status !== "broken").map((m) => ({ label: m.label, kind: m.kind, url: m.url })),
     // Information managers added to answer questions the data could not (services/assistant.js addInfo).
-    agency_notes: p.notes ? String(p.notes).slice(0, 4000) : null,
+    agency_notes: p.notes ? String(p.notes).slice(0, 4000) + (String(p.notes).length > 4000 ? " [notes cut here: more than 4,000 characters, the rest is not shown]" : "") : null,
     highlights: Array.isArray(p.highlights?.en) && p.highlights.en.length ? p.highlights.en : Array.isArray(p.highlights?.ar) ? p.highlights.ar : [],
     brochure: { as_of: day(p.brochure?.read_at), facts: (p.brochure?.facts || []).slice(0, MAX_FACTS).map((f) => f.text) },
     // F22: what came from uploaded files, each with its date.
