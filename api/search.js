@@ -23,13 +23,15 @@ function register(api, { pool }) {
     const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
     const forceAi = req.query.ai === "1";
+    // "Search without them": the broker saw which words were not understood and chose to search anyway.
+    const drop = req.query.drop === "1";
     const parse = await Search.parseRequest(AI, { text, ctx: { pool, AI, broker, agency: req.session.agency, lang: broker.preferred_lang === "en" ? "en" : "ar" }, forceAi });
     const intent = Q.classifyIntent(parse.parsed);
     const base = { source: parse.source, aiError: parse.aiError || null };
     if (intent !== "search") return res.json({ ...base, status: intent, total: 0, items: [] });
-    const out = await Search.runSearch(pool, broker.agency_id, parse.parsed, { pageSize: PAGE, ask: true });
+    const out = await Search.runSearch(pool, broker.agency_id, parse.parsed, { pageSize: PAGE, ask: !drop });
     // The AI could not answer and a number was left unplaced: ask, never search as if it were not there.
-    const numbers = parse.source === "fallback" ? parse.local?.meta?.leftover_numbers || [] : [];
+    const numbers = parse.source === "fallback" && !drop ? parse.local?.meta?.leftover_numbers || [] : [];
     if (numbers.length) out.ask = { terms: out.ask?.terms || [], numbers, aiDown: true, withoutTotal: out.ask ? out.ask.withoutTotal : out.total };
     if (out.ask) return res.json({ ...base, status: "ask", total: 0, items: [], ask: out.ask });
     const photos = out.rows.length

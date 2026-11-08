@@ -36,6 +36,12 @@ test("a plain request returns a well-formed answer and never an error page", asy
   expect(Array.isArray(r.body.items)).toBe(true);
 });
 
+test("drop=1 never answers with an ask", async () => {
+  const r = await get("broker", { q: "شقة في الخيالستان بميزة غريبة", drop: "1" });
+  expect(r.status).toBe(200);
+  expect(r.body.status).not.toBe("ask");
+});
+
 test("small talk is reported as such, not searched", async () => {
   const r = await get("broker", { q: "اهلا" });
   expect(r.status).toBe(200);
