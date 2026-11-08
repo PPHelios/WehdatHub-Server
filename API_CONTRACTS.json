@@ -2478,8 +2478,13 @@
     "services/globalProjects.js": {
       "syncFile": ["pool", "file"],
       "list": ["pool", "params"],
+      "listPage": ["pool", "params"],
+      "create": ["pool", "actor", "input"],
+      "update": ["pool", "actor", "id", "input"],
+      "getOne": ["pool", "actor", "id"],
       "setPublished": ["pool", "id", "published"],
-      "use": ["pool", "actor", "id"]
+      "use": ["pool", "actor", "id"],
+      "PAGE_SIZE": "Number"
     }
   },
   "invariant_variable_names": {
