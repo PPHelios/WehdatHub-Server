@@ -40,3 +40,22 @@ test("a Google hit inside Egypt is used as the fallback", async () => {
   expect(row.google_status).toBe("OK");
   expect(row.source).toBe("google");
 });
+
+describe("verdict (Check all)", () => {
+  const saved = { lat: 30.0, lng: 31.5 };
+  const near = { lat: 30.001, lng: 31.5 };
+  const far = { lat: 30.2, lng: 31.5 };
+  test("a service within 0.5 km: looks right", () => {
+    expect(Lookup.verdict({ saved, osm: near, google: far })).toBe("ok");
+    expect(Lookup.verdict({ saved, osm: null, google: near })).toBe("ok");
+  });
+  test("both services agree on a spot over 1 km away: confident move", () => {
+    expect(Lookup.verdict({ saved, osm: far, google: { lat: 30.2005, lng: 31.5 } })).toBe("move");
+  });
+  test("one service alone, disagreeing services, or nothing found: needs a person", () => {
+    expect(Lookup.verdict({ saved, osm: far, google: null })).toBe("review");
+    expect(Lookup.verdict({ saved, osm: far, google: { lat: 30.4, lng: 31.5 } })).toBe("review");
+    expect(Lookup.verdict({ saved, osm: null, google: null })).toBe("review");
+    expect(Lookup.verdict({ saved: null, osm: far, google: far })).toBe("review");
+  });
+});
