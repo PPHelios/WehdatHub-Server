@@ -376,6 +376,7 @@
       "NUDGE_DAYS": "Array"
     },
     "domain/describe.js": {
+      "internalLines": ["l", "lang"],
       "clientCopy": ["l", "broker", "params"],
       "paymentHint": ["l", "lang"],
       "featuresLine": ["l", "lang", "max"],
@@ -406,7 +407,6 @@
       "planHint": ["p", "lang"],
       "maintenanceText": ["l", "lang"],
       "factLines": ["l", "lang", "params"],
-      "internalLines": ["l", "lang"],
       "brokerCard": ["l", "params"],
       "reviewCard": ["l", "params"],
       "savedCard": ["l", "params"]
@@ -1583,6 +1583,7 @@
       "validateVisionDraft": ["raw", "nImages"]
     },
     "services/catalogue.js": {
+      "addClarification": ["db", "actor", "id", "input"],
       "STATUSES": "Array",
       "KINDS": "Array",
       "MAX_FILE_MB": "Number",
@@ -1598,7 +1599,6 @@
       "listProjects": ["db", "actor", "params"],
       "saveProject": ["db", "actor", "input"],
       "archiveProject": ["db", "actor", "id", "archived"],
-      "addClarification": ["db", "actor", "id", "input"],
       "getProject": ["db", "actor", "id"],
       "savePhase": ["db", "actor", "projectId", "input"],
       "deletePhase": ["db", "actor", "projectId", "phaseId"],
@@ -2473,7 +2473,8 @@
       "suggest": ["places", "params"],
       "setPosition": ["pool", "id", "lat", "lng"],
       "km": ["a", "b"],
-      "verdict": ["r"]
+      "verdict": ["r"],
+      "districtOk": ["pos", "district"]
     },
     "services/globalProjects.js": {
       "syncFile": ["pool", "file"],

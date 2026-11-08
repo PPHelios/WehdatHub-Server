@@ -24,18 +24,59 @@ async function osm(name, fetchFn) {
 }
 
 /** Returns { pos, status }: status is "no_key", "OK", "ZERO_RESULTS", "REQUEST_DENIED", "HTTP_<code>" or "outside_egypt". */
-async function google(name, key, fetchFn) {
+// Rules from the older pipeline that gave mostly right data: Google results must be in Egypt, a precise place (not only a city or
+// area), not the Downtown default point, and inside the rough radius of the district when we know that district.
+const DOWNTOWN = { lat: 30.04442, lng: 31.235712 };
+const PRECISE_TYPES = ["establishment", "premise", "subpremise", "point_of_interest", "route", "street_address"];
+// Rough centres and maximum distances (km) for district words; a district with no word here is not checked.
+const DISTRICT_RULES = [
+  { words: ["new zayed"], lat: 30.1, lng: 30.88, maxKm: 20 },
+  { words: ["sheikh zayed", "zayed"], lat: 30.04, lng: 30.98, maxKm: 18 },
+  { words: ["6th of october", "october"], lat: 29.97, lng: 30.95, maxKm: 25 },
+  { words: ["mostakbal"], lat: 30.06, lng: 31.64, maxKm: 16 },
+  { words: ["new capital", "r7"], lat: 30.015, lng: 31.68, maxKm: 22 },
+  { words: ["shorouk", "burouj"], lat: 30.15, lng: 31.62, maxKm: 18 },
+  { words: ["uptown", "mokattam", "maadi"], lat: 30.015, lng: 31.325, maxKm: 12 },
+  { words: ["north coast", "sahel", "alamein", "ras el hekma"], lat: 30.95, lng: 28.75, maxKm: 90 },
+  { words: ["sokhna", "galala"], lat: 29.68, lng: 32.32, maxKm: 45 },
+];
+
+function districtOk(pos, district) {
+  const d = String(district || "").toLowerCase();
+  const rule = DISTRICT_RULES.find((r) => r.words.some((w) => d.includes(w)));
+  if (!rule || !pos) return true;
+  return km(pos, rule) <= rule.maxKm;
+}
+
+function genericOnly(result) {
+  const types = result.types || [];
+  return types.length > 0 && !types.some((t) => PRECISE_TYPES.includes(t));
+}
+
+async function google(name, key, fetchFn, district) {
   if (!key) return { pos: null, status: "no_key" };
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?region=eg&address=${encodeURIComponent(`${name}, Egypt`)}&key=${encodeURIComponent(key)}`;
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?components=country:EG&address=${encodeURIComponent(`${name}, Egypt`)}&key=${encodeURIComponent(key)}`;
   const res = await fetchFn(url);
   if (!res.ok) return { pos: null, status: `HTTP_${res.status}` };
   const body = await res.json();
   if (body.status !== "OK") return { pos: null, status: body.status || "unknown" };
-  const loc = body.results?.[0]?.geometry?.location;
-  const pos = loc && { lat: Number(loc.lat), lng: Number(loc.lng) };
-  const address = body.results?.[0]?.formatted_address || null;
-  if (pos && P.inEgypt(pos.lat, pos.lng)) return { pos, status: "OK", address };
-  return { pos: null, status: "outside_egypt", address };
+  const results = body.results || [];
+  const address = results[0]?.formatted_address || null;
+  let outside = false;
+  let generic = false;
+  let far = false;
+  for (const r of results) {
+    const loc = r.geometry?.location;
+    const pos = loc && { lat: Number(loc.lat), lng: Number(loc.lng) };
+    if (!pos || !P.inEgypt(pos.lat, pos.lng)) { outside = true; continue; }
+    if (genericOnly(r)) { generic = true; continue; }
+    if (km(pos, DOWNTOWN) < 2.5 && /qasr el nil/i.test(r.formatted_address || "")) continue;
+    if (!districtOk(pos, district)) { far = true; continue; }
+    return { pos, status: "OK", address: r.formatted_address || address };
+  }
+  if (far) return { pos: null, status: "OUT_OF_DISTRICT", address };
+  if (generic) return { pos: null, status: "GENERIC_ONLY", address };
+  return { pos: null, status: outside ? "outside_egypt" : "ZERO_RESULTS", address };
 }
 
 /** Approved places with no pin, 20 at a time. */
@@ -96,7 +137,8 @@ async function suggest(places, { fetchFn = fetch, key = process.env.GOOGLE_MAPS_
     if (!o) { try { o = await osm(name, fetchFn); } catch { o = null; } }
     let gs = "error";
     let ga = null;
-    try { ({ pos: g, status: gs, address: ga } = await google(p.district ? `${name}, ${p.district}` : name, key, fetchFn)); } catch { g = null; }
+    try { ({ pos: g, status: gs, address: ga } = await google(p.district ? `${name}, ${p.district}` : name, key, fetchFn, p.district)); } catch { g = null; }
+    if (o && !districtOk(o, p.district)) o = null;
     const pos = o || g;
     out.push({ id: p.id, name, units: p.units ?? null, district: p.district ?? null, saved: p.lat != null ? { lat: p.lat, lng: p.lng } : null, osm: o, pos, source: o ? "osm" : g ? "google" : null, google: g, google_status: gs, google_address: ga, apart_km: o && g ? Math.round(km(o, g) * 10) / 10 : null });
     if (pauseMs) await new Promise((r) => setTimeout(r, pauseMs)); // Nominatim allows one request a second
@@ -129,4 +171,4 @@ function verdict(r) {
   return "review";
 }
 
-module.exports = { missing, unchecked, finishCheck, suggest, setPosition, km, verdict };
+module.exports = { missing, unchecked, finishCheck, suggest, setPosition, km, verdict, districtOk };
