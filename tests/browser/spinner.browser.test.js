@@ -59,7 +59,8 @@ async function checkControl(ctx, path, index, where) {
     // A click that is covered by another element still counts as a click: the spinner is about the request, not the overlay.
     // Counts requests to the app from the click on: a click that sends nothing has no wait to show, so it is reported apart.
     let sent = 0;
-    const onRequest = (r) => { if (LOCAL.test(r.url()) && !/\/static\//.test(r.url())) sent++; };
+    // Only a form post or a page navigation counts: background loads from the page itself are not the click's request.
+    const onRequest = (r) => { if (LOCAL.test(r.url()) && (r.method() === "POST" || r.isNavigationRequest())) sent++; };
     pg.on("request", onRequest);
     const clicked = await btn.click({ noWaitAfter: true, timeout: 5000, force: true }).then(() => "", (e) => String(e.message || e).split("\n")[0]);
     if (clicked) {
