@@ -2438,6 +2438,8 @@
     },
     "services/placeLookup.js": {
       "missing": ["pool", "params"],
+      "unchecked": ["pool", "params"],
+      "finishCheck": ["pool", "choices"],
       "suggest": ["places", "params"],
       "setPosition": ["pool", "id", "lat", "lng"],
       "km": ["a", "b"]

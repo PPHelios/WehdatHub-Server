@@ -233,3 +233,17 @@ test("units list price boxes filter by from and to (5m, 250k)", async () => {
   expect(res.text).toMatch(/PB-2/);
   expect(res.text).not.toMatch(/PB-1/);
 });
+
+test("check saved pins: a kept pin is marked checked and not asked again; a moved pin changes", async () => {
+  const Lookup = require("../../services/placeLookup");
+  const [a] = await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('checka', 'Checka', 30.0, 31.4, 'manual', true) RETURNING id`);
+  const [b] = await h.query(`INSERT INTO map_places (name_key, name_en, lat, lng, source, approved) VALUES ('checkb', 'Checkb', 30.0, 31.4, 'manual', true) RETURNING id`);
+  const before = (await Lookup.unchecked(h.pool)).total;
+  expect(before).toBeGreaterThanOrEqual(2);
+  expect(Lookup.km({ lat: 30, lng: 31.4 }, { lat: 30.09, lng: 31.4 })).toBeGreaterThan(9);
+  const out = await Lookup.finishCheck(h.pool, [{ id: a.id }, { id: b.id, lat: 30.5, lng: 31.5 }]);
+  expect(out.moved).toBe(1);
+  expect((await Lookup.unchecked(h.pool)).total).toBe(before - 2);
+  expect((await h.query("SELECT lat FROM map_places WHERE id = $1", [b.id]))[0].lat).toBe(30.5);
+  expect((await h.query("SELECT lat FROM map_places WHERE id = $1", [a.id]))[0].lat).toBe(30);
+});
