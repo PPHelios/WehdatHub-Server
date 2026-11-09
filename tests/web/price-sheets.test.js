@@ -17,6 +17,7 @@ jest.setTimeout(60000);
 let h;
 beforeEach(async () => {
   h = await createHarness();
+  await h.approvePlaces([["badya", "Badya", null], ["mivida", "Mivida", "ميفيدا"]]);
 });
 afterAll(closeHarness);
 
