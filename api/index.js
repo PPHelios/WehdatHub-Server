@@ -77,6 +77,7 @@ function mountApi(app, { pool }) {
   require("./search").register(priv, { pool });
   require("./leads").register(priv, { pool });
   require("./unitsWrite").register(priv, { pool });
+  require("./viewings").register(priv, { pool });
   require("./map").register(priv, { pool });
   require("./devices").register(priv, { pool });
   api.use(priv);
