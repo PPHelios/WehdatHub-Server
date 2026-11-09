@@ -1186,8 +1186,7 @@
     "lib/placeNames.js": {
       "noteUnknown": ["pool", "name", "params"],
       "widenSearchTerms": ["pool", "terms"],
-      "pending": ["pool"],
-      "approve": ["pool", "id", "nameAr"],
+      "resetCache": [],
       "approved": ["pool"]
     },
     "domain/placeNames.js": {
@@ -2473,7 +2472,7 @@
     },
     "services/compoundResolve.js": {
       "resolve": ["db", "fields"],
-      "normalize": ["db", "fields"],
+      "normalize": ["db", "fields", "params"],
       "suggest": ["db", "typed", "limit"]
     },
     "services/placeLookup.js": {
@@ -2512,6 +2511,28 @@
       "seedTree": ["db", "tree", "parentId"],
       "linkPlacesFromDistrict": ["db"],
       "placesWithoutArea": ["db", "limit"]
+    },
+    "domain/placeReview.js": {
+      "groupPending": ["pending", "existing"],
+      "likeness": ["a", "b"],
+      "placeKey": ["name"]
+    },
+    "services/placeReview.js": {
+      "PER_HOUR": "Number",
+      "overLimit": ["db", "brokerId"],
+      "recordProposal": ["db", "kind", "refId", "brokerId", "batch"],
+      "proposeArea": ["db", "brokerId", "input", "params"],
+      "queue": ["pool"],
+      "counts": ["db", "since"],
+      "approveCompound": ["pool", "id", "input"],
+      "mergeCompound": ["pool", "id", "placeId", "params"],
+      "rejectName": ["pool", "id", "reason", "params"],
+      "approveArea": ["pool", "id", "input"],
+      "mergeArea": ["pool", "id", "intoId"],
+      "rejectArea": ["pool", "id", "reason"]
+    },
+    "web/views/placeReview.js": {
+      "placesSection": ["q", "lang", "csrf"]
     }
   },
   "invariant_variable_names": {
