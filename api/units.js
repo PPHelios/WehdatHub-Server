@@ -7,6 +7,10 @@ const Vis = require("../lib/visibility");
 const Store = require("../lib/listingStore");
 const Storage = require("../lib/supabase");
 const Deal = require("../domain/dealType");
+const Authz = require("../lib/authz");
+const Share = require("../lib/shareLinks");
+const UnitPrivacy = require("../services/unitPrivacy");
+const Owners = require("../services/unitOwners");
 const { PROPERTY_TYPES } = require("../domain/fieldRules");
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../domain/furnishingStatus");
 
@@ -111,6 +115,30 @@ function register(api, { pool }) {
       features: found.feature_keys || [],
       images: images.map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), position: i.position }))
     });
+  });
+
+  // The owner's name and number, only for a broker who may see this unit's secret details (the agency's switch, the
+  // unit's own broker, managers, or a granted request). Anyone else gets 403 and the app hides the buttons.
+  api.get("/units/:code/contact", async (req, res) => {
+    const { broker } = req.session;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found) return res.status(404).json({ error: "not_found" });
+    if (!(await UnitPrivacy.canSee(pool, broker, found))) return res.status(403).json({ error: "hidden" });
+    const owner = found.owner_id ? await Owners.getFor(pool, broker, found.owner_id) : null;
+    const d = found.details || {};
+    const phone = owner?.phones?.[0] || d.owner_phone || null;
+    return res.json({ name: owner?.name || d.owner_name || null, phone: phone ? String(phone) : null });
+  });
+
+  // A client link for an active unit: the page shows photos and specs only, and the broker is alerted when it is opened.
+  api.post("/units/:code/share-link", async (req, res) => {
+    const { broker } = req.session;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
+    if (found.status !== "active") return res.status(409).json({ error: "not_active" });
+    const lang = req.body?.lang === "en" ? "en" : "ar";
+    const { url } = await Share.createShareLink(pool, broker, found, { channel: "web", lang, source: "web" });
+    return res.json({ url });
   });
 }
 
