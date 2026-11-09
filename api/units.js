@@ -13,6 +13,8 @@ const UnitPrivacy = require("../services/unitPrivacy");
 const Owners = require("../services/unitOwners");
 const Rights = require("../services/unitRights");
 const Recipients = require("../services/linkRecipients");
+const Flyer = require("../lib/flyer");
+const RateLimit = require("../lib/rateLimit");
 const { PROPERTY_TYPES } = require("../domain/fieldRules");
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../domain/furnishingStatus");
 
@@ -171,6 +173,18 @@ function register(api, { pool }) {
     if (!found) return res.status(404).json({ error: "not_found" });
     const out = await UnitPrivacy.requestAccess(pool, broker, found);
     return res.json({ ok: true, already: Boolean(out.already), access: out.already ? "granted" : "pending" });
+  });
+
+  // The unit's flyer as an image link (made on the first call, then cached). Nothing is sent to anyone.
+  api.post("/units/:code/flyer", async (req, res) => {
+    const { broker } = req.session;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
+    const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
+    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: broker.preferred_lang === "en" ? "en" : "ar" });
+    if (out.error) return res.status(out.error === "busy" ? 503 : 502).json({ error: out.error });
+    return res.json({ url: out.url });
   });
 
   // A client link for an active unit: the page shows photos and specs only, and the broker is alerted when it is opened.

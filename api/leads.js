@@ -26,6 +26,7 @@ function leadView(l) {
     followUpNote: l.follow_up_status === "open" ? l.follow_up_note || null : null,
     lastContactAt: l.last_contact_at ? new Date(l.last_contact_at).toISOString() : null,
     assignee: l.assignee_name || null,
+    assigneeId: l.assigned_broker_id || null,
     version: l.version
   };
 }
@@ -61,7 +62,7 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const tab = TABS.includes(req.query.tab) ? req.query.tab : "all";
     const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, 10000));
-    const { rows, more, total } = await Leads.listLeads(pool, broker, { ...tabFilter(tab), q: String(req.query.q || "").slice(0, 80), limit: PAGE, offset });
+    const { rows, more, total } = await Leads.listLeads(pool, broker, { ...tabFilter(tab), q: String(req.query.q || "").slice(0, 80), limit: PAGE, offset, brokerId: String(req.query.broker || "") });
     res.json({ items: rows.map(leadView), more, total, offset, limit: PAGE });
   });
 
@@ -98,6 +99,15 @@ function register(api, { pool }) {
     if (r.outcome === "colleague") return res.status(409).json({ error: "colleague" });
     if (r.outcome === "erased_before") return res.status(409).json({ error: "erased_before" });
     return res.status(ERRORS[r.error] || 422).json({ error: r.error || "invalid" });
+  });
+
+  // Reassign: managers anywhere, a team lead inside their team (or back to the managers with brokerId null).
+  api.post("/leads/:ref/assign", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const b = req.body || {};
+    return answer(req, res, lead, await Leads.assignLead(pool, req.session.broker, lead.id, b.brokerId || null, { version: versionOf(b) }));
   });
 
   api.post("/leads/:ref/contacted", async (req, res) => {

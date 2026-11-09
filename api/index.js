@@ -78,6 +78,8 @@ function mountApi(app, { pool }) {
   require("./leads").register(priv, { pool });
   require("./unitsWrite").register(priv, { pool });
   require("./viewings").register(priv, { pool });
+  require("./team").register(priv, { pool });
+  require("./ask").register(priv, { pool });
   require("./map").register(priv, { pool });
   require("./devices").register(priv, { pool });
   api.use(priv);

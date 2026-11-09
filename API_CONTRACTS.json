@@ -157,6 +157,7 @@
       "renderOffThread": ["payload"],
       "stopFlyerWorker": [],
       "renderFlyerOnDemand": ["broker", "code", "_flyerLang", "theme", "ctx"],
+      "flyerUrlFor": ["pool", "broker", "listing", "params"],
       "loadFont": ["filename"],
       "buildFlyerModel": ["params"],
       "makeTheme": ["mode", "P", "S"],
