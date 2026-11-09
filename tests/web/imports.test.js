@@ -19,6 +19,7 @@ let h;
 beforeEach(async () => {
   h = await createHarness();
   await h.seedBroker("manager");
+  await h.approvePlaces([["mivida", "Mivida", "ميفيدا"], ["al rehab", "Al Rehab", "الرحاب"]]);
 });
 afterAll(closeHarness);
 

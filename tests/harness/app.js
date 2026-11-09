@@ -51,10 +51,17 @@ async function seed(pool) {
     );
   }
   // The approved list every web-form test saves against (a compound outside the list is refused by the form).
-  await pool.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved) VALUES ('hyde park', 'Hyde Park', 'هايد بارك', 29.98, 31.55, true)`);
+  await pool.query("DELETE FROM areas"); // the seed list from migration 099 is not part of these fixtures
+  await pool.query(`INSERT INTO areas (id, name_key, name_en, name_ar) VALUES ('a0000000-0000-0000-0000-0000000000c1', 'new cairo', 'New Cairo', 'القاهرة الجديدة') ON CONFLICT DO NOTHING`);
+  await pool.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved, area_id) VALUES ('hyde park', 'Hyde Park', 'هايد بارك', 29.98, 31.55, true, 'a0000000-0000-0000-0000-0000000000c1')`);
 }
 
 /** Inserts a listing directly (fixture), bypassing the bot. Returns the row. */
+/** Approves compounds (with the fixture area) for tests that import units by compound name. */
+async function approvePlaces(pool, list) {
+  for (const [k, en, ar] of list) await pool.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved, area_id) VALUES ($1, $2, $3, 30.0, 31.5, true, 'a0000000-0000-0000-0000-0000000000c1') ON CONFLICT (name_key) DO NOTHING`, [k, en, ar]);
+}
+
 async function insertListing(pool, fields) {
   const row = {
     agency_id: AGENCY_A,
@@ -235,6 +242,7 @@ async function createHarness() {
       return send(who, { type: "audio", audio: { id, mime_type: "audio/ogg; codecs=opus", voice: true, duration } });
     },
     insertListing: (fields) => insertListing(pool, fields),
+    approvePlaces: (list) => approvePlaces(pool, list),
     query: async (sql, params) => (await pool.query(sql, params)).rows,
     session: async (who, type = "draft") =>
       (

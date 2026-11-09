@@ -26,7 +26,7 @@ const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Descri
 /**
  * @param {Object} p - { values (formFromUnit), mode: "new"|"edit", code, version, images, lang, notice, error, review, duplicate (P13: the save button becomes "Save anyway") }
  */
-function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null }) {
+function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null, areas = [] }) {
   const action = mode === "edit" ? `/app/units/${encodeURIComponent(code)}/edit` : "/app/units/new";
   const groups = [...new Set(Features.FEATURES.map((f) => f.group))];
   // A new unit is added in 4 steps (app.js shows one at a time); editing, an error or a review shows everything.
@@ -53,7 +53,9 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${select("listing_type", L(lang, "بيع أو إيجار *", "Sale or rent *"), v.listing_type, [["", "—"], ["sale", L(lang, "بيع", "Sale")], ["rent", L(lang, "إيجار", "Rent")]])}
     ${select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]])}
     ${select("property_type", L(lang, "النوع *", "Type *"), v.property_type, [["", "—"], ...Rules.PROPERTY_TYPES.map((t) => [t, pick(Describe.TYPE_LABELS[t], lang)])])}
-    ${input("compound", L(lang, "الكمبوند *", "Compound *"), v.compound, { extra: ' list="approved-places" autocomplete="off"' })}
+    ${input("compound", L(lang, "الكمبوند (أو اختار منطقة)", "Compound (or pick an area)"), v.compound, { extra: ' list="approved-places" autocomplete="off" data-place-suggest' })}
+    <label>${L(lang, "المنطقة (لو من غير كمبوند)", "Area (if no compound)")}<select name="area_id"><option value="">—</option>${areas.filter((a) => !a.parent_id).map((a) => html`<option value="${a.id}"${sel(String(v.area_id) === String(a.id))}>${a.name_en || a.name_ar}</option>`)}</select></label>
+    <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<select name="subzone_id"><option value="">—</option>${areas.filter((a) => !a.parent_id).map((t) => html`<optgroup label="${t.name_en || t.name_ar}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}"${sel(String(v.subzone_id) === String(a.id))}>${a.name_en || a.name_ar}</option>`)}</optgroup>`)}</select></label>
     <label class="check"><input type="checkbox" name="compound_new" value="1"${raw(v.compound_new === "1" ? " checked" : "")}> ${L(lang, "الكمبوند مش في القائمة (ضيفه كجديد)", "Compound not in the list (add as new)")}</label>
     ${input("district", L(lang, "الحي", "District"), v.district)}
     ${input("city", L(lang, "المدينة", "City"), v.city)}

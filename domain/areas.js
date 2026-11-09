@@ -97,7 +97,7 @@ const KIND_RANK = { compound: 0, subzone: 1, area: 2 };
  * aliases first, then names that start with the text, then names that contain it, then spelling-alike names.
  * @param {string} text
  * @param {{places: object[], areas: object[]}} lists approved rows only
- * @returns {Array<{kind: "compound"|"area"|"subzone", id: string, name_en: string|null, name_ar: string|null, path: string, via: "name"|"alias"|"alike"}>}
+ * @returns {Array<{kind: "compound"|"area"|"subzone", id: string, name_en: string|null, name_ar: string|null, path: string, via: "name"|"alias"|"alike", area_id: string|null, subzone_id: string|null}>}
  */
 function suggest(text, { places = [], areas = [] }, limit = 8) {
   const q = placeKey(text);
@@ -124,7 +124,11 @@ function suggest(text, { places = [], areas = [] }, limit = 8) {
       else if (q.length >= 4 && dice(q, k) >= 0.55) score = 1 + dice(q, k) / 10;
       if (score && (!best || score > best.score)) best = { score, via: score < 2 ? "alike" : isName ? "name" : "alias" };
     }
-    if (best) out.push({ kind, id: row.id, name_en: row.name_en || null, name_ar: row.name_ar || null, path: pathOf(row), via: best.via, score: best.score });
+    if (best) {
+      // What to store when this suggestion is picked: a compound brings its own area; an area or sub-zone is the area itself.
+      const at = kind === "compound" ? { area_id: row.area_id || null, subzone_id: row.subzone_id || null } : placement(areas, row.id);
+      out.push({ kind, id: row.id, name_en: row.name_en || null, name_ar: row.name_ar || null, path: pathOf(row), via: best.via, ...at, score: best.score });
+    }
   }
   return out
     .sort((a, b) => b.score - a.score || KIND_RANK[a.kind] - KIND_RANK[b.kind] || String(a.name_en || a.name_ar).localeCompare(String(b.name_en || b.name_ar)))

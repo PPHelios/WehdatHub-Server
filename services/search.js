@@ -169,6 +169,12 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       typeRank = `CASE l.property_type ${whens} ELSE ${f.property_type_order.length} END, `;
     }
 
+    // A place word that named an area or sub-zone (services/areaSearch.js) filters on the unit's area columns.
+    const areaScope = (parsedOrFilters?.filters || parsedOrFilters || {}).area_scope;
+    if (areaScope && (areaScope.areas?.length || areaScope.subzones?.length)) {
+      where.push(`(l.area_id = ANY(${add(areaScope.areas || [])}::uuid[]) OR l.subzone_id = ANY(${add(areaScope.subzones || [])}::uuid[]))`);
+    }
+
     // Places: resolved keys use the indexed key columns; free place words use the search document.
     if (f.places.length) {
       const ors = f.places.map((p) => {
@@ -316,6 +322,12 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
   // A word that is an approved compound name (lib/placeNames.js) searches in both its languages.
   if (parsed.filters.place_terms?.length && !parsed.filters.places?.length) {
     parsed.filters.place_terms = await PlaceNames.widenSearchTerms(pool, parsed.filters.place_terms);
+    // A word that is the name or alias of one area or sub-zone filters on the unit's area (services/areaSearch.js).
+    const byArea = await require("./areaSearch").scope(pool, parsed.filters.place_terms);
+    if (byArea.scope) {
+      parsed.filters.area_scope = byArea.scope;
+      parsed.filters.place_terms = byArea.rest;
+    }
   }
   const fx = await Fx.loadRates(pool, agencyId);
   let { sql, params } = buildSearchQuery(agencyId, parsed, { fx, status });
@@ -329,7 +341,7 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
   // the unknown place words; when nothing matched, the unknown words are what emptied the answer.
   let ignoredTerms = [];
   const f0 = parsed.filters;
-  const placeFound = (f0.places || []).length > 0;
+  const placeFound = (f0.places || []).length > 0 || Boolean(f0.area_scope);
   const soft = [...(placeFound ? [] : f0.place_terms || []), ...(f0.feature_terms || [])];
   const unusedPlaceWords = placeFound ? f0.place_terms || [] : [];
   const unknown = [...(!rows.length ? soft : []), ...unusedPlaceWords];

@@ -119,9 +119,9 @@ test("only the CRM owner opens the places window; it saves a place from a pasted
   expect((await crm.agent.get("/app/owner/map?lang=en")).status).toBe(200);
   const bad = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark", maps_link: "https://maps.app.goo.gl/x" });
   expect(bad.headers.location).toMatch(/err=link_short/);
-  const ok = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark", name_ar: "زيتا", maps_link: "https://www.google.com/maps/@30.0058,31.5377,15z", verified: "on" });
+  const ok = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark", name_ar: "زيتا", area_id: "a0000000-0000-0000-0000-0000000000c1", maps_link: "https://www.google.com/maps/@30.0058,31.5377,15z", verified: "on" });
   expect(ok.headers.location).toMatch(/msg=saved/);
-  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark Compound", lat: "30", lng: "31" });
+  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Zetapark Compound", area_id: "a0000000-0000-0000-0000-0000000000c1", lat: "30", lng: "31" });
   expect(dup.headers.location).toMatch(/err=duplicate/);
 
   await h.insertListing({ code: "EM-1", compound: "Emaar Zetapark" });
@@ -258,7 +258,7 @@ test("the owner's search lists similar places, with or without a pin, approved o
   expect(await names("Eas-town")).toEqual(expect.arrayContaining(["Eastown", "SODIC Eastown Compound"]));
   expect(await names("Eastown compound")).toEqual(expect.arrayContaining(["Eastown", "SODIC Eastown Compound"]));
   const crm = await signIn(h, "admin");
-  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Eastown", lat: "30.0", lng: "31.5" });
+  const dup = await crm.agent.post("/app/owner/map").type("form").send({ _csrf: crm.csrf, name_en: "Eastown", area_id: "a0000000-0000-0000-0000-0000000000c1", lat: "30.0", lng: "31.5" });
   expect(dup.headers.location).toMatch(/err=duplicate&q=Eastown/);
   const page = await crm.agent.get(dup.headers.location);
   expect(page.text).toContain("SODIC Eastown Compound");

@@ -985,4 +985,28 @@
   // microphone then, on every visit and back-navigation. Focus the box and let the user tap the mic.
   var start = document.querySelector("[data-voice-start]");
   if (start) start.focus();
+  // Place suggestions: compounds, their other names, areas and sub-zones in one list (GET /app/places/suggest).
+  var placeTimer = null;
+  document.addEventListener("input", function (e) {
+    var input = e.target;
+    if (!input || !input.matches || !input.matches("[data-place-suggest]")) return;
+    var list = document.getElementById(input.getAttribute("list"));
+    var q = input.value.trim();
+    if (!list || q.length < 2) return;
+    clearTimeout(placeTimer);
+    placeTimer = setTimeout(function () {
+      fetch("/app/places/suggest?q=" + encodeURIComponent(q), { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+        .then(function (d) {
+          list.innerHTML = "";
+          (d.items || []).forEach(function (it) {
+            var o = document.createElement("option");
+            o.value = it.name_en || it.name_ar;
+            o.label = [it.name_ar && it.name_en ? it.name_ar : "", it.path].filter(Boolean).join(" · ");
+            list.appendChild(o);
+          });
+        })
+        .catch(function () {});
+    }, 200);
+  });
 })();
