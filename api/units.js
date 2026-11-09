@@ -11,6 +11,8 @@ const Authz = require("../lib/authz");
 const Share = require("../lib/shareLinks");
 const UnitPrivacy = require("../services/unitPrivacy");
 const Owners = require("../services/unitOwners");
+const Rights = require("../services/unitRights");
+const Recipients = require("../services/linkRecipients");
 const { PROPERTY_TYPES } = require("../domain/fieldRules");
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../domain/furnishingStatus");
 
@@ -82,6 +84,9 @@ function register(api, { pool }) {
     const pmax = Deal.parseMoney(String(q.pmax || ""));
     if (pmin) add("listings.price_value >= ?", pmin);
     if (pmax) add("listings.price_value <= ?", pmax);
+    // Not updated for N days (data entry's "stale" filter).
+    const staleDays = parseInt(q.staleDays, 10);
+    if (staleDays >= 1 && staleDays <= 3650) add("COALESCE(listings.updated_at, listings.created_at) < now() - (?::int * interval '1 day')", staleDays);
     const bedrooms = parseInt(q.bedrooms, 10);
     if (bedrooms >= 0 && bedrooms <= 20) add("listings.bedrooms = ?", bedrooms);
     const code = String(q.q || "").trim().slice(0, 40);
@@ -109,6 +114,25 @@ function register(api, { pool }) {
     });
   });
 
+  // Compound suggestions as the person types: name and how many units in it (active, visible to this person).
+  api.get("/units/compounds", async (req, res) => {
+    const { broker } = req.session;
+    const text = String(req.query.q || "").trim().slice(0, 60);
+    const args = [broker.agency_id];
+    let like = "";
+    if (text) {
+      args.push(text.replace(/[%_\\]/g, (c) => "\\" + c));
+      like = "AND listings.compound ILIKE '%' || $2 || '%'";
+    }
+    const { rows } = await pool.query(
+      `SELECT listings.compound AS name, count(*)::int AS n FROM listings
+        WHERE ${Vis.units("listings")} AND listings.agency_id = $1 AND listings.status = 'active' AND listings.compound IS NOT NULL AND listings.compound <> '' ${like}
+        GROUP BY listings.compound ORDER BY n DESC, listings.compound LIMIT 12`,
+      args
+    );
+    return res.json({ items: rows });
+  });
+
   api.get("/units/:code", async (req, res) => {
     const { broker } = req.session;
     // findByCode carries the visibility rule: a private unit is a 404 for everyone but the agency owner.
@@ -118,6 +142,7 @@ function register(api, { pool }) {
     return res.json({
       ...unitView(found),
       mine: found.broker_id === broker.id,
+      canEdit: Authz.canEdit(broker, found) && (await Rights.mayWrite(pool, broker)),
       features: found.feature_keys || [],
       images: images.map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), position: i.position }))
     });
@@ -129,11 +154,23 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!found) return res.status(404).json({ error: "not_found" });
-    if (!(await UnitPrivacy.canSee(pool, broker, found))) return res.status(403).json({ error: "hidden" });
+    if (!(await UnitPrivacy.canSee(pool, broker, found))) {
+      const state = (await UnitPrivacy.askStates(pool, broker, [found])).get(found.id) || "ask";
+      return res.status(403).json({ error: "hidden", access: state });
+    }
     const owner = found.owner_id ? await Owners.getFor(pool, broker, found.owner_id) : null;
     const d = found.details || {};
     const phone = owner?.phones?.[0] || d.owner_phone || null;
     return res.json({ name: owner?.name || d.owner_name || null, phone: phone ? String(phone) : null });
+  });
+
+  // Ask the managers to see this unit's hidden details (owner, address, pin). They answer on the website.
+  api.post("/units/:code/access-request", async (req, res) => {
+    const { broker } = req.session;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found) return res.status(404).json({ error: "not_found" });
+    const out = await UnitPrivacy.requestAccess(pool, broker, found);
+    return res.json({ ok: true, already: Boolean(out.already), access: out.already ? "granted" : "pending" });
   });
 
   // A client link for an active unit: the page shows photos and specs only, and the broker is alerted when it is opened.
@@ -143,8 +180,11 @@ function register(api, { pool }) {
     if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
     if (found.status !== "active") return res.status(409).json({ error: "not_active" });
     const lang = req.body?.lang === "en" ? "en" : "ar";
-    const { url } = await Share.createShareLink(pool, broker, found, { channel: "web", lang, source: "web" });
-    return res.json({ url });
+    // Who it goes to: a lead (L-0042) or a mobile number, same as the website and Telegram; empty means no recipient.
+    const recipient = await Recipients.resolveRecipient(pool, broker, req.body && req.body.to);
+    if (recipient.error) return res.status(422).json({ error: recipient.error });
+    const { url } = await Share.createShareLink(pool, broker, found, { channel: "web", lang, recipient, source: "web" });
+    return res.json({ url, recipientPhone: recipient.phone || null, leadLinked: Boolean(recipient.leadId) });
   });
 }
 
