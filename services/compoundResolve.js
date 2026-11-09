@@ -42,27 +42,13 @@ async function normalize(db, fields) {
   return out;
 }
 
-const bigrams = (k) => {
-  const s = ` ${k} `;
-  const out = new Map();
-  for (let i = 0; i < s.length - 1; i++) out.set(s.slice(i, i + 2), (out.get(s.slice(i, i + 2)) || 0) + 1);
-  return out;
-};
-const dice = (a, b) => {
-  const x = bigrams(a);
-  const y = bigrams(b);
-  let hit = 0;
-  for (const [g, n] of x) hit += Math.min(n, y.get(g) || 0);
-  return (2 * hit) / (Math.max(1, a.length + 1) + Math.max(1, b.length + 1));
-};
-
 /** The approved places that look most like what was typed (spelling variants), best first. Suggestions only; never applied alone. */
 async function suggest(db, typed, limit = 3) {
   const { rows } = await approvedIndex(db);
   const key = P.placeKey(P.splitCompound(typed).name);
   if (!key) return [];
   return rows
-    .map((r) => ({ id: r.id, name: r.name_en || r.name_ar, name_ar: r.name_ar, score: Math.max(...P.keysOf(r).map((k) => dice(key, k)), 0) }))
+    .map((r) => ({ id: r.id, name: r.name_en || r.name_ar, name_ar: r.name_ar, score: Math.max(...P.keysOf(r).map((k) => P.dice(key, k)), 0) }))
     .filter((r) => r.score >= 0.45)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
