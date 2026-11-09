@@ -7,8 +7,9 @@ const L = require("../lib/listing");
 const AI = require("../lib/ai");
 const AiBlock = require("../lib/aiBlock");
 const Store = require("../lib/listingStore");
-const Rights = require("../services/unitRights");
+const Edits = require("../lib/edits");
 const Authz = require("../lib/authz");
+const Rights = require("../services/unitRights");
 const Supabase = require("../lib/supabase");
 const RateLimit = require("../lib/rateLimit");
 const { normalizeImageBuffer, MAX_PHOTOS } = require("../lib/images");
@@ -93,6 +94,48 @@ function register(api, { pool }) {
     const { ev } = evaluate(fieldsOf(req.body), lang, photoCount);
     const duplicate = ev.ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing) : null;
     return res.json({ ok: ev.ok, blockers: blockersOf(ev), warnings: warningsOf(ev, lang), duplicate: duplicate || null });
+  });
+
+  // The unit's fields as the form names them, for the edit screen. Whoever may edit the unit may open this.
+  api.get("/units/:code/edit", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing) return res.status(404).json({ error: "not_found" });
+    if (!Authz.canEdit(broker, listing)) return res.status(403).json({ error: "forbidden" });
+    return res.json({ code: listing.code, version: listing.version, fields: Form.formFromUnit(listing) });
+  });
+
+  // Save changes to one unit: the version the screen was opened at must still be current (409 otherwise). Photos are not
+  // changed here.
+  api.post("/units/:code/edit", async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
+    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    const expectedVersion = Number(req.body && req.body.version);
+    if (!Number.isInteger(expectedVersion)) return res.status(400).json({ error: "version_required" });
+    const form = Form.unitFromForm(fieldsOf(req.body));
+    const out = await Edits.withCodeLock(pool, broker.agency_id, req.params.code, async (client) => {
+      const listing = await Store.findByCode(client, broker.agency_id, req.params.code, { forUpdate: true });
+      if (!listing) return { missing: true };
+      if (!Authz.canEdit(broker, listing)) return { forbidden: true };
+      const photoCount = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1", [listing.id])).rows[0].n;
+      const ev = Rules.evaluate(Form.composeFromForm({ existing: listing, form, lang }), { lang, photoCount });
+      if (!ev.ok) return { rollback: true, listing, ev };
+      const patch = Edits.diffPatch(listing, ev.listing);
+      const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
+      if (res2.conflict) return { rollback: true, conflict: true };
+      if (res2.forbidden) return { rollback: true, forbidden: true };
+      return { saved: res2.listing, columns: Object.keys(patch) };
+    });
+    if (out.missing) return res.status(404).json({ error: "not_found" });
+    if (out.forbidden) return res.status(403).json({ error: "forbidden" });
+    if (out.conflict) return res.status(409).json({ error: "conflict" });
+    if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev) });
+    require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", metadata: { columns: out.columns } });
+    return res.json({ code: out.saved.code, version: out.saved.version });
   });
 
   // Save: the field table must pass; insert-only (a used code is refused, never overwritten).
