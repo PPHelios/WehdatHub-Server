@@ -110,6 +110,39 @@ function register(api, { pool }) {
     return answer(req, res, lead, await Leads.assignLead(pool, req.session.broker, lead.id, b.brokerId || null, { version: versionOf(b) }));
   });
 
+  // Ask manager: a broker asks managers (or the owner) for help on a lead; a manager marks it handled with an optional reply.
+  api.post("/leads/:ref/request", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const b = req.body || {};
+    const r = await Leads.flagForManager(pool, req.session.broker, lead.id, b.text, { to: b.to === "owner" ? "owner" : "manager", version: versionOf(b) });
+    if (r.error === "already_flagged") return res.status(409).json({ error: "already_flagged" });
+    return answer(req, res, lead, r);
+  });
+  api.post("/leads/:ref/request/handle", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const b = req.body || {};
+    const r = await Leads.handleFlag(pool, req.session.broker, lead.id, b.reply, { version: versionOf(b) });
+    if (r.unchanged) return res.json({ lead: leadView(lead), closed: 0 });
+    if (r.ok) return res.json({ lead: leadView(r.lead), closed: r.closed });
+    return answer(req, res, lead, r);
+  });
+  api.get("/leads/:ref/requests", async (req, res) => {
+    const lead = await load(req, res);
+    if (!lead) return;
+    const items = await Leads.openRequestsOn(pool, req.session.broker, lead.id);
+    return res.json({ items: items.map((x) => ({ id: x.id, note: x.note, to: x.to_role, by: x.broker_name || null, mine: x.mine, at: new Date(x.created_at).toISOString() })) });
+  });
+  // The open requests waiting on this manager or owner (403 for a plain broker).
+  api.get("/requests", async (req, res) => {
+    const rows = await Leads.openFlags(pool, req.session.broker);
+    if (!rows) return res.status(403).json({ error: "forbidden" });
+    return res.json({ items: rows.map((r) => ({ id: r.request_id, ref: Card.refLabel(r.ref), name: r.name || null, note: r.request_note, to: r.to_role, by: r.flagged_by_name || null, at: new Date(r.requested_at).toISOString() })) });
+  });
+
   api.post("/leads/:ref/contacted", async (req, res) => {
     if (!(await writeGate(req, res))) return;
     const lead = await load(req, res);
