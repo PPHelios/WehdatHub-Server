@@ -66,6 +66,43 @@ AS $function$
   FROM (SELECT btrim(left(btrim(regexp_replace(lower(coalesce(p_name, '')), '[^a-z0-9]+', '-', 'g'), '-'), 40), '-') AS s) x
 $function$;
 
+CREATE OR REPLACE FUNCTION public.area_subzone_check()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cur uuid := NEW.subzone_id;
+  ok boolean := false;
+BEGIN
+  IF NEW.subzone_id IS NULL THEN RETURN NEW; END IF;
+  IF NEW.area_id IS NULL THEN RAISE EXCEPTION 'a sub-zone needs its area'; END IF;
+  WHILE cur IS NOT NULL LOOP
+    SELECT parent_id INTO cur FROM areas WHERE id = cur;
+    IF cur = NEW.area_id THEN ok := true; EXIT; END IF;
+  END LOOP;
+  IF NOT ok THEN RAISE EXCEPTION 'the sub-zone is not under the chosen area'; END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.areas_check_depth()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  depth integer := 1;
+  cur uuid := NEW.parent_id;
+BEGIN
+  WHILE cur IS NOT NULL LOOP
+    IF cur = NEW.id THEN RAISE EXCEPTION 'an area cannot sit under itself'; END IF;
+    depth := depth + 1;
+    IF depth > 3 THEN RAISE EXCEPTION 'areas go three levels deep at most'; END IF;
+    SELECT parent_id INTO cur FROM areas WHERE id = cur;
+  END LOOP;
+  RETURN NEW;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.audit_logs_protect()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -446,7 +483,9 @@ CREATE TABLE IF NOT EXISTS public.listings (
   deleted_at timestamp with time zone,
   deleted_by uuid,
   place_id uuid,
-  compound_state text
+  compound_state text,
+  area_id uuid,
+  subzone_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -1468,7 +1507,9 @@ CREATE TABLE IF NOT EXISTS public.map_places (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   approved boolean DEFAULT false NOT NULL,
-  pin_checked_at timestamp with time zone
+  pin_checked_at timestamp with time zone,
+  area_id uuid,
+  subzone_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.global_projects (
@@ -1496,10 +1537,26 @@ CREATE TABLE IF NOT EXISTS public.device_tokens (
   failed_count integer DEFAULT 0 NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.areas (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  parent_id uuid,
+  name_key text NOT NULL,
+  name_en text,
+  name_ar text,
+  aliases text[] DEFAULT '{}'::text[] NOT NULL,
+  lat double precision,
+  lng double precision,
+  status text DEFAULT 'approved'::text NOT NULL,
+  source text DEFAULT 'manual'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
+ALTER TABLE areas ADD CONSTRAINT areas_pkey PRIMARY KEY (id);
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_pkey PRIMARY KEY (id);
@@ -1612,6 +1669,11 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((wa_credits_monthly IS NULL) OR (wa_credits_monthly >= 0)));
+ALTER TABLE areas ADD CONSTRAINT areas_check CHECK (((name_en IS NOT NULL) OR (name_ar IS NOT NULL)));
+ALTER TABLE areas ADD CONSTRAINT areas_lat_check CHECK (((lat IS NULL) OR ((lat >= (21)::double precision) AND (lat <= (32)::double precision))));
+ALTER TABLE areas ADD CONSTRAINT areas_lng_check CHECK (((lng IS NULL) OR ((lng >= (24)::double precision) AND (lng <= (37)::double precision))));
+ALTER TABLE areas ADD CONSTRAINT areas_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text, 'broker'::text])));
+ALTER TABLE areas ADD CONSTRAINT areas_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'telegram'::text, 'whatsapp'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_check CHECK ((length(question) <= 600));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg = ANY (ARRAY['-7'::integer, '-257'::integer])));
@@ -1805,6 +1867,7 @@ ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE agencies ADD CONSTRAINT agencies_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES agencies(id) ON DELETE SET NULL;
+ALTER TABLE areas ADD CONSTRAINT areas_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES areas(id) ON DELETE RESTRICT;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
@@ -1878,12 +1941,16 @@ ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_listing_id_fkey FOREIGN
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_sheet_id_fkey FOREIGN KEY (sheet_id) REFERENCES price_sheets(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT fk_listings_broker FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE listings ADD CONSTRAINT listings_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
 ALTER TABLE listings ADD CONSTRAINT listings_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_place_id_fkey FOREIGN KEY (place_id) REFERENCES map_places(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+ALTER TABLE listings ADD CONSTRAINT listings_subzone_id_fkey FOREIGN KEY (subzone_id) REFERENCES areas(id) ON DELETE SET NULL;
+ALTER TABLE map_places ADD CONSTRAINT map_places_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE SET NULL;
+ALTER TABLE map_places ADD CONSTRAINT map_places_subzone_id_fkey FOREIGN KEY (subzone_id) REFERENCES areas(id) ON DELETE SET NULL;
 ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_merged_into_fkey FOREIGN KEY (merged_into) REFERENCES notifications(id) ON DELETE SET NULL;
@@ -1966,6 +2033,9 @@ ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_broker_id_fkey FOREIGN KEY 
 CREATE UNIQUE INDEX agencies_referral_code_idx ON public.agencies USING btree (referral_code) WHERE (referral_code IS NOT NULL);
 CREATE INDEX agencies_referred_by_idx ON public.agencies USING btree (referred_by) WHERE (referred_by IS NOT NULL);
 CREATE UNIQUE INDEX uq_agencies_slug ON public.agencies USING btree (slug);
+CREATE INDEX areas_parent ON public.areas USING btree (parent_id) WHERE (parent_id IS NOT NULL);
+CREATE UNIQUE INDEX areas_parent_key ON public.areas USING btree (COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid), name_key);
+CREATE INDEX areas_status ON public.areas USING btree (status);
 CREATE INDEX idx_assistant_questions_agency ON public.assistant_questions USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_audit_logs_action ON public.audit_logs USING btree (agency_id, action, created_at DESC);
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);
@@ -2019,6 +2089,7 @@ CREATE INDEX listing_images_agency_phash_idx ON public.listing_images USING btre
 CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");
 CREATE UNIQUE INDEX listing_images_listing_pos_uniq ON public.listing_images USING btree (listing_id, "position");
 CREATE INDEX idx_listing_prices_listing ON public.listing_prices USING btree (listing_id, changed_at DESC);
+CREATE INDEX idx_listings_area ON public.listings USING btree (agency_id, area_id) WHERE (area_id IS NOT NULL);
 CREATE INDEX idx_listings_area_key ON public.listings USING btree (agency_id, area_key) WHERE (area_key IS NOT NULL);
 CREATE INDEX idx_listings_code ON public.listings USING btree (code);
 CREATE INDEX idx_listings_compound ON public.listings USING btree (compound);
@@ -2048,6 +2119,7 @@ CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_norm
 CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);
 CREATE UNIQUE INDEX uq_listings_agency_code_norm ON public.listings USING btree (agency_id, code_norm);
 CREATE UNIQUE INDEX uq_listings_project_dev_code ON public.listings USING btree (project_id, upper(btrim(developer_unit_code))) WHERE ((project_id IS NOT NULL) AND (developer_unit_code IS NOT NULL) AND (btrim(developer_unit_code) <> ''::text));
+CREATE INDEX map_places_area ON public.map_places USING btree (area_id) WHERE (area_id IS NOT NULL);
 CREATE INDEX map_places_verified ON public.map_places USING btree (verified);
 CREATE INDEX idx_notifications_agency ON public.notifications USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_notifications_due ON public.notifications USING btree (deliver_after) WHERE (status = ANY (ARRAY['held'::text, 'queued'::text]));
@@ -2101,6 +2173,7 @@ CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree 
 CREATE INDEX idx_web_sessions_broker ON public.web_sessions USING btree (broker_id);
 
 CREATE TRIGGER trg_agencies_slug BEFORE INSERT OR UPDATE OF slug, name ON public.agencies FOR EACH ROW WHEN (((new.slug IS NULL) OR (btrim(new.slug) = ''::text) OR (new.slug <> lower(btrim(new.slug))))) EXECUTE FUNCTION agencies_set_slug();
+CREATE TRIGGER areas_depth BEFORE INSERT OR UPDATE OF parent_id ON public.areas FOR EACH ROW EXECUTE FUNCTION areas_check_depth();
 CREATE TRIGGER audit_logs_protect_trg BEFORE DELETE OR UPDATE ON public.audit_logs FOR EACH ROW EXECUTE FUNCTION audit_logs_protect();
 CREATE CONSTRAINT TRIGGER trg_deal_shares_balance AFTER INSERT OR DELETE OR UPDATE ON public.deal_splits DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION deal_shares_balance();
 CREATE TRIGGER trg_deal_splits_same_agency BEFORE INSERT OR UPDATE ON public.deal_splits FOR EACH ROW EXECUTE FUNCTION deal_splits_same_agency();
@@ -2109,8 +2182,10 @@ CREATE TRIGGER trg_deals_same_agency BEFORE INSERT OR UPDATE OF agency_id, lead_
 CREATE TRIGGER trg_leads_reset_reminder_steps BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE FUNCTION leads_reset_reminder_steps();
 CREATE TRIGGER trg_leads_same_agency BEFORE INSERT OR UPDATE OF agency_id, assigned_broker_id, created_by_broker_id, follow_up_listing_id ON public.leads FOR EACH ROW EXECUTE FUNCTION leads_same_agency();
 CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
+CREATE TRIGGER listings_subzone BEFORE INSERT OR UPDATE OF area_id, subzone_id ON public.listings FOR EACH ROW EXECUTE FUNCTION area_subzone_check();
 CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();
 CREATE TRIGGER trg_update_listings_timestamp BEFORE UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();
+CREATE TRIGGER map_places_subzone BEFORE INSERT OR UPDATE OF area_id, subzone_id ON public.map_places FOR EACH ROW EXECUTE FUNCTION area_subzone_check();
 
 CREATE OR REPLACE VIEW public.agency_outbound_daily AS
 SELECT agency_id,

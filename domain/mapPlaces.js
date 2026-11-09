@@ -75,6 +75,22 @@ function resolveName(index, text) {
   return null;
 }
 
+const bigrams = (k) => {
+  const s = ` ${k} `;
+  const out = new Map();
+  for (let i = 0; i < s.length - 1; i++) out.set(s.slice(i, i + 2), (out.get(s.slice(i, i + 2)) || 0) + 1);
+  return out;
+};
+
+/** How alike two keys are, 0 to 1 (shared letter pairs). Used for "did you mean" suggestions only. */
+function dice(a, b) {
+  const x = bigrams(a);
+  const y = bigrams(b);
+  let hit = 0;
+  for (const [g, n] of x) hit += Math.min(n, y.get(g) || 0);
+  return (2 * hit) / (Math.max(1, a.length + 1) + Math.max(1, b.length + 1));
+}
+
 const inEgypt = (lat, lng) => lat >= BOUNDS.lat[0] && lat <= BOUNDS.lat[1] && lng >= BOUNDS.lng[0] && lng <= BOUNDS.lng[1];
 
 /**
@@ -143,4 +159,4 @@ function cleanPlace(input) {
   };
 }
 
-module.exports = { placeKey, keysOf, buildIndex, matchCompound, splitCompound, resolveName, parseMapsLink, parseAliases, cleanPlace, inEgypt, BOUNDS };
+module.exports = { placeKey, keysOf, buildIndex, matchCompound, splitCompound, resolveName, parseMapsLink, parseAliases, cleanPlace, inEgypt, dice, BOUNDS };
