@@ -44,25 +44,19 @@ describe("place names: noting a unit's compound", () => {
     };
   }
 
-  test("a new name alerts once, then only counts", async () => {
+  test("a new name is saved once, then only counts", async () => {
     const pool = fakePool();
-    const alerts = [];
-    const alert = async (t) => alerts.push(t);
-    expect((await LIB.noteUnknown(pool, "Sun Valley", { alert })).status).toBe("new");
-    expect((await LIB.noteUnknown(pool, "Sun Valley", { alert })).status).toBe("pending");
-    expect(alerts.length).toBe(1);
+    expect((await LIB.noteUnknown(pool, "Sun Valley")).status).toBe("new");
+    expect((await LIB.noteUnknown(pool, "Sun Valley")).status).toBe("pending");
     expect(pool.rows.get("sun valley").times_seen).toBe(2);
   });
   test("a known compound is not saved", async () => {
     const pool = fakePool();
-    expect((await LIB.noteUnknown(pool, "Hyde Park Compound", { alert: async () => {} })).status).toBe("known");
+    expect((await LIB.noteUnknown(pool, "Hyde Park Compound")).status).toBe("known");
     expect(pool.rows.size).toBe(0);
   });
   test("an Arabic-only name is not saved", async () => {
     const pool = fakePool();
-    expect((await LIB.noteUnknown(pool, "صن فالي", { alert: async () => {} })).status).toBe("ignored");
-  });
-  test("approve needs an Arabic name", async () => {
-    expect((await LIB.approve(fakePool(), "id", "Sun Valley")).error).toBe("bad_arabic");
+    expect((await LIB.noteUnknown(pool, "صن فالي")).status).toBe("ignored");
   });
 });

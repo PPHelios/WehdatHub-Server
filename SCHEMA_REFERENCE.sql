@@ -1313,7 +1313,9 @@ CREATE TABLE IF NOT EXISTS public.place_names (
   times_seen integer DEFAULT 1 NOT NULL,
   example text,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  decided_at timestamp with time zone
+  decided_at timestamp with time zone,
+  place_id uuid,
+  reject_reason text
 );
 
 CREATE TABLE IF NOT EXISTS public.import_rows (
@@ -1549,7 +1551,17 @@ CREATE TABLE IF NOT EXISTS public.areas (
   status text DEFAULT 'approved'::text NOT NULL,
   source text DEFAULT 'manual'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  reject_reason text
+);
+
+CREATE TABLE IF NOT EXISTS public.place_proposals (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  kind text NOT NULL,
+  ref_id uuid NOT NULL,
+  broker_id uuid,
+  batch text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
@@ -1602,6 +1614,7 @@ ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_pkey PRIM
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KEY (challenge);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE place_names ADD CONSTRAINT place_names_pkey PRIMARY KEY (id);
+ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_pkey PRIMARY KEY (id);
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_pkey PRIMARY KEY (id);
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id);
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_pkey PRIMARY KEY (fingerprint);
@@ -1673,7 +1686,7 @@ ALTER TABLE areas ADD CONSTRAINT areas_check CHECK (((name_en IS NOT NULL) OR (n
 ALTER TABLE areas ADD CONSTRAINT areas_lat_check CHECK (((lat IS NULL) OR ((lat >= (21)::double precision) AND (lat <= (32)::double precision))));
 ALTER TABLE areas ADD CONSTRAINT areas_lng_check CHECK (((lng IS NULL) OR ((lng >= (24)::double precision) AND (lng <= (37)::double precision))));
 ALTER TABLE areas ADD CONSTRAINT areas_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text, 'broker'::text])));
-ALTER TABLE areas ADD CONSTRAINT areas_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text])));
+ALTER TABLE areas ADD CONSTRAINT areas_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'telegram'::text, 'whatsapp'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_check CHECK ((length(question) <= 600));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg = ANY (ARRAY['-7'::integer, '-257'::integer])));
@@ -1808,7 +1821,8 @@ ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text)
 ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text, 'credit_bundle'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
-ALTER TABLE place_names ADD CONSTRAINT place_names_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text])));
+ALTER TABLE place_names ADD CONSTRAINT place_names_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'merged'::text, 'rejected'::text])));
+ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'area'::text])));
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_client_name_check CHECK (((client_name IS NULL) OR (length(client_name) <= 120)));
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_link_check CHECK ((length(link) <= 1000));
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_listing_no_check CHECK (((listing_no IS NULL) OR ((length(listing_no) >= 4) AND (length(listing_no) <= 20))));
@@ -1963,6 +1977,8 @@ ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_broker_id_fkey 
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_bundle_id_fkey FOREIGN KEY (bundle_id) REFERENCES credit_bundles(id);
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE place_names ADD CONSTRAINT place_names_place_id_fkey FOREIGN KEY (place_id) REFERENCES map_places(id) ON DELETE SET NULL;
+ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2136,6 +2152,8 @@ CREATE INDEX idx_passkey_challenges_expiry ON public.passkey_challenges USING bt
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
 CREATE INDEX place_names_status ON public.place_names USING btree (status, times_seen DESC);
+CREATE INDEX place_proposals_broker ON public.place_proposals USING btree (broker_id, created_at DESC);
+CREATE INDEX place_proposals_ref ON public.place_proposals USING btree (kind, ref_id);
 CREATE INDEX portal_enquiries_agency_idx ON public.portal_enquiries USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effective_on) WHERE (status = 'scheduled'::text);
 CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);

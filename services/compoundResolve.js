@@ -29,11 +29,11 @@ async function resolve(db, fields) {
 }
 
 /** `resolve` applied to a fields object: returns the object with the compound columns, place, state, and extra text in details.notes. */
-async function normalize(db, fields) {
+async function normalize(db, fields, { brokerId = null } = {}) {
   const r = await resolve(db, fields);
   const { extra, ...cols } = r;
   // A name that is not on the list waits for the CRM owner (alerted once per name); the unit is saved and flagged.
-  if (r.compound_state === "needs_fix") await require("../lib/placeNames").noteUnknown(db, r.compound, { example: "unit" }).catch(() => {});
+  if (r.compound_state === "needs_fix") await require("../lib/placeNames").noteUnknown(db, r.compound, { example: "unit", brokerId: brokerId || fields.broker_id || null }).catch(() => {});
   const out = { ...fields, ...cols };
   if (extra) {
     const old = String(fields.details?.notes || "").trim();
