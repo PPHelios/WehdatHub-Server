@@ -2531,8 +2531,19 @@
       "mergeArea": ["pool", "id", "intoId"],
       "rejectArea": ["pool", "id", "reason"]
     },
+    "services/placeSuggest.js": {
+      "suggest": ["pool", "text", "limit"],
+      "resetCache": []
+    },
+    "services/areaSearch.js": {
+      "scope": ["pool", "terms"],
+      "resetCache": []
+    },
     "web/views/placeReview.js": {
       "placesSection": ["q", "lang", "csrf"]
+    },
+    "web/routes/placeSuggest.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {
