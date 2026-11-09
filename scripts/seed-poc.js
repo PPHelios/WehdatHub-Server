@@ -184,6 +184,13 @@ async function seed(pool, agencyId) {
 
   // ---- Units
   const byNo = new Map();
+  // Demo compounds are approved places (with their district's area), so their units are visible to everyone.
+  for (const u of UNITS) {
+    const key = require("../domain/mapPlaces").placeKey(u.compound);
+    await pool.query("INSERT INTO map_places (name_key, name_en, district, approved) VALUES ($1, $2, $3, true) ON CONFLICT (name_key) DO NOTHING", [key, u.compound, u.district]);
+  }
+  await require("../services/areas").linkPlacesFromDistrict(pool);
+  require("../services/mapPlaces").clearCache?.();
   for (const u of UNITS) {
     const broker = actor(u.who);
     const ev = Rules.evaluate(L.composeFields({ draft: draftOf(u), lang: "en" }), { lang: "en" });
