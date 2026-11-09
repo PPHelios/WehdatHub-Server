@@ -54,22 +54,23 @@ function register(api, { pool }) {
     if (r.error) return res.status(ERRORS[r.error] || 422).json({ error: r.error });
     return res.json({ lead: leadView(r.lead || lead), undoEventId: r.eventId || null });
   };
+  const tabFilter = (tab) => ({ stage: Stages.STAGES.includes(tab) ? tab : null, dueToday: tab === "due_today", overdue: tab === "overdue", noNextStep: tab === "no_next_step" });
   const versionOf = (b) => (b.version === undefined || b.version === null || b.version === "" ? null : Number(b.version));
 
   api.get("/leads", async (req, res) => {
     const { broker } = req.session;
     const tab = TABS.includes(req.query.tab) ? req.query.tab : "all";
     const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, 10000));
-    const { rows, more } = await Leads.listLeads(pool, broker, {
-      q: String(req.query.q || "").slice(0, 80),
-      stage: Stages.STAGES.includes(tab) ? tab : null,
-      dueToday: tab === "due_today",
-      overdue: tab === "overdue",
-      noNextStep: tab === "no_next_step",
-      limit: PAGE,
-      offset
-    });
-    res.json({ items: rows.map(leadView), more, offset, limit: PAGE });
+    const { rows, more, total } = await Leads.listLeads(pool, broker, { ...tabFilter(tab), q: String(req.query.q || "").slice(0, 80), limit: PAGE, offset });
+    res.json({ items: rows.map(leadView), more, total, offset, limit: PAGE });
+  });
+
+  // The number on every tab, from the start (same filters as the list, with the search text).
+  api.get("/leads/counts", async (req, res) => {
+    const { broker } = req.session;
+    const q = String(req.query.q || "").slice(0, 80);
+    const entries = await Promise.all(TABS.map(async (t) => [t, (await Leads.listLeads(pool, broker, { ...tabFilter(t), q, countOnly: true })).total]));
+    res.json({ counts: Object.fromEntries(entries) });
   });
 
   api.get("/leads/:ref", async (req, res) => {

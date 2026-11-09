@@ -65,9 +65,9 @@ function register(api, { pool }) {
     return res.json({ ok: true });
   });
 
-  api.get("/me", (req, res) => {
+  api.get("/me", async (req, res) => {
     if (!req.session) return res.status(401).json({ error: "unauthorized" });
-    return res.json({ broker: brokerView(req.session.broker), agency: agencyView(req.session.agency), expiresAt: req.session.expiresAt });
+    return res.json({ broker: brokerView(req.session.broker), agency: agencyView(req.session.agency), rights: await require("../services/unitRights").rights(pool, req.session.broker), expiresAt: req.session.expiresAt });
   });
 }
 

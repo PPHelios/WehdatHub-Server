@@ -29,6 +29,7 @@ const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
+const Rights = require("../../services/unitRights");
 const OwnerAgencies = require("../../services/ownerAgencies");
 const AgencyCreate = require("../../services/agencyCreate");
 const { isManager, isAgencyOwner } = require("../../lib/authz");
@@ -152,6 +153,18 @@ function privacySection(scope, lang, csrf, notice, canSwitch = false) {
     ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
   <p><a class="btn secondary" href="/app/units-export.xlsx" download>${icon("import", 18)} ${L(lang, "نزّل كل الوحدات (إكسيل)", "Download all units (Excel)")}</a> <span class="muted small">${L(lang, "للمديرين بس، وكل تنزيل بيتسجل.", "Managers only; every download is logged.")}</span></p>
+</section>`;
+}
+
+/** The agency owner's switch for brokers adding and editing units (on by default; managers and data entry are never limited). */
+function brokerEditSection(allowed, lang, csrf, canSwitch) {
+  return html`<section class="card stack" id="broker-edit">
+  <h2>${L(lang, "إضافة وتعديل الوحدات للسماسرة", "Brokers adding and editing units")}</h2>
+  <form method="post" action="/app/dashboard/brokers-edit-units" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
+    <label class="pill"><input type="checkbox" name="allowed" value="on"${allowed ? html` checked` : ""}${canSwitch ? "" : html` disabled`}><span>${L(lang, "السماسرة يقدروا يضيفوا ويعدّلوا وحدات", "Brokers may add and edit units")}</span></label>
+    <p class="muted small">${L(lang, "لو اتقفلت، السماسرة ومسؤولو الفرق يشوفوا الوحدات بس. المديرين وإدخال البيانات مش متأثرين.", "When off, brokers and team leaders can only view units. Managers and data entry are not affected.")}</p>
+    ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
+  </form>
 </section>`;
 }
 
@@ -538,7 +551,8 @@ function register(web, { pool, page }) {
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null, teamLeadId: String(req.query.team || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
-    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    const brokersWrite = await Rights.brokersMayWrite(pool, req.session.broker.agency_id);
+    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   // Who sees a unit's private details (services/unitPrivacy.js); the agency owner only.
@@ -546,6 +560,13 @@ function register(web, { pool, page }) {
     const out = await Privacy.setScope(pool, req.session.broker, String(req.body.scope || ""));
     if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
     return res.redirect(303, "/app/dashboard?privacy=saved#data-security");
+  });
+
+  // Brokers adding and editing units (services/unitRights.js); the agency owner only.
+  web.post("/dashboard/brokers-edit-units", async (req, res) => {
+    const out = await Rights.setBrokersMayWrite(pool, req.session.broker, req.body.allowed === "on");
+    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
+    return res.redirect(303, "/app/dashboard?privacy=saved#broker-edit");
   });
 
   // The whole inventory as Excel: managers only, and every download is logged.

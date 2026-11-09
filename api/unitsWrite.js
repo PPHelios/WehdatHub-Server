@@ -7,6 +7,7 @@ const L = require("../lib/listing");
 const AI = require("../lib/ai");
 const AiBlock = require("../lib/aiBlock");
 const Store = require("../lib/listingStore");
+const Rights = require("../services/unitRights");
 const Authz = require("../lib/authz");
 const Supabase = require("../lib/supabase");
 const RateLimit = require("../lib/rateLimit");
@@ -62,6 +63,7 @@ function register(api, { pool }) {
 
   // Fill the fields from a typed description (a shared WhatsApp message) and/or a voice note. Nothing is saved.
   api.post("/units/extract", upload, async (req, res) => {
+    if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
     const lang = langOf(req);
     const { broker } = req.session;
     const text = String(req.body?.describe || "").trim().slice(0, MAX_DESCRIBE);
@@ -84,6 +86,7 @@ function register(api, { pool }) {
 
   // What is still missing, warnings, and a duplicate, without saving.
   api.post("/units/review", async (req, res) => {
+    if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
     const lang = langOf(req);
     const { broker } = req.session;
     const photoCount = Math.max(0, Math.min(parseInt(req.body?.photoCount, 10) || 0, MAX_PHOTOS));
@@ -94,6 +97,7 @@ function register(api, { pool }) {
 
   // Save: the field table must pass; insert-only (a used code is refused, never overwritten).
   api.post("/units", upload, async (req, res) => {
+    if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);

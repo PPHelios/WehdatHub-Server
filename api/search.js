@@ -29,18 +29,29 @@ function register(api, { pool }) {
     const intent = Q.classifyIntent(parse.parsed);
     const base = { source: parse.source, aiError: parse.aiError || null };
     if (intent !== "search") return res.json({ ...base, status: intent, total: 0, items: [] });
-    const out = await Search.runSearch(pool, broker.agency_id, parse.parsed, { pageSize: PAGE, ask: !drop });
+    // Active is the default; Sold and Archived are the same search for those units, and the three counts come with it.
+    const st = Search.SEARCH_STATUSES.includes(req.query.status) ? req.query.status : "active";
+    const out = await Search.runSearch(pool, broker.agency_id, parse.parsed, { pageSize: PAGE, ask: !drop, status: st });
     // The AI could not answer and a number was left unplaced: ask, never search as if it were not there.
     const numbers = parse.source === "fallback" && !drop ? parse.local?.meta?.leftover_numbers || [] : [];
     if (numbers.length) out.ask = { terms: out.ask?.terms || [], numbers, aiDown: true, withoutTotal: out.ask ? out.ask.withoutTotal : out.total };
     if (out.ask) return res.json({ ...base, status: "ask", total: 0, items: [], ask: out.ask });
+    // More results: the same search again, from the offset (the first page is already in out.rows).
+    const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, Search.SNAPSHOT_MAX));
+    if (offset > 0) out.rows = await Search.pageByIds(pool, broker.agency_id, out.ids, offset, PAGE, { status: st });
     const photos = out.rows.length
       ? (await pool.query("SELECT DISTINCT ON (listing_id) listing_id, url FROM listing_images WHERE listing_id = ANY($1::uuid[]) AND agency_id = $2 ORDER BY listing_id, position", [out.rows.map((r) => r.id), broker.agency_id])).rows
       : [];
     const photoOf = new Map(photos.map((p) => [p.listing_id, Storage.photoUrl(p.url)]));
+    const counts = { active: 0, sold: 0, archived: 0, [st]: out.total };
+    for (const other of Search.SEARCH_STATUSES.filter((x) => x !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, { filters: parse.parsed }, other);
     return res.json({
       ...base,
       status: out.rows.length ? "results" : "none",
+      unitStatus: st,
+      offset,
+      limit: PAGE,
+      counts,
       total: Math.min(out.total, Search.SNAPSHOT_MAX),
       relaxed: out.relaxed,
       ignoredTerms: out.ignoredTerms || [],
