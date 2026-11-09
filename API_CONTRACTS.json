@@ -2437,6 +2437,7 @@
       "parseAliases": ["text"],
       "cleanPlace": ["input"],
       "inEgypt": ["lat", "lng"],
+      "dice": ["a", "b"],
       "BOUNDS": "Object"
     },
     "services/mapPlaces.js": {
