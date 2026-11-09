@@ -11,6 +11,7 @@ const Authz = require("../lib/authz");
 const Share = require("../lib/shareLinks");
 const UnitPrivacy = require("../services/unitPrivacy");
 const Owners = require("../services/unitOwners");
+const Rights = require("../services/unitRights");
 const Recipients = require("../services/linkRecipients");
 const { PROPERTY_TYPES } = require("../domain/fieldRules");
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../domain/furnishingStatus");
@@ -141,6 +142,7 @@ function register(api, { pool }) {
     return res.json({
       ...unitView(found),
       mine: found.broker_id === broker.id,
+      canEdit: Authz.canEdit(broker, found) && (await Rights.mayWrite(pool, broker)),
       features: found.feature_keys || [],
       images: images.map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), position: i.position }))
     });

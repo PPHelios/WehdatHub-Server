@@ -99,3 +99,9 @@ test("the client link can go to a lead or a number, and a bad recipient is refus
   expect((await api().post("/api/v1/units/A-1/share-link").set(auth).send({ to: "123" })).status).toBe(422);
   expect((await api().post("/api/v1/units/A-1/share-link").set(auth).send({})).status).toBe(200);
 });
+
+test("the unit page says whether this person can edit it", async () => {
+  await ownUnit();
+  expect((await api().get("/api/v1/units/A-1").set(await login("broker"))).body.canEdit).toBe(true);
+  expect((await api().get("/api/v1/units/A-1").set(await login("colleague"))).body.canEdit).toBe(false);
+});
