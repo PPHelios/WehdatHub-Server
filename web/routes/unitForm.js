@@ -18,6 +18,7 @@ const Card = require("../../domain/leadCard");
 const Leads = require("../../services/leads");
 const Privacy = require("../../services/unitPrivacy");
 const Leases = require("../../services/leases");
+const Rights = require("../../services/unitRights");
 const Plans = require("../../domain/plans");
 const Form = require("../forms/unitForm");
 const Session = require("../session");
@@ -115,9 +116,21 @@ function register(web, { pool, page, assets }) {
     );
   };
 
-  web.get("/units/new", (req, res) => formPage(req, res, { mode: "new", values: Form.formFromUnit({ market: "resale" }) }));
+  // The agency owner can switch brokers' adding and editing off (services/unitRights.js): a clear refusal on every form route.
+  const writesOff = async (req, res) => {
+    if (await Rights.mayWrite(pool, req.session.broker)) return false;
+    const lang = langOf(req);
+    res.status(403).type("text/plain").send(L10n(lang, "مالك الشركة قفل إضافة وتعديل الوحدات للسماسرة.", "The agency owner has switched off adding and editing units for brokers."));
+    return true;
+  };
+
+  web.get("/units/new", async (req, res) => {
+    if (await writesOff(req, res)) return undefined;
+    return formPage(req, res, { mode: "new", values: Form.formFromUnit({ market: "resale" }) });
+  });
 
   web.get("/units/:code/edit", async (req, res, next) => {
+    if (await writesOff(req, res)) return undefined;
     const listing = await editable(pool, req.session.broker, req.params.code);
     if (!listing) return next();
     return formPage(req, res, { mode: "edit", code: listing.code, version: listing.version, values: Form.formFromUnit(listing), images: await imagesOf(pool, listing) });
@@ -196,6 +209,7 @@ function register(web, { pool, page, assets }) {
 
   // ✅ Create: the field table must pass; insert-only (a used code is refused, never overwritten).
   web.post("/units/new", upload, async (req, res) => {
+    if (await writesOff(req, res)) return undefined;
     const lang = langOf(req);
     const { broker } = req.session;
     const form = Form.unitFromForm(req.body);
@@ -256,6 +270,7 @@ function register(web, { pool, page, assets }) {
 
   // ✅ Edit: under the (agency, code) advisory lock, with the version the form was opened at.
   web.post("/units/:code/edit", upload, async (req, res, next) => {
+    if (await writesOff(req, res)) return undefined;
     const lang = langOf(req);
     const { broker } = req.session;
     const form = Form.unitFromForm(req.body);

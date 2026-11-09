@@ -776,13 +776,19 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
     else if (digits.length >= 4 && /^[\d\s+\-().٠-٩]+$/.test(q)) add("EXISTS (SELECT 1 FROM unnest(l.phones) p WHERE p LIKE '%' || ? || '%')", digits);
     else add("l.name ILIKE '%' || ? || '%'", q.replace(/[%_\\]/g, (c) => `\\${c}`));
   }
+  // Counts only (the app's tab numbers): the same filters, no rows.
+  if (f.countOnly) {
+    const { rows } = await pool.query(`SELECT count(*)::int AS n ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args);
+    return { total: rows[0].n };
+  }
   const limit = Math.min(Math.max(parseInt(f.limit, 10) || PAGE, 1), 100);
   const offset = Math.max(parseInt(f.offset, 10) || 0, 0);
   const { rows } = await pool.query(
     `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")} ORDER BY l.last_activity_at DESC, l.ref DESC LIMIT ${limit + 1} OFFSET ${offset}`,
     args
   );
-  return { rows: rows.slice(0, limit), more: rows.length > limit };
+  const total = (await pool.query(`SELECT count(*)::int AS n ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args)).rows[0].n;
+  return { rows: rows.slice(0, limit), more: rows.length > limit, total };
 }
 
 /** True when the agency has a lead with this reference (visible or not): "not yours" rather than "no such lead". */

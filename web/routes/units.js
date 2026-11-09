@@ -268,6 +268,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     if (!["active", "sold", "archived"].includes(status)) return res.status(400).type("text/plain").send("Unknown status");
     if (listing.status === "deleted") return res.status(400).type("text/plain").send("Unit is deleted");
     if (!Authz.canEdit(broker, listing)) return res.status(403).type("text/plain").send("Not allowed");
+    if (!(await require("../../services/unitRights").mayWrite(pool, broker))) return res.status(403).type("text/plain").send("Not allowed: the agency owner switched off unit changes for brokers");
     if (listing.status !== status) {
       const out = await Store.applyListingPatch(pool, broker, { listing, patch: { status } });
       if (out.conflict) return res.status(409).type("text/plain").send("Changed by someone else, try again");

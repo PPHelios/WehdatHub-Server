@@ -66,8 +66,8 @@ function register(api, { pool }) {
     const deal = Deal.clean(q.deal);
     const limit = Math.max(1, Math.min(parseInt(q.limit, 10) || 20, MAX_LIMIT));
     const offset = Math.max(0, Math.min(parseInt(q.offset, 10) || 0, 100000));
-    const args = [broker.agency_id, status];
-    const where = ["listings.agency_id = $1", "listings.status = $2"];
+    const args = [broker.agency_id];
+    const where = ["listings.agency_id = $1"];
     const add = (sql, v) => {
       args.push(v);
       where.push(sql.split("?").join(`$${args.length}`));
@@ -86,8 +86,13 @@ function register(api, { pool }) {
     if (bedrooms >= 0 && bedrooms <= 20) add("listings.bedrooms = ?", bedrooms);
     const code = String(q.q || "").trim().slice(0, 40);
     if (code) add("(listings.code ILIKE '%' || ? || '%' OR listings.developer_unit_code ILIKE '%' || ? || '%' OR listings.compound ILIKE '%' || ? || '%')", code.replace(/[%_\\]/g, (c) => `\\${c}`));
-    const cond = where.join(" AND ");
-    const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
+    // The three status counts use every filter except the status itself, so the tabs show their numbers from the start.
+    const byStatus = (await pool.query(`SELECT listings.status AS s, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${where.join(" AND ")} AND listings.status IN ('active', 'sold', 'archived') GROUP BY listings.status`, args)).rows;
+    const counts = { active: 0, sold: 0, archived: 0 };
+    for (const r of byStatus) counts[r.s] = r.n;
+    args.push(status);
+    const cond = `${where.join(" AND ")} AND listings.status = $${args.length}`;
+    const total = counts[status];
     const { rows } = await pool.query(
       `SELECT ${COLS},
               (SELECT li.url FROM listing_images li WHERE li.listing_id = listings.id AND li.agency_id = listings.agency_id ORDER BY li.position LIMIT 1) AS photo
@@ -97,6 +102,7 @@ function register(api, { pool }) {
     );
     return res.json({
       total,
+      counts,
       limit,
       offset,
       items: rows.map((r) => ({ ...unitView(r), mine: r.broker_id === broker.id, photo: photoOf(r.photo) }))
