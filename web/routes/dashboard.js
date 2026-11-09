@@ -20,7 +20,7 @@ const Commission = require("../../domain/commission");
 const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
-const PlaceNames = require("../../lib/placeNames");
+const PlaceReview = require("../../services/placeReview");
 const Referrals = require("../../services/referrals");
 const Intake = require("../../services/leadIntake");
 const Plans = require("../../domain/plans");
@@ -465,17 +465,7 @@ function announceSection(log, lang, csrf) {
 </section>`;
 }
 
-// New English compound names waiting for the CRM owner's Arabic name (lib/placeNames.js).
-function namesSection(names, lang, csrf) {
-  return html`<div id="place-names"><h2>${L(lang, "أسماء جديدة", "New names")}</h2>
-<p class="muted small">${L(lang, "كمبوندات باسمها الإنجليزي اللي مش معروفة عندنا. اكتب اسمها بالعربي، والبحث بيعرفها من بعدها.", "Compounds with an English name we don't know yet. Enter the Arabic name; search uses it from then on.")}</p>
-${names.length
-  ? html`<ul class="stack" data-place-names>${names.map((n) => html`<li class="card" data-place-name="${n.id}"><b dir="ltr">${n.name_en}</b> <span class="chip">${n.times_seen} ${L(lang, "مرة", "×")}</span>
-<form method="post" action="/app/owner/place-names/${n.id}/approve" class="row"><input type="hidden" name="_csrf" value="${csrf}"><input name="name_ar" required placeholder="${L(lang, "الاسم بالعربي", "Arabic name")}" aria-label="${L(lang, "الاسم بالعربي", "Arabic name")}"><button type="submit">✅ ${L(lang, "اعتمد", "Approve")}</button></form></li>`)}</ul>`
-  : html`<p class="muted">${L(lang, "مفيش أسماء مستنية.", "No names waiting.")}</p>`}</div>`;
-}
-
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "", names = [] } = {}) {
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "", places = { groups: [], topAreas: [], subzones: [] } } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
@@ -483,7 +473,7 @@ ${tabs("owner_tab", [
   [L(lang, "الشركات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
   [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${credits ? creditsSection(credits, lang) : ""}`],
   [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}`],
-  [L(lang, "الأسماء", "Names"), namesSection(names, lang, csrf)],
+  [L(lang, "الأماكن", "Places"), require("../views/placeReview").placesSection(places, lang, csrf)],
   [L(lang, "الصحة", "Health"), healthSections(d, lang, usd)]
 ])}`;
 }
@@ -596,8 +586,8 @@ function register(web, { pool, page }) {
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
     const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("سماسرة نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
-    const [agencies, log, names] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceNames.pending(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, names, csrf: req.session.csrf })}` }, status);
+    const [agencies, log, places] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -660,13 +650,35 @@ function register(web, { pool, page }) {
       <p>${L(lang, "ابعت اللينك ده للمالك بنفسك. يتفتح مرة واحدة، وبيفتح البوت؛ من البوت يفتح الموقع.", "Send this link to the owner yourself. It works once and opens the bot; from the bot the website opens.")}</p>${link}</section>`);
   }));
 
-  // The owner gives a new compound's Arabic name; search uses it from the next minute.
-  web.post("/owner/place-names/:id/approve", ownerOnly(async (req, res, lang) => {
+  // The owner decides on new places: approve as a new place, link to an existing one, or reject with a reason.
+  const placeDone = (req, res, lang, r) => {
+    const why = { name: ["لازم اسم.", "A name is needed."], area: ["لازم منطقة.", "An area is needed."], needs_area: ["لازم منطقة.", "An area is needed."], bad_subzone: ["المنطقة الفرعية مش تابعة للمنطقة دي.", "The sub-zone is not under that area."], coords: ["الإحداثيات مش صح.", "The coordinates are not valid."], reason: ["اكتب سبب الرفض.", "Write the reason."], duplicate: ["المكان ده موجود بالفعل.", "That place already exists."], no_place: ["اختار مكان موجود.", "Pick an existing place."], no_area: ["اختار منطقة موجودة.", "Pick an existing area."], has_children: ["المنطقة دي ليها مناطق فرعية.", "That area has sub-zones."], bad_parent: ["المنطقة التابعة لها مش مناسبة.", "That parent is not allowed."], not_pending: ["الطلب ده اتعمله قبل كده.", "This was already handled."] };
+    if (r.error) return ownerView(req, res, bad(L(lang, ...(why[r.error] || why.not_pending))), r.error === "not_pending" ? 409 : 400);
+    return ownerView(req, res, html`<p class="card" role="status" data-place-done>✅ ${L(lang, "اتحفظ", "Saved")}: ${r.name}</p>`);
+  };
+  web.post("/owner/places/:id/approve", ownerOnly(async (req, res, lang) => {
     const id = uuidParam(req);
-    const r = id ? await PlaceNames.approve(pool, id, req.body.name_ar) : { error: "not_pending" };
-    if (r.error === "bad_arabic") return ownerView(req, res, bad(L(lang, "الاسم لازم يكون بالعربي.", "The name must be in Arabic.")), 400);
-    if (r.error) return ownerView(req, res, bad(L(lang, "الاسم ده اتعمله قبل كده.", "This name was already handled.")), 400);
-    return ownerView(req, res, html`<p class="card" role="status">✅ ${L(lang, "اتحفظ", "Saved")}: ${r.name_en}</p>`);
+    return placeDone(req, res, lang, id ? await PlaceReview.approveCompound(pool, id, req.body) : { error: "not_pending" });
+  }));
+  web.post("/owner/places/:id/merge", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    return placeDone(req, res, lang, id ? await PlaceReview.mergeCompound(pool, id, req.body.into, { also: req.body.also }) : { error: "not_pending" });
+  }));
+  web.post("/owner/places/:id/reject", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    return placeDone(req, res, lang, id ? await PlaceReview.rejectName(pool, id, req.body.reason, { also: req.body.also }) : { error: "not_pending" });
+  }));
+  web.post("/owner/areas/:id/approve", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    return placeDone(req, res, lang, id ? await PlaceReview.approveArea(pool, id, req.body) : { error: "not_pending" });
+  }));
+  web.post("/owner/areas/:id/merge", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    return placeDone(req, res, lang, id ? await PlaceReview.mergeArea(pool, id, req.body.into) : { error: "not_pending" });
+  }));
+  web.post("/owner/areas/:id/reject", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    return placeDone(req, res, lang, id ? await PlaceReview.rejectArea(pool, id, req.body.reason) : { error: "not_pending" });
   }));
 
   web.post("/owner/signups/:id/approve", ownerOnly(async (req, res, lang) => {

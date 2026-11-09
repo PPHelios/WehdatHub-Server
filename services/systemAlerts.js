@@ -99,6 +99,16 @@ async function due(pool, { now = new Date() } = {}) {
     [since(24 * HOUR), lim.exportsPerDay]
   );
   for (const x of exp) out.push({ key: `exports:${x.broker_id}:${now.toISOString().slice(0, 10)}`, title: `📤 ${x.name || "Someone"} exported the inventory ${x.n} times in a day`, body: "Check the agency's activity log." });
+  // New places (compound names, areas, sub-zones) waiting for the owner: one alert an hour with the new ones counted together.
+  const places = await require("./placeReview").counts(pool, since(HOUR));
+  if (places.fresh > 0) {
+    out.push({
+      key: `places:${now.toISOString().slice(0, 13)}`,
+      title: `🆕 ${places.fresh} new ${places.fresh === 1 ? "place" : "places"} waiting for your approval (${places.total} in all)`,
+      body: "Open the owner page, Places waiting.",
+      url: "/app/owner#places"
+    });
+  }
   return out;
 }
 
@@ -128,7 +138,7 @@ async function run(pool, { now = new Date() } = {}) {
         dedupeKey: `system:${alert.key}:${window}`,
         title: alert.title,
         body: alert.body,
-        url: "/app/owner/board",
+        url: alert.url || "/app/owner/board",
         now
       }).catch((err) => {
         console.warn("System alert failed:", err.message);
