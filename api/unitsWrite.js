@@ -138,6 +138,46 @@ function register(api, { pool }) {
     return res.json({ code: out.saved.code, version: out.saved.version });
   });
 
+  // Photos of an existing unit: add new ones (multipart "photos"), remove some (JSON array "remove" of image ids) and set the
+  // order (JSON array "order" of image ids, first is the cover; new photos follow). Same limit as the website.
+  api.post("/units/:code/photos", upload, async (req, res) => {
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
+    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    const ids = (raw) => {
+      try {
+        const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+        return (Array.isArray(v) ? v : []).filter((id) => /^[0-9a-f-]{36}$/.test(String(id))).map(String);
+      } catch {
+        return [];
+      }
+    };
+    const removeIds = ids(req.body && req.body.remove);
+    const order = ids(req.body && req.body.order).filter((id) => !removeIds.includes(id));
+    const photos = await storePhotos(broker, filesOf(req, "photos").slice(0, MAX_PHOTOS));
+    const out = await Edits.withCodeLock(pool, broker.agency_id, req.params.code, async (client) => {
+      const listing = await Store.findByCode(client, broker.agency_id, req.params.code, { forUpdate: true });
+      if (!listing) return { rollback: true, missing: true };
+      if (!Authz.canEdit(broker, listing)) return { rollback: true, forbidden: true };
+      const left = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1 AND NOT (id = ANY($2::uuid[]))", [listing.id, removeIds])).rows[0].n;
+      if (left + photos.urls.length > MAX_PHOTOS) return { rollback: true, tooMany: true };
+      const removed = await Store.removePhotos(client, listing, removeIds);
+      await Store.addPhotos(client, listing, photos.urls);
+      if (order.length > 1) await Store.reorderPhotos(client, listing, order);
+      await client.query("UPDATE listings SET flyer_cache = '{}'::jsonb, updated_at = now() WHERE id = $1", [listing.id]);
+      const images = (await client.query("SELECT id, url, position FROM listing_images WHERE listing_id = $1 ORDER BY position", [listing.id])).rows;
+      return { removed, images, listing };
+    });
+    if (!out.images) Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+    if (out.missing) return res.status(404).json({ error: "not_found" });
+    if (out.forbidden) return res.status(403).json({ error: "forbidden" });
+    if (out.tooMany) return res.status(422).json({ error: "too_many_photos", max: MAX_PHOTOS });
+    if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(() => {});
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.listing.code, operation_type: "app_unit_photos", metadata: { added: photos.urls.length, removed: out.removed.length } });
+    return res.json({ images: out.images.map((i) => ({ id: i.id, url: Supabase.photoUrl(i.url), position: i.position })), failed: photos.failed });
+  });
+
   // Save: the field table must pass; insert-only (a used code is refused, never overwritten).
   api.post("/units", upload, async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });

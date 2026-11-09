@@ -755,6 +755,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
     // A team lead's list: their own leads and the leads of brokers in their team.
     args.push(actor.id);
     where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);
+    if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
   } else if (!Authz.isManager(actor)) add("l.assigned_broker_id = ?", actor.id);
   else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
   else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
