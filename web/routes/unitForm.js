@@ -95,14 +95,17 @@ function register(web, { pool, page, assets }) {
   const compoundError = async (client, listing, body, lang) => {
     if (!String(listing.compound || "").trim() || body.compound_new === "1") return null;
     const r = await require("../../services/compoundResolve").resolve(client, listing);
-    return r.compound_state === "needs_fix"
-      ? L10n(lang, "⛔ الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\" عشان يتراجع.", "⛔ This compound is not on the list. Pick it from the list, or tick \"not in the list\" so it is reviewed.")
-      : null;
+    if (r.compound_state !== "needs_fix") return null;
+    // The names it looks like are offered ("did you mean"), so a spelling slip does not become a new compound.
+    const like = (await require("../../services/compoundResolve").suggest(client, listing.compound, 3)).map((x) => x.name).filter(Boolean);
+    const base = L10n(lang, "⛔ الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\" عشان يتراجع.", "⛔ This compound is not on the list. Pick it from the list, or tick \"not in the list\" so it is reviewed.");
+    return like.length ? `${base} ${L10n(lang, "قصدك:", "Did you mean:")} ${like.join(" / ")}` : base;
   };
   const formPage = async (req, res, opts, status = 200) => {
     const lang = langOf(req);
     const approvedPlaces = await pool.query("SELECT name_en, name_ar FROM map_places WHERE approved ORDER BY name_en").then((r) => r.rows).catch(() => []);
     const leadChoices = await Leases.tenantChoices(pool, req.session.broker).catch(() => []);
+    const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
     const edit = opts.mode === "edit";
     return page(
       req,
@@ -110,7 +113,7 @@ function register(web, { pool, page, assets }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.flatMap((p) => [p.name_en, p.name_ar]).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
+        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, areas, ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.flatMap((p) => [p.name_en, p.name_ar]).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
       },
       status
     );

@@ -55,11 +55,12 @@ describe("one suggestion list", () => {
   const places = [{ id: "p1", name_en: "Hyde Park", name_ar: "هايد بارك", aliases: ["hydepark"], area_id: "nc", subzone_id: "s5" }];
   test("compounds, aliases, areas and sub-zones come back together, exact first", () => {
     const out = A.suggest("hyde", { places, areas: tree });
-    expect(out[0]).toMatchObject({ kind: "compound", id: "p1", path: "New Cairo › 5th Settlement" });
+    expect(out[0]).toMatchObject({ kind: "compound", id: "p1", path: "New Cairo › 5th Settlement", area_id: "nc", subzone_id: "s5" });
     const byAlias = A.suggest("hydepark", { places, areas: tree });
     expect(byAlias[0]).toMatchObject({ kind: "compound", via: "name" === byAlias[0].via ? "name" : "alias" });
     const areaHit = A.suggest("banaf", { places, areas: tree });
     expect(areaHit.map((r) => r.id)).toContain("ban");
+    expect(areaHit.find((r) => r.id === "ban")).toMatchObject({ kind: "subzone", area_id: "nc", subzone_id: "ban" });
     expect(A.suggest("tagamoa", { places, areas: tree })[0]).toMatchObject({ kind: "area", id: "nc", via: "alias" });
   });
   test("a near spelling still shows as alike, and one letter finds nothing", () => {

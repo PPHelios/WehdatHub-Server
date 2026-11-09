@@ -48,7 +48,9 @@ const ERRORS = (lang) => ({
   link_short: L(lang, "الرابط مختصر. افتحه في جوجل ماب وانسخ الرابط الكامل.", "That is a short link. Open it in Google Maps and copy the full link."),
   link_unreadable: L(lang, "مش قادر أقرأ الرابط ده.", "I can't read that link."),
   duplicate: L(lang, "المكان ده موجود بالفعل. الأماكن المشابهة تحت، اضغط على واحد تعدله.", "That place already exists. The similar places are listed below: tap one to edit it."),
-  missing: L(lang, "المكان مش موجود.", "That place was not found.")
+  missing: L(lang, "المكان مش موجود.", "That place was not found."),
+  needs_area: L(lang, "اختار المنطقة. كل كمبوند لازم يكون ليه منطقة.", "Pick the area. Every compound needs one."),
+  bad_subzone: L(lang, "المنطقة الفرعية مش تابعة للمنطقة دي.", "That sub-zone is not under this area.")
 });
 
 // ---- Brokers -------------------------------------------------------------
@@ -114,15 +116,20 @@ function drawerBody(lang, units, place) {
 
 // ---- The CRM owner ---------------------------------------------------------
 
-function placeForm(lang, p) {
+function placeForm(lang, p, areas = []) {
   const v = p || {};
+  const tops = areas.filter((a) => !a.parent_id);
+  const name = (a) => a.name_en || a.name_ar;
+  const subs = areas.filter((a) => a.parent_id);
   return html`<form method="post" action="${v.id ? `/app/owner/map/${v.id}` : "/app/owner/map"}" class="card stack" data-place-form>
   <h2>${v.id ? L(lang, "تعديل مكان", "Edit place") : L(lang, "إضافة مكان", "Add a place")}</h2>
   <div class="grid">
     <label>${L(lang, "الاسم بالإنجليزي", "English name")}<input name="name_en" value="${v.name_en || ""}" maxlength="120" dir="ltr"></label>
     <label>${L(lang, "الاسم بالعربي", "Arabic name")}<input name="name_ar" value="${v.name_ar || ""}" maxlength="120"></label>
     <label>${L(lang, "المطور", "Developer")}<input name="developer" value="${v.developer || ""}" maxlength="120"></label>
-    <label>${L(lang, "المنطقة", "District")}<input name="district" value="${v.district || ""}" maxlength="120"></label>
+    <label>${L(lang, "المنطقة *", "Area *")}<select name="area_id" required><option value="">—</option>${tops.map((a) => html`<option value="${a.id}"${v.area_id === a.id ? raw(" selected") : ""}>${name(a)}</option>`)}</select></label>
+    <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<select name="subzone_id"><option value="">—</option>${tops.map((t) => html`<optgroup label="${name(t)}">${subs.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}"${v.subzone_id === a.id ? raw(" selected") : ""}>${name(a)}</option>`)}</optgroup>`)}</select></label>
+    <label>${L(lang, "الحي (نص قديم)", "District (old text)")}<input name="district" value="${v.district || ""}" maxlength="120"></label>
     <label>${L(lang, "خط العرض", "Latitude")}<input name="lat" value="${v.lat ?? ""}" inputmode="decimal" dir="ltr" data-lat></label>
     <label>${L(lang, "خط الطول", "Longitude")}<input name="lng" value="${v.lng ?? ""}" inputmode="decimal" dir="ltr" data-lng></label>
   </div>
@@ -157,10 +164,11 @@ async function ownerPage(req, pool, lang, tilesUrl) {
   const q = String(req.query.q || "").trim().slice(0, 80);
   const filter = req.query.v === "1" ? true : req.query.v === "0" ? false : null;
   const pageNo = Math.max(1, Math.floor(Number(req.query.p) || 1));
-  const [list, editing, allPins] = await Promise.all([
+  const [list, editing, allPins, areaList] = await Promise.all([
     Maps.list(pool, { q, verified: filter, limit: 50, offset: (pageNo - 1) * 50 }),
     req.query.edit ? Maps.place(pool, req.query.edit) : null,
-    Maps.allPlaces(pool)
+    Maps.allPlaces(pool),
+    require("../../services/areas").approvedAreas(pool)
   ]);
   const msg = String(req.query.msg || "");
   const err = ERRORS(lang)[String(req.query.err || "")];
@@ -170,7 +178,7 @@ async function ownerPage(req, pool, lang, tilesUrl) {
 ${notice}
 <p><a class="btn secondary small" href="/app/owner/map/find">📍 ${L(lang, "دوّر على الأماكن اللي من غير دبوس", "Find missing pins")}</a></p>
 <p class="muted">${L(lang, `${list.total} مكان، ${list.verified} منهم مراجَع.`, `${list.total} places, ${list.verified} checked.`)}</p>
-${placeForm(lang, editing)}
+${placeForm(lang, editing, areaList)}
 <div class="map-view map-pick" data-map data-pick data-places="${JSON.stringify(allPins.places.filter((x) => x.approved && x.lat != null && x.id !== editing?.id).map((x) => ({ id: x.id, n: x.name_en || x.name_ar, lat: x.lat, lng: x.lng })))}" role="application" aria-label="${L(lang, "اختار مكان الدبوس", "Pick the pin")}" data-tiles="${tilesUrl}" data-i18n="${JSON.stringify(words(lang))}" data-lang="${lang}"></div>
 <section class="card stack" id="places"><h2>${L(lang, "الأماكن", "Places")}</h2>
   <form method="get" action="/app/owner/map" class="row"><input type="search" name="q" value="${q}" placeholder="${L(lang, "ابحث", "Search")}"><select name="v"><option value="">${L(lang, "الكل", "All")}</option><option value="1"${filter === true ? raw(" selected") : ""}>${L(lang, "مراجَع", "Checked")}</option><option value="0"${filter === false ? raw(" selected") : ""}>${L(lang, "لسه", "Not yet")}</option></select><button type="submit" class="secondary">${L(lang, "ابحث", "Search")}</button></form>

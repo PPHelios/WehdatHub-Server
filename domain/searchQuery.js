@@ -874,6 +874,7 @@ function hasAnyFilter(parsed) {
       f.market ||
       (f.property_types || []).length ||
       (f.places || []).length ||
+      f.area_scope ||
       (f.place_terms || []).length ||
       (f.features || []).length ||
       (f.feature_terms || []).length ||

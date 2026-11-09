@@ -18,6 +18,7 @@ async function allPlaces(pool) {
 }
 const clearCache = () => {
   cache = { at: 0, places: [], index: new Map() };
+  require("./placeSuggest").resetCache();
 };
 
 const TYPES = ["sale", "rent"];
@@ -201,11 +202,14 @@ async function save(pool, id, input) {
   const c = P.cleanPlace(input);
   if (!c.ok) return c;
   const v = c.value;
+  // Every compound has an area; a sub-zone, if given, sits under it.
+  const loc = require("../domain/areas").checkLocation({ area_id: input.area_id, subzone_id: input.subzone_id }, { kind: "compound", areas: await require("./areas").approvedAreas(pool) });
+  if (!loc.ok) return { ok: false, error: loc.error };
   if (id) {
     try {
       const { rows } = await pool.query(
-        `UPDATE map_places SET name_key=$2, name_en=$3, name_ar=$4, developer=$5, district=$6, lat=$7, lng=$8, aliases=$9, verified=$10, approved=true, updated_at=now() WHERE id=$1 RETURNING *`,
-        [id, v.name_key, v.name_en, v.name_ar, v.developer, v.district, v.lat, v.lng, v.aliases, v.verified]
+        `UPDATE map_places SET name_key=$2, name_en=$3, name_ar=$4, developer=$5, district=$6, lat=$7, lng=$8, aliases=$9, verified=$10, area_id=$11, subzone_id=$12, approved=true, updated_at=now() WHERE id=$1 RETURNING *`,
+        [id, v.name_key, v.name_en, v.name_ar, v.developer, v.district, v.lat, v.lng, v.aliases, v.verified, loc.area_id, loc.subzone_id]
       );
       clearCache();
       return rows[0] ? { ok: true, place: rows[0] } : { ok: false, error: "missing" };
@@ -215,10 +219,10 @@ async function save(pool, id, input) {
     }
   }
   const { rows } = await pool.query(
-    `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, lat, lng, aliases, verified, source, approved)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual',true)
+    `INSERT INTO map_places (name_key, name_en, name_ar, developer, district, lat, lng, aliases, verified, source, approved, area_id, subzone_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual',true,$10,$11)
      ON CONFLICT (name_key) DO NOTHING RETURNING *`,
-    [v.name_key, v.name_en, v.name_ar, v.developer, v.district, v.lat, v.lng, v.aliases, v.verified]
+    [v.name_key, v.name_en, v.name_ar, v.developer, v.district, v.lat, v.lng, v.aliases, v.verified, loc.area_id, loc.subzone_id]
   );
   clearCache();
   return rows[0] ? { ok: true, place: rows[0] } : { ok: false, error: "duplicate" };
@@ -311,7 +315,7 @@ async function approve(pool, id) {
 
 /** Approved places only (the list units are matched against). */
 async function approvedIndex(pool) {
-  const { rows } = await pool.query("SELECT id, name_en, name_ar, aliases, verified FROM map_places WHERE approved");
+  const { rows } = await pool.query("SELECT id, name_en, name_ar, aliases, verified, area_id, subzone_id FROM map_places WHERE approved");
   return { rows, index: P.buildIndex(rows) };
 }
 
@@ -367,14 +371,15 @@ async function recheck(pool, { apply = false } = {}) {
     const place = places.find((x) => x.id === hit.id);
     const old = String(r.details?.notes || "").trim();
     const notes = hit.extra && !old.includes(hit.extra) ? [old, hit.extra].filter(Boolean).join(" — ") : old;
-    fixes.push({ id: r.id, place_id: place.id, compound: place.name_ar || place.name_en, compound_en: place.name_en || null, notes });
+    fixes.push({ id: r.id, place_id: place.id, area_id: place.area_id || null, subzone_id: place.subzone_id || null, compound: place.name_ar || place.name_en, compound_en: place.name_en || null, notes });
   }
   if (apply) {
     for (let i = 0; i < fixes.length; i += 300) {
       await pool.query(
         `UPDATE listings l SET place_id = x.place_id, compound_state = NULL, compound = x.compound, compound_en = x.compound_en,
+                area_id = COALESCE(x.area_id, l.area_id), subzone_id = CASE WHEN x.area_id IS NOT NULL THEN x.subzone_id ELSE l.subzone_id END,
                 details = CASE WHEN x.notes = '' THEN l.details ELSE jsonb_set(l.details, '{notes}', to_jsonb(x.notes)) END
-           FROM jsonb_to_recordset($1::jsonb) AS x(id uuid, place_id uuid, compound text, compound_en text, notes text)
+           FROM jsonb_to_recordset($1::jsonb) AS x(id uuid, place_id uuid, area_id uuid, subzone_id uuid, compound text, compound_en text, notes text)
           WHERE l.id = x.id`,
         [JSON.stringify(fixes.slice(i, i + 300))]
       );

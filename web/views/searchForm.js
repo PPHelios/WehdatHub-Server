@@ -71,7 +71,7 @@ function refineForm(filters, lang = "ar", { open = false, action = "/app/search"
     <span class="sep"></span>
     ${pill("radio", "market", "", !v.market, L(lang, "الكل", "Any"))}${pill("radio", "market", "resale", v.market === "resale", L(lang, "ريسيل", "Resale"))}${pill("radio", "market", "primary", v.market === "primary", L(lang, "برايمري", "Primary"))}
   </div>
-  <label>${L(lang, "المكان (كمبوند، مطور أو منطقة)", "Place (compound, developer or area)")}<input name="place" value="${v.place}" list="places" autocomplete="off"></label>
+  <label>${L(lang, "المكان (كمبوند، مطور أو منطقة)", "Place (compound, developer or area)")}<input name="place" value="${v.place}" list="places" autocomplete="off" data-place-suggest></label>
   <div class="pills" role="group" aria-label="${L(lang, "النوع", "Type")}">
     ${PROPERTY_TYPES.map((t) => pill("checkbox", "type", t, v.type.includes(t), pick(Describe.TYPE_LABELS[t], lang)))}
   </div>

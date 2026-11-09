@@ -198,7 +198,8 @@ function register(api, { pool }) {
     // The compound must be on the approved list unless the broker says it is new (kept as pending for review).
     if (String(ev.listing.compound || "").trim() && !(fields.compound_new === true || fields.compound_new === "1")) {
       const r = await require("../services/compoundResolve").resolve(pool, ev.listing);
-      if (r.compound_state === "needs_fix") return res.status(422).json({ error: "compound_unknown" });
+      // The names it looks like are offered ("did you mean"); the broker picks one or marks the compound as new.
+      if (r.compound_state === "needs_fix") return res.status(422).json({ error: "compound_unknown", suggestions: await require("../services/compoundResolve").suggest(pool, ev.listing.compound, 3) });
     }
     if (!(fields.force === true || fields.force === "1")) {
       const duplicate = await Store.findDuplicate(pool, broker.agency_id, ev.listing);

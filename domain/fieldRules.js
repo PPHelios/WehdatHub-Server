@@ -54,7 +54,7 @@ function paymentCase(l = {}) {
 const LABELS = {
   listing_type: ["بيع أو إيجار", "Sale or rent"],
   property_type: ["نوع الوحدة", "Property type"],
-  location: ["الكمبوند (أو الحي والمدينة)", "Compound (or district and city)"],
+  location: ["الكمبوند أو المنطقة", "Compound or area"],
   area_value: ["المساحة", "Area"],
   bua: ["مساحة المباني (BUA)", "Built-up area (BUA)"],
   price_value: ["السعر", "Price"],
@@ -140,7 +140,8 @@ function evaluate(listing = {}, { lang = "ar", photoCount = null, askInstallment
   // All units
   if (!["sale", "rent"].includes(l.listing_type)) blockers.push(item("listing_type", lang));
   if (kind === "unknown") blockers.push(item("property_type", lang));
-  const hasPlace = present(String(l.compound || "").trim()) || (present(String(l.district || "").trim()) && present(String(l.city || "").trim()));
+  // A compound or an area is enough; a compound brings its own area (services/compoundResolve.js). District and city typed together still count.
+  const hasPlace = present(String(l.compound || "").trim()) || present(l.area_id) || (present(String(l.district || "").trim()) && present(String(l.city || "").trim()));
   if (!hasPlace) blockers.push(item("location", lang));
   if (!positive(l.area_value)) blockers.push(item(kind === "villa" ? "bua" : "area_value", lang));
 

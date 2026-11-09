@@ -331,13 +331,13 @@ async function claim(pool, broker, id, kind) {
   return rows[0] || null;
 }
 
-async function insertOne(pool, broker, fields, code, lang) {
+async function insertOne(pool, broker, fields, code, lang, batch = null) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     // A file has no one to ask: a row with an owner phone and no name uses the phone as the name.
     if (fields.details?.owner_phone && !fields.details.owner_name) fields.details.owner_name = require("../domain/phone").displayPhone(fields.details.owner_phone);
-    const res = await Store.createListing(client, broker, { fields, code, lang });
+    const res = await Store.createListing(client, broker, { fields, code, lang, batch });
     if (res.listing && fields.status && fields.status !== "active") {
       await client.query("UPDATE listings SET status = $1 WHERE id = $2 AND agency_id = $3", [fields.status, res.listing.id, broker.agency_id]);
     }
@@ -375,7 +375,7 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
   for (const item of imp.payload.items) {
     if (!wanted.has(item.row)) continue;
     if (item.kind === "new") {
-      const res = await insertOne(pool, broker, item.fields, item.code, lang);
+      const res = await insertOne(pool, broker, item.fields, item.code, lang, `import:${id}`);
       if (res.listing) {
         result.created.push(res.listing.code);
         result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
@@ -714,7 +714,7 @@ async function applyGroup(pool, broker, id, { rows = [], lang = "ar" } = {}) {
   const used = new Set();
   for (const r of imp.payload.results || []) {
     if (!r || !wanted.has(r.i) || !r.ok) continue;
-    const res = await insertOne(pool, broker, r.fields, null, lang);
+    const res = await insertOne(pool, broker, r.fields, null, lang, `import:${id}`);
     if (!res.listing) {
       result.failed.push(r.i);
       if (res.limit) result.limit = res.limit;

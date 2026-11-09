@@ -14,7 +14,7 @@ const PLAN_ROWS = 3;
 
 // Columns and detail keys the form owns (everything else on the row is kept as it is).
 const FORM_COLUMNS = [
-  "listing_type", "market", "property_type", "compound", "district", "city", "price_value", "area_value", "bedrooms",
+  "listing_type", "market", "property_type", "compound", "area_id", "subzone_id", "district", "city", "price_value", "area_value", "bedrooms",
   "bathrooms", "floor_level", "finishing", "furnishing", "delivery_year", "delivery_quarter", "delivery_month", "is_ready",
   "delivery_raw", "down_payment_value", "remaining_amount", "installment_value", "payment_frequency", "installments_end",
   "installment_years", "maintenance_pct"
@@ -22,6 +22,10 @@ const FORM_COLUMNS = [
 const FORM_DETAILS = ["land_area", "garden_area", "roof_area", "project", "developer", "rent_period", "currency", "owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "clean_summary", "unit_no", "address"];
 const INTERNAL_DETAILS = ["owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "unit_no", "address"];
 
+const uuid = (v) => {
+  const s = String(Array.isArray(v) ? v[v.length - 1] : v ?? "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ? s : null;
+};
 const one = (v) => (Array.isArray(v) ? v[v.length - 1] : v);
 const many = (v) => (v === undefined || v === null || v === "" ? [] : Array.isArray(v) ? v : [v]);
 const str = (v, max = 200) => {
@@ -80,6 +84,8 @@ function unitFromForm(body = {}) {
     market,
     property_type: oneOf(body.property_type, PROPERTY_TYPES),
     compound: str(body.compound, 120),
+    area_id: uuid(body.area_id),
+    subzone_id: uuid(body.subzone_id),
     district: str(body.district, 120),
     city: str(body.city, 120),
     price_value: money(body.price_value),
@@ -168,6 +174,8 @@ function formFromUnit(l = {}) {
     market: fmt(l.market || "resale"),
     property_type: fmt(l.property_type),
     compound: fmt(l.compound),
+    area_id: fmt(l.area_id),
+    subzone_id: fmt(l.subzone_id),
     district: fmt(l.district),
     city: fmt(l.city),
     price_value: fmt(l.price_value),
