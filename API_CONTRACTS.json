@@ -2496,6 +2496,22 @@
       "setPublished": ["pool", "id", "published"],
       "use": ["pool", "actor", "id"],
       "PAGE_SIZE": "Number"
+    },
+    "domain/areas.js": {
+      "areaKeys": ["area"],
+      "buildIndex": ["areas"],
+      "resolveArea": ["index", "text"],
+      "chain": ["areas", "id"],
+      "placement": ["areas", "id"],
+      "checkLocation": ["loc", "params"],
+      "cleanArea": ["input"],
+      "suggest": ["text", "params", "limit"]
+    },
+    "services/areas.js": {
+      "approvedAreas": ["db"],
+      "seedTree": ["db", "tree", "parentId"],
+      "linkPlacesFromDistrict": ["db"],
+      "placesWithoutArea": ["db", "limit"]
     }
   },
   "invariant_variable_names": {
