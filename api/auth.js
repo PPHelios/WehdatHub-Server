@@ -67,7 +67,35 @@ function register(api, { pool }) {
 
   api.get("/me", async (req, res) => {
     if (!req.session) return res.status(401).json({ error: "unauthorized" });
-    return res.json({ broker: brokerView(req.session.broker), agency: agencyView(req.session.agency), rights: await require("../services/unitRights").rights(pool, req.session.broker), expiresAt: req.session.expiresAt });
+    const TestRole = require("../lib/testRole");
+    const b = req.session.broker;
+    const testSwitch = TestRole.canSwitch(b) ? { roles: TestRole.ROLES, role: b.home_role || b.role, canView: TestRole.canView(b), viewing: TestRole.isViewing(req.token) } : null;
+    return res.json({ broker: brokerView(b), agency: agencyView(req.session.agency), rights: await require("../services/unitRights").rights(pool, b), expiresAt: req.session.expiresAt, testSwitch });
+  });
+
+  // The test switch from the app: the same actions as the website's test switch (web/routes/testRole.js).
+  api.post("/test-role", async (req, res) => {
+    if (!req.session) return res.status(401).json({ error: "unauthorized" });
+    const TestRole = require("../lib/testRole");
+    const broker = req.session.broker;
+    if (!TestRole.canSwitch(broker)) return res.status(403).json({ error: "forbidden" });
+    const role = String(req.body?.role || "");
+    if (!TestRole.ROLES.includes(role)) return res.status(422).json({ error: "unknown_role" });
+    const home = TestRole.homeAgencyOf(broker);
+    const from = broker.home_role || broker.role;
+    await pool.query("UPDATE brokers SET role = $2 WHERE id = $1 AND agency_id = $3", [broker.id, role, home]);
+    logOperation(pool, { agency_id: home, broker_id: broker.id, operation_type: "test_role_switch", metadata: { from, to: role } });
+    return res.json({ ok: true, role });
+  });
+
+  api.post("/test-view", async (req, res) => {
+    if (!req.session) return res.status(401).json({ error: "unauthorized" });
+    const TestRole = require("../lib/testRole");
+    const broker = req.session.broker;
+    if (!TestRole.canSwitch(broker)) return res.status(403).json({ error: "forbidden" });
+    const on = req.body?.view === "other" && TestRole.canView(broker);
+    TestRole.setViewing(req.token, on);
+    return res.json({ ok: true, viewing: on });
   });
 }
 

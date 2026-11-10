@@ -36,6 +36,11 @@ function loadBearer(pool) {
     try {
       req.token = bearerOf(req);
       req.session = req.token ? await WebAuth.getSession(pool, req.token) : null;
+      // Same test switch as the website: while this session views NCH, it sees that agency read-only.
+      const TestRole = require("../lib/testRole");
+      if (req.session && TestRole.canView(req.session.broker) && TestRole.isViewing(req.token)) {
+        req.session.broker = TestRole.asViewer(req.session.broker);
+      }
       next();
     } catch (err) {
       next(err);
