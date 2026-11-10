@@ -574,6 +574,7 @@
       "LOGIN_CODE_TTL_MINUTES": "Number",
       "issueLoginCode": ["pool", "broker"],
       "consumeLoginCode": ["pool", "broker", "code"],
+      "demoLoginAccepted": ["env", "broker", "code"],
       "LOGIN_TOKEN_TTL_MINUTES": "Number",
       "SESSION_DAYS": "Number",
       "sha256": ["s"],
@@ -2544,6 +2545,12 @@
     },
     "web/routes/placeSuggest.js": {
       "register": ["web", "params"]
+    },
+    "web/routes/legal.js": {
+      "mountLegal": ["app", "params"],
+      "PRIVACY": "Object",
+      "TERMS": "Object",
+      "CONTACT": "String"
     }
   },
   "invariant_variable_names": {

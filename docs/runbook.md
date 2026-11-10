@@ -59,6 +59,10 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
+| `DEMO_LOGIN_ENABLED` | no | off | `true` turns on the store-review demo sign-in. Off unless set to exactly `true`. Turn it off after the review. |
+| `DEMO_LOGIN_PHONE` | with demo on | — | Normalised phone of the one demo broker (e.g. `201044556666`). The fixed code works for this number only. |
+| `DEMO_LOGIN_CODE` | with demo on | — | The fixed six-digit code for the demo broker. Keep it only in Render, never in the repo. |
+| `DEMO_LOGIN_AGENCY_ID` | with demo on | — | The one agency the demo broker belongs to. The code is refused in any other agency. |
 | `MAP_TILES_URL` | no | empty | Public address of the `.pmtiles` map file (Cloudflare R2, `https://….pmtiles`). Empty = the Map page says it is not set up. The bucket needs a CORS rule that allows `GET` and the `Range` header from the app's address, or the map stays blank. |
 | `FIREBASE_SERVICE_ACCOUNT` | no | empty | The Firebase service account key (the whole JSON, one line) for alerts to the mobile app. Empty = app alerts are off; web push and Telegram are unaffected. Keep it only in Render. |
 | `FIREBASE_CLIENT_CONFIG` | no | empty | The phone apps' public Firebase identifiers, one line: `{"android":{"apiKey":"…","appId":"…","projectId":"…","messagingSenderId":"…"},"ios":{…}}`. The app reads them from `/api/v1/config` and switches alerts and crash reports on; empty = both stay off. Not secret, but keep it in Render with the key above. |
