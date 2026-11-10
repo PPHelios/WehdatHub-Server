@@ -107,6 +107,12 @@ function privacyBody(lang, other) {
   ${SECTIONS.map(
     (s) => html`<section><h2>${T(lang, s.title)}</h2>${(lang === "en" ? s.en : s.ar).map((p) => html`<p>${p}</p>`)}</section>`
   )}
+  <section class="delete-box">
+    <h2>${T(lang, ["طلب حذف بياناتي", "Request deletion of my data"])}</h2>
+    <p>${T(lang, ["اضغط الزرار وابعت الرسالة من بريدك المرتبط بحسابك. هنحذف بياناتك الشخصية خلال ٣٠ يومًا. بيتم حذف: اسمك ورقمك وإعدادات حسابك وسجلات الدخول. ولا نحذف بيانات الوحدات والعملاء اللي شركتك بتملكها إلا بطلبها، ونحتفظ فقط بما يُلزمنا القانون بالاحتفاظ به.", "Tap the button and send the email from the address linked to your account. We delete your personal data within 30 days. This covers your name, number, account settings and sign-in records. Units and client records owned by your agency are removed only at the agency's request. We keep only what the law requires."])}</p>
+    <p><a class="btn" href="mailto:${CONTACT}?subject=${encodeURIComponent(T(lang, ["طلب حذف بياناتي", "Delete my data"]))}">✉️ ${T(lang, ["ابعت طلب الحذف", "Send deletion request"])}</a></p>
+    <p class="muted">${CONTACT}</p>
+  </section>
 </article>
 <footer class="lp-foot"><span>${BRAND.name}</span><a href="/?lang=${lang}">${T(lang, ["الرئيسية", "Home"])}</a><a href="/app/guide?lang=${lang}">${T(lang, ["الدليل", "Guide"])}</a><a href="mailto:${CONTACT}">${CONTACT}</a></footer>`;
 }
