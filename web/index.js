@@ -183,7 +183,7 @@ function mountWeb(app, { pool, config }) {
   app.use("/app", web);
   // The landing page at / and its "try it" form (phase 2 step 3).
   require("./routes/landing").mountLanding(app, { pool, assets });
-  require("./routes/privacy").mountPrivacy(app, { assets });
+  require("./routes/legal").mountLegal(app, { assets });
   // Public unit pages last: /<agency-slug>/<unit-code>?s=<token> (reserved slugs never reach them).
   require("./routes/publicUnit").mountPublic(app, { pool, assets });
   return { assets };
