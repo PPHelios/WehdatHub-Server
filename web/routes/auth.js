@@ -217,7 +217,8 @@ function register(web, { pool, page }) {
        FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`,
       [phone]
     );
-    const broker = await WebAuth.consumeLoginCode(pool, rows[0], req.body.code);
+    const demo = WebAuth.demoLoginAccepted(process.env, rows[0], req.body.code);
+    const broker = demo ? rows[0] : await WebAuth.consumeLoginCode(pool, rows[0], req.body.code);
     if (!broker) {
       logOperation(pool, { operation_type: "web_login_code", status: "failed", metadata: { ip: req.ip } });
       return bad(L(req.lang, "الكود مش صح، أو انتهى، أو اتستخدم قبل كده.", "That code is wrong, expired, or already used."));
@@ -225,7 +226,7 @@ function register(web, { pool, page }) {
     if (req.sid) await WebAuth.revokeSession(pool, req.sid);
     const { sid } = await WebAuth.createSession(pool, broker, { userAgent: req.get("user-agent") });
     S.setSessionCookie(res, sid);
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_code" });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_code", metadata: demo ? { demo: true } : undefined });
     return res.redirect(303, next || "/app/");
   });
 
