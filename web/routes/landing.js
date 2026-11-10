@@ -86,7 +86,7 @@ function landingBody(lang, { telegramUrl, form, logo, signupOpen, actions = [] }
 </section>
 ${creditTable(actions, lang)}
 ${form}
-<footer class="lp-foot"><span>${BRAND.name}</span><a href="/app/guide?lang=${lang}">${T(lang, "الدليل", "Guide")}</a><a href="/app/">${T(lang, "دخول", "Sign in")}</a></footer>`;
+<footer class="lp-foot"><span>${BRAND.name}</span><a href="/app/guide?lang=${lang}">${T(lang, "الدليل", "Guide")}</a><a href="/privacy?lang=${lang}">${T(lang, "الخصوصية", "Privacy")}</a><a href="/app/">${T(lang, "دخول", "Sign in")}</a></footer>`;
 }
 
 function mountLanding(app, { pool, assets }) {
