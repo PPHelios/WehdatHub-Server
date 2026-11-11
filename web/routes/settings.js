@@ -61,8 +61,8 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   ].filter(([, , show]) => show);
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
   ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`<label>${L(lang, "تشغيل", "On")} <select name="on_${k}" data-kind="${k}"${fixed("on") ? html` disabled` : ""}><option value="1"${eff.enabled ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${eff.enabled ? "" : html` selected`}>${L(lang, "مقفول", "Off")}</option></select></label>`}
-  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
-  ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
+  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") || !eff.enabled ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
+  ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") || !eff.enabled ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
 </div>`;
 }
 

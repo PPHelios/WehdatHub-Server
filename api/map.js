@@ -4,6 +4,7 @@
 
 const Maps = require("../services/mapPlaces");
 const { getConfig } = require("../config");
+const Storage = require("../lib/supabase");
 
 function register(api, { pool }) {
   api.get("/map", async (req, res) => {
@@ -28,7 +29,8 @@ function register(api, { pool }) {
         bathrooms: u.bathrooms,
         area: u.area_value,
         price: u.price_value,
-        priceText: u.price_display
+        priceText: u.price_display,
+        photo: u.photo ? Storage.photoUrl(u.photo) : null
       }))
     });
   });
