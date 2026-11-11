@@ -7,6 +7,7 @@ const Lib = require("../services/globalProjects");
 const Compare = require("../lib/compareLinks");
 const Billing = require("../services/billing");
 const Credits = require("../services/credits");
+const UsageCredits = require("../lib/credits");
 const Referrals = require("../services/referrals");
 const OwnerAgencies = require("../services/ownerAgencies");
 const AgencyCreate = require("../services/agencyCreate");
@@ -86,9 +87,9 @@ function register(api, { pool }) {
 
   api.get("/usage", async (req, res) => {
     const b = req.session.broker;
-    const [state, allowance] = await Promise.all([Credits.check(pool, b), Billing.allowance(pool, b.agency_id)]);
-    const mine = await Credits.usage(pool, b.agency_id, { brokerId: b.id });
-    const agency = isManager(b) ? await Credits.usage(pool, b.agency_id) : null;
+    const [state, allowance] = await Promise.all([UsageCredits.check(pool, b), Billing.allowance(pool, b.agency_id)]);
+    const mine = await UsageCredits.usage(pool, b.agency_id, { brokerId: b.id });
+    const agency = isManager(b) ? await UsageCredits.usage(pool, b.agency_id) : null;
     res.json({ state, allowance, mine, agency });
   });
 
