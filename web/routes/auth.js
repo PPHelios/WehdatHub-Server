@@ -3,6 +3,7 @@
 "use strict";
 
 const WebAuth = require("../../lib/webAuth");
+const DemoLogin = require("../../lib/demoLogin");
 const RateLimit = require("../../lib/rateLimit");
 const Links = require("../../lib/links");
 const Onboarding = require("../../lib/onboarding");
@@ -102,7 +103,7 @@ function register(web, { pool, page }) {
         [phone]
       );
       // The demo number never gets a code or a link sent: it signs in only with the saved demo code.
-      const broker = WebAuth.isDemoBroker(process.env, rows[0]) ? null : rows[0];
+      const broker = DemoLogin.isDemoBroker(process.env, rows[0]) ? null : rows[0];
       if (broker && req.body.mode === "code") {
         const code = await WebAuth.issueLoginCode(pool, broker);
         const lang = broker.preferred_lang || "ar";
