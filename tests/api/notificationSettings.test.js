@@ -42,12 +42,16 @@ test("a broker sees only the alert kinds for their role, and saves channel, quie
     .send({ kinds: { follow_up: { channel: "telegram", on: true } }, quiet: { enabled: false, start: 22, end: 8 }, reminderMinutes: [30, 120] });
   expect(saved.status).toBe(200);
   expect(saved.body.kinds.follow_up.channel).toBe("telegram");
+  expect(saved.body.kinds.follow_up.on).toBe(true);
+  expect(saved.body.kinds.follow_up.label.en).toBe("Follow-ups and viewings");
   expect(saved.body.quiet.enabled).toBe(false);
   expect(saved.body.reminderMinutes).toEqual([30, 120]);
 });
 
 test("values outside the allowed lists are ignored", async () => {
   const t = await login("broker");
+  const off = await api().put("/api/v1/notification-settings").set(auth(t)).send({ kinds: { match: { on: false } } });
+  expect(off.body.kinds.match.on).toBe(false);
   const r = await api().put("/api/v1/notification-settings").set(auth(t)).send({ kinds: { follow_up: { channel: "fax", frequency: "weekly" } } });
   expect(r.status).toBe(200);
   expect(r.body.kinds.follow_up.channel).not.toBe("fax");

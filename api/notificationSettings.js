@@ -14,9 +14,9 @@ async function read(pool, broker) {
   const items = {};
   for (const k of kinds) {
     const eff = await Notifications.effectiveFor(pool, me, k);
-    items[k] = { on: eff.on !== false, channel: eff.channel || prefs.channels[k], frequency: eff.frequency || "immediate", locked: eff.locked || null, urgent: Policy.isUrgent(k) };
+    items[k] = { label: { ar: Notifications.KIND_LABELS[k][0], en: Notifications.KIND_LABELS[k][1] }, on: eff.enabled !== false, channel: eff.channel || prefs.channels[k], frequency: eff.frequency || "immediate", locked: eff.locked || null, urgent: Policy.isUrgent(k) };
   }
-  return { kinds: items, reminderMinutes: prefs.reminderMinutes, quiet: prefs.quiet, channels: Notifications.CHANNELS };
+  return { kinds: items, reminderMinutes: prefs.reminderMinutes, quiet: prefs.quiet, telegramLinked: Boolean(me.telegram_chat_id) };
 }
 
 function register(api, { pool }) {
