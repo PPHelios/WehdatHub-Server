@@ -59,3 +59,11 @@ test("owners list answers, and only the agency owner marks private", async () =>
   const r = await api().post("/api/v1/portfolio/unit/10000000-0000-0000-0000-0000000000aa").set(await as("manager")).send({ value: true });
   expect(r.status).toBe(403);
 });
+
+test("dashboard and win-loss are for managers; prices and reports for everyone", async () => {
+  expect((await api().get("/api/v1/dashboard").set(await as("broker"))).status).toBe(403);
+  expect((await api().get("/api/v1/dashboard").set(await as("manager"))).status).toBe(200);
+  expect((await api().get("/api/v1/insights/winloss").set(await as("broker"))).status).toBe(403);
+  expect((await api().get("/api/v1/insights/prices").set(await as("broker"))).status).toBe(200);
+  expect((await api().post("/api/v1/report").set(await as("broker")).send({ text: "ab" })).status).toBe(422);
+});
