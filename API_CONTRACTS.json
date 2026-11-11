@@ -883,7 +883,8 @@
       "MIN_AGE_DAYS": "Number",
       "findOrphans": ["pool", "params"],
       "run": ["pool", "params"],
-      "checkJob": []
+      "checkJob": [],
+      "deleteSwitchOn": ["value"]
     },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",

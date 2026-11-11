@@ -37,8 +37,13 @@ async function findOrphans(pool, { limit = DELETE_BATCH } = {}) {
   return { count: rows[0].count, bytes: Number(rows[0].bytes), names: rows[0].names, available: true };
 }
 
+/** The delete switch: tolerant of stray spaces, case and quotes from the hosting dashboard (e.g. " true "). */
+function deleteSwitchOn(value = process.env.STORAGE_CLEANUP_DELETE) {
+  return /^(true|1|on|yes)$/i.test(String(value ?? "").trim().replace(/^["']|["']$/g, "").trim());
+}
+
 /** One weekly run: reports the orphans; deletes a batch of them only when the delete switch is on. */
-async function run(pool, { deleteFiles = process.env.STORAGE_CLEANUP_DELETE === "true" } = {}) {
+async function run(pool, { deleteFiles = deleteSwitchOn() } = {}) {
   const found = await findOrphans(pool);
   let deleted = 0;
   if (deleteFiles && found.names.length) {
@@ -48,6 +53,13 @@ async function run(pool, { deleteFiles = process.env.STORAGE_CLEANUP_DELETE === 
   return { orphans: found.count, orphan_bytes: found.bytes, deleted, dry_run: !deleteFiles };
 }
 
-const checkJob = () => ({ name: "storage_check", everyMs: 7 * 24 * 3600 * 1000, run: ({ pool }) => run(pool).then((counts) => ({ counts, watermark: { orphans: counts.orphans, bytes: counts.orphan_bytes, dry_run: counts.dry_run } })) });
+const checkJob = () => ({
+  name: "storage_check",
+  everyMs: 7 * 24 * 3600 * 1000,
+  run: ({ pool }) => run(pool).then((counts) => ({
+    counts,
+    watermark: { orphans: counts.orphans, bytes: counts.orphan_bytes, dry_run: counts.dry_run, deleted: counts.deleted }
+  }))
+});
 
-module.exports = { BUCKET, MIN_AGE_DAYS, findOrphans, run, checkJob };
+module.exports = { BUCKET, MIN_AGE_DAYS, findOrphans, run, checkJob, deleteSwitchOn };
