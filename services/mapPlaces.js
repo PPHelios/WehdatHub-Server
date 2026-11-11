@@ -145,7 +145,8 @@ async function unitsAt(pool, broker, placeId, query = {}, limit = 40) {
   }
   if (!compounds.size && !compoundsEn.size) return [];
   const { rows } = await pool.query(
-    `SELECT l.id, l.code, l.title, l.property_type, l.listing_type, l.bedrooms, l.bathrooms, l.area_value, l.price_value, l.price_display, l.compound, l.compound_en
+    `SELECT l.id, l.code, l.title, l.property_type, l.listing_type, l.bedrooms, l.bathrooms, l.area_value, l.price_value, l.price_display, l.compound, l.compound_en,
+            (SELECT li.url FROM listing_images li WHERE li.listing_id = l.id AND li.agency_id = l.agency_id ORDER BY li.position LIMIT 1) AS photo
        FROM listings l
       WHERE ${FILTER_SQL} AND ${Vis.units("l")} AND (l.compound = ANY($10::text[]) OR l.compound_en = ANY($11::text[]))
       ORDER BY l.created_at DESC
