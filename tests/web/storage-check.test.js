@@ -45,3 +45,15 @@ test("the CRM owner is alerted after a dry run that found files", async () => {
   await h.query("INSERT INTO crm_jobs (name, watermark) VALUES ('storage_check', '{\"orphans\": 3, \"bytes\": 3145728, \"dry_run\": true}') ON CONFLICT (name) DO UPDATE SET watermark = EXCLUDED.watermark");
   expect((await Alerts.due(h.pool)).map((a) => a.key)).toContain("storage_orphans");
 });
+
+test("the delete switch accepts stray spaces, case and quotes", () => {
+  for (const v of ["true", " true ", "TRUE", "'true'", "1", "yes"]) expect(StorageCheck.deleteSwitchOn(v)).toBe(true);
+  for (const v of ["", undefined, "false", "0", "no", "tru"]) expect(StorageCheck.deleteSwitchOn(v)).toBe(false);
+});
+
+test("after a run that deleted files the owner sees that deletion ran, not a dry-run prompt", async () => {
+  await h.query("INSERT INTO crm_jobs (name, watermark) VALUES ('storage_check', '{\"orphans\": 1, \"bytes\": 2000, \"dry_run\": false, \"deleted\": 1}') ON CONFLICT (name) DO UPDATE SET watermark = EXCLUDED.watermark");
+  const keys = (await Alerts.due(h.pool)).map((a) => a.key);
+  expect(keys).toContain("storage_deleted");
+  expect(keys).not.toContain("storage_orphans");
+});
