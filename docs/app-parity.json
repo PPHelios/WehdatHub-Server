@@ -7,7 +7,7 @@
     "app": "Activity log"
   },
   "adminBoard.js": {
-    "app": "planned: Platform section (PR 8)"
+    "app": "Platform"
   },
   "assistant.js": {
     "app": "Ask"
@@ -19,16 +19,16 @@
     "web": "client-facing page"
   },
   "catalogue.js": {
-    "app": "planned: Projects (PR 5)"
+    "app": "Projects (read, archive, clarify; editing and uploads stay on the website)"
   },
   "catalogueUpdates.js": {
-    "app": "planned: Projects (PR 5)"
+    "app": "Projects"
   },
   "commissions.js": {
     "app": "Commissions (PR 4)"
   },
   "compare.js": {
-    "app": "planned: Projects (PR 6)"
+    "app": "Compare"
   },
   "dashboard.js": {
     "app": "Dashboard (PR 3)"
@@ -40,7 +40,7 @@
     "web": "client-facing page"
   },
   "globalProjects.js": {
-    "app": "planned: Projects (PR 5)"
+    "app": "Library"
   },
   "guide.js": {
     "web": "help pages"
@@ -91,13 +91,13 @@
     "app": "place boxes"
   },
   "plan.js": {
-    "app": "planned: Settings and plan (PR 7)"
+    "app": "Plan"
   },
   "portalEnquiries.js": {
     "app": "Portal enquiries (PR 4)"
   },
   "priceSheets.js": {
-    "app": "planned: Projects (PR 6)"
+    "web": "web only: price sheet uploads and reading"
   },
   "publicUnit.js": {
     "web": "client-facing page"
@@ -112,7 +112,7 @@
     "app": "Search"
   },
   "settings.js": {
-    "app": "planned: Settings and plan (PR 7)"
+    "app": "Notifications (more settings on the website)"
   },
   "signup.js": {
     "web": "public sign-up"
@@ -133,7 +133,7 @@
     "app": "Units"
   },
   "usage.js": {
-    "app": "planned: Settings and plan (PR 7)"
+    "app": "Usage (read)"
   },
   "viewing.js": {
     "app": "Viewings"
