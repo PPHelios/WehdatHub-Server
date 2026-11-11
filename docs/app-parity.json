@@ -25,7 +25,7 @@
     "app": "planned: Projects (PR 5)"
   },
   "commissions.js": {
-    "app": "planned: Insights (PR 3)"
+    "app": "Commissions (PR 4)"
   },
   "compare.js": {
     "app": "planned: Projects (PR 6)"
@@ -34,7 +34,7 @@
     "app": "Dashboard (PR 3)"
   },
   "deals.js": {
-    "app": "planned: Insights (PR 4)"
+    "app": "Deals (PR 4)"
   },
   "gallery.js": {
     "web": "client-facing page"
@@ -79,7 +79,7 @@
     "app": "Notifications"
   },
   "openedLinks.js": {
-    "app": "planned: Insights (PR 4)"
+    "app": "Opened links (PR 4)"
   },
   "owners.js": {
     "app": "Owners"
@@ -94,7 +94,7 @@
     "app": "planned: Settings and plan (PR 7)"
   },
   "portalEnquiries.js": {
-    "app": "planned: Insights (PR 4)"
+    "app": "Portal enquiries (PR 4)"
   },
   "priceSheets.js": {
     "app": "planned: Projects (PR 6)"
@@ -118,7 +118,7 @@
     "web": "public sign-up"
   },
   "sources.js": {
-    "app": "planned: Insights (PR 4)"
+    "app": "Lead sources (PR 4)"
   },
   "team.js": {
     "app": "Team"

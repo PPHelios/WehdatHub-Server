@@ -89,6 +89,7 @@ function mountApi(app, { pool }) {
   require("./access").register(priv, { pool });
   require("./teamAdmin").register(priv, { pool });
   require("./insights").register(priv, { pool });
+  require("./deals").register(priv, { pool });
   require("./ask").register(priv, { pool });
   require("./map").register(priv, { pool });
   require("./places").register(priv, { pool });
