@@ -37,6 +37,23 @@ for (const re of [/^\/units\/new$/, /^\/units\/extract$/, /^\/units\/review$/, /
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
 const ctxOf = (pool, req) => ({ pool, broker: req.session.broker, agency: req.session.agency, lang: langOf(req) });
 
+/**
+ * Every refused add or edit leaves a row in operation_logs (status error, error_code = the reason) and answers with a
+ * readable text. The reason and the blocked field names are kept; no unit values are logged.
+ */
+function traceRefusal(pool, req, { reason, listingCode = null, blockers = [] }) {
+  const { broker } = req.session;
+  logOperation(pool, {
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: listingCode,
+    operation_type: "unit_write_refused",
+    status: "error",
+    error_code: reason,
+    metadata: { method: req.method, path: req.path.replace(/[0-9a-f-]{36}/gi, ":id"), role: broker.role || null, blockers }
+  });
+}
+
 /** Normalizes and uploads photos before any transaction; returns { urls, failed }. */
 async function storePhotos(broker, files) {
   const urls = [];
@@ -123,6 +140,7 @@ function register(web, { pool, page, assets }) {
   const writesOff = async (req, res) => {
     if (await Rights.mayWrite(pool, req.session.broker)) return false;
     const lang = langOf(req);
+    traceRefusal(pool, req, { reason: "writes_off" });
     res.status(403).type("text/plain").send(L10n(lang, "مالك الشركة قفل إضافة وتعديل الوحدات للسماسرة.", "The agency owner has switched off adding and editing units for brokers."));
     return true;
   };
@@ -134,9 +152,18 @@ function register(web, { pool, page, assets }) {
 
   web.get("/units/:code/edit", async (req, res, next) => {
     if (await writesOff(req, res)) return undefined;
-    const listing = await editable(pool, req.session.broker, req.params.code);
-    if (!listing) return next();
-    return formPage(req, res, { mode: "edit", code: listing.code, version: listing.version, values: Form.formFromUnit(listing), images: await imagesOf(pool, listing) });
+    const { broker } = req.session;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found) {
+      traceRefusal(pool, req, { reason: "edit_unit_not_found", listingCode: req.params.code });
+      return next();
+    }
+    if (!Authz.canEdit(broker, found)) {
+      // Same answer as a unit that does not exist, so a VIP unit's existence is not revealed; the reason is in the log.
+      traceRefusal(pool, req, { reason: found.is_private ? "edit_vip_owner_only" : "edit_role_not_allowed", listingCode: found.code });
+      return res.status(404).type("text/plain").send(L10n(langOf(req), "الوحدة دي مش متاحة لحسابك.", "This unit is not available to your account."));
+    }
+    return formPage(req, res, { mode: "edit", code: found.code, version: found.version, values: Form.formFromUnit(found), images: await imagesOf(pool, found) });
   });
 
   // ✨ Fill the form from a description or a voice note (AI extraction; what the form already says is kept).
@@ -218,8 +245,10 @@ function register(web, { pool, page, assets }) {
     const form = Form.unitFromForm(req.body);
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
     const ev = evaluate({ existing: null, form, lang, photoCount: files.length });
-    const again = (status, error, duplicate = null) =>
-      formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
+    const again = (status, error, duplicate = null) => {
+      traceRefusal(pool, req, { reason: `create_refused_${status}`, listingCode: form.code || null, blockers: ev.blockers.map((b) => b.field) });
+      return formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
+    };
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
     const nameError = ownerNameError(ev.listing, req.body, lang);
     if (nameError) return again(422, nameError);
@@ -311,10 +340,17 @@ function register(web, { pool, page, assets }) {
 
     if (out.missing || out.forbidden) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
-      return next();
+      traceRefusal(pool, req, { reason: out.missing ? "save_unit_not_found" : "save_forbidden", listingCode: req.params.code });
+      if (out.missing) return next();
+      return res.status(404).type("text/plain").send(L10n(lang, "الوحدة دي مش متاحة لحسابك.", "This unit is not available to your account."));
     }
     if (!out.saved) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      traceRefusal(pool, req, {
+        reason: out.leadError ? "save_owner_or_lead_check" : out.conflict ? "save_version_conflict" : out.tooMany ? "save_too_many_photos" : "save_missing_fields",
+        listingCode: out.listing?.code || req.params.code,
+        blockers: (out.ev?.blockers || []).map((b) => b.field)
+      });
       const error = out.leadError
         ? out.leadError
         : out.conflict

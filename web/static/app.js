@@ -595,6 +595,13 @@
   // Any submit button locks at the tap, even when the page handles its form itself (AJAX or htmx), so the spinner shows
   // until the answer. A button whose form is not valid sends nothing, so it is not locked. Unlocked after 15 s at the latest.
   document.addEventListener("click", function (e) {
+    // Button-style links (Edit, Compare, Send photos) show the same spinner while the next page loads.
+    var link = e.target && e.target.closest ? e.target.closest("a.btn") : null;
+    if (link && link.getAttribute("href") && !link.hasAttribute("target") && !link.hasAttribute("data-no-lock") && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) {
+      setTimeout(function () { link.classList.add("busy"); }, 0);
+      setTimeout(unlock, 15000);
+      return;
+    }
     var b = e.target && e.target.closest ? e.target.closest("button[type=submit], button:not([type]), input[type=submit]") : null;
     if (!b || !b.form || b.disabled || b.hasAttribute("data-no-lock") || b.hasAttribute("data-confirm") || b.form.hasAttribute("data-no-lock")) return;
     if (b.form.getAttribute("target") || !b.form.checkValidity()) return;
