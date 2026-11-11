@@ -872,6 +872,10 @@
       "threshold": [],
       "middleware": ["pool"]
     },
+    "lib/failureLog.js": {
+      "middleware": ["pool"],
+      "routeShape": ["path"]
+    },
     "lib/requestIds.js": {
       "TTL_MS": "Number",
       "repeated": ["brokerId", "id", "now"],
