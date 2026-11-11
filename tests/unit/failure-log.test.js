@@ -24,3 +24,11 @@ test("2xx, already-traced and signed-out requests are not logged", () => {
   run(200); run(404, { traced: true }); run(403, { broker: null });
   expect(logOperation).not.toHaveBeenCalled();
 });
+
+// A submit button named "action" shadows form.action (it becomes the button element → ".../[object HTMLButtonElement]").
+test("scripts read the form address with getAttribute, not form.action", () => {
+  const fs = require("fs");
+  for (const f of ["app.js", "unitPhotos.js"]) {
+    expect(fs.readFileSync(`${__dirname}/../../web/static/${f}`, "utf8")).not.toMatch(/form\.action\b/);
+  }
+});
