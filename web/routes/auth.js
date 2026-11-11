@@ -101,7 +101,8 @@ function register(web, { pool, page }) {
          FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`,
         [phone]
       );
-      const broker = rows[0];
+      // The demo number never gets a code or a link sent: it signs in only with the saved demo code.
+      const broker = WebAuth.isDemoBroker(process.env, rows[0]) ? null : rows[0];
       if (broker && req.body.mode === "code") {
         const code = await WebAuth.issueLoginCode(pool, broker);
         const lang = broker.preferred_lang || "ar";
