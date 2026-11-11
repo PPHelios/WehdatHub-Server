@@ -88,6 +88,7 @@ function mountApi(app, { pool }) {
   require("./map").register(priv, { pool });
   require("./places").register(priv, { pool });
   require("./devices").register(priv, { pool });
+  require("./notificationSettings").register(priv, { pool });
   api.use(priv);
 
   api.use((_req, res) => res.status(404).json({ error: "not_found" }));
