@@ -2534,6 +2534,7 @@
     },
     "services/placeSuggest.js": {
       "suggest": ["pool", "text", "limit"],
+      "listing": ["pool", "since"],
       "resetCache": []
     },
     "services/areaSearch.js": {
