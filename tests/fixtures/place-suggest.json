@@ -1,0 +1,251 @@
+{
+ "places": [
+  {
+   "id": "p1",
+   "name_en": "Mivida",
+   "name_ar": "ميفيدا",
+   "aliases": [
+    "Mivida Emaar"
+   ],
+   "area_id": "a1",
+   "subzone_id": "a2",
+   "lat": 30,
+   "lng": 31.55
+  },
+  {
+   "id": "p2",
+   "name_en": "Hyde Park Compound",
+   "name_ar": "هايد بارك",
+   "aliases": [],
+   "area_id": "a1",
+   "subzone_id": "a2",
+   "lat": 30.01,
+   "lng": 31.43
+  },
+  {
+   "id": "p3",
+   "name_en": "Azad",
+   "name_ar": "ازاد",
+   "aliases": [
+    "Azad Compound"
+   ],
+   "area_id": "a1",
+   "subzone_id": null,
+   "lat": 30,
+   "lng": 31.5
+  },
+  {
+   "id": "p4",
+   "name_en": "Palm Hills October",
+   "name_ar": "بالم هيلز اكتوبر",
+   "aliases": [
+    "PHO"
+   ],
+   "area_id": "a3",
+   "subzone_id": null,
+   "lat": 29.98,
+   "lng": 30.94
+  },
+  {
+   "id": "p5",
+   "name_en": "Zed East",
+   "name_ar": "زد ايست",
+   "aliases": [],
+   "area_id": "a1",
+   "subzone_id": null,
+   "lat": 30.01,
+   "lng": 31.6
+  }
+ ],
+ "areas": [
+  {
+   "id": "a1",
+   "parent_id": null,
+   "name_en": "New Cairo",
+   "name_ar": "القاهرة الجديدة",
+   "aliases": [
+    "التجمع",
+    "Tagamoa",
+    "5th Settlement"
+   ],
+   "lat": 30,
+   "lng": 31.47
+  },
+  {
+   "id": "a2",
+   "parent_id": "a1",
+   "name_en": "Fifth Settlement",
+   "name_ar": "التجمع الخامس",
+   "aliases": [
+    "التجمع الخامس"
+   ],
+   "lat": 30.02,
+   "lng": 31.5
+  },
+  {
+   "id": "a3",
+   "parent_id": null,
+   "name_en": "Sheikh Zayed",
+   "name_ar": "الشيخ زايد",
+   "aliases": [
+    "زايد",
+    "Zayed"
+   ],
+   "lat": 30.04,
+   "lng": 30.97
+  },
+  {
+   "id": "a4",
+   "parent_id": null,
+   "name_en": "Maadi",
+   "name_ar": "المعادي",
+   "aliases": [],
+   "lat": 29.96,
+   "lng": 31.25
+  }
+ ],
+ "cases": [
+  {
+   "q": "mivida",
+   "expect": [
+    "p1"
+   ]
+  },
+  {
+   "q": "ميفيدا",
+   "expect": [
+    "p1"
+   ]
+  },
+  {
+   "q": "مفيدا",
+   "expect": [
+    "p1"
+   ]
+  },
+  {
+   "q": "hyde",
+   "expect": [
+    "p2"
+   ]
+  },
+  {
+   "q": "هايد",
+   "expect": [
+    "p2",
+    "a3"
+   ]
+  },
+  {
+   "q": "compound",
+   "expect": []
+  },
+  {
+   "q": "كمبوند ازاد",
+   "expect": [
+    "p3"
+   ]
+  },
+  {
+   "q": "azad",
+   "expect": [
+    "p3"
+   ]
+  },
+  {
+   "q": "تجمع",
+   "expect": [
+    "a2",
+    "a1"
+   ]
+  },
+  {
+   "q": "التجمع الخامس",
+   "expect": [
+    "a2",
+    "a1"
+   ]
+  },
+  {
+   "q": "zayed",
+   "expect": [
+    "a3"
+   ]
+  },
+  {
+   "q": "زايد",
+   "expect": [
+    "a3"
+   ]
+  },
+  {
+   "q": "pal",
+   "expect": [
+    "p4"
+   ]
+  },
+  {
+   "q": "pho",
+   "expect": [
+    "p4"
+   ]
+  },
+  {
+   "q": "zed",
+   "expect": [
+    "p5"
+   ]
+  },
+  {
+   "q": "maadi",
+   "expect": [
+    "a4"
+   ]
+  },
+  {
+   "q": "معادي",
+   "expect": [
+    "a4"
+   ]
+  },
+  {
+   "q": "x",
+   "expect": []
+  },
+  {
+   "q": "",
+   "expect": []
+  },
+  {
+   "q": "الشيخ",
+   "expect": [
+    "a3"
+   ]
+  },
+  {
+   "q": "settlement",
+   "expect": [
+    "a2",
+    "a1"
+   ]
+  },
+  {
+   "q": "ميفيده",
+   "expect": [
+    "p1"
+   ]
+  },
+  {
+   "q": "أزاد",
+   "expect": [
+    "p3"
+   ]
+  },
+  {
+   "q": "ازاد",
+   "expect": [
+    "p3"
+   ]
+  }
+ ]
+}
