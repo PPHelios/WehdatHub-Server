@@ -188,8 +188,8 @@ function policyCard({ policy, viewer, lang, notice = null }) {
     const dis = lockedByOwner ? html` disabled` : "";
     return html`<tr data-policy-row="${k}"><td>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${urgent ? html` <span class="muted small">(${L(lang, "دايماً فوري", "always immediate")})</span>` : ""}${lockedByOwner ? html` <span class="muted small">🔒 ${L(lang, "المالك قفله", "locked by the owner")}</span>` : ""}</td>
     <td>${urgent ? html`<span class="muted small">${L(lang, "دايماً", "Always")}</span>` : html`<select name="on_${k}"${dis}><option value="">${L(lang, "هو يختار", "They choose")}</option><option value="1"${e.on === true ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${e.on === false ? html` selected` : ""}>${L(lang, "مقفول", "Off")}</option></select>`}</td>
-    <td><select name="ch_${k}"${dis}>${chOpts.map(([v, t]) => html`<option value="${v}"${(e.channel || "") === v ? html` selected` : ""}>${t}</option>`)}</select></td>
-    <td>${urgent ? html`<span class="muted small">${L(lang, "فوري", "Immediately")}</span>` : html`<select name="fq_${k}"${dis}>${freqOpts.map(([v, t]) => html`<option value="${v}"${(e.frequency || "") === v ? html` selected` : ""}>${t}</option>`)}</select>`}</td>
+    <td><select name="ch_${k}"${dis}${e.on === false ? html` disabled` : ""}>${chOpts.map(([v, t]) => html`<option value="${v}"${(e.channel || "") === v ? html` selected` : ""}>${t}</option>`)}</select></td>
+    <td>${urgent ? html`<span class="muted small">${L(lang, "فوري", "Immediately")}</span>` : html`<select name="fq_${k}"${dis}${e.on === false ? html` disabled` : ""}>${freqOpts.map(([v, t]) => html`<option value="${v}"${(e.frequency || "") === v ? html` selected` : ""}>${t}</option>`)}</select>`}</td>
     <td><input type="checkbox" name="lock_${k}" value="1"${e.lock && !lockedByOwner ? html` checked` : ""}${dis}${!owner && e.lock === "owner" ? html` disabled` : ""}></td></tr>`;
   })}
   </tbody></table></div>
