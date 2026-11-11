@@ -67,3 +67,16 @@ test("dashboard and win-loss are for managers; prices and reports for everyone",
   expect((await api().get("/api/v1/insights/prices").set(await as("broker"))).status).toBe(200);
   expect((await api().post("/api/v1/report").set(await as("broker")).send({ text: "ab" })).status).toBe(422);
 });
+
+test("deals, commissions and sources follow the role", async () => {
+  const br = await as("broker");
+  const mg = await as("manager");
+  expect((await api().get("/api/v1/deals").set(br)).status).toBe(200);
+  expect((await api().get("/api/v1/commissions").set(br)).status).toBe(200);
+  expect((await api().get("/api/v1/sources").set(br)).status).toBe(403);
+  expect((await api().get("/api/v1/sources").set(mg)).status).toBe(200);
+  expect((await api().get("/api/v1/portal-enquiries").set(br)).status).toBe(403);
+  expect((await api().get("/api/v1/portal-enquiries").set(mg)).status).toBe(200);
+  expect((await api().get("/api/v1/links").set(br)).status).toBe(200);
+  expect((await api().get("/api/v1/commissions/00000000-0000-0000-0000-000000000000").set(br)).status).toBe(403);
+});
