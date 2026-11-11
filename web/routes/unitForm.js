@@ -43,6 +43,7 @@ const ctxOf = (pool, req) => ({ pool, broker: req.session.broker, agency: req.se
  */
 function traceRefusal(pool, req, { reason, listingCode = null, blockers = [] }) {
   const { broker } = req.session;
+  req.res.locals.failureTraced = true; // the shared 4xx log (lib/failureLog.js) skips what is traced here
   logOperation(pool, {
     agency_id: broker.agency_id,
     broker_id: broker.id,
