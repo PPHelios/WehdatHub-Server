@@ -87,7 +87,10 @@ async function due(pool, { now = new Date() } = {}) {
   // 5b. The weekly storage check found files nothing points to (a dry run unless deleting is switched on).
   const [store] = (await pool.query("SELECT watermark FROM crm_jobs WHERE name = 'storage_check'")).rows;
   if (store?.watermark?.orphans > 0 && store.watermark.dry_run) {
-    out.push({ key: "storage_orphans", title: `🗑️ ${store.watermark.orphans} unused photo files (${Math.round(store.watermark.bytes / 1048576)} MB) found in storage`, body: "Dry run only. Set STORAGE_CLEANUP_DELETE=true to remove them." });
+    out.push({ key: "storage_orphans", title: `🗑️ ${store.watermark.orphans} unused photo files (${Math.round(store.watermark.bytes / 1048576)} MB) found in storage`, body: "Deletion is OFF (dry run only). Set STORAGE_CLEANUP_DELETE to true on Render to remove them." });
+  } else if (store?.watermark?.orphans > 0) {
+    const left = store.watermark.orphans - (store.watermark.deleted || 0);
+    out.push({ key: "storage_deleted", title: `🗑️ Deleted ${store.watermark.deleted || 0} unused photo files from storage this week`, body: left > 0 ? `${left} more are still unused and will be removed in the next run.` : "No unused photo files are left." });
   }
 
   // 6. Unusual activity from the audit log: many failed sign-ins in an hour, or one person exporting the inventory again and again.
