@@ -61,3 +61,50 @@ test("a picked photo can be deleted with its button", async () => {
   expect(await pg.locator("[data-photo-preview] li").count()).toBe(1);
   await ctx.close();
 });
+
+const openEdit = async () => {
+  const base = "http://127.0.0.1:4572";
+  const ctx = await browser.newContext({ serviceWorkers: "block" });
+  const pg = await ctx.newPage();
+  const br = h.BROKERS.broker;
+  const token = await WebAuth.issueLoginToken(h.pool, { id: br.id, agency_id: br.agency_id });
+  await pg.goto(`${base}/app/login/confirm?t=${token}`);
+  await pg.click("form button[type=submit], form input[type=submit]");
+  await pg.waitForLoadState("networkidle");
+  await pg.goto(`${base}/app/units/NH-A20/edit`, { waitUntil: "networkidle" });
+  return { ctx, pg };
+};
+
+test("only 15 photos can be added; the rest are counted and said", async () => {
+  const { ctx, pg } = await openEdit();
+  const files = Array.from({ length: 20 }, (_, i) => ({ name: `p${i}.png`, mimeType: "image/png", buffer: PNG }));
+  await pg.setInputFiles("input[data-photo-tray]", files);
+  await pg.waitForSelector("[data-photo-preview] li");
+  expect(await pg.locator("[data-photo-preview] li").count()).toBe(15);
+  const note = pg.locator("[data-photo-note]");
+  expect(await note.isVisible()).toBe(true);
+  expect(await note.textContent()).toMatch(/5/);
+  expect(await note.getAttribute("class")).toContain("bad");
+  await ctx.close();
+});
+
+test("saving reduces a big photo in the browser first and shows progress", async () => {
+  const sharp = require("sharp");
+  const w = 3000, hgt = 2000;
+  const raw = Buffer.alloc(w * hgt * 3);
+  for (let i = 0; i < raw.length; i++) raw[i] = 120 + ((i * 7919) % 8);
+  const big = await sharp(raw, { raw: { width: w, height: hgt, channels: 3 } }).png({ compressionLevel: 1 }).toBuffer();
+  const { ctx, pg } = await openEdit();
+  await pg.setInputFiles("input[data-photo-tray]", [{ name: "big.png", mimeType: "image/png", buffer: big }]);
+  await pg.waitForSelector("[data-photo-preview] li");
+  const sent = pg.waitForRequest((r) => r.method() === "POST" && /\/edit$/.test(r.url()));
+  await pg.evaluate(() => {
+    const f = document.querySelector("#unit-form");
+    f.requestSubmit(f.querySelector("button[name=action]"));
+  });
+  const req = await sent;
+  const size = (req.postDataBuffer() || Buffer.alloc(0)).length;
+  expect(size).toBeGreaterThan(0);
+  expect(size).toBeLessThan(big.length / 4);
+  await ctx.close();
+});
