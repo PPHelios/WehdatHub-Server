@@ -92,3 +92,9 @@ test("Next shows the server's location blocker on the compound field, and photos
   expect(view).toContain("data-remove-photo");
   expect(view).not.toMatch(/<label class="check grow"><input type="checkbox" name="remove_photo"/);
 });
+
+test("the unit page status row and action buttons are aligned by the stylesheet", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "../../web/static/app.css"), "utf8");
+  expect(css).toContain("form[data-unit-status] { align-items: flex-end; }");
+  expect(css).toContain("#unit-actions { align-items: stretch; }");
+});

@@ -629,3 +629,10 @@ label.req.field-missing > input, label.req.field-missing > select, label.req.fie
 form[aria-busy="true"] { opacity: 0.65; cursor: progress; }
 [data-blocker] { cursor: pointer; text-decoration: underline; }
 details.more { grid-column: 1 / -1; }
+
+/* Unit page: the status dropdown and its button sit on the same line at the same height; the action buttons are one row, equal height. */
+form[data-unit-status] { align-items: flex-end; }
+form[data-unit-status] select { min-height: 48px; }
+#unit-actions { align-items: stretch; }
+#unit-actions form.inline { display: flex; margin: 0; }
+#unit-actions form.inline button, #unit-actions > .btn { min-height: 48px; }
