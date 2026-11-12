@@ -70,7 +70,7 @@ function register(api, { pool }) {
     const TestRole = require("../lib/testRole");
     const b = req.session.broker;
     const testSwitch = TestRole.canSwitch(b) ? { roles: TestRole.ROLES, role: b.home_role || b.role, canView: TestRole.canView(b), viewing: TestRole.isViewing(req.token) } : null;
-    return res.json({ broker: brokerView(b), agency: agencyView(req.session.agency), rights: await require("../services/unitRights").rights(pool, b), expiresAt: req.session.expiresAt, testSwitch });
+    return res.json({ broker: brokerView(b), agency: agencyView(req.session.agency), rights: await require("../services/unitRights").rights(pool, b), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
   });
 
   // The test switch from the app: the same actions as the website's test switch (web/routes/testRole.js).
