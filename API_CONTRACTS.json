@@ -1,5 +1,12 @@
 {
   "libraries": {
+    "lib/saveKeys.js": {
+      "keyOf": ["body"],
+      "claim": ["client", "agencyId", "key", "kind"],
+      "attach": ["client", "agencyId", "key", "code"],
+      "lookup": ["pool", "agencyId", "key"],
+      "purgeOld": ["pool", "params"]
+    },
     "domain/dealType.js": {
       "DEALS": "Array",
       "LABELS": "Object",

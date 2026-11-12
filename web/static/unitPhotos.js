@@ -9,8 +9,8 @@
   var IMAGE = /\.(jpe?g|png|webp|gif|heic|heif)$/i;
   var MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif" };
   var T = document.documentElement.lang === "en"
-    ? { over: "{n} photo(s) not added: the limit is {max} per unit.", prep: "Preparing photos {i} of {n}…", saving: "Saving…", kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
-    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ…", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
+    ? { over: "{n} photo(s) not added: the limit is {max} per unit.", prep: "Preparing photos {i} of {n}…", saving: "Saving {p}%", sending: "Uploading photos…", server: "The server is saving… {s}s", checking: "Checking whether it was saved…", saved: "✅ Saved. Opening the unit…", notSaved: "⚠️ Not saved yet. Your form and photos are kept.", retry: "Try again", kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
+    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "برفع الصور…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
   var fill = function (s, o) { return s.replace(/\{(\w+)\}/g, function (_, k) { return o[k]; }); };
 
   var tray = null; // { form, items: [{ file, keep, url }], dropped, busy }
@@ -30,27 +30,38 @@
     box.classList.toggle("bad", Boolean(warn));
   }
 
-  // A status line right above the Save button (the photo note sits far up the page): preparing photos with a progress bar, then saving.
-  function status(form, text, done, total, wait) {
+  // A status line right above the Save button for the detail ("Preparing photo 4 of 15"); the percentage itself is drawn
+  // inside the Save button (--p fills it), so there is one progress, not a spinner plus a bar.
+  function status(form, text, kind) {
     var p = form.querySelector("[data-save-status]");
     if (!p) {
-      var btn = form.querySelector("button[type=submit], button[name=action]");
+      var btn = form.querySelector("[data-save-row] button[type=submit], button[type=submit], button[name=action]");
       if (!btn || !btn.parentNode) return;
       p = document.createElement("p");
-      p.className = "notice";
       p.setAttribute("data-save-status", "");
       p.setAttribute("role", "status");
       btn.parentNode.insertBefore(p, btn);
     }
+    p.className = "notice" + (kind ? " " + kind : "");
     p.hidden = !text;
     p.textContent = text || "";
-    if (text && (total || wait)) {
-      var bar = document.createElement("progress");
-      // With no count (the save itself) the bar has no value and just moves.
-      if (total) { bar.max = total; bar.value = done; }
-      bar.style.cssText = "display:block;width:100%";
-      p.appendChild(bar);
-    }
+    return p;
+  }
+
+  // The Save button shows the label and the percent; the fill is its background.
+  function progress(btn, pct) {
+    if (!btn) return;
+    if (btn._label === undefined) btn._label = btn.innerHTML;
+    pct = Math.max(0, Math.min(100, Math.round(pct)));
+    btn.classList.add("saving");
+    btn.style.setProperty("--p", pct + "%");
+    btn.textContent = fill(T.saving, { p: pct });
+  }
+  function resetButton(btn) {
+    if (!btn) return;
+    btn.classList.remove("saving");
+    btn.style.removeProperty("--p");
+    if (btn._label !== undefined) { btn.innerHTML = btn._label; btn._label = undefined; }
   }
 
   // The file input is always the photos in the shown order (the compressed ones once they are ready), so the server stores exactly that.
@@ -102,6 +113,13 @@
   // 1600 px, JPEG quality 82, rotation from the photo's own orientation applied. Anything the browser cannot read
   // (HEIC on most desktops) goes as it is and the server's fallback handles it.
   function compress(file) {
+    // A photo the browser cannot finish in 20 seconds goes as it is (the server's fallback handles it): saving never waits forever.
+    return new Promise(function (ok) {
+      var done = false, t = setTimeout(function () { if (!done) { done = true; ok(file); } }, 20000);
+      compressNow(file).then(function (f) { if (!done) { done = true; clearTimeout(t); ok(f); } }, function () { if (!done) { done = true; clearTimeout(t); ok(file); } });
+    });
+  }
+  function compressNow(file) {
     if (!/^image\/(jpeg|png|webp)$/.test(file.type) || !window.createImageBitmap || !window.HTMLCanvasElement) return Promise.resolve(file);
     return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
       var k = Math.min(1, SIDE / Math.max(bmp.width, bmp.height));
@@ -119,16 +137,16 @@
     }).catch(function () { return file; });
   }
 
-  // The photos in the tray, one at a time (phones run out of memory with many at once), with a progress bar.
-  function prepare(form) {
+  // The photos in the tray, one at a time (phones run out of memory with many at once); onStep(done, total) for the percent.
+  function prepare(form, onStep) {
     var items = tray.items, i = 0;
     var step = function () {
       if (i >= items.length) return Promise.resolve();
       var it = items[i];
-      status(form, fill(T.prep, { i: i + 1, n: items.length }), i, items.length);
+      onStep(i, items.length);
       return (it.small ? Promise.resolve(it.small) : compress(it.file)).then(function (s) { it.small = s; i++; return step(); });
     };
-    return step().then(function () { sync(); });
+    return step().then(function () { onStep(items.length, items.length); sync(); });
   }
 
   // Only as many photos as the unit has room for are added; the rest are counted and said out loud.
@@ -222,68 +240,161 @@
     else if (t.matches("input[data-photo-zip]")) fromZip(t);
   });
 
-  // Saving: the photos are reduced first (with a progress bar), then an added unit goes in the background (a warning
-  // brings the form back with the same photos still in the tray) and an edit is posted as a normal form.
+  // Saving (add and edit share this one path). The photos are reduced first, then the form goes up in the background with the
+  // upload percent. The form carries a save key, so a repeated try never saves twice. If no answer comes in 60 seconds (or the
+  // connection drops) the page asks the server whether that key was saved: saved shows "Saved" and opens the unit, not saved
+  // shows the error with Try again and the form and photos exactly as they were.
+  var CHECK_AFTER_MS = 60000;
+  var busy = false;
   document.addEventListener("submit", function (e) {
     var form = e.target;
-    if (!form || !form.matches || !form.matches("#unit-form") || !window.fetch || !window.DOMParser) return;
+    if (!form || !form.matches || !form.matches("#unit-form") || !window.XMLHttpRequest || !window.DOMParser || !window.FormData) return;
     var edit = /\/edit$/.test((form.getAttribute("action") || location.href) || "");
     if (!tray || tray.form !== form) start(form);
-    // An edit with no new photos is just a normal post.
-    if (edit && !tray.items.length) return;
     e.preventDefault();
+    if (busy) return; // a double tap
     if (kept() + existing() > MAX) {
       sync();
       var box = form.querySelector("[data-photo-note]");
       if (box && box.scrollIntoView) box.scrollIntoView({ block: "center" });
       return;
     }
-    var sub = e.submitter;
+    var sub = e.submitter || form.querySelector("[data-save-row] button[type=submit]");
     var buttons = form.querySelectorAll("button[type=submit], button[name=action]");
-    Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
-    var unlock = function () { Array.prototype.forEach.call(buttons, function (b) { b.disabled = false; }); };
-    prepare(form).then(function () {
-      status(form, T.saving, 0, 0, true);
-      if (edit) {
-        // Disabled buttons do not send their name, so it goes as a hidden field.
-        if (sub && sub.name) {
-          var hid = document.createElement("input");
-          hid.type = "hidden"; hid.name = sub.name; hid.value = sub.value;
-          form.appendChild(hid);
-        }
-        HTMLFormElement.prototype.submit.call(form);
-        return null;
+    var keyInput = form.querySelector('input[name="save_key"]');
+    var saveKey = keyInput ? keyInput.value : "";
+    var action = form.getAttribute("action") || location.href;
+    busy = true;
+    var lock = function (on) {
+      Array.prototype.forEach.call(buttons, function (b) { b.disabled = on; });
+      try { form.inert = on; } catch (x) { /* older browsers: the buttons are locked */ }
+      if (on) form.setAttribute("aria-busy", "true"); else form.removeAttribute("aria-busy");
+    };
+    var timers = [];
+    var clearTimers = function () { timers.forEach(function (t) { clearTimeout(t); clearInterval(t); }); timers = []; };
+    var xhr = null;
+    var pct = 0;
+    var serverFrom = 0; // when the server wait began
+    var failed = function (msg) {
+      clearTimers();
+      busy = false;
+      lock(false);
+      resetButton(sub);
+      var p = status(form, msg, "bad");
+      if (p) {
+        var again = document.createElement("button");
+        again.type = "button"; again.className = "secondary small"; again.textContent = T.retry;
+        again.addEventListener("click", function () { status(form, ""); if (form.requestSubmit) form.requestSubmit(sub && sub.form === form ? sub : undefined); else form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true })); });
+        p.appendChild(document.createTextNode(" "));
+        p.appendChild(again);
+        if (p.scrollIntoView) p.scrollIntoView({ block: "center" });
       }
+    };
+    // Asks whether this save went through. The check is a plain read: nothing is saved or changed by asking.
+    var checkSaved = function () {
+      status(form, T.checking);
+      return fetch("/app/units/save-status?key=" + encodeURIComponent(saveKey), { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : { saved: false }; })
+        .catch(function () { return { saved: false }; })
+        .then(function (j) {
+          if (j && j.saved && j.code) {
+            clearTimers();
+            if (xhr) { try { xhr.abort(); } catch (x) { /* already done */ } }
+            progress(sub, 100);
+            status(form, T.saved, "ok");
+            report("recovered");
+            location.assign("/app/units/" + encodeURIComponent(j.code) + "?saved=1");
+            return true;
+          }
+          return false;
+        });
+    };
+    var t0 = Date.now();
+    // The browser tells the server how the save went and how long the broker waited (no unit content), so slow or lost
+    // saves show up in the logs. One row per save: ok, refused, recovered (answer lost, check found it), timeout, network.
+    var report = function (outcome) {
+      try {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        fetch("/app/units/save-report", {
+          method: "POST", credentials: "same-origin", keepalive: true,
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": meta ? meta.content : "" },
+          body: JSON.stringify({ outcome: outcome, ms: Date.now() - t0, edit: edit, photos: tray.items.length })
+        }).catch(function () {});
+      } catch (x) { /* reporting must never break a save */ }
+    };
+    lock(true);
+    progress(sub, 0);
+    var tick = setInterval(function () {
+      // The last part (the server working) moves slowly toward 99 so the bar never sits still while it is alive.
+      if (serverFrom) {
+        var secs = (Date.now() - serverFrom) / 1000;
+        pct = 85 + 14 * (1 - Math.exp(-secs / 20));
+        progress(sub, pct);
+        status(form, fill(T.server, { s: Math.round(secs) }));
+      }
+    }, 500);
+    timers.push(tick);
+    prepare(form, function (done, total) {
+      pct = total ? 30 * (done / total) : 30;
+      progress(sub, pct);
+      status(form, total ? fill(T.prep, { i: Math.min(done + 1, total), n: total }) : "");
+    }).then(function () {
+      pct = 30;
+      progress(sub, pct);
+      status(form, T.sending);
       var fd = new FormData(form);
       if (sub && sub.name) fd.append(sub.name, sub.value);
-      return fetch((form.getAttribute("action") || location.href), { method: "POST", body: fd, credentials: "same-origin", headers: { Accept: "text/html" } })
-        .then(function (r) {
-          if (r.redirected) { location.href = r.url; return null; }
-          return r.text();
-        })
-        .then(function (html) {
-          if (html === null) return;
-          var fresh = new DOMParser().parseFromString(html, "text/html").getElementById("unit-form");
-          if (!fresh) { HTMLFormElement.prototype.submit.call(form); return; }
-          var keepOpts = ["owner_name_from_phone", "photo_manual"].map(function (n) {
-            var old = form.querySelector('[name="' + n + '"]');
-            return { n: n, on: Boolean(old && old.checked) };
-          });
-          var keepTray = tray;
-          form.replaceWith(fresh);
-          keepOpts.forEach(function (o) {
-            var box = fresh.querySelector('[name="' + o.n + '"]');
-            if (box && o.on) box.checked = true;
-          });
-          if (window.htmx && window.htmx.process) window.htmx.process(fresh);
-          // The photos stay in the tray (already reduced) for the next try.
-          tray = keepTray; tray.form = fresh; wire(fresh);
-          var alert = fresh.querySelector("[role=alert]");
-          if (alert && alert.scrollIntoView) alert.scrollIntoView({ block: "center" });
+      xhr = new XMLHttpRequest();
+      xhr.open("POST", action, true);
+      xhr.setRequestHeader("Accept", "text/html");
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) return;
+        pct = 30 + 55 * (ev.loaded / ev.total);
+        progress(sub, pct);
+      };
+      xhr.upload.onload = function () { serverFrom = Date.now(); };
+      xhr.onerror = function () {
+        // The connection dropped: the save may still have gone through, so ask before saying it failed.
+        checkSaved().then(function (saved) { if (!saved) { report("network"); failed(T.notSaved); } });
+      };
+      xhr.onload = function () {
+        clearTimers();
+        report(xhr.status >= 400 ? "refused" : "ok");
+        if (xhr.responseURL && xhr.responseURL !== new URL(action, location.href).href && xhr.status < 400) { progress(sub, 100); location.assign(xhr.responseURL); return; }
+        var fresh = new DOMParser().parseFromString(xhr.responseText, "text/html").getElementById("unit-form");
+        // No form back (a server error page): ask whether it saved before saying it did not.
+        if (!fresh) { checkSaved().then(function (saved) { if (!saved) failed(T.notSaved); }); return; }
+        // The same form comes back with the reason (a warning, a missing field, "looks like a duplicate"). The page's own form stays
+        // as it is, with its photos and its listeners: only the message, the review and the Save row are taken from the answer.
+        busy = false;
+        lock(false);
+        resetButton(sub);
+        var oldBanner = form.querySelector(":scope > .notice.bad");
+        if (oldBanner) oldBanner.remove();
+        var newBanner = fresh.querySelector(":scope > .notice.bad");
+        if (newBanner) form.insertBefore(document.importNode(newBanner, true), form.firstChild.nextSibling);
+        var nr = fresh.querySelector("[data-auto-review]"), orv = form.querySelector("[data-auto-review]");
+        if (nr && orv) orv.innerHTML = nr.innerHTML;
+        var ns = fresh.querySelector("[data-save-row]"), os = form.querySelector("[data-save-row]");
+        if (ns && os) os.innerHTML = ns.innerHTML;
+        // Show every step, then let the page's own check decide whether Save is open (the warnings tick).
+        form.dispatchEvent(new CustomEvent("stepgoto", { detail: 99 }));
+        if (orv) orv.dispatchEvent(new CustomEvent("htmx:afterSwap", { bubbles: true }));
+        var alertBox = form.querySelector("[role=alert]");
+        if (alertBox && alertBox.scrollIntoView) alertBox.scrollIntoView({ block: "center" });
+      };
+      xhr.send(fd);
+      // 60 seconds with no answer: ask whether it was saved; if not, stop waiting and show the error with Try again.
+      timers.push(setTimeout(function () {
+        checkSaved().then(function (saved) {
+          if (saved) return;
+          report("timeout");
+          try { xhr.abort(); } catch (x) { /* already done */ }
+          failed(T.notSaved);
         });
+      }, CHECK_AFTER_MS));
     }).catch(function () {
-      if (edit) { unlock(); status(form, "", 0, 0); return; }
-      HTMLFormElement.prototype.submit.call(form);
+      failed(T.notSaved);
     });
   });
 })();

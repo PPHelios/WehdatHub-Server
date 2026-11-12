@@ -19,6 +19,7 @@ const Plans = require("../domain/plans");
 const FormChecks = require("../lib/formChecks");
 const Form = require("../web/forms/unitForm");
 const { uploads, PHOTO, VOICE } = require("../web/uploads");
+const SaveKeys = require("../lib/saveKeys");
 
 const MAX_DESCRIBE = 4000;
 const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -59,6 +60,12 @@ async function storePhotos(broker, files) {
     }
   }
   return { urls, failed };
+}
+
+/** The body of a repeated create: the unit the first try saved, with its photo count. */
+async function repeatBody(pool, broker, code) {
+  const { rows } = await pool.query("SELECT count(li.*)::int AS n FROM listings l LEFT JOIN listing_images li ON li.listing_id = l.id WHERE l.agency_id = $1 AND l.code = $2", [broker.agency_id, code]);
+  return { code, photos: rows[0] ? rows[0].n : 0, photosFailed: 0, repeat: true };
 }
 
 function register(api, { pool }) {
@@ -129,10 +136,15 @@ function register(api, { pool }) {
     const expectedVersion = Number(req.body && req.body.version);
     if (!Number.isInteger(expectedVersion)) return res.status(400).json({ error: "version_required" });
     const form = Form.unitFromForm(fieldsOf(req.body));
+    const saveKey = SaveKeys.keyOf(req.body);
+    const t0 = Date.now();
     const out = await Edits.withCodeLock(pool, broker.agency_id, req.params.code, async (client) => {
       const listing = await Store.findByCode(client, broker.agency_id, req.params.code, { forUpdate: true });
       if (!listing) return { missing: true };
       if (!Authz.canEdit(broker, listing)) return { forbidden: true };
+      // The same save sent again (a lost answer, the 60-second check's Retry): the first result, never a second change.
+      const key = await SaveKeys.claim(client, broker.agency_id, saveKey, "edit");
+      if (!key.first) return { rollback: true, repeat: listing };
       const photoCount = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1", [listing.id])).rows[0].n;
       const ev = Rules.evaluate(Form.composeFromForm({ existing: listing, form, lang }), { lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
@@ -140,13 +152,15 @@ function register(api, { pool }) {
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, conflict: true };
       if (res2.forbidden) return { rollback: true, forbidden: true };
+      await SaveKeys.attach(client, broker.agency_id, saveKey, res2.listing.code);
       return { saved: res2.listing, columns: Object.keys(patch) };
     });
+    if (out.repeat) return res.json({ code: out.repeat.code, version: out.repeat.version, repeat: true });
     if (out.missing) return res.status(404).json({ error: "not_found" });
     if (out.forbidden) return res.status(403).json({ error: "forbidden" });
     if (out.conflict) return res.status(409).json({ error: "conflict" });
     if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev) });
-    require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", metadata: { columns: out.columns } });
+    require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", total_duration_ms: Date.now() - t0, metadata: { columns: out.columns, save_key: Boolean(saveKey) } });
     return res.json({ code: out.saved.code, version: out.saved.version });
   });
 
@@ -198,6 +212,10 @@ function register(api, { pool }) {
     const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
     const fields = fieldsOf(req.body);
+    const t0 = Date.now();
+    const saveKey = SaveKeys.keyOf(req.body);
+    const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
+    if (prior) return res.status(201).json(await repeatBody(pool, broker, prior));
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
     const { form, ev } = evaluate(fields, lang, files.length);
     if (!ev.ok) return res.status(422).json({ error: "incomplete", blockers: blockersOf(ev) });
@@ -217,24 +235,37 @@ function register(api, { pool }) {
       const duplicate = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
       if (duplicate) return res.status(409).json({ error: "duplicate", duplicate });
     }
+    const tPhotos = Date.now();
     const photos = await storePhotos(broker, files);
+    const photoMs = Date.now() - tPhotos;
+    const tDb = Date.now();
     const client = await pool.connect();
     let result;
+    let repeat = null;
     try {
       await client.query("BEGIN");
-      result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
-      if (result.listing) {
+      const key = await SaveKeys.claim(client, broker.agency_id, saveKey, "create");
+      if (!key.first) {
+        repeat = key;
+        await client.query("ROLLBACK");
+      } else result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
+      if (result && result.listing) {
+        await SaveKeys.attach(client, broker.agency_id, saveKey, result.listing.code);
         const added = await Store.addPhotos(client, result.listing, photos.urls);
         // The broker ordered the photos by hand (drag and drop in the app): AI ordering is skipped for this unit (saves AI credits).
         if (!(fields.photo_ai === true || fields.photo_ai === "1") && added.length) await Store.reorderPhotos(client, result.listing, added.map((r) => r.id), { force: true });
       }
-      await client.query(result.listing ? "COMMIT" : "ROLLBACK");
+      if (!repeat) await client.query(result.listing ? "COMMIT" : "ROLLBACK");
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
       throw err;
     } finally {
       client.release();
+    }
+    if (repeat) {
+      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      return res.status(201).json(await repeatBody(pool, broker, repeat.code));
     }
     if (!result.listing) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
@@ -243,7 +274,7 @@ function register(api, { pool }) {
       if (result.conflict) return res.status(409).json({ error: "code_used", code: result.code });
       return res.status(422).json({ error: "not_saved" });
     }
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "app_unit_create", metadata: { photos: photos.urls.length, photo_failures: photos.failed } });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "app_unit_create", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { photos: photos.urls.length, photo_failures: photos.failed, save_key: Boolean(saveKey) } });
     return res.status(201).json({ code: result.listing.code, photos: photos.urls.length, photosFailed: photos.failed });
   });
 }

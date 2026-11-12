@@ -1564,6 +1564,14 @@ CREATE TABLE IF NOT EXISTS public.place_proposals (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.save_keys (
+  agency_id uuid NOT NULL,
+  key text NOT NULL,
+  kind text NOT NULL,
+  listing_code text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1627,6 +1635,7 @@ ALTER TABLE project_phases ADD CONSTRAINT project_phases_pkey PRIMARY KEY (id);
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_pkey PRIMARY KEY (id);
 ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_pkey PRIMARY KEY (agency_id, key);
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_pkey PRIMARY KEY (id);
 ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_pkey PRIMARY KEY (id);
@@ -1858,6 +1867,8 @@ ALTER TABLE project_plans ADD CONSTRAINT project_plans_years_check CHECK (((year
 ALTER TABLE projects ADD CONSTRAINT projects_delivery_quarter_check CHECK (((delivery_quarter IS NULL) OR ((delivery_quarter >= 1) AND (delivery_quarter <= 4))));
 ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_key_check CHECK (((length(key) >= 8) AND (length(key) <= 64)));
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_kind_check CHECK ((kind = ANY (ARRAY['create'::text, 'edit'::text])));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_kind_check CHECK ((kind = ANY (ARRAY['place'::text, 'type'::text, 'feature'::text, 'furnishing'::text, 'finishing'::text, 'listing_type'::text])));
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'ai'::text, 'manual'::text])));
@@ -2009,6 +2020,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_developer_id_fkey FOREIGN KEY (deve
 ALTER TABLE projects ADD CONSTRAINT projects_global_id_fkey FOREIGN KEY (global_id) REFERENCES global_projects(id) ON DELETE SET NULL;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -2166,6 +2178,7 @@ CREATE UNIQUE INDEX uq_project_phases_name ON public.project_phases USING btree 
 CREATE INDEX idx_project_plans_project ON public.project_plans USING btree (project_id, "position");
 CREATE UNIQUE INDEX uq_projects_agency_lower_name ON public.projects USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING btree (broker_id);
+CREATE INDEX idx_save_keys_created ON public.save_keys USING btree (created_at);
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
 CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
