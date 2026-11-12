@@ -21,7 +21,7 @@ afterEach(() => jest.restoreAllMocks());
 afterAll(closeHarness);
 
 test("createListing shows the real owner-sync error", async () => {
-  jest.spyOn(require("../../services/compoundResolve"), "normalize").mockImplementation(async (db, f) => ({ ...f, location_keywords: ["x"] }));
+  jest.spyOn(require("../../services/compoundResolve"), "normalize").mockImplementation(async (db, f) => ({ ...f, location_keywords: [], inventory_type: "resale_unit", features: [], language: "en", search_text: "", feature_keys: [], hero_position: 0, collateral: {} }));
   jest.spyOn(Owners, "syncFromListing").mockRejectedValue(new Error("owner sync boom"));
   const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
   const client = await h.pool.connect();
