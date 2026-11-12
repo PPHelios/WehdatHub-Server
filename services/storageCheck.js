@@ -30,7 +30,7 @@ async function findOrphans(pool, { limit = DELETE_BATCH } = {}) {
     orphans AS (
       SELECT o.name, COALESCE((o.metadata->>'size')::bigint, 0) AS bytes FROM storage.objects o
        WHERE o.bucket_id = $1 AND o.created_at < NOW() - make_interval(days => $2::int)
-         AND NOT EXISTS (SELECT 1 FROM refs r WHERE r.u IS NOT NULL AND position(o.name IN r.u) > 0))
+         AND NOT EXISTS (SELECT 1 FROM refs r WHERE r.u IS NOT NULL AND position(CASE WHEN o.name LIKE 'thumbs/%' THEN substr(o.name, 8) ELSE o.name END IN r.u) > 0))
     SELECT (SELECT count(*)::int FROM orphans) AS count, (SELECT COALESCE(sum(bytes), 0)::bigint FROM orphans) AS bytes,
            ARRAY(SELECT name FROM orphans ORDER BY name LIMIT $3) AS names`;
   const { rows } = await pool.query(sql, [BUCKET, MIN_AGE_DAYS, limit]);

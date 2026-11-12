@@ -302,6 +302,9 @@ ol.results, ul.results { list-style: none; padding: 0; margin: 0; display: grid;
 .unitcard .pick { position: absolute; inset-block-start: 14px; inset-inline-end: 14px; }
 .unitcard:has(.pick) .uc-top { padding-inline-end: 32px; }
 .uc-main { display: grid; gap: 2px; color: var(--ink); text-decoration: none; }
+.uc-main.has-thumb { grid-template-columns: 96px minmax(0, 1fr); column-gap: 12px; }
+.uc-main.has-thumb > :not(.uc-thumb) { grid-column: 2; }
+.uc-thumb { grid-row: 1 / span 3; width: 96px; height: 72px; object-fit: cover; border-radius: 10px; background: var(--soft); }
 .uc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .uc-top .code { color: var(--brand); font-size: 1.02rem; }
 .uc-price { font-size: 1.05rem; white-space: nowrap; }

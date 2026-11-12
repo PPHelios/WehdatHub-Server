@@ -57,3 +57,12 @@ test("after a run that deleted files the owner sees that deletion ran, not a dry
   expect(keys).toContain("storage_deleted");
   expect(keys).not.toContain("storage_orphans");
 });
+
+test("a small copy is in use while its original is, and unused when its original is not", async () => {
+  await h.query(`INSERT INTO storage.objects (bucket_id, name, created_at, metadata) VALUES
+    ('listing-images', 'thumbs/a/used.jpg', NOW() - INTERVAL '10 days', '{"size": 100}'),
+    ('listing-images', 'thumbs/a/orphan.jpg', NOW() - INTERVAL '10 days', '{"size": 300}')`);
+  const out = await StorageCheck.run(h.pool, { deleteFiles: true });
+  expect(out.deleted).toBe(2);
+  expect(Supabase.deleteStorageFiles).toHaveBeenCalledWith(["a/orphan.jpg", "thumbs/a/orphan.jpg"]);
+});

@@ -165,6 +165,7 @@ function register(web, { pool, page }) {
       `SELECT ${LIST_COLS} FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
       args
     );
+    const covers = status === "deleted" ? new Map() : await Store.coverImages(pool, broker.agency_id, rows);
     const link = (over = {}) => {
       const p = new URLSearchParams();
       const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, deal, pmin, pmax, ...over };
@@ -210,7 +211,7 @@ ${rows.length
   ? html`<p class="muted small" data-total="${total}">${L(lang, `${total} وحدة${pages > 1 ? ` · صفحة ${pageNo + 1} من ${pages}` : ""} · علّم الوحدات عشان تغيّر حالتها مرة واحدة.`, `${total} unit(s)${pages > 1 ? ` · page ${pageNo + 1} of ${pages}` : ""} · tick units to change them together.`)}</p>
 ${status === "deleted"
   ? html`<ol class="results">${rows.map((r) => html`<li class="card result" data-deleted-code="${r.code}"><div class="row between"><span><b dir="ltr">${r.code}</b> <span class="muted">${Describe.typeLabel(r, lang)}${r.compound ? ` · ${r.compound}` : ""}</span></span><span class="muted small">${L(lang, `تتمسح بعد ${deletedDaysLeft(r)} يوم`, `purged in ${deletedDaysLeft(r)} day(s)`)}</span></div><form method="post" action="/app/units/${encodeURIComponent(r.code)}/restore" class="row"><button type="submit" class="secondary small" data-restore>↩️ ${L(lang, "رجّعها", "Restore")}</button></form></li>`)}</ol>`
-  : html`<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`}
+  : html`<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true, thumb: covers.get(r.id) }))}</ol>`}
 ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn secondary" href="${link({ page: pageNo - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${pageNo + 1 < pages ? html`<a class="btn secondary" href="${link({ page: pageNo + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>` : ""}
 <form id="bulk" method="post" action="/app/units/bulk" class="bulkbar">
   <select name="action" aria-label="${L(lang, "للمختار", "Selected")}">
