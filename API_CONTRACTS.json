@@ -196,6 +196,8 @@
       "thumbUrl": ["value"],
       "uploadThumb": ["storagePath", "buffer"],
       "downloadListingImage": ["keyOrUrl"],
+      "objectInfo": ["keyOrUrl"],
+      "createSignedUpload": ["storagePath"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],
