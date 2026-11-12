@@ -83,3 +83,12 @@ test("the map's review rule does not clip the unit review panel", () => {
   expect(css).not.toMatch(/^\[data-review\] \{/m);
   expect(css).toMatch(/\.map-view\[data-review\] \{/);
 });
+
+test("Next shows the server's location blocker on the compound field, and photos have delete buttons", () => {
+  const fs = require("fs"), path = require("path");
+  const js = fs.readFileSync(path.join(__dirname, "../../web/static/app.js"), "utf8");
+  expect(js).toContain('blockers[b].field === "location" ? "compound"');
+  const view = fs.readFileSync(path.join(__dirname, "../../web/views/unitForm.js"), "utf8");
+  expect(view).toContain("data-remove-photo");
+  expect(view).not.toMatch(/<label class="check grow"><input type="checkbox" name="remove_photo"/);
+});

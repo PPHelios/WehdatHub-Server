@@ -338,6 +338,36 @@
     // Locked a moment later, so the button's own name and value still go with the form.
     if (sb) setTimeout(function () { sb.disabled = true; sb.classList.add("busy"); }, 0);
   });
+  // Existing photos on the edit form: the delete button marks one removed (greyed, with Undo); the hidden tick carries it to the server.
+  document.addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest("[data-remove-photo]") : null;
+    if (!btn) return;
+    var li = btn.closest("li");
+    var box = li && li.querySelector("input[name=remove_photo]");
+    if (!box) return;
+    box.checked = !box.checked;
+    li.classList.toggle("removed", box.checked);
+    btn.textContent = box.checked ? (EN ? "↩ Undo" : "↩ تراجع") : (EN ? "🗑 Delete" : "🗑 احذف");
+  });
+  // Photos from the server: a spinner until each one loads, two quiet retries, then "tap to retry". Never blocks the page.
+  function watchImages(root) {
+    var imgs = (root || document).querySelectorAll("ol.photo-order img[data-wait]:not([data-watched])");
+    Array.prototype.forEach.call(imgs, function (img) {
+      img.setAttribute("data-watched", "");
+      var base = img.getAttribute("src"), tries = 0;
+      if (img.complete && img.naturalWidth) return;
+      img.classList.add("img-wait");
+      img.addEventListener("load", function () { img.classList.remove("img-wait", "img-bad"); });
+      img.addEventListener("error", function () {
+        if (tries < 2) { tries++; setTimeout(function () { img.src = base + (base.indexOf("?") < 0 ? "?" : "&") + "r=" + tries; }, 700 * tries); return; }
+        img.classList.remove("img-wait"); img.classList.add("img-bad"); img.title = EN ? "Tap to retry" : "دوس لإعادة المحاولة";
+      });
+      img.addEventListener("click", function () { if (img.classList.contains("img-bad")) { tries = 0; img.classList.remove("img-bad"); img.classList.add("img-wait"); img.src = base + (base.indexOf("?") < 0 ? "?" : "&") + "r=" + Date.now(); } });
+    });
+  }
+  watchImages(document);
+  document.addEventListener("htmx:afterSwap", function (e) { watchImages(e.target); });
+
   // Uploads with a progress bar (forms with data-progress): the file goes up with XMLHttpRequest so the bar shows how much has
   // gone; then the server reads it. The answer replaces the page (a redirect is followed).
   var UP = document.documentElement.lang === "ar"
@@ -915,8 +945,10 @@
           var shown = [];
           var blockers = (j && j.blockers) || [];
           for (var b = 0; b < blockers.length; b++) {
-            var input = form.querySelector('[data-step="' + here + '"] [name="' + blockers[b].field + '"]');
-            if (input) shown.push(blockers[b]);
+            // "Compound or area" is one blocker for two inputs; it is shown on the compound field.
+            var fname = blockers[b].field === "location" ? "compound" : blockers[b].field;
+            var input = form.querySelector('[data-step="' + here + '"] [name="' + fname + '"]');
+            if (input) shown.push({ field: fname, label: blockers[b].label });
           }
           // A look-alike unit is a red warning with a link, shown once; tapping Next again goes on (the final save asks again).
           var dup = j && j.duplicate;

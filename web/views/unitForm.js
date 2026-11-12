@@ -141,8 +141,8 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${images.length
       ? html`<p class="muted">${L(lang, "اسحب الصور (أو استخدم الأسهم) لترتيبها؛ الأولى هي الغلاف. لو رتّبتها بنفسك مش بنستخدم الذكاء الاصطناعي للترتيب، وده بيوفر رصيدك.", "Drag the photos (or use the arrows) to order them; the first is the cover. A hand-set order skips AI ordering, which saves your AI credits.")}</p>
     <ol data-sortable class="photo-order">${images.map(
-          (i) => html`<li draggable="true" data-photo="${i.id}"><input type="hidden" name="photo_order" value="${i.id}"><img src="${i.url}" alt="" loading="lazy">
-      <label class="check grow"><input type="checkbox" name="remove_photo" value="${i.id}">${L(lang, "حذف", "Remove")}</label>
+          (i) => html`<li draggable="true" data-photo="${i.id}"><input type="hidden" name="photo_order" value="${i.id}"><img src="${i.url}" alt="" loading="lazy" data-wait>
+      <span class="grow"><input type="checkbox" name="remove_photo" value="${i.id}" hidden><button type="button" class="secondary" data-remove-photo>🗑 ${L(lang, "احذف", "Delete")}</button></span>
       <button type="button" class="secondary" data-move="up" aria-label="${L(lang, "لفوق", "Up")}">↑</button><button type="button" class="secondary" data-move="down" aria-label="${L(lang, "لتحت", "Down")}">↓</button></li>`
         )}</ol>`
       : ""}
