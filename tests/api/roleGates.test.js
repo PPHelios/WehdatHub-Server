@@ -52,13 +52,12 @@ test("the plan is for managers and the agency owner, not brokers", async () => {
   expect((await api().get("/api/v1/plan").set(await login("manager"))).status).toBe(200);
 });
 
-test("data entry gets the owners right only while the agency's switch is on", async () => {
+test("data entry has the owners right by default and loses it when the agency owner switches it off", async () => {
   await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
   const auth = await login("colleague");
-  const off = await api().get("/api/v1/me").set(auth);
-  expect(off.body.rights).toMatchObject({ dataEntry: true, owners: false });
-  const owners = require("../../services/unitOwners");
-  jest.spyOn(owners, "dataEntryOwnersOn").mockResolvedValue(true);
   const on = await api().get("/api/v1/me").set(auth);
-  expect(on.body.rights.owners).toBe(true);
+  expect(on.body.rights).toMatchObject({ dataEntry: true, owners: true });
+  await h.query("UPDATE agencies SET crm_settings = crm_settings || '{\"data_entry_owners\":\"off\"}'::jsonb WHERE id = $1", [h.BROKERS.colleague.agency_id]);
+  const off = await api().get("/api/v1/me").set(auth);
+  expect(off.body.rights.owners).toBe(false);
 });
