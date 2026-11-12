@@ -22,27 +22,55 @@ async function agencyOf(l) {
 }
 const ids = async (agency, text) => (await Search.runSearch(h.pool, agency, Q.fallbackParse(text), { pageSize: 20 })).rows.map((r) => r.code);
 
-test("a unit with the extra comes first, a unit with no extras recorded comes after, a unit with other extras only is left out", async () => {
-  const withAc = await h.insertListing({ code: "E1", compound: "Hyde Park", listing_type: "rent", bedrooms: 3, price_value: 40000 });
-  await h.query("UPDATE listings SET feature_keys = ARRAY['ac_installed'] WHERE id = $1", [withAc.id]);
-  await h.insertListing({ code: "E2", compound: "Hyde Park", listing_type: "rent", bedrooms: 3, price_value: 41000 });
-  const other = await h.insertListing({ code: "E3", compound: "Hyde Park", listing_type: "rent", bedrooms: 3, price_value: 42000 });
-  await h.query("UPDATE listings SET feature_keys = ARRAY['corner'] WHERE id = $1", [other.id]);
-  const agency = await agencyOf(withAc);
-  const got = await ids(agency, "apartment for rent hyde park with ac installed");
-  expect(got.slice(0, 2)).toEqual(["E1", "E2"]);
-  expect(got).not.toContain("E3");
+const mk = async (code, furnishing, extra = {}) => {
+  const l = await h.insertListing({ code, compound: "Mivida", listing_type: "rent", bedrooms: 2, price_value: 30000 + Number(code.slice(1)), ...extra });
+  if (furnishing) await h.query("UPDATE listings SET furnishing = $2 WHERE id = $1", [l.id, furnishing]);
+  return l;
+};
+
+test('"with AC" lists AC only first, then kitchen and AC, then furnished, then units with nothing recorded', async () => {
+  const first = await mk("A1", "ac_only");
+  await mk("A2", "kitchen_and_ac");
+  await mk("A3", "furnished");
+  await mk("A4", null);
+  await mk("A5", "unfurnished");
+  await mk("A6", "kitchen_only");
+  const agency = await agencyOf(first);
+  expect(await ids(agency, "apartment for rent mivida with ac")).toEqual(["A1", "A2", "A3", "A4"]);
 });
 
-test("a furnished unit fits a kitchen and AC request, after the exact and blank ones", async () => {
-  const x = await h.insertListing({ code: "F1", compound: "Mivida", listing_type: "rent", bedrooms: 2, price_value: 30000 });
+test('"with kitchen" lists kitchen only first, then kitchen and AC', async () => {
+  const first = await mk("K1", "kitchen_only");
+  await mk("K2", "kitchen_and_ac");
+  await mk("K3", "ac_only");
+  const agency = await agencyOf(first);
+  expect(await ids(agency, "apartment for rent mivida with kitchen")).toEqual(["K1", "K2"]);
+});
+
+test('"kitchen and ac" lists that status first, then AC only or kitchen only, then furnished and semi-furnished, then blank', async () => {
+  const first = await mk("B1", "kitchen_and_ac");
+  await mk("B2", "ac_only");
+  await mk("B3", "kitchen_only");
+  await mk("B4", "semi_furnished");
+  await mk("B5", "furnished");
+  await mk("B6", null);
+  await mk("B7", "unfurnished");
+  const agency = await agencyOf(first);
+  const got = await ids(agency, "apartment for rent mivida kitchen and ac");
+  expect(got.slice(0, 3)).toEqual(["B1", expect.stringMatching(/^B[23]$/), expect.stringMatching(/^B[23]$/)]);
+  expect(got.slice(3)).toHaveLength(3);
+  expect(got.slice(3, 5).sort()).toEqual(["B4", "B5"]);
+  expect(got[5]).toBe("B6");
+  expect(got).not.toContain("B7");
+});
+
+test("a blank unit that has the extras recorded counts as an exact match", async () => {
+  const x = await mk("C1", null);
+  await h.query("UPDATE listings SET feature_keys = ARRAY['ac_installed'] WHERE id = $1", [x.id]);
+  await mk("C2", "ac_only");
+  await mk("C3", null);
   const agency = await agencyOf(x);
-  await h.query("UPDATE listings SET furnishing = 'furnished' WHERE id = $1", [x.id]);
-  const blank = await h.insertListing({ code: "F2", compound: "Mivida", listing_type: "rent", bedrooms: 2, price_value: 31000 });
-  const exact = await h.insertListing({ code: "F3", compound: "Mivida", listing_type: "rent", bedrooms: 2, price_value: 32000 });
-  await h.query("UPDATE listings SET furnishing = 'kitchen_and_ac' WHERE id = $1", [exact.id]);
-  const unf = await h.insertListing({ code: "F4", compound: "Mivida", listing_type: "rent", bedrooms: 2, price_value: 33000 });
-  await h.query("UPDATE listings SET furnishing = 'unfurnished' WHERE id = $1", [unf.id]);
-  void blank;
-  expect(await ids(agency, "apartment for rent mivida kitchen and ac")).toEqual(["F3", "F2", "F1"]);
+  const got = await ids(agency, "apartment for rent mivida with ac");
+  expect(got[2]).toBe("C3");
+  expect(got.slice(0, 2).sort()).toEqual(["C1", "C2"]);
 });

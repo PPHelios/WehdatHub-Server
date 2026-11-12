@@ -13,7 +13,14 @@ const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
 const TG_PAGE_SIZE = 10;
 const SEARCH_STATUSES = ["active", "sold", "archived"];
-const FURNISHING_ALSO = { kitchen_and_ac: ["furnished"], ac_only: ["furnished", "kitchen_and_ac"], kitchen_only: ["furnished", "kitchen_and_ac"] };
+// AC and kitchen requests (Haytham 2026-11-12): the exact status first, then the closest ones, then furnished units (they have both),
+// then units with nothing recorded. Semi-furnished counts as kitchen and AC. Other statuses are left out.
+const FURNISHING_TIERS = {
+  kitchen_and_ac: [["kitchen_and_ac"], ["ac_only", "kitchen_only"], ["furnished", "semi_furnished"]],
+  ac_only: [["ac_only"], ["kitchen_and_ac", "semi_furnished"], ["furnished"]],
+  kitchen_only: [["kitchen_only"], ["kitchen_and_ac", "semi_furnished"], ["furnished"]]
+};
+const FURNISHING_KEYS = { kitchen_and_ac: ["kitchen_installed", "ac_installed"], ac_only: ["ac_installed"], kitchen_only: ["kitchen_installed"] };
 const SOFT_FEATURE_KEYS = new Set(require("../domain/features").FEATURES.filter((f) => f.group === "equipment" || f.group === "outdoor").map((f) => f.key));
 const SNAPSHOT_MAX = 100; // ids remembered for "more" (B1)
 const STEP_MONTHS_SQL = `CASE p->>'frequency' WHEN 'monthly' THEN 1 WHEN 'semi_annual' THEN 6 WHEN 'annual' THEN 12 ELSE 3 END`;
@@ -237,11 +244,18 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
         exactFirst += `CASE WHEN l.finishing = ANY(${fin}::text[]) THEN 0 ELSE 1 END, `;
       }
       if (f.furnishing) {
-        // A furnished unit has its kitchen and AC, so it also fits those statuses (listed after exact and blank).
-        const ok = [f.furnishing, ...(FURNISHING_ALSO[f.furnishing] || [])];
-        where.push(`(l.furnishing IS NULL OR l.furnishing = ANY(${add(ok)}::text[]))`);
-        // Exact status first, then the units whose status is blank (Haytham 2026-11-04).
-        exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} THEN 0 WHEN l.furnishing IS NULL THEN 1 ELSE 2 END, `;
+        const tiers = FURNISHING_TIERS[f.furnishing];
+        if (tiers) {
+          where.push(`(l.furnishing IS NULL OR l.furnishing = ANY(${add(tiers.flat())}::text[]) OR l.furnishing = ${add(f.furnishing)})`);
+          // Exact status (or the extras recorded on the unit) first, then each tier, then units with nothing recorded.
+          const own = add(FURNISHING_KEYS[f.furnishing]);
+          const whens = tiers.map((t, i) => `WHEN l.furnishing = ANY(${add(t)}::text[]) THEN ${i + 1}`).join(" ");
+          exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} OR (l.furnishing IS NULL AND l.feature_keys @> ${own}::text[]) THEN 0 ${whens} WHEN l.furnishing IS NULL THEN ${tiers.length + 1} ELSE ${tiers.length + 2} END, `;
+        } else {
+          where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
+          // Exact status first, then the units whose status is blank (Haytham 2026-11-04).
+          exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} THEN 0 ELSE 1 END, `;
+        }
       }
     }
 

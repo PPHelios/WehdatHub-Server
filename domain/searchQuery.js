@@ -242,10 +242,14 @@ function normalizeAiSearch(raw) {
     feature_terms: other
   });
 
-  // Kitchen and AC together is a furnishing status (the same reading the quick reader makes), never two hard features.
-  if (!filters.furnishing && filters.features.includes("kitchen_installed") && filters.features.includes("ac_installed")) {
-    filters.features = filters.features.filter((k) => k !== "kitchen_installed" && k !== "ac_installed");
-    filters.furnishing = "kitchen_and_ac";
+  // AC and kitchen are a furnishing status (the same reading the quick reader makes): both, AC alone or kitchen alone ("with AC").
+  if (!filters.furnishing) {
+    const k = filters.features.includes("kitchen_installed");
+    const a = filters.features.includes("ac_installed");
+    if (k || a) {
+      filters.features = filters.features.filter((x) => x !== "kitchen_installed" && x !== "ac_installed");
+      filters.furnishing = k && a ? "kitchen_and_ac" : a ? "ac_only" : "kitchen_only";
+    }
   }
   return {
     intent: ["search", "listing", "other"].includes(r.intent) ? r.intent : "search",
@@ -834,8 +838,6 @@ function fallbackParse(text) {
   // "AC only" / "kitchen only" (بس is optional in Arabic) are the other two statuses of the same field.
   if (!f.furnishing) {
     const nraw = ` ${normalizeSearch(raw)} `;
-    const onlyAc = /(?:تكييف|تكييفات|تكيفات|\bac\b|\bacs\b|air condition\w*)(?: بس)? only | (?:تكييف|تكييفات|تكيفات|\bac\b|\bacs\b) بس /.test(nraw);
-    const onlyKitchen = /(?:مطبخ|kitchen)(?: بس)? only | مطبخ بس /.test(nraw);
     // "K/A" is how brokers write kitchen and AC.
     if (/(?:^|\s)k\s?\/\s?a(?:\s|$)/i.test(String(raw))) {
       for (const k of ["kitchen_installed", "ac_installed"]) if (!f.features.includes(k)) f.features.push(k);
@@ -845,10 +847,10 @@ function fallbackParse(text) {
     if (hasK && hasA) {
       f.features = f.features.filter((k) => k !== "kitchen_installed" && k !== "ac_installed");
       f.furnishing = "kitchen_and_ac";
-    } else if (hasA && onlyAc) {
+    } else if (hasA && !hasK) {
       f.features = f.features.filter((k) => k !== "ac_installed");
       f.furnishing = "ac_only";
-    } else if (hasK && onlyKitchen) {
+    } else if (hasK && !hasA) {
       f.features = f.features.filter((k) => k !== "kitchen_installed");
       f.furnishing = "kitchen_only";
     }
