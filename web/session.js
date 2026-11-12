@@ -2,6 +2,7 @@
 "use strict";
 
 const WebAuth = require("../lib/webAuth");
+const Swallow = require("../lib/swallow");
 const Links = require("../lib/links");
 
 const secure = () => Links.siteOrigin().startsWith("https:");
@@ -45,7 +46,7 @@ function loadSession(pool) {
     try {
       req.session = req.sid ? await WebAuth.getSession(pool, req.sid) : null;
       // Features the agency owner switched off: their buttons are grayed out with a hint (web/static/app.js).
-      if (req.session?.broker?.agency_id) req.session.aiOff = await require("../services/aiSwitches").offList(pool, req.session.broker.agency_id).catch(() => []);
+      if (req.session?.broker?.agency_id) req.session.aiOff = await require("../services/aiSwitches").offList(pool, req.session.broker.agency_id).catch(Swallow.logged(pool, "session.aiOff", []));
       next();
     } catch (err) {
       next(err);

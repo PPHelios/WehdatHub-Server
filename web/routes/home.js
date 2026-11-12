@@ -2,6 +2,7 @@
 "use strict";
 
 const { html, raw, navFor } = require("../html");
+const Swallow = require("../../lib/swallow");
 const { icon } = require("../icons");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
@@ -80,6 +81,7 @@ ${groups.map(([g, label]) => {
       body: html`<h1>${en ? "WehdatHub app" : "تطبيق WehdatHub"}</h1>
 <div class="tiles">
   <a class="tile-link" href="/app/owner">${icon("chart", 28)}<span><b>${en ? "Tracking" : "المتابعة"}</b><span class="muted">${en ? "Agencies, plans, credits, payments" : "الشركات والباقات والرصيد والمدفوعات"}</span></span></a>
+  <a class="tile-link" href="/app/failures">${icon("gauge", 28)}<span><b>${en ? "Failures" : "الأخطاء"}</b><span class="muted">${en ? "Failed and refused actions, with reasons" : "العمليات اللي فشلت أو اترفضت بالسبب"}</span></span></a>
   <a class="tile-link" href="/app/owner/board">${icon("gauge", 28)}<span><b>${en ? "Board" : "اللوحة"}</b><span class="muted">${en ? "Money, AI, performance, search, operations" : "الفلوس والذكاء الاصطناعي والأداء والبحث والتشغيل"}</span></span></a>
 </div>
 <section class="card" data-app-alerts>
@@ -98,7 +100,7 @@ ${groups.map(([g, label]) => {
     if (require("../../lib/authz").isCrmOwner(broker)) return crmHome(req, res);
     const en = broker.preferred_lang === "en";
     const now = new Date();
-    const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(() => null)]);
+    const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null))]);
     return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en }) });
   });
 }

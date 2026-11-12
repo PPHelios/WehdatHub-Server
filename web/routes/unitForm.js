@@ -4,6 +4,7 @@
 "use strict";
 
 const L = require("../../lib/listing");
+const Swallow = require("../../lib/swallow");
 const AI = require("../../lib/ai");
 const AiBlock = require("../../lib/aiBlock");
 const Store = require("../../lib/listingStore");
@@ -121,9 +122,9 @@ function register(web, { pool, page, assets }) {
   };
   const formPage = async (req, res, opts, status = 200) => {
     const lang = langOf(req);
-    const approvedPlaces = await pool.query("SELECT name_en, name_ar FROM map_places WHERE approved ORDER BY name_en").then((r) => r.rows).catch(() => []);
-    const leadChoices = await Leases.tenantChoices(pool, req.session.broker).catch(() => []);
-    const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
+    const approvedPlaces = await pool.query("SELECT name_en, name_ar FROM map_places WHERE approved ORDER BY name_en").then((r) => r.rows).catch(Swallow.logged(pool, "unitForm.places", []));
+    const leadChoices = await Leases.tenantChoices(pool, req.session.broker).catch(Swallow.logged(pool, "unitForm.tenants", []));
+    const areas = await require("../../services/areas").approvedAreas(pool).catch(Swallow.logged(pool, "unitForm.areas", []));
     const edit = opts.mode === "edit";
     return page(
       req,
@@ -219,7 +220,7 @@ function register(web, { pool, page, assets }) {
     const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length });
     const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
     const catalogue = ev.ok && !duplicate && !existing?.details?.catalogue
-      ? await Store.findCatalogueMatch(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }).catch(() => null)
+      ? await Store.findCatalogueMatch(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }).catch(Swallow.logged(pool, "unitForm.catalogueMatch", null))
       : null;
     return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate, catalogue })));
   });
@@ -286,15 +287,15 @@ function register(web, { pool, page, assets }) {
       client.release();
     }
     if (result.limit) {
-      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
       return again(403, Plans.unitLimitText(result.limit, lang));
     }
     if (result.owner_required) {
-      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
       return again(400, L10n(lang, "⚠️ لازم تكتب تليفون المالك قبل ما تحفظ الوحدة.", "⚠️ Enter the owner's phone number before saving the unit."));
     }
     if (result.conflict) {
-      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
       return again(409, L10n(lang, `⚠️ الكود #${result.code} مستخدم لوحدة أخرى في الشركة. اكتب كود مختلف.`, `⚠️ Code #${result.code} is already used by another unit. Choose another code.`));
     }
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "web_unit_create", metadata: { photos: photos.urls.length, photo_failures: photos.failed } });
@@ -340,13 +341,13 @@ function register(web, { pool, page, assets }) {
     });
 
     if (out.missing || out.forbidden) {
-      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
       traceRefusal(pool, req, { reason: out.missing ? "save_unit_not_found" : "save_forbidden", listingCode: req.params.code });
       if (out.missing) return next();
       return res.status(404).type("text/plain").send(L10n(lang, "الوحدة دي مش متاحة لحسابك.", "This unit is not available to your account."));
     }
     if (!out.saved) {
-      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
       traceRefusal(pool, req, {
         reason: out.leadError ? "save_owner_or_lead_check" : out.conflict ? "save_version_conflict" : out.tooMany ? "save_too_many_photos" : "save_missing_fields",
         listingCode: out.listing?.code || req.params.code,
@@ -375,7 +376,7 @@ function register(web, { pool, page, assets }) {
       );
     }
     // Storage files are removed outside the transaction (SEC-04).
-    if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(() => {});
+    if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(Swallow.logged(pool, "unitForm.removePhotos"));
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", metadata: { columns: out.columns, photos_added: photos.urls.length, photos_removed: out.removed.length, photos_reordered: Boolean(out.reordered) } });
     return res.redirect(303, `/app/units/${encodeURIComponent(out.saved.code)}?saved=1`);
   });

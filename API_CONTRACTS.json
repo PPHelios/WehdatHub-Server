@@ -868,6 +868,21 @@
     "web/routes/activityLog.js": {
       "register": ["web", "params"]
     },
+    "web/routes/failures.js": {
+      "register": ["web", "params"]
+    },
+    "lib/swallow.js": {
+      "logged": ["pool", "where", "fallback"]
+    },
+    "services/failures.js": {
+      "TYPES": "Array",
+      "KEEP_DAYS": "Number",
+      "PAGE": "Number",
+      "list": ["pool", "params"],
+      "filters": ["pool"],
+      "summaryText": ["pool", "now"],
+      "summaryJob": []
+    },
     "lib/slowRequests.js": {
       "threshold": [],
       "middleware": ["pool"]
