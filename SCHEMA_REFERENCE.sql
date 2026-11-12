@@ -28,6 +28,7 @@ CREATE SEQUENCE IF NOT EXISTS public.share_link_opens_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_access_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_owner_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_reference_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.usage_events_id_seq;
 
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
  RETURNS trigger
@@ -1582,6 +1583,31 @@ CREATE TABLE IF NOT EXISTS public.unit_photo_uploads (
   attached_at timestamp with time zone
 );
 
+CREATE TABLE IF NOT EXISTS public.usage_events (
+  id bigint DEFAULT nextval('usage_events_id_seq'::regclass) NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  agency_id uuid,
+  broker_id uuid,
+  channel text NOT NULL,
+  event text NOT NULL,
+  ok boolean DEFAULT true NOT NULL,
+  ms integer,
+  meta jsonb
+);
+
+CREATE TABLE IF NOT EXISTS public.log_daily_summary (
+  day date NOT NULL,
+  agency_id uuid DEFAULT '00000000-0000-0000-0000-000000000000'::uuid NOT NULL,
+  source text NOT NULL,
+  name text NOT NULL,
+  n integer DEFAULT 0 NOT NULL,
+  ok_n integer DEFAULT 0 NOT NULL,
+  ms_n integer DEFAULT 0 NOT NULL,
+  ms_sum bigint DEFAULT 0 NOT NULL,
+  ms_avg integer,
+  ms_max integer
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1625,6 +1651,7 @@ ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
+ALTER TABLE log_daily_summary ADD CONSTRAINT log_daily_summary_pkey PRIMARY KEY (day, agency_id, source, name);
 ALTER TABLE map_places ADD CONSTRAINT map_places_pkey PRIMARY KEY (id);
 ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
@@ -1662,6 +1689,7 @@ ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY 
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
 ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_pkey PRIMARY KEY (key);
 ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_pkey PRIMARY KEY (id);
+ALTER TABLE usage_events ADD CONSTRAINT usage_events_pkey PRIMARY KEY (id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_pkey PRIMARY KEY (id);
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
@@ -2063,6 +2091,8 @@ ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_created_by_fkey FOREIGN KEY (
 ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE usage_events ADD CONSTRAINT usage_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE usage_events ADD CONSTRAINT usage_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -2214,6 +2244,8 @@ CREATE INDEX unit_owners_phones ON public.unit_owners USING gin (phones);
 CREATE INDEX idx_unit_photo_uploads_broker ON public.unit_photo_uploads USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_unit_photo_uploads_state ON public.unit_photo_uploads USING btree (attached_at, created_at);
 CREATE INDEX unit_reference_agency_idx ON public.unit_reference USING btree (agency_id, purged_at DESC);
+CREATE INDEX usage_events_agency_event ON public.usage_events USING btree (agency_id, event, created_at DESC);
+CREATE INDEX usage_events_time ON public.usage_events USING btree (created_at);
 CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
 CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree (broker_id, created_at DESC);

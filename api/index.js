@@ -79,6 +79,7 @@ function mountApi(app, { pool }) {
   priv.use(require("../lib/readCaps").apiReadLimiter(pool));
   // Every refused or failed app request (4xx/5xx) is one row in the Failures list, tagged "app" (lib/failureLog.js).
   priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));
+  priv.use(require("../lib/usageLog").track(pool));
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   // Data entry works on units and owners only: leads, deals, viewings, Ask and the rest are refused to that role.
   const NOT_FOR_DATA_ENTRY = /^\/(deals|commissions|links|opened-links|viewings|ask|compare)(\/|$)/;
@@ -90,6 +91,7 @@ function mountApi(app, { pool }) {
   require("./unitsWrite").register(priv, { pool });
   require("./viewings").register(priv, { pool });
   require("./team").register(priv, { pool });
+  require("./usage").register(priv, { pool });
   require("./capabilities").register(priv, { pool });
   require("./owners").register(priv, { pool });
   require("./access").register(priv, { pool });
