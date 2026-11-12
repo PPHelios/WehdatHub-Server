@@ -523,6 +523,7 @@
     "domain/searchQuery.js": {
       "enforceInstallmentWords": ["parsed", "text"],
       "enforceMillionUnits": ["parsed", "text"],
+      "enforceSaleForPayment": ["parsed", "text"],
       "emptyFilters": [],
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],
@@ -2449,6 +2450,7 @@
     },
     "lib/viewGuard.js": {
       "runReadOnly": ["fn"],
+      "runWritable": ["fn"],
       "active": [],
       "isReadOnlySql": ["text"],
       "guardPool": ["pool"]
