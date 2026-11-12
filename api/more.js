@@ -69,6 +69,7 @@ function register(api, { pool }) {
   // Plan and usage
   api.get("/plan", async (req, res) => {
     const b = req.session.broker;
+    if (!isManager(b)) return res.status(403).json({ error: "forbidden" }); // the plan and its payments are for managers and the agency owner
     const [allowance, payTo, limits] = await Promise.all([Billing.allowance(pool, b.agency_id), Billing.payTo(pool), Billing.planLimits(pool)]);
     const manager = isManager(b);
     const [payments, requests, referral] = manager ? await Promise.all([Billing.paymentsOf(pool, b.agency_id), Credits.requestsOf(pool, b.agency_id), Referrals.summary(pool, b.agency_id)]) : [[], [], null];

@@ -45,7 +45,8 @@ async function rights(pool, broker) {
     leads: !dataEntry,
     search: !dataEntry,
     team: manager || Authz.isTeamLead(broker),
-    owners: manager || dataEntry,
+    // Data entry sees owners unless the agency owner switched that off (it is on by default).
+    owners: manager || (dataEntry && (await require("./unitOwners").dataEntryOwnersOn(pool, broker.agency_id))),
     manager,
     agencyOwner: Authz.isAgencyOwner(broker),
     dataEntry,
