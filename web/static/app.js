@@ -701,6 +701,76 @@
       form.requestSubmit ? form.requestSubmit() : form.submit();
     });
   }
+  // ---- The new-unit form: a draft kept on this phone, a warning before leaving unsaved work, live price/phone readback.
+  // Only the unit's public fields are kept; owner, notes, commission, address, location and photos never are.
+  var DRAFT_KEY = "wh-unit-draft";
+  var DRAFT_SKIP = /^(_csrf|version|code|photos|voice|describe|force|action|photo_order|remove_photo|photo_manual|owner_.*|notes|commission|co_broker|unit_no|address|pin)$/;
+  try { if (/[?&]saved=1/.test(location.search)) localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  (function () {
+    var form = document.getElementById("unit-form");
+    if (!form || /\/edit$/.test(form.getAttribute("action") || "")) return;
+    var dirty = false, timer = null;
+    function fieldsOf() { return Array.prototype.filter.call(form.elements, function (el) { return el.name && !DRAFT_SKIP.test(el.name) && el.type !== "file" && el.type !== "submit" && el.type !== "button" && el.type !== "hidden"; }); }
+    function save() {
+      try {
+        var out = {};
+        fieldsOf().forEach(function (el) {
+          if (el.type === "checkbox") { if (el.checked) (out[el.name] = out[el.name] || []).push(el.value); }
+          else if (el.value) out[el.name] = el.value;
+        });
+        if (Object.keys(out).length) localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), v: out })); else localStorage.removeItem(DRAFT_KEY);
+      } catch (e) {}
+    }
+    // Restore only into an empty form (a form re-shown after a refusal already has its values).
+    try {
+      var raw = localStorage.getItem(DRAFT_KEY);
+      var d = raw ? JSON.parse(raw) : null;
+      var empty = fieldsOf().every(function (el) { return el.type === "checkbox" ? !el.checked : !el.value || el.tagName === "SELECT"; });
+      if (d && d.v && Date.now() - d.at < 7 * 24 * 3600 * 1000 && empty) {
+        fieldsOf().forEach(function (el) {
+          var val = d.v[el.name];
+          if (val === undefined) return;
+          if (el.type === "checkbox") el.checked = [].concat(val).indexOf(el.value) >= 0; else el.value = String(val);
+        });
+        var note = document.createElement("p");
+        note.className = "card notice";
+        note.setAttribute("data-draft-note", "");
+        note.textContent = (EN ? "Your unfinished unit was restored. " : "رجّعنا الوحدة اللي ما كملتهاش. ") + (EN ? "Photos and owner details are not kept. " : "الصور وبيانات المالك مش بتتحفظ. ");
+        var discard = document.createElement("button");
+        discard.type = "button"; discard.className = "secondary small"; discard.textContent = EN ? "Start over" : "ابدأ من الأول";
+        discard.addEventListener("click", function () { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} dirty = false; location.reload(); });
+        note.appendChild(discard);
+        form.insertBefore(note, form.firstChild.nextSibling);
+      }
+    } catch (e) {}
+    form.addEventListener("input", function () { dirty = true; clearTimeout(timer); timer = setTimeout(save, 500); });
+    form.addEventListener("submit", function () { dirty = false; });
+    window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+    // Price and phone: say how the typed text is read, as you type.
+    var DIG = { "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
+    function latin(t) { return String(t).replace(/[٠-٩]/g, function (c) { return DIG[c]; }); }
+    function readPrice(t) {
+      var x = latin(t).replace(/,/g, "").trim();
+      var m = x.match(/^(\d+(?:\.\d+)?)\s*(m|million|مليون|k|thousand|ألف|الف)?$/i);
+      if (!m) return null;
+      var n = parseFloat(m[1]), u = (m[2] || "").toLowerCase();
+      if (u === "m" || u === "million" || u === "مليون") n *= 1e6; else if (u) n *= 1e3;
+      return n >= 1000 ? n : null;
+    }
+    function hint(name, fn) {
+      var inp = form.querySelector('[name="' + name + '"]');
+      if (!inp) return;
+      var s = document.createElement("small");
+      s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", name);
+      inp.parentNode.appendChild(s);
+      var run = function () { s.textContent = inp.value ? fn(inp.value) : ""; };
+      inp.addEventListener("input", run);
+      run();
+    }
+    hint("price_value", function (v) { var n = readPrice(v); return n ? "= " + n.toLocaleString("en") : (EN ? "Not read as a price yet" : "لسه مش مقروء كسعر"); });
+    hint("owner_phone", function (v) { var d = latin(v).replace(/\D/g, ""); return /^(20)?0?1[0125]\d{8}$/.test(d) ? "✅" : (EN ? "⚠️ Egyptian mobile numbers have 11 digits (01…)" : "⚠️ الموبايل المصري 11 رقم (01…)"); });
+  })();
+
   // A form that is waiting for the server can't be edited or tapped (inert), so nothing changes under the request.
   function setFormBusy(form, on) {
     if (!form) return;
@@ -760,6 +830,8 @@
       if (!input) return;
       var part = input.closest("[data-step]");
       if (part && part.hidden) unitFormEl.dispatchEvent(new CustomEvent("stepgoto", { detail: part.getAttribute("data-step") }));
+      var more = input.closest("details");
+      if (more) more.open = true;
       var lab = input.closest("label");
       if (lab) lab.classList.add("field-missing");
       setTimeout(function () { input.focus(); input.scrollIntoView({ block: "center" }); }, 0);
@@ -1085,6 +1157,10 @@
   document.addEventListener("change", function (e) {
     var input = e.target;
     if (!input || !input.matches || !input.matches("[data-voice-file]")) return;
+    var n = input.files ? input.files.length : 0;
+    if (n > 5) { input.value = ""; toast(EN ? "Up to 5 voice notes at a time." : "لحد 5 فويس نوت في المرة.", true); return; }
+    var per = Number(input.getAttribute("data-cost")) || 0;
+    if (n > 1 && per) toast(EN ? n + " voice notes · " + n * per + " credits" : n + " فويس نوت · " + n * per + " رصيد", false);
     var box = input.closest("section") || input.form;
     var fill = box && box.querySelector('[data-ai="unit_fill"]');
     if (fill && window.htmx) htmx.trigger(fill, "click");

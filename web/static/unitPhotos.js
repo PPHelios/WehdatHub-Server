@@ -70,12 +70,32 @@
     sync();
   }
 
+  // A big photo is reduced in the browser before upload (long side 2000 px, JPEG): a faster upload on mobile data. If
+  // anything fails, or the result isn't smaller, the original goes as it is.
+  function shrink(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1500000 || !window.createImageBitmap || !window.HTMLCanvasElement) return Promise.resolve(file);
+    return createImageBitmap(file).then(function (bmp) {
+      var k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+      var c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      if (bmp.close) bmp.close();
+      return new Promise(function (ok) {
+        c.toBlob(function (b) {
+          ok(b && b.size < file.size ? new File([b], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file);
+        }, "image/jpeg", 0.85);
+      });
+    }).catch(function () { return file; });
+  }
+
   function addFiles(files, dropped) {
     var added = 0;
     Array.prototype.forEach.call(files, function (f) {
       if (!IMAGE.test(f.name) && !/^image\//.test(f.type)) { tray.dropped++; return; }
       // The first MAX photos are ticked when they arrive; later ones start unticked.
-      tray.items.push({ file: f, keep: kept() < MAX, url: null });
+      var item = { file: f, keep: kept() < MAX, url: null };
+      tray.items.push(item);
+      shrink(f).then(function (small) { if (small !== f) { item.file = small; sync(); } });
       added++;
     });
     tray.dropped += dropped || 0;

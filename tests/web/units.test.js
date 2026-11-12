@@ -263,6 +263,14 @@ describe("edit a unit on the web", () => {
       confirmed_at: "2026-01-01T00:00:00Z"
     });
   }
+  test("the edit review lists what is about to change, as from → to", async () => {
+    await seed();
+    const { agent, csrf } = await signIn(h, "broker");
+    const { version } = await editFields(agent);
+    const r = await post(agent, "/app/units/review", csrf, { code: "ED-1", version, listing_type: "sale", property_type: "apartment", compound: "Hyde Park", price_value: "9.5 مليون", area_value: "150", bedrooms: "3" }, { header: true });
+    expect(r.text).toMatch(/data-change="price_value"/);
+    expect(r.text).toMatch(/9000000 → 9500000/);
+  });
   const editFields = async (agent) => {
     const page = await agent.get("/app/units/ED-1/edit");
     return { page, version: page.text.match(/name="version" value="(\d+)"/)[1] };
@@ -383,5 +391,17 @@ describe("owner checks before the final save", () => {
     expect(page.text).toMatch(/data-auto-review/);
     expect(page.text).not.toMatch(/hx-post="\/app\/units\/review"[^>]*>📋/);
     expect(page.text).toMatch(/name="voice" accept="audio\/\*" multiple/);
+  });
+});
+
+describe("form extras", () => {
+  test("rare internal fields sit under 'More details'; the saved unit page offers 'Add another'; voice carries its credit cost", async () => {
+    const { agent } = await signIn(h, "broker");
+    const form = await agent.get("/app/units/new?lang=en");
+    expect(form.text).toMatch(/<details class="more"[^>]*><summary>More details/);
+    expect(form.text).toMatch(/data-voice-file data-cost="\d+"/);
+    await h.insertListing({ code: "SV-1" });
+    const saved = await agent.get("/app/units/SV-1?saved=1&lang=en");
+    expect(saved.text).toMatch(/data-saved[\s\S]*Add another unit/);
   });
 });

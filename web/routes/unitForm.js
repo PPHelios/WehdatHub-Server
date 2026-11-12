@@ -98,6 +98,14 @@ const ownerNameError = (listing, body, lang) => {
 const pinError = (body, lang) => (String(body.pin || "").trim() && !pinFrom(body) ? L10n(lang, "⛔ اللوكيشن مش واضح. الصق لينك جوجل ماب أو الإحداثيات.", "⛔ The location isn't clear. Paste a Google Maps link or the coordinates.") : null);
 const savePin = (client, listing, pin) => client.query("UPDATE listings SET lat = $3, lng = $4, updated_at = now() WHERE id = $1 AND agency_id = $2", [listing.id, listing.agency_id, pin?.lat ?? null, pin?.lng ?? null]);
 
+// An edit's review lists what is about to change (the main fields only), as "from → to".
+const CHANGE_FIELDS = [["price_value", "السعر", "Price"], ["area_value", "المساحة", "Area"], ["bedrooms", "الغرف", "Bedrooms"], ["bathrooms", "الحمامات", "Bathrooms"], ["compound", "الكمبوند", "Compound"], ["listing_type", "بيع/إيجار", "Sale/rent"], ["property_type", "النوع", "Type"], ["finishing", "التشطيب", "Finishing"], ["floor_level", "الدور", "Floor"]];
+function changesOf(existing, next) {
+  if (!existing || !next) return [];
+  const show = (v) => (v === null || v === undefined || v === "" ? "—" : String(v));
+  return CHANGE_FIELDS.filter(([f]) => show(existing[f]) !== show(next[f])).map(([field, ar, en]) => ({ field, ar, en, from: show(existing[field]), to: show(next[field]) }));
+}
+
 function register(web, { pool, page, assets }) {
   // The owner's lead code: an existing lead of this agency that this broker may see (L-0042), or an error text.
   const checkOwnerLead = async (broker, listing, lang) => {
@@ -240,7 +248,7 @@ function register(web, { pool, page, assets }) {
     const catalogue = ev.ok && !duplicate && !existing?.details?.catalogue
       ? await Store.findCatalogueMatch(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }).catch(Swallow.logged(pool, "unitForm.catalogueMatch", null))
       : null;
-    return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate, catalogue })));
+    return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate, catalogue, changes: changesOf(existing, ev.listing) })));
   });
 
   // ➡️ Next on a stepped new-unit form: the field rules for the form as it stands, as JSON. Nothing is saved; the page
