@@ -98,3 +98,8 @@ test("the unit page status row and action buttons are aligned by the stylesheet"
   expect(css).toContain("form[data-unit-status] { align-items: flex-end; }");
   expect(css).toContain("#unit-actions { align-items: stretch; }");
 });
+
+test("the edit page keeps its Save row in reach (sticky)", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "../../web/static/app.css"), "utf8");
+  expect(css).toMatch(/#unit-form:not\(\[data-steps\]\) \[data-save-row\] \{ position: sticky;/);
+});

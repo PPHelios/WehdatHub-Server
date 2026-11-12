@@ -457,6 +457,9 @@ details.sheet { padding-block: 4px; }
 .stepdot.done { background: var(--brand-soft); color: var(--brand-ink); }
 .stepnav { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 4; padding: 8px; border-radius: 16px; background: var(--card); box-shadow: 0 6px 18px rgba(14, 21, 33, 0.16); }
 .stepnav button { flex: 1; }
+/* Edit is one long page: its Save row stays in reach at the bottom, like the add form's Next/Back. */
+#unit-form:not([data-steps]) [data-save-row] { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 4; padding: 8px; border-radius: 16px; background: var(--card); box-shadow: 0 6px 18px rgba(14, 21, 33, 0.16); }
+.tg-main-on #unit-form:not([data-steps]) [data-save-row] { position: static; }
 [hidden] { display: none !important; }
 
 /* Plan cards */
