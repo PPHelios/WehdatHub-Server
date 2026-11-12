@@ -126,3 +126,13 @@ test("createApp builds a disabled scheduler under tests", () => {
   expect(loadConfig({ NODE_ENV: "development" }).scheduler.enabled).toBe(true);
   expect(loadConfig({ NODE_ENV: "development", SCHEDULER_ENABLED: "false" }).scheduler.enabled).toBe(false);
 });
+
+test("a quiet run (nothing done, fast) writes no telemetry row, but a run that did work or failed still does", async () => {
+  const quietJob = counter("quiet", 60000, () => ({ counts: { sent: 0, delivered: 0 } }));
+  const busyJob = counter("busy", 60000, () => ({ counts: { sent: 2 } }));
+  const s = createScheduler({ pool: db.pool, jobs: [quietJob, busyJob], log: quiet });
+  await s.tick({ now: T0 });
+  const rows = (await q("SELECT operation_type FROM operation_logs WHERE operation_type IN ('crm_job_quiet', 'crm_job_busy')")).rows.map((r) => r.operation_type);
+  expect(rows).toEqual(["crm_job_busy"]);
+  expect((await q("SELECT last_status FROM crm_jobs WHERE name = 'quiet'")).rows[0].last_status).toBe("success");
+});

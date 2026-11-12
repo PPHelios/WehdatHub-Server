@@ -35,6 +35,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   const stepped = mode === "new" && !error && !review && !duplicate;
   return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack" data-progress${stepped ? html` data-steps="${L(lang, "الوحدة والسعر|التسليم والدفع|المميزات|الصور والحفظ", "Unit and price|Delivery and payment|Features|Photos and save")}" data-next="${L(lang, "التالي", "Next")}" data-prev="${L(lang, "رجوع", "Back")}" data-check="/app/units/step-check"` : ""}>
   <input type="hidden" name="_csrf" value="${csrf}">
+  <input type="hidden" name="save_key" value="${require("crypto").randomBytes(12).toString("base64url")}">
   ${notice ? html`<p class="card notice">${notice}</p>` : ""}
   ${error ? html`<p class="card notice bad" role="alert">${error}</p>` : ""}
   ${mode === "edit" ? html`<input type="hidden" name="version" value="${version}"><input type="hidden" name="code" value="${code}">` : ""}
@@ -178,7 +179,7 @@ function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = nu
   <h2>📋 ${L(lang, "مراجعة قبل الحفظ", "Review before saving")}</h2>
   ${blockers.length
     ? html`<div class="notice bad card"><strong>⛔ ${L(lang, "ناقص لإتمام الحفظ:", "Still needed to save:")}</strong><ul>${blockers.map((b) => html`<li data-blocker="${b.field}" role="button" tabindex="0">${lang === "en" ? b.label_en : b.label_ar}</li>`)}</ul></div>`
-    : html`<p class="ok">✅ ${L(lang, "جاهزة للحفظ.", "Ready to save.")}</p>`}
+    : html`<p class="ok">✅ ${L(lang, "جاهزة للحفظ.", "Ready to save.")}${warnings.length ? "" : html` ${L(lang, "مفيش تنبيهات، مش محتاج تعلّم حاجة.", "No warnings, nothing to tick.")}`}</p>`}
   ${changes.length ? html`<div class="notice card" data-changes><strong>✏️ ${L(lang, "اللي اتغير:", "What changed:")}</strong><ul>${changes.map((c) => html`<li data-change="${c.field}">${lang === "en" ? c.en : c.ar}: <span dir="ltr">${c.from} → ${c.to}</span></li>`)}</ul></div>` : ""}
   ${duplicate ? duplicateNotice(duplicate, lang) : catalogue ? catalogueNotice(catalogue, lang) : ""}
   ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>

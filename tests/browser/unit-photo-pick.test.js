@@ -88,28 +88,68 @@ test("only 15 photos can be added; the rest are counted and said", async () => {
   await ctx.close();
 });
 
-test("saving reduces a big photo in the browser first and shows progress", async () => {
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "*", "access-control-allow-headers": "*" };
+
+test("a picked photo is reduced in the browser and goes straight to storage; Save then sends only its key", async () => {
   const sharp = require("sharp");
+  const Fake = require("../harness/fake-supabase");
   const w = 3000, hgt = 2000;
   const raw = Buffer.alloc(w * hgt * 3);
   for (let i = 0; i < raw.length; i++) raw[i] = 120 + ((i * 7919) % 8);
   const big = await sharp(raw, { raw: { width: w, height: hgt, channels: 3 } }).png({ compressionLevel: 1 }).toBuffer();
+  // The page may talk to the storage address only when the server knows it (CSP); here the fake storage address.
+  const saved = process.env.SUPABASE_URL;
+  process.env.SUPABASE_URL = "https://storage.test";
   const { ctx, pg } = await openEdit();
+  const puts = [];
+  await ctx.route("https://storage.test/**", async (route) => {
+    const req = route.request();
+    if (req.method() === "PUT") {
+      const body = req.postDataBuffer();
+      const path = decodeURIComponent(new URL(req.url()).pathname.replace("/upload/sign/", ""));
+      puts.push({ path, size: body.length, jpeg: body.includes("image/jpeg") });
+      Fake.objects.set(path, body);
+    }
+    await route.fulfill({ status: 200, headers: CORS, body: "{}" });
+  });
+  await pg.reload({ waitUntil: "networkidle" });
   await pg.setInputFiles("input[data-photo-tray]", [{ name: "big.png", mimeType: "image/png", buffer: big }]);
   await pg.waitForSelector("[data-photo-preview] li");
-  // The final post is replaced by a recorder: the page stays and we see what the form was about to send.
-  await pg.evaluate(() => {
-    HTMLFormElement.prototype.submit = function () {
-      const f = this.querySelector("input[data-photo-tray]").files[0];
-      window.__sent = { type: f.type, size: f.size, name: f.name };
-    };
-    const f = document.querySelector("#unit-form");
-    f.requestSubmit(f.querySelector("button[name=action]"));
-  });
-  await pg.waitForFunction(() => window.__sent, null, { timeout: 20000 });
-  const file = await pg.evaluate(() => window.__sent);
-  expect(await pg.locator("[data-save-status] progress").count()).toBe(1);
-  expect(file.type).toBe("image/jpeg");
-  expect(file.size).toBeLessThan(big.length / 4);
+  await pg.waitForFunction(() => /✓/.test((document.querySelector("[data-photo-state]") || {}).textContent || ""), null, { timeout: 20000 });
+  // Both copies went up, reduced: the photo is far smaller than the 3000 px original, and the form names it by key.
+  expect(puts).toHaveLength(2);
+  expect(puts[0].jpeg).toBe(true);
+  expect(puts[0].size).toBeLessThan(big.length / 4);
+  expect(puts[1].path).toMatch(/^thumbs\//);
+  expect(await pg.locator('input[name="photo_keys"]').count()).toBe(1);
+  expect(await pg.locator('input[data-photo-tray]').evaluate((i) => i.files.length)).toBe(0);
+  // Save: the form goes without any photo bytes and the unit gets the photo.
+  await pg.waitForSelector("[data-review]");
+  if (await pg.locator("[data-warn-ack]").count()) await pg.check("[data-warn-ack]");
+  await pg.click("[data-save-row] button[type=submit]");
+  await pg.waitForURL(/saved=1/, { timeout: 30000 });
+  const n = (await h.query("SELECT count(*)::int AS n FROM listing_images li JOIN listings l ON l.id = li.listing_id WHERE l.code = 'NH-A20'"))[0].n;
+  expect(n).toBe(1);
+  expect((await h.query("SELECT count(*)::int AS n FROM unit_photo_uploads WHERE attached_at IS NOT NULL"))[0].n).toBe(1);
+  if (saved === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = saved;
+  await ctx.close();
+});
+
+test("when storage cannot be reached the photo goes with the form, as before", async () => {
+  const Fake = require("../harness/fake-supabase");
+  const { ctx, pg } = await openEdit();
+  // Uploads to storage fail (the address is blocked by the page's own rules): the tray marks it failed and Save still works.
+  await pg.setInputFiles("input[data-photo-tray]", [{ name: "c.png", mimeType: "image/png", buffer: PNG }]);
+  await pg.waitForSelector("[data-photo-preview] li");
+  await pg.waitForFunction(() => /⚠|✓/.test((document.querySelector("[data-photo-state]") || {}).textContent || ""), null, { timeout: 20000 });
+  expect(await pg.locator('input[name="photo_keys"]').count()).toBe(0);
+  expect(await pg.locator('input[data-photo-tray]').evaluate((i) => i.files.length)).toBe(1);
+  await pg.waitForSelector("[data-review]");
+  if (await pg.locator("[data-warn-ack]").count()) await pg.check("[data-warn-ack]");
+  await pg.click("[data-save-row] button[type=submit]");
+  await pg.waitForURL(/saved=1/, { timeout: 30000 });
+  const imgs = (await h.query("SELECT li.url FROM listing_images li JOIN listings l ON l.id = li.listing_id WHERE l.code = 'NH-A20'")).length;
+  expect(imgs).toBeGreaterThanOrEqual(1);
+  expect(Fake.objects.size).toBeGreaterThanOrEqual(1);
   await ctx.close();
 });

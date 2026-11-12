@@ -218,6 +218,8 @@ const privacyJob = () => ({
       ...(await retentionSweep(pool, { now })),
       ...(await purgeInboundPayloads(pool, { now })),
       ...(await ErrorReports.purgeOld(pool, { now })),
+      ...(await require("../lib/saveKeys").purgeOld(pool, { now })),
+      ...(await require("../lib/unitUploads").purgeOld(pool, { now })),
       telegram_purged: await require("../lib/tgLink").purgeCallbacks(pool)
     }
   })
