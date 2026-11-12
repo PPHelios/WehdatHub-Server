@@ -361,3 +361,27 @@ describe("auto unit codes (NH-V12)", () => {
     expect((await save(b.agent, b.csrf, "XX")).status).toBe(403);
   });
 });
+
+describe("owner checks before the final save", () => {
+  test("Next (step-check) and the review flag a missing owner phone and name, and a tick on 'use the phone' clears the name", async () => {
+    const { agent, csrf } = await signIn(h, "broker");
+    const { owner_name, owner_phone, ...noOwner } = FULL; // eslint-disable-line no-unused-vars
+    const check = await post(agent, "/app/units/step-check", csrf, noOwner, { header: true });
+    const fields = JSON.parse(check.text).blockers.map((b) => b.field);
+    expect(fields).toEqual(expect.arrayContaining(["owner_phone", "owner_name"]));
+    const review = await post(agent, "/app/units/review", csrf, noOwner, { header: true });
+    expect(review.text).toMatch(/data-review="blocked"/);
+    expect(review.text).toMatch(/data-blocker="owner_phone"/);
+    const phoneOnly = await post(agent, "/app/units/step-check", csrf, { ...noOwner, owner_phone: "01011112222", owner_name_from_phone: "1" }, { header: true });
+    expect(JSON.parse(phoneOnly.text).blockers.map((b) => b.field)).toEqual([]);
+  });
+  test("required labels carry a star and the req outline, and the review loads by itself", async () => {
+    const { agent } = await signIn(h, "broker");
+    const page = await agent.get("/app/units/new?lang=en");
+    expect(page.text).toMatch(/<label class="req">Owner phone \*/);
+    expect(page.text).toMatch(/<label class="req">Owner \*/);
+    expect(page.text).toMatch(/data-auto-review/);
+    expect(page.text).not.toMatch(/hx-post="\/app\/units\/review"[^>]*>📋/);
+    expect(page.text).toMatch(/name="voice" accept="audio\/\*" multiple/);
+  });
+});

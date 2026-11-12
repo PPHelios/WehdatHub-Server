@@ -23,7 +23,7 @@ const Rights = require("../../services/unitRights");
 const Plans = require("../../domain/plans");
 const Form = require("../forms/unitForm");
 const Session = require("../session");
-const { uploads, PHOTO, VOICE } = require("../uploads");
+const { uploads, PHOTO, VOICE_MANY } = require("../uploads");
 const { html } = require("../html");
 const { unitForm, reviewPanel } = require("../views/unitForm");
 const { placeList } = require("../views/searchForm");
@@ -31,7 +31,7 @@ const { imagesOf } = require("./units");
 
 const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
-const upload = uploads([PHOTO, VOICE]);
+const upload = uploads([PHOTO, VOICE_MANY]);
 
 for (const re of [/^\/units\/new$/, /^\/units\/extract$/, /^\/units\/review$/, /^\/units\/step-check$/, /^\/units\/[^/]+\/edit$/]) Session.allowMultipart(re);
 
@@ -120,6 +120,22 @@ function register(web, { pool, page, assets }) {
     const base = L10n(lang, "⛔ الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\" عشان يتراجع.", "⛔ This compound is not on the list. Pick it from the list, or tick \"not in the list\" so it is reviewed.");
     return like.length ? `${base} ${L10n(lang, "قصدك:", "Did you mean:")} ${like.join(" / ")}` : base;
   };
+  // What the final save also refuses (owner phone and name, location, compound), as blockers, so Next and the review
+  // panel show them before any photo is sent. `isNew`: a new unit needs the owner's phone; a name is needed with a phone.
+  const extraBlockers = async (listing, body, lang, { isNew, existing = null }) => {
+    const d = listing.details || {};
+    const phone = String(d.owner_phone || "").trim();
+    const item = (field, ar, en) => ({ field, label_ar: ar, label_en: en, label: L10n(lang, ar, en) });
+    const out = [];
+    if (isNew && !require("../../domain/phone").normalizePhone(phone)) out.push(item("owner_phone", "تليفون المالك", "Owner phone"));
+    if (!String(d.owner_name || "").trim() && (isNew || phone) && String(body.owner_name_from_phone || "") !== "1") out.push(item("owner_name", "اسم المالك (أو علّم \"استخدم التليفون كاسم\")", "Owner name (or tick \"use the phone as the name\")"));
+    if (pinError(body, lang)) out.push(item("pin", "لوكيشن مش واضح", "Location is not clear"));
+    if (!existing || listing.compound !== existing.compound) {
+      const comp = await compoundError(pool, listing, body, lang);
+      if (comp) out.push({ field: "compound", label_ar: comp, label_en: comp, label: comp });
+    }
+    return out;
+  };
   const formPage = async (req, res, opts, status = 200) => {
     const lang = langOf(req);
     const approvedPlaces = await pool.query("SELECT name_en, name_ar FROM map_places WHERE approved ORDER BY name_en").then((r) => r.rows).catch(Swallow.logged(pool, "unitForm.places", []));
@@ -179,7 +195,7 @@ function register(web, { pool, page, assets }) {
     const base = Form.composeFromForm({ existing, form, lang });
     const view = { mode, code: existing?.code, version: req.body.version, images: existing ? await imagesOf(pool, existing) : [], lang, csrf: req.session.csrf };
     const text = String(req.body.describe || "").trim().slice(0, 4000);
-    const voice = filesOf(req, "voice").map((f) => ({ buffer: f.buffer, mimeType: f.mimetype.split(";")[0] }));
+    const voice = filesOf(req, "voice").slice(0, 5).map((f) => ({ buffer: f.buffer, mimeType: f.mimetype.split(";")[0] }));
     if (!text && !voice.length) {
       return res.type("html").send(String(unitForm({ ...view, values: Form.formFromUnit({ ...base, code: form.code }), error: L10n(lang, "اكتب وصف أو سجّل فويس الأول.", "Type a description or record a voice note first.") })));
     }
@@ -218,6 +234,8 @@ function register(web, { pool, page, assets }) {
     const current = existing ? (await imagesOf(pool, existing)).filter((i) => !removeIds.includes(i.id)).length : 0;
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length });
+    ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: !existing, existing }))];
+    ev.ok = ev.blockers.length === 0;
     const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
     const catalogue = ev.ok && !duplicate && !existing?.details?.catalogue
       ? await Store.findCatalogueMatch(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }).catch(Swallow.logged(pool, "unitForm.catalogueMatch", null))
@@ -226,11 +244,13 @@ function register(web, { pool, page, assets }) {
   });
 
   // ➡️ Next on a stepped new-unit form: the field rules for the form as it stands, as JSON. Nothing is saved; the page
-  // shows the blockers that belong to the step on screen. The duplicate, owner and lead checks stay on the final save.
+  // shows the blockers that belong to the step on screen. The owner, location and compound checks run here too; the duplicate and lead checks stay on the final save.
   web.post("/units/step-check", upload, async (req, res) => {
     const lang = langOf(req);
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length });
+    ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: true }))];
+    ev.ok = ev.blockers.length === 0;
     // A unit that looks like one the agency already has is flagged at the first Next, not only at the final save.
     let duplicate = null;
     try {

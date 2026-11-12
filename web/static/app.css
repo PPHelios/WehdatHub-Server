@@ -616,3 +616,10 @@ label.field-missing input, label.field-missing select, label.field-missing texta
 .sat { max-width: 100%; border-radius: 12px; margin-block: 8px; }
 [data-row] { cursor: pointer; }
 [data-row].is-selected { outline: 2px solid var(--brand); }
+
+/* Required fields: a quiet brand-coloured edge from the start; red only after a failed check (.field-missing below wins). */
+label.req > input, label.req > select, label.req > textarea { border-color: var(--brand); box-shadow: inset 3px 0 0 var(--brand); }
+[dir="rtl"] label.req > input, [dir="rtl"] label.req > select, [dir="rtl"] label.req > textarea { box-shadow: inset -3px 0 0 var(--brand); }
+label.req.field-missing > input, label.req.field-missing > select, label.req.field-missing > textarea { border-color: var(--bad); box-shadow: none; }
+form[aria-busy="true"] { opacity: 0.65; cursor: progress; }
+[data-blocker] { cursor: pointer; text-decoration: underline; }

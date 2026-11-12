@@ -82,7 +82,8 @@ describe("web review", () => {
   test("the review shows a soft catalogue note (not the duplicate warning) and saving is not blocked", async () => {
     await seedCatalogue();
     const { agent, csrf } = await signIn(h, "broker");
-    const review = await post(agent, "/app/units/review", csrf, FULL);
+    // The review also asks for what the save needs: the owner's phone and name.
+    const review = await post(agent, "/app/units/review", csrf, { ...FULL, owner_name: "Mr Owner", owner_phone: "01011112222" });
     expect(review.text).toMatch(/data-catalogue-match="CAT-U1"/);
     expect(review.text).toMatch(/B12-04/);
     expect(review.text).not.toMatch(/data-duplicate=/);
