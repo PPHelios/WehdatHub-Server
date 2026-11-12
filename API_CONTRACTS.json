@@ -2450,6 +2450,7 @@
     },
     "lib/viewGuard.js": {
       "runReadOnly": ["fn"],
+      "runWritable": ["fn"],
       "active": [],
       "isReadOnlySql": ["text"],
       "guardPool": ["pool"]
