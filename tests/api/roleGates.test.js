@@ -61,3 +61,19 @@ test("data entry has the owners right by default and loses it when the agency ow
   const off = await api().get("/api/v1/me").set(auth);
   expect(off.body.rights.owners).toBe(false);
 });
+
+test("lead rules, round robin and away are for managers; a broker is refused", async () => {
+  await h.seedBroker("manager");
+  const m = await login("manager");
+  const rules = await api().get("/api/v1/team/rules").set(m);
+  expect(rules.status).toBe(200);
+  expect(rules.body).toHaveProperty("rules");
+  expect(Array.isArray(rules.body.brokers)).toBe(true);
+  const off = await api().post("/api/v1/team/routing").set(m).send({ roundRobin: false, order: [] });
+  expect(off.status).toBe(200);
+  expect(off.body.roundRobin).toBe(false);
+  expect((await api().post(`/api/v1/team/${h.BROKERS.broker.id}/away`).set(m).send({ until: "2020-01-01" })).status).toBe(422);
+  const b = await login("broker");
+  expect((await api().get("/api/v1/team/rules").set(b)).status).toBe(403);
+  expect((await api().post("/api/v1/team/routing").set(b).send({ roundRobin: true })).status).toBe(403);
+});
