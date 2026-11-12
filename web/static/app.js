@@ -96,7 +96,7 @@
     var run = function () {
       var files = form.querySelector('input[type="file"]');
       if (!files || !files.files.length) return;
-      var url = form.getAttribute("action").replace(/\/read$/, "/estimate");
+      var url = (form.getAttribute("action") || location.href).replace(/\/read$/, "/estimate");
       fetch(url, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -367,7 +367,7 @@
       for (var k = 0; k < controls.length; k++) controls[k].disabled = false;
     };
     var xhr = new XMLHttpRequest();
-    xhr.open("POST", form.action, true);
+    xhr.open("POST", (form.getAttribute("action") || location.href), true);
     xhr.setRequestHeader("Accept", "text/html");
     xhr.upload.onprogress = function (e) {
       if (!e.lengthComputable) return;

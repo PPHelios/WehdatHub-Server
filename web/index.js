@@ -125,6 +125,8 @@ function mountWeb(app, { pool, config }) {
   // A repeated one-time request ID (double tap, retry, re-sent form) is answered without running the action again.
   priv.use(RequestIds.middleware);
   priv.use(require("../lib/slowRequests").middleware(pool));
+  // Every refused or failed request (4xx/5xx) is written to operation_logs with its status and route.
+  priv.use(require("../lib/failureLog").middleware(pool));
   // The test number viewing another agency: its data only, read-only; switching back and signing out stay open.
   priv.use((req, res, next) => {
     if (!(TestRole.canView(req.session.broker) && TestRole.isViewing(req.sid))) return next();

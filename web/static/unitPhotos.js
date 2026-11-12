@@ -156,7 +156,7 @@
     var form = e.target;
     if (!form || !form.matches || !form.matches("#unit-form") || !window.fetch || !window.DOMParser) return;
     // Edit saves stay a normal form post for now (the background save is for adding a unit).
-    if (/\/edit$/.test(form.getAttribute("action") || "")) return;
+    if (/\/edit$/.test((form.getAttribute("action") || location.href) || "")) return;
     if (!tray || tray.form !== form) start(form);
     e.preventDefault();
     if (kept() > MAX) { sync(); return; }
@@ -165,7 +165,7 @@
     if (sub && sub.name) fd.append(sub.name, sub.value);
     var buttons = form.querySelectorAll("button[type=submit], button[name=action]");
     Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
-    fetch(form.action, { method: "POST", body: fd, credentials: "same-origin", headers: { Accept: "text/html" } })
+    fetch((form.getAttribute("action") || location.href), { method: "POST", body: fd, credentials: "same-origin", headers: { Accept: "text/html" } })
       .then(function (r) {
         if (r.redirected) { location.href = r.url; return null; }
         return r.text();
