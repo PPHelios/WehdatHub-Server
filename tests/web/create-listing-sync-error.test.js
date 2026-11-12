@@ -21,7 +21,11 @@ afterEach(() => jest.restoreAllMocks());
 afterAll(closeHarness);
 
 test("createListing shows the real owner-sync error", async () => {
-  jest.spyOn(require("../../services/compoundResolve"), "normalize").mockImplementation(async (db, f) => ({ ...f, location_keywords: [], inventory_type: "resale_unit", features: [], language: "en", search_text: "", feature_keys: [], features_other: [], hero_position: 0, collateral: {} }));
+  // The insert names every column, so each NOT NULL column with a default gets that default's value here.
+  const defs = await h.query("SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'listings' AND is_nullable = 'NO' AND column_default IS NOT NULL");
+  const filled = {};
+  for (const d of defs) filled[d.column_name] = (await h.query(`SELECT ${d.column_default} AS v`))[0].v;
+  jest.spyOn(require("../../services/compoundResolve"), "normalize").mockImplementation(async (db, f) => ({ ...filled, ...f }));
   jest.spyOn(Owners, "syncFromListing").mockRejectedValue(new Error("owner sync boom"));
   const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
   const client = await h.pool.connect();
