@@ -872,6 +872,13 @@
     "web/routes/failures.js": {
       "register": ["web", "params"]
     },
+    "lib/formChecks.js": {
+      "ownerBlockers": ["listing", "body", "lang", "params"],
+      "changesOf": ["existing", "next"]
+    },
+    "api/clientError.js": {
+      "register": ["api", "params"]
+    },
     "lib/swallow.js": {
       "logged": ["pool", "where", "fallback"]
     },
@@ -889,7 +896,7 @@
       "middleware": ["pool"]
     },
     "lib/failureLog.js": {
-      "middleware": ["pool"],
+      "middleware": ["pool", "params"],
       "routeShape": ["path"]
     },
     "lib/requestIds.js": {
