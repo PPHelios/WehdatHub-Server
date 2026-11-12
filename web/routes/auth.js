@@ -6,6 +6,7 @@ const WebAuth = require("../../lib/webAuth");
 const RateLimit = require("../../lib/rateLimit");
 const Links = require("../../lib/links");
 const Onboarding = require("../../lib/onboarding");
+const Phone = require("../../domain/phone");
 const { notifyPreferred } = require("../../lib/dispatcher");
 const { logOperation: logOp } = require("../../lib/db");
 const Audit = require("../../services/audit");
@@ -19,6 +20,15 @@ const S = require("../session");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
+
+/** True only for the demo broker: the demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true". */
+function isDemoBroker(env, broker) {
+  if (String(env.DEMO_LOGIN_ENABLED || "").toLowerCase() !== "true") return false;
+  if (!env.DEMO_LOGIN_PHONE || !broker) return false;
+  const phone = Phone.normalizePhone(env.DEMO_LOGIN_PHONE);
+  if (!phone || String(broker.phone_normalized || "") !== phone) return false;
+  return String(broker.agency_id) === String(env.DEMO_LOGIN_AGENCY_ID || "").trim();
+}
 
 const tooMany = (page, req, res, gate) => {
   res.set("Retry-After", String(gate.retryAfterSec));
@@ -101,7 +111,8 @@ function register(web, { pool, page }) {
          FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`,
         [phone]
       );
-      const broker = rows[0];
+      // The demo number never gets a code or a link sent: it signs in only with the saved demo code.
+      const broker = isDemoBroker(process.env, rows[0]) ? null : rows[0];
       if (broker && req.body.mode === "code") {
         const code = await WebAuth.issueLoginCode(pool, broker);
         const lang = broker.preferred_lang || "ar";
