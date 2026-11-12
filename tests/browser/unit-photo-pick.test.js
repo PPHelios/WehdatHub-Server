@@ -108,6 +108,7 @@ test("saving reduces a big photo in the browser first and shows progress", async
   });
   await pg.waitForFunction(() => window.__sent, null, { timeout: 20000 });
   const file = await pg.evaluate(() => window.__sent);
+  expect(await pg.locator("[data-save-status] progress").count()).toBe(1);
   expect(file.type).toBe("image/jpeg");
   expect(file.size).toBeLessThan(big.length / 4);
   await ctx.close();

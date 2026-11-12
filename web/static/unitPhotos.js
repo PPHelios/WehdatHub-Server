@@ -31,7 +31,7 @@
   }
 
   // A status line right above the Save button (the photo note sits far up the page): preparing photos with a progress bar, then saving.
-  function status(form, text, done, total) {
+  function status(form, text, done, total, wait) {
     var p = form.querySelector("[data-save-status]");
     if (!p) {
       var btn = form.querySelector("button[type=submit], button[name=action]");
@@ -44,9 +44,11 @@
     }
     p.hidden = !text;
     p.textContent = text || "";
-    if (text && total) {
+    if (text && (total || wait)) {
       var bar = document.createElement("progress");
-      bar.max = total; bar.value = done; bar.style.cssText = "display:block;width:100%";
+      // With no count (the save itself) the bar has no value and just moves.
+      if (total) { bar.max = total; bar.value = done; }
+      bar.style.cssText = "display:block;width:100%";
       p.appendChild(bar);
     }
   }
@@ -241,7 +243,7 @@
     Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
     var unlock = function () { Array.prototype.forEach.call(buttons, function (b) { b.disabled = false; }); };
     prepare(form).then(function () {
-      status(form, T.saving, 0, 0);
+      status(form, T.saving, 0, 0, true);
       if (edit) {
         // Disabled buttons do not send their name, so it goes as a hidden field.
         if (sub && sub.name) {
