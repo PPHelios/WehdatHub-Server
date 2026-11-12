@@ -37,7 +37,7 @@ test("a broker over the daily owner phone cap gets 429, and a view under it is l
   await h.query(`UPDATE listings SET details = jsonb_build_object('owner_name', 'Owner Ali', 'owner_phone', '01012345678') WHERE code = 'A-1' AND agency_id = $1`, [h.BROKERS.broker.agency_id]);
   const auth = await login("broker");
   expect((await api().get("/api/v1/units/A-1/contact").set(auth)).status).toBe(200);
-  const { rows } = await h.query("SELECT count(*)::int AS n FROM operation_logs WHERE operation_type = 'owner_phone_view' AND broker_id = $1", [h.BROKERS.broker.id]);
+  const rows = await h.query("SELECT count(*)::int AS n FROM operation_logs WHERE operation_type = 'owner_phone_view' AND broker_id = $1", [h.BROKERS.broker.id]);
   expect(rows[0].n).toBe(1);
   await fillBucket(`owner_phones:broker:${h.BROKERS.broker.id}`, 50);
   const over = await api().get("/api/v1/units/A-1/contact").set(auth);
@@ -65,7 +65,7 @@ test("a broker over the daily unit list cap gets 429", async () => {
 
 test("document photos are hidden from a colleague but shown to the unit's own broker", async () => {
   await h.insertListing({ code: "A-1", compound: "Mivida" });
-  const { rows } = await h.query("SELECT id, agency_id FROM listings WHERE code = 'A-1' AND agency_id = $1", [h.BROKERS.broker.agency_id]);
+  const rows = await h.query("SELECT id, agency_id FROM listings WHERE code = 'A-1' AND agency_id = $1", [h.BROKERS.broker.agency_id]);
   await h.query("INSERT INTO listing_images (listing_id, agency_id, url, position, role) VALUES ($1, $2, 'p/plain.jpg', 0, NULL), ($1, $2, 'p/contract.jpg', 1, 'document')", [rows[0].id, rows[0].agency_id]);
   await h.query("UPDATE agencies SET crm_settings = COALESCE(crm_settings, '{}'::jsonb) || '{\"secret_details\":\"all\"}'::jsonb WHERE id = $1", [rows[0].agency_id]);
   const mine = await api().get("/api/v1/units/A-1").set(await login("broker"));
@@ -83,7 +83,7 @@ test("app demo sign-in: the demo code works, and asking for a code sends nothing
   process.env.DEMO_LOGIN_CODE = "123456";
   const ask = await api().post("/api/v1/auth/code/request").send({ phone: b.phone });
   expect(ask.status).toBe(200);
-  const { rows } = await h.query("SELECT count(*)::int AS n FROM web_login_tokens WHERE broker_id = $1 AND channel = 'code'", [b.id]);
+  const rows = await h.query("SELECT count(*)::int AS n FROM web_login_tokens WHERE broker_id = $1 AND channel = 'code'", [b.id]);
   expect(rows[0].n).toBe(0);
   const ok = await api().post("/api/v1/auth/code/verify").send({ phone: b.phone, code: "123456" });
   expect(ok.status).toBe(200);
