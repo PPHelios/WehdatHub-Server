@@ -220,6 +220,7 @@ const privacyJob = () => ({
       ...(await ErrorReports.purgeOld(pool, { now })),
       ...(await require("../lib/saveKeys").purgeOld(pool, { now })),
       ...(await require("../lib/unitUploads").purgeOld(pool, { now })),
+      ...(await require("../lib/logRollup").rollUp(pool, { now })),
       telegram_purged: await require("../lib/tgLink").purgeCallbacks(pool)
     }
   })

@@ -1,5 +1,16 @@
 {
   "libraries": {
+    "lib/logRollup.js": {
+      "rollUp": ["pool", "params"],
+      "cutoff": ["now"],
+      "KEEP_DAYS": "Number"
+    },
+    "lib/usageLog.js": {
+      "APP_EVENTS": "Set",
+      "cleanBatch": ["body"],
+      "record": ["pool", "params"],
+      "track": ["pool"]
+    },
     "lib/unitUploads.js": {
       "keysOf": ["body"],
       "sign": ["pool", "broker", "count", "source"],
