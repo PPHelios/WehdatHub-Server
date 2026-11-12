@@ -27,6 +27,7 @@ const { uploads, PHOTO, VOICE_MANY } = require("../uploads");
 const { html } = require("../html");
 const { unitForm, reviewPanel } = require("../views/unitForm");
 const SaveKeys = require("../../lib/saveKeys");
+const Uploads = require("../../lib/unitUploads");
 const { placeList } = require("../views/searchForm");
 const { imagesOf } = require("./units");
 
@@ -242,7 +243,7 @@ function register(web, { pool, page, assets }) {
     const removeIds = [].concat(req.body.remove_photo || []);
     const current = existing ? (await imagesOf(pool, existing)).filter((i) => !removeIds.includes(i.id)).length : 0;
     const form = Form.unitFromForm(req.body);
-    const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length });
+    const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length + Uploads.keysOf(req.body).length });
     ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: !existing, existing }))];
     ev.ok = ev.blockers.length === 0;
     const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
@@ -257,7 +258,7 @@ function register(web, { pool, page, assets }) {
   web.post("/units/step-check", upload, async (req, res) => {
     const lang = langOf(req);
     const form = Form.unitFromForm(req.body);
-    const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length });
+    const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length + Uploads.keysOf(req.body).length });
     ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: true }))];
     ev.ok = ev.blockers.length === 0;
     // A unit that looks like one the agency already has is flagged at the first Next, not only at the final save.
@@ -275,6 +276,23 @@ function register(web, { pool, page, assets }) {
     const code = key ? await SaveKeys.lookup(pool, req.session.broker.agency_id, key) : null;
     res.set("Cache-Control", "no-store");
     return res.json(code ? { saved: true, code } : { saved: false });
+  });
+
+  // Photos straight to storage: one-time upload links (the photo never passes through this server), and the check that
+  // photos uploaded earlier (before a reload) are still good. Nothing here changes a unit.
+  web.post("/units/photo-upload", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    const out = await Uploads.sign(pool, broker, (req.body || {}).count, "web");
+    res.set("Cache-Control", "no-store");
+    if (out.limited) return res.status(429).json({ error: "rate_limited" });
+    if (out.failed) return res.status(503).json({ error: "storage_unavailable" });
+    return res.json(out);
+  });
+  web.post("/units/photo-upload/check", async (req, res) => {
+    const keys = Uploads.keysOf({ photo_keys: (req.body || {}).keys });
+    res.set("Cache-Control", "no-store");
+    return res.json({ ready: await Uploads.ready(pool, req.session.broker, keys) });
   });
 
   // The browser's own view of a save: how long the broker waited and how it ended. One row per save; no unit content.
@@ -305,7 +323,8 @@ function register(web, { pool, page, assets }) {
     const { broker } = req.session;
     const form = Form.unitFromForm(req.body);
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
-    const ev = evaluate({ existing: null, form, lang, photoCount: files.length });
+    const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
+    const ev = evaluate({ existing: null, form, lang, photoCount: files.length + keys.length });
     const again = (status, error, duplicate = null) => {
       traceRefusal(pool, req, { reason: `create_refused_${status}`, listingCode: form.code || null, blockers: ev.blockers.map((b) => b.field) });
       return formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
@@ -326,6 +345,9 @@ function register(web, { pool, page, assets }) {
       }
     }
 
+    // Photos that went straight to storage must all be there, the broker's own and unused (checked before any work).
+    const staged = await Uploads.verify(pool, broker, keys);
+    if (staged.missing.length) return again(422, L10n(lang, "⚠️ صورة أو أكتر ما خلصش رفعها. ضيفها تاني.", "⚠️ A photo did not finish uploading. Add it again."));
     // Already saved under this key (a repeat of a save whose answer was lost): no photo work, just the first result.
     const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
     if (prior) return res.redirect(303, `/app/units/${encodeURIComponent(prior)}?saved=1`);
@@ -336,6 +358,7 @@ function register(web, { pool, page, assets }) {
     const client = await pool.connect();
     let result;
     let repeat = null;
+    let photosUsed = false;
     try {
       await client.query("BEGIN");
       // A repeated try of the same save (lost answer, double tap, the page's own check) finds the first result.
@@ -346,17 +369,23 @@ function register(web, { pool, page, assets }) {
       } else result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
       if (result && result.listing) {
         await SaveKeys.attach(client, broker.agency_id, saveKey, result.listing.code);
+        // The photos named by key are marked used in this same transaction (a second save cannot use them again).
+        if (!(await Uploads.attach(client, broker, keys))) photosUsed = true;
         await savePin(client, result.listing, pinFrom(req.body));
-        const added = await Store.addPhotos(client, result.listing, photos.urls);
+        const added = await Store.addPhotos(client, result.listing, photosUsed ? [] : [...staged.paths, ...photos.urls]);
         // The broker ordered the photos by hand: AI ordering is skipped for this unit (saves AI credits).
         if (req.body.photo_manual === "on" && added.length) await Store.reorderPhotos(client, result.listing, added.map((r) => r.id), { force: true });
       }
-      if (!repeat) await client.query(result.listing ? "COMMIT" : "ROLLBACK");
+      if (!repeat) await client.query(result.listing && !photosUsed ? "COMMIT" : "ROLLBACK");
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
       throw err;
     } finally {
       client.release();
+    }
+    if (photosUsed) {
+      Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
+      return again(409, L10n(lang, "⚠️ الصور دي اتستخدمت في حفظ تاني. ضيفها تاني.", "⚠️ These photos were used by another save. Add them again."));
     }
     if (repeat) {
       Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
@@ -374,7 +403,7 @@ function register(web, { pool, page, assets }) {
       Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));
       return again(409, L10n(lang, `⚠️ الكود #${result.code} مستخدم لوحدة أخرى في الشركة. اكتب كود مختلف.`, `⚠️ Code #${result.code} is already used by another unit. Choose another code.`));
     }
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "web_unit_create", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { photos: photos.urls.length, photo_failures: photos.failed, save_key: Boolean(saveKey) } });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "web_unit_create", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { photos: photos.urls.length + staged.paths.length, direct: staged.paths.length, photo_failures: photos.failed, save_key: Boolean(saveKey) } });
     return res.redirect(303, `/app/units/${encodeURIComponent(result.listing.code)}?saved=1`);
   });
 
@@ -391,6 +420,8 @@ function register(web, { pool, page, assets }) {
     const expectedVersion = Number(req.body.version) || -1;
     const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
     if (prior) return res.redirect(303, `/app/units/${encodeURIComponent(prior)}?saved=1`);
+    const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
+    const staged = await Uploads.verify(pool, broker, keys);
     const tPhotos = Date.now();
     const photos = await storePhotos(broker, files);
     const photoMs = Date.now() - tPhotos;
@@ -403,7 +434,7 @@ function register(web, { pool, page, assets }) {
       if (!key.first) return { rollback: true, repeat: key.code || listing.code };
       if (!Authz.canEdit(broker, listing)) return { rollback: true, forbidden: true };
       const { rows } = await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1 AND NOT (id = ANY($2::uuid[]))", [listing.id, removeIds]);
-      const photoCount = rows[0].n + photos.urls.length;
+      const photoCount = rows[0].n + photos.urls.length + keys.length;
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
       const nameError = ownerNameError(ev.listing, req.body, lang);
@@ -413,12 +444,14 @@ function register(web, { pool, page, assets }) {
       const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
       if (leadError) return { rollback: true, listing, ev, leadError };
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
+      if (staged.missing.length) return { rollback: true, listing, ev, photoMissing: true };
       const patch = Edits.diffPatch(listing, ev.listing);
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, listing, ev, conflict: true };
       await savePin(client, res2.listing, pinFrom(req.body));
       const removed = await Store.removePhotos(client, listing, removeIds);
-      await Store.addPhotos(client, listing, photos.urls);
+      if (!(await Uploads.attach(client, broker, keys))) return { rollback: true, listing, ev, photosUsed: true };
+      await Store.addPhotos(client, listing, [...staged.paths, ...photos.urls]);
       await SaveKeys.attach(client, broker.agency_id, saveKey, res2.listing.code);
       // P3: the order the broker dragged the photos into (new photos follow).
       const order = [].concat(req.body.photo_order || []).filter((id) => /^[0-9a-f-]{36}$/.test(id) && !removeIds.includes(id));
@@ -449,6 +482,10 @@ function register(web, { pool, page, assets }) {
         ? L10n(lang, `⚠️ الوحدة #${out.listing.code} اتعدلت من شخص تاني أثناء التعديل. افتح التعديل من جديد.`, `⚠️ #${out.listing.code} was changed by someone else meanwhile. Open the edit again.`)
         : out.tooMany
         ? L10n(lang, `⚠️ الحد الأقصى ${MAX_PHOTOS} صورة للوحدة.`, `⚠️ At most ${MAX_PHOTOS} photos per unit.`)
+        : out.photoMissing
+        ? L10n(lang, "⚠️ صورة أو أكتر ما خلصش رفعها. ضيفها تاني.", "⚠️ A photo did not finish uploading. Add it again.")
+        : out.photosUsed
+        ? L10n(lang, "⚠️ الصور دي اتستخدمت في حفظ تاني. ضيفها تاني.", "⚠️ These photos were used by another save. Add them again.")
         : L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing.");
       return formPage(
         req,
@@ -467,7 +504,7 @@ function register(web, { pool, page, assets }) {
     }
     // Storage files are removed outside the transaction (SEC-04).
     if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(Swallow.logged(pool, "unitForm.removePhotos"));
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { columns: out.columns, photos_added: photos.urls.length, photos_removed: out.removed.length, photos_reordered: Boolean(out.reordered), save_key: Boolean(saveKey) } });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { columns: out.columns, photos_added: photos.urls.length + staged.paths.length, direct: staged.paths.length, photos_removed: out.removed.length, photos_reordered: Boolean(out.reordered), save_key: Boolean(saveKey) } });
     return res.redirect(303, `/app/units/${encodeURIComponent(out.saved.code)}?saved=1`);
   });
 }

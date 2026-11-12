@@ -1,5 +1,13 @@
 {
   "libraries": {
+    "lib/unitUploads.js": {
+      "keysOf": ["body"],
+      "sign": ["pool", "broker", "count", "source"],
+      "verify": ["pool", "broker", "keys"],
+      "attach": ["client", "broker", "keys"],
+      "ready": ["pool", "broker", "keys"],
+      "purgeOld": ["pool", "params"]
+    },
     "lib/saveKeys.js": {
       "keyOf": ["body"],
       "claim": ["client", "agencyId", "key", "kind"],
@@ -188,6 +196,8 @@
       "thumbUrl": ["value"],
       "uploadThumb": ["storagePath", "buffer"],
       "downloadListingImage": ["keyOrUrl"],
+      "objectInfo": ["keyOrUrl"],
+      "createSignedUpload": ["storagePath"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],

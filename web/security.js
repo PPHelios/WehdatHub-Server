@@ -21,12 +21,21 @@ const CSP = [
   "worker-src 'self'"
 ].join("; ");
 
-/** The policy, plus the map file's own address in connect-src when MAP_TILES_URL is set (the browser reads it in ranges). */
+/**
+ * The policy, plus the origins the browser reads or writes directly in connect-src: the map file's address when MAP_TILES_URL is
+ * set (read in ranges) and the storage project's address when SUPABASE_URL is set (photos go straight to storage).
+ */
 function cspWithMap() {
-  const url = require("../config").getConfig().map.tilesUrl;
-  if (!url) return CSP;
-  const origin = new URL(url).origin;
-  return CSP.replace("connect-src 'self'", `connect-src 'self' ${origin}`);
+  const origins = [];
+  const tiles = require("../config").getConfig().map.tilesUrl;
+  if (tiles) origins.push(new URL(tiles).origin);
+  try {
+    if (process.env.SUPABASE_URL) origins.push(new URL(process.env.SUPABASE_URL).origin);
+  } catch {
+    /* a malformed address adds nothing */
+  }
+  if (!origins.length) return CSP;
+  return CSP.replace("connect-src 'self'", `connect-src 'self' ${[...new Set(origins)].join(" ")}`);
 }
 
 /** Security headers for HTML pages and static files of the web app and the public pages. */
