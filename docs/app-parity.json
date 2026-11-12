@@ -36,6 +36,9 @@
   "deals.js": {
     "app": "Deals (PR 4)"
   },
+  "failures.js": {
+    "app": "planned: Platform section (PR 8), with the board"
+  },
   "gallery.js": {
     "web": "client-facing page"
   },

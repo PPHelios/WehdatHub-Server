@@ -5,6 +5,7 @@
 "use strict";
 
 const express = require("express");
+const Swallow = require("../../lib/swallow");
 const Leads = require("../../services/leads");
 const Gallery = require("../../services/projectGallery");
 const Notifications = require("../../lib/notifications");
@@ -225,7 +226,7 @@ function mountPublic(app, { pool, assets }) {
 
   /** The unit's catalogue project and its client-visible links (C7). */
   async function projectOf(listing) {
-    const project = await Catalogue.projectForUnit(pool, listing).catch(() => null);
+    const project = await Catalogue.projectForUnit(pool, listing).catch(Swallow.logged(pool, "publicUnit.project", null));
     return project ? { project, materials: await Catalogue.clientMaterials(pool, listing) } : { project: null, materials: [] };
   }
 

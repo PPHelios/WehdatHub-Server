@@ -18,6 +18,7 @@ const PRIVATE = [
   require("./commissions"),
   require("./notifications"),
   require("./activityLog"),
+  require("./failures"),
   require("./owners"),
   require("./openedLinks"),
   require("./settings"),

@@ -5,6 +5,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const Swallow = require("../../lib/swallow");
 const express = require("express");
 const Supabase = require("../../lib/supabase");
 const AI = require("../../lib/ai");
@@ -81,7 +82,7 @@ function register(web, { pool }) {
       return { ok: true };
     });
     if (!out.ok) {
-      Supabase.deleteStorageFiles([url]).catch(() => {});
+      Supabase.deleteStorageFiles([url]).catch(Swallow.logged(pool, "matchPhotos.cleanup"));
       return res.status(out.missing ? 404 : 200).json(out.missing ? { missing: true } : { full: true });
     }
     const same = hash ? (await PhotoHash.sameAs(pool, broker.agency_id, [hash], { excludeListingId: listing.id })).get(hash) : null;
@@ -143,7 +144,7 @@ function register(web, { pool }) {
       [imp.id, String(n), JSON.stringify([photo]), broker.agency_id, broker.id, MAX_PHOTOS]
     );
     if (!rowCount) {
-      Supabase.deleteStorageFiles([url]).catch(() => {});
+      Supabase.deleteStorageFiles([url]).catch(Swallow.logged(pool, "matchPhotos.cleanup"));
       return res.json({ full: true });
     }
     return res.json({ ok: true, ...(twin >= 0 ? { twin: true } : {}), ...(same ? { same_as: same } : {}) });

@@ -3,6 +3,7 @@
 "use strict";
 
 const Vis = require("../lib/visibility");
+const Swallow = require("../lib/swallow");
 const Authz = require("../lib/authz");
 const TestRole = require("../lib/testRole");
 const ViewGuard = require("../lib/viewGuard");
@@ -155,7 +156,7 @@ function mountWeb(app, { pool, config }) {
   // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).
   priv.use(async (req, _res, next) => {
     if (req.method === "GET" && !req.get("HX-Request")) {
-      req.session.unread = await Notifications.unreadCount(pool, req.session.broker).catch(() => 0);
+      req.session.unread = await Notifications.unreadCount(pool, req.session.broker).catch(Swallow.logged(pool, "web.unreadCount", 0));
     }
     next();
   });

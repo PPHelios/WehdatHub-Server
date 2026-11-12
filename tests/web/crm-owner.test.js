@@ -136,3 +136,16 @@ test("agency alerts never reach the CRM owner, even when their broker row is an 
   const rows = await h.query("SELECT 1 FROM notifications WHERE broker_id = $1 AND kind = 'manager_alert'", [crm.id]);
   expect(rows).toHaveLength(0);
 });
+
+test("the Failures page is the CRM owner's; refused actions show up there with their reason", async () => {
+  const crm = await signIn(h, "admin");
+  const broker = await signIn(h, "broker");
+  // A page that does not exist is a 404 for the broker, and the shared log keeps it.
+  expect((await broker.agent.get("/app/no-such-page")).status).toBe(404);
+  await new Promise((r) => setTimeout(r, 200));
+  expect((await broker.agent.get("/app/failures")).status).toBe(404);
+  const page = await crm.agent.get("/app/failures?lang=en");
+  expect(page.status).toBe(200);
+  expect(page.text).toMatch(/Failed and refused actions/);
+  expect(page.text).toMatch(/http_404/);
+});

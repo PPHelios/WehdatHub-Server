@@ -565,10 +565,17 @@
   });
   // htmx buttons (Fill from description, Review, duplicate check): say so when the server can't be reached.
   document.addEventListener("htmx:responseError", function (e) {
-    var code = e.detail && e.detail.xhr ? e.detail.xhr.status : 0;
+    var xhr = e.detail && e.detail.xhr;
+    var code = xhr ? xhr.status : 0;
+    // The server's own reason (a short plain text) is shown as it is; anything else gets the generic line with the status.
+    var ct = xhr && xhr.getResponseHeader ? String(xhr.getResponseHeader("Content-Type") || "") : "";
+    var why = xhr && ct.indexOf("text/plain") === 0 ? String(xhr.responseText || "").trim() : "";
+    if (why && why.length <= 200) { toast(why, true); return; }
     toast(EN ? "Something went wrong (" + code + "). Try again." : "حصلت مشكلة (" + code + "). جرب تاني.", true);
   });
-  function unreachable() {
+  function unreachable(e) {
+    // Only the browser knows the server couldn't be reached, so it tells the server (logged and listed as a failure).
+    reportError("htmx " + (e && e.type ? e.type : "unreachable") + " " + (e && e.detail && e.detail.pathInfo ? e.detail.pathInfo.requestPath : ""), location.origin + "/app/htmx", 0, "");
     toast(EN ? "Couldn't reach the server. Check the connection and try again." : "مقدرناش نوصل للسيرفر. اتأكد من النت وجرب تاني.", true);
   }
   document.addEventListener("htmx:sendError", unreachable);
