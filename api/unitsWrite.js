@@ -16,10 +16,12 @@ const { normalizeImageBuffer, MAX_PHOTOS } = require("../lib/images");
 const { logOperation } = require("../lib/db");
 const Rules = require("../domain/fieldRules");
 const Plans = require("../domain/plans");
+const FormChecks = require("../lib/formChecks");
 const Form = require("../web/forms/unitForm");
 const { uploads, PHOTO, VOICE } = require("../web/uploads");
 
 const MAX_DESCRIBE = 4000;
+const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
 
@@ -91,9 +93,19 @@ function register(api, { pool }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const photoCount = Math.max(0, Math.min(parseInt(req.body?.photoCount, 10) || 0, MAX_PHOTOS));
-    const { ev } = evaluate(fieldsOf(req.body), lang, photoCount);
-    const duplicate = ev.ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing) : null;
-    return res.json({ ok: ev.ok, blockers: blockersOf(ev), warnings: warningsOf(ev, lang), duplicate: duplicate || null });
+    const fields = fieldsOf(req.body);
+    // An edit (code given): the unit as it is now, so the review lists what would change.
+    const existing = req.body?.code ? await Store.findByCode(pool, broker.agency_id, String(req.body.code)) : null;
+    const { ev } = evaluate(fields, lang, photoCount);
+    // What the save also refuses (owner phone and name; a compound that is not on the list) is listed here too.
+    const blockers = [...blockersOf(ev), ...FormChecks.ownerBlockers(ev.listing, fields, lang, { isNew: !existing }).map((b) => ({ field: b.field, label: b.label }))];
+    if (String(ev.listing.compound || "").trim() && !(fields.compound_new === true || fields.compound_new === "1") && (!existing || existing.compound !== ev.listing.compound)) {
+      const r = await require("../services/compoundResolve").resolve(pool, ev.listing);
+      if (r.compound_state === "needs_fix") blockers.push({ field: "compound", label: L10n(lang, "الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\".", "This compound is not on the list. Pick it, or mark it as new.") });
+    }
+    const ok = blockers.length === 0;
+    const duplicate = ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
+    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing) });
   });
 
   // The unit's fields as the form names them, for the edit screen. Whoever may edit the unit may open this.

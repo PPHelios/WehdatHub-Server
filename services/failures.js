@@ -4,7 +4,7 @@
 
 const { alertOwner } = require("../lib/errorReports");
 
-const TYPES = ["web_failed", "unit_write_refused", "swallowed_error"];
+const TYPES = ["web_failed", "app_failed", "unit_write_refused", "swallowed_error"];
 const KEEP_DAYS = 30;
 const PAGE = 50;
 const DAY = 24 * 3600 * 1000;

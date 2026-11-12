@@ -76,6 +76,8 @@ function mountApi(app, { pool }) {
 
   const priv = express.Router();
   priv.use(requireAuth);
+  // Every refused or failed app request (4xx/5xx) is one row in the Failures list, tagged "app" (lib/failureLog.js).
+  priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   require("./units").register(priv, { pool });
   require("./today").register(priv, { pool });
@@ -95,6 +97,7 @@ function mountApi(app, { pool }) {
   require("./map").register(priv, { pool });
   require("./places").register(priv, { pool });
   require("./devices").register(priv, { pool });
+  require("./clientError").register(priv, { pool });
   require("./notificationSettings").register(priv, { pool });
   api.use(priv);
 
