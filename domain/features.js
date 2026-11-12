@@ -45,7 +45,7 @@ const FEATURES = [
   { key: "furnished", ar: "مفروشة", en: "Furnished", group: "equipment", syn: ["مفروشه", "مفروشة", "مفروش", "furnished", "fully furnished"] },
   { key: "kitchen_installed", ar: "مطبخ مركب", en: "Fitted kitchen", group: "equipment", syn: ["مطبخ مركب", "بالمطبخ", "مطبخ", "fitted kitchen", "kitchen installed", "kitchen", "with kitchen"] },
   { key: "appliances", ar: "بالأجهزة", en: "With appliances", group: "equipment", syn: ["بالاجهزه", "بالأجهزة", "بالاجهزة", "اجهزه كهربائيه", "appliances", "with appliances"] },
-  { key: "ac_installed", ar: "تكييفات", en: "ACs installed", group: "equipment", syn: ["تكييفات", "مكيفات", "بالتكييفات", "تكييف", "ac", "acs", "ac s", "air conditioning", "air conditioners", "air conditioner", "aircon"] },
+  { key: "ac_installed", ar: "تكييفات", en: "ACs installed", group: "equipment", syn: ["تكييفات", "تكيفات", "مكيفات", "بالتكييفات", "تكييف", "ac", "acs", "ac s", "air conditioning", "air conditioners", "air conditioner", "aircon"] },
   { key: "smart_home", ar: "سمارت هوم", en: "Smart home", group: "equipment", syn: ["سمارت هوم", "smart home"] },
   { key: "natural_gas", ar: "عداد غاز", en: "Natural gas", group: "equipment", syn: ["غاز طبيعي", "عداد غاز", "natural gas"] },
 

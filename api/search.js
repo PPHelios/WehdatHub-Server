@@ -3,6 +3,7 @@
 "use strict";
 
 const Search = require("../services/search");
+const SearchLog = require("../services/searchLog");
 const AI = require("../lib/ai");
 const RateLimit = require("../lib/rateLimit");
 const Q = require("../domain/searchQuery");
@@ -22,22 +23,24 @@ function register(api, { pool }) {
     if (!text) return res.status(400).json({ error: "empty" });
     const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    const t0 = Date.now();
     const forceAi = req.query.ai === "1";
     // "Search without them": the broker saw which words were not understood and chose to search anyway.
     const drop = req.query.drop === "1";
-    const parse = await Search.parseRequest(AI, { text, ctx: { pool, AI, broker, agency: req.session.agency, lang: broker.preferred_lang === "en" ? "en" : "ar" }, forceAi });
-    const intent = Q.classifyIntent(parse.parsed);
-    const base = { source: parse.source, aiError: parse.aiError || null };
-    if (intent !== "search") return res.json({ ...base, status: intent, total: 0, items: [] });
     // Active is the default; Sold and Archived are the same search for those units, and the three counts come with it.
     const st = Search.SEARCH_STATUSES.includes(req.query.status) ? req.query.status : "active";
-    const out = await Search.runSearch(pool, broker.agency_id, parse.parsed, { pageSize: PAGE, ask: !drop, status: st });
-    // The AI could not answer and a number was left unplaced: ask, never search as if it were not there.
-    const numbers = parse.source === "fallback" && !drop ? parse.local?.meta?.leftover_numbers || [] : [];
-    if (numbers.length) out.ask = { terms: out.ask?.terms || [], numbers, aiDown: true, withoutTotal: out.ask ? out.ask.withoutTotal : out.total };
-    if (out.ask) return res.json({ ...base, status: "ask", total: 0, items: [], ask: out.ask });
-    // More results: the same search again, from the offset (the first page is already in out.rows).
+    // The one search service, as the website and Telegram use it: same reading, same budget question, same "words not understood" ask.
+    const found = await Search.search({ pool, AI, agencyId: broker.agency_id, text, ctx: { pool, AI, broker, agency: req.session.agency, lang: broker.preferred_lang === "en" ? "en" : "ar" }, pageSize: PAGE, forceAi, allowDrop: drop, status: st });
+    const base = { source: found.source, aiError: found.aiError || null };
+    if (!["results", "none", "ask"].includes(found.status)) return res.json({ ...base, status: found.status, total: 0, items: [] });
     const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, Search.SNAPSHOT_MAX));
+    // Only the first page of a search is logged ("more" pages are the same search).
+    if (offset === 0) {
+      await SearchLog.record(pool, { broker, channel: "app", text, parse: { ...found, timings: found.timings }, used: found.parsed.filters, total: found.status === "ask" ? 0 : found.total, ids: found.ids, relaxed: found.relaxed, startedAt: t0 });
+    }
+    if (found.status === "ask") return res.json({ ...base, status: "ask", total: 0, items: [], ask: found.ask });
+    const out = found;
+    // More results: the same search again, from the offset (the first page is already in out.rows).
     if (offset > 0) out.rows = await Search.pageByIds(pool, broker.agency_id, out.ids, offset, PAGE, { status: st });
     const photos = out.rows.length
       ? (await pool.query("SELECT DISTINCT ON (listing_id) listing_id, url FROM listing_images WHERE listing_id = ANY($1::uuid[]) AND agency_id = $2 ORDER BY listing_id, position", [out.rows.map((r) => r.id), broker.agency_id])).rows
@@ -45,7 +48,7 @@ function register(api, { pool }) {
     const photoOf = new Map(photos.map((p) => [p.listing_id, Storage.photoUrl(p.url)]));
     const thumbOf = new Map(photos.map((p) => [p.listing_id, Storage.thumbUrl(p.url)]));
     const counts = { active: 0, sold: 0, archived: 0, [st]: out.total };
-    for (const other of Search.SEARCH_STATUSES.filter((x) => x !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, { filters: parse.parsed }, other);
+    for (const other of Search.SEARCH_STATUSES.filter((x) => x !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, found.parsed, other);
     return res.json({
       ...base,
       status: out.rows.length ? "results" : "none",

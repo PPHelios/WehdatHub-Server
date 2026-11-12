@@ -13,6 +13,8 @@ const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
 const TG_PAGE_SIZE = 10;
 const SEARCH_STATUSES = ["active", "sold", "archived"];
+const FURNISHING_ALSO = { kitchen_and_ac: ["furnished"], ac_only: ["furnished", "kitchen_and_ac"], kitchen_only: ["furnished", "kitchen_and_ac"] };
+const SOFT_FEATURE_KEYS = new Set(require("../domain/features").FEATURES.filter((f) => f.group === "equipment" || f.group === "outdoor").map((f) => f.key));
 const SNAPSHOT_MAX = 100; // ids remembered for "more" (B1)
 const STEP_MONTHS_SQL = `CASE p->>'frequency' WHEN 'monthly' THEN 1 WHEN 'semi_annual' THEN 6 WHEN 'annual' THEN 12 ELSE 3 END`;
 
@@ -58,6 +60,7 @@ RULES:
 - "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).
 - بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".
 - "Lake View" is a compound: "compound": "Lake View". It is the lake-view feature ("view_lagoon") ONLY in "overlooking lake", "with lake view", "فيو بحيرة" and "فيو على بحيرة"; then do not put it in compound.
+- "20m" / "20 م" / "20M" with no word like متر, sqm or m2 means twenty million (price_max 20000000), never 20 square metres. An area is written with متر / sqm / m2, or is 30 or more.
 - "budget" / "بادجت" / "ميزانية" with a number is a price ceiling (price_max), never an installment. A monthly installment is set only when the request says "قسط" / "installment".
 - Names may be misspelled or written in Arabic letters; give the usual English spelling of the compound, and if you do not know a place put it in "locations" as said. Never guess a place you do not know.
 - Exclusions are NEVER filters: what follows "بدون" / "من غير" / "مش في" / "without" / "not" is left out completely ("شقة بدون مصعد" → apartment only, no elevator feature). "الدور الاخير" / "last floor" and "قانون جديد" / "new rent law" are also left out.`;
@@ -124,7 +127,7 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
       ctx: free ? { pool: ctx.pool } : ctx
     });
     const raw = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
-    const parsed = Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text);
+    const parsed = Q.enforceMillionUnits(Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text), text);
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
     // Phrases the filters cannot say are the parser's to report; the AI reading carries them over.
     parsed.meta = { ...(local.meta || {}), unsure: false };
@@ -234,9 +237,11 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
         exactFirst += `CASE WHEN l.finishing = ANY(${fin}::text[]) THEN 0 ELSE 1 END, `;
       }
       if (f.furnishing) {
-        where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
+        // A furnished unit has its kitchen and AC, so it also fits those statuses (listed after exact and blank).
+        const ok = [f.furnishing, ...(FURNISHING_ALSO[f.furnishing] || [])];
+        where.push(`(l.furnishing IS NULL OR l.furnishing = ANY(${add(ok)}::text[]))`);
         // Exact status first, then the units whose status is blank (Haytham 2026-11-04).
-        exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} THEN 0 ELSE 1 END, `;
+        exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} THEN 0 WHEN l.furnishing IS NULL THEN 1 ELSE 2 END, `;
       }
     }
 
@@ -286,7 +291,16 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     const featureKeys = f.furnishing ? f.features.filter((k) => k !== "furnished") : f.features;
     // Lake View is a compound: the lake-view feature also matches that compound's units.
     const plainKeys = featureKeys.filter((k) => k !== "view_lagoon");
-    if (plainKeys.length) where.push(`l.feature_keys @> ${add(plainKeys)}::text[]`);
+    // Extras rank, they do not hide (Haytham 2026-11-12): a unit with no extras recorded still shows, after the ones that have them.
+    // Only equipment and outdoor extras are soft; orientation, layout, view and building facts stay strict.
+    const softKeys = plainKeys.filter((k) => SOFT_FEATURE_KEYS.has(k));
+    const hardKeys = plainKeys.filter((k) => !SOFT_FEATURE_KEYS.has(k));
+    if (hardKeys.length) where.push(`l.feature_keys @> ${add(hardKeys)}::text[]`);
+    if (softKeys.length) {
+      const k = add(softKeys);
+      where.push(`(coalesce(cardinality(l.feature_keys), 0) = 0 OR l.feature_keys @> ${k}::text[])`);
+      exactFirst += `CASE WHEN l.feature_keys @> ${k}::text[] THEN 0 ELSE 1 END, `;
+    }
     if (featureKeys.includes("view_lagoon")) where.push(`(l.feature_keys @> ARRAY['view_lagoon']::text[] OR l.compound_key = 'lake_view')`);
     for (const t of f.feature_terms) {
       const like = `l.search_text_normalized LIKE '%' || ${add(t)} || '%'`;
@@ -410,18 +424,18 @@ async function countByStatus(pool, agencyId, parsed, status) {
  * The whole search for one request: parse → intent guard → run.
  * @returns {Promise<{ status: "results"|"none"|"small_talk"|"listing", parsed, source, rows, ids, total, relaxed, timings }>}
  */
-async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false }) {
+async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false, status = "active" }) {
   const parse = await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
   const intent = Q.classifyIntent(parse.parsed);
   const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons, disagree: parse.disagree || [], aiError: parse.aiError || null };
   // A budget with no unit ("budget 50") is never guessed: ask which unit was meant, and show how many units fit without the budget.
   const budgetUnit = (parse.parsed?.meta?.ambiguous || []).some((a) => a.kind === "budget");
   if (budgetUnit && intent !== "listing" && !allowDrop) {
-    const without = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: false });
+    const without = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: false, status });
     return { ...base, rows: [], ids: [], total: 0, relaxed: false, status: "ask", ask: { terms: [], numbers: [], withoutTotal: without.total }, timings: { parseMs: parse.ms, dbMs: without.dbMs } };
   }
   if (intent !== "search") return { ...base, status: intent, rows: [], ids: [], total: 0, relaxed: false, timings: { parseMs: parse.ms, dbMs: 0 } };
-  const res = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: !allowDrop });
+  const res = await runSearch(pool, agencyId, parse.parsed, { pageSize, ask: !allowDrop, status });
   // The AI could not answer and the quick reader left a number it could not place ("بادجت 70000"): ask, never search without it.
   const numbers = parse.source === "fallback" && !allowDrop ? parse.local?.meta?.leftover_numbers || [] : [];
   if (numbers.length) res.ask = { terms: res.ask?.terms || [], numbers, aiDown: true, withoutTotal: res.ask ? res.ask.withoutTotal : res.total };
