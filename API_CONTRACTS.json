@@ -494,6 +494,7 @@
     },
     "domain/searchQuery.js": {
       "enforceInstallmentWords": ["parsed", "text"],
+      "enforceMillionUnits": ["parsed", "text"],
       "emptyFilters": [],
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],
@@ -2363,6 +2364,8 @@
     "services/searchAudit.js": {
       "disagreements": ["a", "b"],
       "badUnits": ["filters", "units"],
+      "dropOne": ["pool", "agencyId", "used"],
+      "coreMissed": ["pool", "row"],
       "run": ["pool", "params"],
       "summary": ["pool", "counts"],
       "auditJob": []
