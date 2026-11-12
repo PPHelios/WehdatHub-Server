@@ -27,7 +27,7 @@ test("createListing shows the real owner-sync error", async () => {
   try {
     await client.query("BEGIN");
     await expect(
-      Store.createListing(client, broker, { fields: { listing_type: "sale", property_type: "apartment", price_value: 5e6, area_value: 100, details: { owner_name: "Mr Owner", owner_phone: "01012345678" } }, code: null, lang: "en" })
+      Store.createListing(client, broker, { fields: { location_keywords: ["x"], listing_type: "sale", property_type: "apartment", price_value: 5e6, area_value: 100, details: { owner_name: "Mr Owner", owner_phone: "01012345678" } }, code: null, lang: "en" })
     ).rejects.toThrow("owner sync boom");
   } finally {
     await client.query("ROLLBACK").catch(() => {});
