@@ -158,7 +158,8 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
         .status(200)
         .json({ status: "healthy", timestamp: new Date().toISOString() });
     } catch (err) {
-      res.status(503).json({ status: "degraded", error: err.message });
+      console.warn("Health check failed:", err.message);
+      res.status(503).json({ status: "degraded" });
     }
   });
 

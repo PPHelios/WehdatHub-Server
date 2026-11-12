@@ -15,6 +15,7 @@ const Rights = require("../services/unitRights");
 const Recipients = require("../services/linkRecipients");
 const Flyer = require("../lib/flyer");
 const RateLimit = require("../lib/rateLimit");
+const ReadCaps = require("../lib/readCaps");
 const { PROPERTY_TYPES } = require("../domain/fieldRules");
 const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../domain/furnishingStatus");
 
@@ -70,6 +71,7 @@ function register(api, { pool }) {
     const deal = Deal.clean(q.deal);
     const limit = Math.max(1, Math.min(parseInt(q.limit, 10) || 20, MAX_LIMIT));
     const offset = Math.max(0, Math.min(parseInt(q.offset, 10) || 0, 100000));
+    if (offset > ReadCaps.maxOffset(broker, 100000)) return res.status(403).json({ error: "too_deep" });
     const args = [broker.agency_id];
     const where = ["listings.agency_id = $1"];
     const add = (sql, v) => {
@@ -107,6 +109,8 @@ function register(api, { pool }) {
        ORDER BY listings.confirmed_at DESC NULLS LAST, listings.created_at DESC, listings.id DESC LIMIT ${limit} OFFSET ${offset}`,
       args
     );
+    const cap = await ReadCaps.takeListRows(pool, broker, "units", rows.length);
+    if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
     return res.json({
       total,
       counts,
@@ -140,7 +144,9 @@ function register(api, { pool }) {
     // findByCode carries the visibility rule: a private unit is a 404 for everyone but the agency owner.
     const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!found) return res.status(404).json({ error: "not_found" });
-    const images = (await pool.query("SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position", [found.id, broker.agency_id])).rows;
+    // Photos marked as documents or unrelated (contracts, receipts, screenshots) are only for managers and the unit's own broker.
+    const docsToo = Authz.isManager(broker) || found.broker_id === broker.id;
+    const images = (await pool.query(`SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2${docsToo ? "" : " AND (role IS NULL OR role NOT IN ('document', 'unrelated'))"} ORDER BY position`, [found.id, broker.agency_id])).rows;
     return res.json({
       ...unitView(found),
       mine: found.broker_id === broker.id,
@@ -163,6 +169,10 @@ function register(api, { pool }) {
     const owner = found.owner_id ? await Owners.getFor(pool, broker, found.owner_id) : null;
     const d = found.details || {};
     const phone = owner?.phones?.[0] || d.owner_phone || null;
+    if (phone) {
+      const cap = await ReadCaps.takeOwnerPhones(pool, broker, 1, { channel: "app", ref: found.code });
+      if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
+    }
     return res.json({ name: owner?.name || d.owner_name || null, phone: phone ? String(phone) : null });
   });
 

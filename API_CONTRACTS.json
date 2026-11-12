@@ -592,6 +592,15 @@
       "hit": ["pool", "bucket", "params"],
       "LIMITS": "Object"
     },
+    "lib/readCaps.js": {
+      "takeOwnerPhones": ["pool", "broker", "n", "meta"],
+      "takeListRows": ["pool", "broker", "kind", "n"],
+      "maxOffset": ["broker", "hard"],
+      "apiReadLimiter": ["pool"],
+      "PHONE_CAP": "Object",
+      "LIST_CAP": "Object",
+      "BROKER_MAX_OFFSET": "Number"
+    },
     "web/session.js": {
       "SESSION_COOKIE": [],
       "PRE_COOKIE": [],

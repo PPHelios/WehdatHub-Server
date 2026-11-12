@@ -76,6 +76,7 @@ function mountApi(app, { pool }) {
 
   const priv = express.Router();
   priv.use(requireAuth);
+  priv.use(require("../lib/readCaps").apiReadLimiter(pool));
   // Every refused or failed app request (4xx/5xx) is one row in the Failures list, tagged "app" (lib/failureLog.js).
   priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));

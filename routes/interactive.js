@@ -686,6 +686,11 @@ async function handleInteractive(broker, message, ctx) {
           : lang === "en" ? `🔒 Request sent for #${rows[0].code}. You'll hear when a manager answers.` : `🔒 اتبعت الطلب للوحدة #${rows[0].code}. هيوصلك الرد لما المدير يرد.`);
         return "done";
       }
+      const cap = await require("../lib/readCaps").takeOwnerPhones(pool, broker, 1, { channel: "telegram", ref: rows[0].code });
+      if (!cap.allowed) {
+        await reply(broker, lang === "en" ? "🔒 You have reached today's limit for viewing owner numbers. Try again tomorrow or ask your manager." : "🔒 وصلت للحد اليومي لعرض أرقام الملّاك. جرّب بكرة أو كلّم مديرك.");
+        return "done";
+      }
       const lines = Describe.internalLines(rows[0], lang);
       await reply(broker, `👤 \`${rows[0].code}\`\n${lines.length ? lines.join("\n") : lang === "en" ? "No owner data recorded." : "مفيش بيانات مالك مسجلة."}`);
       return "done";

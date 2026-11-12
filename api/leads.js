@@ -7,6 +7,7 @@ const Leads = require("../services/leads");
 const Card = require("../domain/leadCard");
 const Stages = require("../domain/leadStages");
 const RateLimit = require("../lib/rateLimit");
+const ReadCaps = require("../lib/readCaps");
 
 const PAGE = 20;
 const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step"];
@@ -62,7 +63,10 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const tab = TABS.includes(req.query.tab) ? req.query.tab : "all";
     const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, 10000));
+    if (offset > ReadCaps.maxOffset(broker, 10000)) return res.status(403).json({ error: "too_deep" });
     const { rows, more, total } = await Leads.listLeads(pool, broker, { ...tabFilter(tab), q: String(req.query.q || "").slice(0, 80), limit: PAGE, offset, brokerId: String(req.query.broker || "") });
+    const cap = await ReadCaps.takeListRows(pool, broker, "leads", rows.length);
+    if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
     res.json({ items: rows.map(leadView), more, total, offset, limit: PAGE });
   });
 
