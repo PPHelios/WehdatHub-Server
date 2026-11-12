@@ -107,7 +107,7 @@ function register(api, { pool }) {
       console.warn("App lead extraction failed:", err.message);
     }
     const found = (ex.phones || []).map((p) => Phone.toE164(p)).filter(Boolean);
-    const phones = (found.length ? found : Intake.findPhones(text)).slice(0, 3).map((p) => Phone.displayPhone(p));
+    const phones = (found.length ? found : Intake.findPhones(text)).slice(0, 3).map((p) => Phone.displayPhone(p).replace(/\s/g, ""));
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "app_lead_extract", metadata: { text: true } });
     res.json({ name: ex.name || "", phones, kind: ex.kind || "buyer", source: ex.source || "", note: ex.note || "" });
   });
