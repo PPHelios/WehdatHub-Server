@@ -30,7 +30,8 @@ function register(api, { pool }) {
         area: u.area_value,
         price: u.price_value,
         priceText: u.price_display,
-        photo: u.photo ? Storage.photoUrl(u.photo) : null
+        photo: u.photo ? Storage.photoUrl(u.photo) : null,
+        thumb: u.photo ? Storage.thumbUrl(u.photo) : null
       }))
     });
   });

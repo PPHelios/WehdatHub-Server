@@ -349,6 +349,13 @@
     li.classList.toggle("removed", box.checked);
     btn.textContent = box.checked ? (EN ? "↩ Undo" : "↩ تراجع") : (EN ? "🗑 Delete" : "🗑 احذف");
   });
+  // A unit card's small photo: if the small copy is not there yet (older photos), show the full photo instead, once.
+  document.addEventListener("error", function (e) {
+    var img = e.target;
+    if (!img || img.tagName !== "IMG" || !img.classList.contains("uc-thumb")) return;
+    var full = img.getAttribute("data-full");
+    if (full && img.src !== full) img.src = full;
+  }, true);
   // Photos from the server: a spinner until each one loads, two quiet retries, then "tap to retry". Never blocks the page.
   function watchImages(root) {
     var imgs = (root || document).querySelectorAll("ol.photo-order img[data-wait]:not([data-watched])");

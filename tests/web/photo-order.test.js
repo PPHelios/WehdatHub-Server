@@ -83,3 +83,13 @@ test("managers and brokers cannot open or save the AI features page", async () =
   expect((await agent.get("/app/usage/ai")).status).toBe(403);
   expect((await agent.post("/app/usage/ai").type("form").send({ _csrf: csrf })).status).toBe(403);
 });
+
+test("My units shows a small cover photo on each unit card, with the full photo as the fallback", async () => {
+  const l = await unitWithPhotos(2);
+  await h.query("UPDATE listing_images SET url = 'listings/a/web/0.jpg' WHERE listing_id = $1 AND position = 0", [l.id]);
+  const { agent } = await signIn(h, "admin");
+  const page = await agent.get("/app/units");
+  expect(page.text).toContain('class="uc-thumb"');
+  expect(page.text).toMatch(/src="[^"]*thumbs\/listings\/a\/web\/0\.jpg"/);
+  expect(page.text).toMatch(/data-full="[^"]*\/listings\/a\/web\/0\.jpg"/);
+});

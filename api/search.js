@@ -43,6 +43,7 @@ function register(api, { pool }) {
       ? (await pool.query("SELECT DISTINCT ON (listing_id) listing_id, url FROM listing_images WHERE listing_id = ANY($1::uuid[]) AND agency_id = $2 ORDER BY listing_id, position", [out.rows.map((r) => r.id), broker.agency_id])).rows
       : [];
     const photoOf = new Map(photos.map((p) => [p.listing_id, Storage.photoUrl(p.url)]));
+    const thumbOf = new Map(photos.map((p) => [p.listing_id, Storage.thumbUrl(p.url)]));
     const counts = { active: 0, sold: 0, archived: 0, [st]: out.total };
     for (const other of Search.SEARCH_STATUSES.filter((x) => x !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, { filters: parse.parsed }, other);
     return res.json({
@@ -55,7 +56,7 @@ function register(api, { pool }) {
       total: Math.min(out.total, Search.SNAPSHOT_MAX),
       relaxed: out.relaxed,
       ignoredTerms: out.ignoredTerms || [],
-      items: out.rows.map((r) => ({ ...unitView(r), mine: r.broker_id === broker.id, photo: photoOf.get(r.id) || null }))
+      items: out.rows.map((r) => ({ ...unitView(r), mine: r.broker_id === broker.id, photo: photoOf.get(r.id) || null, thumb: thumbOf.get(r.id) || null }))
     });
   });
 
