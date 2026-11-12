@@ -74,3 +74,11 @@ test("called, stage, follow-up and note change the lead; a stale version gets a 
   const t = await call("broker", "get", `/leads/${ref}`);
   expect(t.body.timeline.length).toBeGreaterThan(2);
 });
+
+test("extract reads a pasted message into a lead form and never saves", async () => {
+  const r = await call("broker", "post", "/leads/extract", { message: "عايز شقة في التجمع 01012345678" });
+  expect(r.status).toBe(200);
+  expect(r.body.phones).toContain("01012345678");
+  expect((await call("broker", "get", "/leads")).body.total).toBe(0);
+  expect((await call("broker", "post", "/leads/extract", {})).status).toBe(400);
+});
