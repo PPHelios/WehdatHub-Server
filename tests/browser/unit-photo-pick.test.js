@@ -88,7 +88,7 @@ test("only 15 photos can be added; the rest are counted and said", async () => {
   await ctx.close();
 });
 
-test("saving reduces a big photo in the browser first and shows progress", async () => {
+test("saving reduces a big photo in the browser first, sends it in the background and opens the unit", async () => {
   const sharp = require("sharp");
   const w = 3000, hgt = 2000;
   const raw = Buffer.alloc(w * hgt * 3);
@@ -97,19 +97,20 @@ test("saving reduces a big photo in the browser first and shows progress", async
   const { ctx, pg } = await openEdit();
   await pg.setInputFiles("input[data-photo-tray]", [{ name: "big.png", mimeType: "image/png", buffer: big }]);
   await pg.waitForSelector("[data-photo-preview] li");
-  // The final post is replaced by a recorder: the page stays and we see what the form was about to send.
-  await pg.evaluate(() => {
-    HTMLFormElement.prototype.submit = function () {
-      const f = this.querySelector("input[data-photo-tray]").files[0];
-      window.__sent = { type: f.type, size: f.size, name: f.name };
-    };
-    const f = document.querySelector("#unit-form");
-    f.requestSubmit(f.querySelector("button[name=action]"));
+  // The save post is caught: what the form sends is read, and the answer is the redirect the server gives after a save.
+  let sent = null;
+  await pg.route("**/app/units/NH-A20/edit", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    const body = route.request().postDataBuffer();
+    sent = { size: body.length, jpeg: body.includes("image/jpeg"), key: /name="save_key"/.test(body.toString("latin1")) };
+    return route.fulfill({ status: 303, headers: { location: "/app/units/NH-A20?saved=1" }, body: "" });
   });
-  await pg.waitForFunction(() => window.__sent, null, { timeout: 20000 });
-  const file = await pg.evaluate(() => window.__sent);
-  expect(await pg.locator("[data-save-status] progress").count()).toBe(1);
-  expect(file.type).toBe("image/jpeg");
-  expect(file.size).toBeLessThan(big.length / 4);
+  await pg.waitForSelector("[data-review]");
+  if (await pg.locator("[data-warn-ack]").count()) await pg.check("[data-warn-ack]");
+  await pg.click("[data-save-row] button[type=submit]");
+  await pg.waitForURL(/saved=1/, { timeout: 30000 });
+  expect(sent.jpeg).toBe(true);
+  expect(sent.size).toBeLessThan(big.length / 4);
+  expect(sent.key).toBe(true);
   await ctx.close();
 });
