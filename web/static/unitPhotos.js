@@ -9,11 +9,16 @@
   var IMAGE = /\.(jpe?g|png|webp|gif|heic|heif)$/i;
   var MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif" };
   var T = document.documentElement.lang === "en"
-    ? { over: "{n} photo(s) not added: the limit is {max} per unit.", prep: "Preparing photos {i} of {n}…", saving: "Saving {p}%", sending: "Uploading photos…", server: "The server is saving… {s}s", checking: "Checking whether it was saved…", saved: "✅ Saved. Opening the unit…", notSaved: "⚠️ Not saved yet. Your form and photos are kept.", retry: "Try again", kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
-    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "برفع الصور…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
+    ? { over: "{n} photo(s) not added: the limit is {max} per unit.", prep: "Preparing photos {i} of {n}…", saving: "Saving {p}%", sending: "Uploading photos…", server: "The server is saving… {s}s", checking: "Checking whether it was saved…", saved: "✅ Saved. Opening the unit…", notSaved: "⚠️ Not saved yet. Your form and photos are kept.", retry: "Try again", up: "Uploading {p}%", wait: "Waiting…", done: "✓", fail: "⚠ Failed", again: "↻ Retry", restored: "Photos you uploaded earlier were restored.", kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
+    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "برفع الصور…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", up: "برفع {p}%", wait: "مستني…", done: "✓", fail: "⚠ فشلت", again: "↻ جرب تاني", restored: "رجّعنا الصور اللي رفعتها قبل كده.", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
   var fill = function (s, o) { return s.replace(/\{(\w+)\}/g, function (_, k) { return o[k]; }); };
 
-  var tray = null; // { form, items: [{ file, keep, url }], dropped, busy }
+  var tray = null; // { form, items: [{ file, name, small, thumb, url, key, state, pct }], dropped, over }
+  // Each photo goes straight to storage as soon as it is picked (state queued > working > done); one that cannot (a type the browser
+  // cannot reduce, storage unreachable, or a failure) stays with the form and goes the old way when the unit is saved.
+  var direct = true;
+  var pumping = false;
+  var nameOf = function (it) { return it.name || (it.file && it.file.name) || ""; };
 
   function kept() { return tray.items.length; }
   // Photos already on the unit (edit form) that are not marked for deletion count toward the limit too.
@@ -69,15 +74,42 @@
     var input = tray.form.querySelector("input[data-photo-tray]");
     if (input && window.DataTransfer) {
       var dt = new DataTransfer();
-      tray.items.forEach(function (it) { dt.items.add(it.small || it.file); });
+      tray.items.forEach(function (it) { if (!it.key && it.file) dt.items.add(it.small || it.file); });
       input.files = dt.files;
     }
+    // The uploaded photos are named in the form (in the shown order), so the review and the save know them.
+    var keyBox = tray.form.querySelector("[data-photo-keys]");
+    if (!keyBox) { keyBox = document.createElement("div"); keyBox.hidden = true; keyBox.setAttribute("data-photo-keys", ""); tray.form.appendChild(keyBox); }
+    keyBox.innerHTML = "";
+    tray.items.forEach(function (it) {
+      if (!it.key) return;
+      var h = document.createElement("input");
+      h.type = "hidden"; h.name = "photo_keys"; h.value = it.key;
+      keyBox.appendChild(h);
+    });
+    persist();
     var total = kept() + existing();
     var parts = [];
     if (total > MAX) parts.push(fill(T.kept, { n: total, max: MAX, x: total - MAX }));
     if (tray.over) parts.push(fill(T.over, { n: tray.over, max: MAX }));
     if (tray.dropped) parts.push(fill(T.dropped, { n: tray.dropped }));
     note(parts.join(" "), total > MAX || Boolean(tray.over));
+  }
+
+  function stateText(it) {
+    if (it.state === "done") return T.done;
+    if (it.state === "failed") return T.fail;
+    if (it.state === "working") return fill(T.up, { p: Math.round(it.pct || 0) });
+    if (it.state === "queued") return T.wait;
+    return "";
+  }
+  // Updates one photo's label without rebuilding the list (dragging and the picture stay as they are).
+  function showState(it) {
+    var list = tray && tray.form.querySelector("[data-photo-preview]");
+    var i = tray ? tray.items.indexOf(it) : -1;
+    var li = list && i >= 0 ? list.children[i] : null;
+    var st = li && li.querySelector("[data-photo-state]");
+    if (st) st.textContent = stateText(it);
   }
 
   function render() {
@@ -90,18 +122,21 @@
       li.setAttribute("data-file", String(i));
             var img = document.createElement("img");
       img.alt = ""; img.loading = "lazy";
-      if (!it.url) it.url = URL.createObjectURL(it.file);
-      img.src = it.url;
+      if (!it.url && it.file) it.url = URL.createObjectURL(it.file);
+      if (it.url) img.src = it.url;
       var name = document.createElement("span");
       name.className = "grow";
-      name.textContent = (i + 1) + ". " + it.file.name;
+      name.textContent = (i + 1) + ". " + nameOf(it);
+      var st = document.createElement("span");
+      st.className = "muted small"; st.setAttribute("data-photo-state", "");
+      st.textContent = stateText(it);
       var up = document.createElement("button");
       up.type = "button"; up.className = "secondary"; up.setAttribute("data-move", "up"); up.textContent = "↑";
       var down = document.createElement("button");
       down.type = "button"; down.className = "secondary"; down.setAttribute("data-move", "down"); down.textContent = "↓";
       var del = document.createElement("button");
       del.type = "button"; del.className = "secondary"; del.setAttribute("data-delete", String(i)); del.textContent = T.del;
-      li.appendChild(img); li.appendChild(name); li.appendChild(up); li.appendChild(down); li.appendChild(del);
+      li.appendChild(img); li.appendChild(name); li.appendChild(st); if (it.state === "failed") { var rt = document.createElement("button"); rt.type = "button"; rt.className = "secondary small"; rt.setAttribute("data-retry", String(i)); rt.textContent = T.again; li.appendChild(rt); } li.appendChild(up); li.appendChild(down); li.appendChild(del);
       list.appendChild(li);
     });
     list.hidden = !tray.items.length;
@@ -137,12 +172,139 @@
     }).catch(function () { return file; });
   }
 
+  // ---- Direct upload: reduce in the browser (1600 px JPEG plus a 360x270 small copy), then PUT both straight to storage.
+  var csrfToken = function () { var m = document.querySelector('meta[name="csrf-token"]'); return m ? m.content : ""; };
+
+  function reduce(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || !window.createImageBitmap || !window.HTMLCanvasElement) return Promise.resolve(null);
+    return new Promise(function (ok) {
+      var done = false, t = setTimeout(function () { if (!done) { done = true; ok(null); } }, 20000);
+      var finish = function (v) { if (!done) { done = true; clearTimeout(t); ok(v); } };
+      createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
+        var k = Math.min(1, SIDE / Math.max(bmp.width, bmp.height));
+        var c = document.createElement("canvas");
+        c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+        c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+        // The small copy: 360x270, cropped to fill from the middle.
+        var tc = document.createElement("canvas");
+        tc.width = 360; tc.height = 270;
+        var scale = Math.max(360 / bmp.width, 270 / bmp.height);
+        var w = 360 / scale, h = 270 / scale;
+        tc.getContext("2d").drawImage(bmp, (bmp.width - w) / 2, (bmp.height - h) / 2, w, h, 0, 0, 360, 270);
+        if (bmp.close) bmp.close();
+        c.toBlob(function (b) {
+          if (!b) return finish(null);
+          tc.toBlob(function (tb) { finish({ small: new File([b], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }), thumb: tb || null }); }, "image/jpeg", 0.7);
+        }, "image/jpeg", QUALITY);
+      }).catch(function () { finish(null); });
+    });
+  }
+
+  // One upload link from the server, or null (then everything goes with the form, as before).
+  function signOne() {
+    return fetch("/app/units/photo-upload", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() }, body: JSON.stringify({ count: 1 }) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { return j && j.uploads && j.uploads[0] ? j.uploads[0] : null; })
+      .catch(function () { return null; });
+  }
+
+  // The same call storage's own library makes for a file: a form with the cache setting and the file, and no sign-in (the link is the permission).
+  function put(url, blob, name, onFraction) {
+    return new Promise(function (ok, no) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("PUT", url, true);
+      xhr.setRequestHeader("x-upsert", "false");
+      xhr.timeout = 120000;
+      xhr.upload.onprogress = function (e) { if (e.lengthComputable && onFraction) onFraction(e.loaded / e.total); };
+      xhr.onload = function () { return xhr.status >= 200 && xhr.status < 300 ? ok() : no(new Error("put " + xhr.status)); };
+      xhr.onerror = function () { no(new Error("network")); };
+      xhr.ontimeout = function () { no(new Error("timeout")); };
+      var fd = new FormData();
+      fd.append("cacheControl", "31536000");
+      fd.append("", blob, name);
+      xhr.send(fd);
+    });
+  }
+
+  function processItem(it) {
+    it.state = "working"; it.pct = 1; showState(it);
+    return reduce(it.file).then(function (r) {
+      if (!r) { it.state = "local"; return null; } // a type the browser cannot reduce: goes with the form
+      it.small = r.small;
+      return signOne().then(function (u) {
+        if (!u) { direct = false; it.state = "local"; return null; }
+        it.pct = 5; showState(it);
+        return put(u.upload_url, r.small, "photo.jpg", function (f) { it.pct = 5 + 90 * f; showState(it); })
+          .then(function () { return r.thumb && u.thumb_upload_url ? put(u.thumb_upload_url, r.thumb, "thumb.jpg").catch(function () { /* the full photo is shown instead */ }) : null; })
+          .then(function () { it.key = u.key; it.state = "done"; it.pct = 100; });
+      });
+    }).catch(function () { it.state = "failed"; }).then(function () { showState(it); });
+  }
+
+  // One photo at a time (phones run out of memory with many); the next starts as soon as one is done.
+  function pump() {
+    if (pumping) return;
+    pumping = true;
+    (function next() {
+      var it = tray && tray.items.filter(function (x) { return x.state === "queued"; })[0];
+      if (!it) { pumping = false; if (tray) sync(); return; }
+      if (!direct) { it.state = "local"; showState(it); return next(); }
+      processItem(it).then(function () { sync(); next(); });
+    })();
+  }
+
+  // The save waits for photos still on their way; onFraction(0..1) feeds the Save button's percent.
+  function settle(onFraction) {
+    return new Promise(function (ok) {
+      (function look() {
+        var items = tray.items, pending = items.filter(function (x) { return x.state === "queued" || x.state === "working"; });
+        var total = items.length || 1;
+        var got = items.reduce(function (n, x) { return n + (x.state === "queued" || x.state === "working" ? (x.pct || 0) / 100 : 1); }, 0);
+        onFraction(got / total, items.length - pending.length, items.length);
+        if (!pending.length) return ok();
+        pump();
+        setTimeout(look, 200);
+      })();
+    });
+  }
+
+  // Photos uploaded before a reload or a closed tab: kept by key on this phone and checked with the server when the form reopens.
+  var persistKey = function () { return tray && tray.form ? "wh-unit-photos:" + (tray.form.getAttribute("action") || "") : null; };
+  function persist() {
+    try {
+      var k = persistKey();
+      if (!k || tray.restoring || (!tray.live && !tray.items.length)) return; // not before the saved list has been read back
+      var list = tray.items.filter(function (x) { return x.key; }).map(function (x) { return { key: x.key, name: nameOf(x) }; });
+      if (list.length) localStorage.setItem(k, JSON.stringify({ at: Date.now(), list: list })); else localStorage.removeItem(k);
+    } catch (e) { /* storage may be off: the photos are simply not remembered */ }
+  }
+  function clearPersist() { try { var k = persistKey(); if (k) localStorage.removeItem(k); } catch (e) { /* ignore */ } }
+  function restore() {
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(persistKey()) || "null"); } catch (e) { raw = null; }
+    if (!raw || !raw.list || !raw.list.length || Date.now() - raw.at > 20 * 3600 * 1000 || tray.items.length) return;
+    tray.restoring = true;
+    fetch("/app/units/photo-upload/check", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() }, body: JSON.stringify({ keys: raw.list.map(function (x) { return x.key; }) }) })
+      .then(function (r) { return r.ok ? r.json() : { ready: [] }; })
+      .then(function (j) {
+        var names = {};
+        raw.list.forEach(function (x) { names[x.key] = x.name; });
+        (j.ready || []).slice(0, room()).forEach(function (r) { tray.items.push({ file: null, name: names[r.key] || "photo.jpg", small: null, thumb: null, url: r.thumb || r.url, key: r.key, state: "done", pct: 100 }); });
+        tray.restoring = false;
+        tray.live = true;
+        render();
+        if (tray.items.length) note(T.restored, false);
+      })
+      .catch(function () { tray.restoring = false; });
+  }
+
   // The photos in the tray, one at a time (phones run out of memory with many at once); onStep(done, total) for the percent.
   function prepare(form, onStep) {
     var items = tray.items, i = 0;
     var step = function () {
       if (i >= items.length) return Promise.resolve();
       var it = items[i];
+      if (it.key || !it.file) { i++; return step(); } // already in storage
       onStep(i, items.length);
       return (it.small ? Promise.resolve(it.small) : compress(it.file)).then(function (s) { it.small = s; i++; return step(); });
     };
@@ -157,12 +319,14 @@
       if (!IMAGE.test(f.name) && !/^image\//.test(f.type)) { tray.dropped++; return; }
       if (free <= 0) { tray.over++; return; }
       free--;
-      tray.items.push({ file: f, small: null, url: null });
+      tray.live = true;
+      tray.items.push({ file: f, name: f.name, small: null, thumb: null, url: null, key: null, state: "queued", pct: 0 });
       added++;
     });
     tray.dropped += dropped || 0;
     if (added) { var manual = tray.form.querySelector("[data-photo-manual]"); if (manual && manual.checked) manual.checked = false; }
     render();
+    if (added) pump();
   }
 
   // The files are taken before the tray starts: starting it re-syncs (and empties) the picker, which lost the first pick.
@@ -209,12 +373,19 @@
         render();
       });
       list.addEventListener("click", function (e) {
+        var rb = e.target.closest && e.target.closest("[data-retry]");
+        if (rb) {
+          var ri = Number(rb.getAttribute("data-retry"));
+          if (tray.items[ri]) { tray.items[ri].state = "queued"; direct = true; render(); pump(); }
+          return;
+        }
         var b = e.target.closest && e.target.closest("[data-delete]");
         if (!b) return;
         var i = Number(b.getAttribute("data-delete"));
         if (isNaN(i) || !tray.items[i]) return;
         if (tray.items[i].url) URL.revokeObjectURL(tray.items[i].url);
         tray.items.splice(i, 1);
+        tray.live = true;
         tray.over = 0;
         render();
       });
@@ -301,6 +472,7 @@
             clearTimers();
             if (xhr) { try { xhr.abort(); } catch (x) { /* already done */ } }
             progress(sub, 100);
+            clearPersist();
             status(form, T.saved, "ok");
             report("recovered");
             location.assign("/app/units/" + encodeURIComponent(j.code) + "?saved=1");
@@ -328,18 +500,25 @@
       // The last part (the server working) moves slowly toward 99 so the bar never sits still while it is alive.
       if (serverFrom) {
         var secs = (Date.now() - serverFrom) / 1000;
-        pct = 85 + 14 * (1 - Math.exp(-secs / 20));
+        pct = 80 + 19 * (1 - Math.exp(-secs / 20));
         progress(sub, pct);
         status(form, fill(T.server, { s: Math.round(secs) }));
       }
     }, 500);
     timers.push(tick);
-    prepare(form, function (done, total) {
-      pct = total ? 30 * (done / total) : 30;
+    // 0-50%: photos still on their way to storage; 50-60%: any photo that goes with the form is reduced; 60-80%: the form goes
+    // up; 80-99%: the server saves. Most of the time the photos are already in storage and the first part is instant.
+    settle(function (frac, done, total) {
+      pct = 50 * frac;
       progress(sub, pct);
-      status(form, total ? fill(T.prep, { i: Math.min(done + 1, total), n: total }) : "");
+      status(form, total && done < total ? fill(T.prep, { i: Math.min(done + 1, total), n: total }) : "");
     }).then(function () {
-      pct = 30;
+      return prepare(form, function (done, total) {
+        pct = 50 + 10 * (total ? done / total : 1);
+        progress(sub, pct);
+      });
+    }).then(function () {
+      pct = 60;
       progress(sub, pct);
       status(form, T.sending);
       var fd = new FormData(form);
@@ -349,7 +528,7 @@
       xhr.setRequestHeader("Accept", "text/html");
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable) return;
-        pct = 30 + 55 * (ev.loaded / ev.total);
+        pct = 60 + 20 * (ev.loaded / ev.total);
         progress(sub, pct);
       };
       xhr.upload.onload = function () { serverFrom = Date.now(); };
@@ -360,7 +539,7 @@
       xhr.onload = function () {
         clearTimers();
         report(xhr.status >= 400 ? "refused" : "ok");
-        if (xhr.responseURL && xhr.responseURL !== new URL(action, location.href).href && xhr.status < 400) { progress(sub, 100); location.assign(xhr.responseURL); return; }
+        if (xhr.responseURL && xhr.responseURL !== new URL(action, location.href).href && xhr.status < 400) { progress(sub, 100); clearPersist(); location.assign(xhr.responseURL); return; }
         var fresh = new DOMParser().parseFromString(xhr.responseText, "text/html").getElementById("unit-form");
         // No form back (a server error page): ask whether it saved before saying it did not.
         if (!fresh) { checkSaved().then(function (saved) { if (!saved) failed(T.notSaved); }); return; }
@@ -396,5 +575,14 @@
     }).catch(function () {
       failed(T.notSaved);
     });
+  });
+
+  // The form's tray starts with the page, so photos uploaded before a reload come back at once.
+  var first = document.getElementById("unit-form");
+  if (first && first.querySelector("[data-photo-preview]")) { start(first); restore(); }
+
+  // Closing the page while photos are still going up would lose them.
+  window.addEventListener("beforeunload", function (e) {
+    if (tray && tray.items.some(function (x) { return x.state === "queued" || x.state === "working"; })) { e.preventDefault(); e.returnValue = ""; }
   });
 })();

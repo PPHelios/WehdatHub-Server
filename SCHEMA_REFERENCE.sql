@@ -1572,6 +1572,16 @@ CREATE TABLE IF NOT EXISTS public.save_keys (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.unit_photo_uploads (
+  key text NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid NOT NULL,
+  path text NOT NULL,
+  thumb_path text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  attached_at timestamp with time zone
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1650,6 +1660,7 @@ ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMAR
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_pkey PRIMARY KEY (key);
 ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_pkey PRIMARY KEY (id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_pkey PRIMARY KEY (id);
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
@@ -1882,6 +1893,7 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_note_length CHECK (((note IS 
 ALTER TABLE share_links ADD CONSTRAINT share_links_source_check CHECK (((source IS NULL) OR (source = ANY (ARRAY['bot'::text, 'web'::text, 'lead'::text]))));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text, 'rename_requested'::text, 'rename_approved'::text, 'rename_rejected'::text])));
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_key_check CHECK (((length(key) >= 8) AND (length(key) <= 64)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_client_note_check CHECK (((client_note IS NULL) OR (length(client_note) <= 300)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
@@ -2048,6 +2060,8 @@ ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_broker_id_fkey FO
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE CASCADE;
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2197,6 +2211,8 @@ CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (ow
 CREATE INDEX unit_owners_agency ON public.unit_owners USING btree (agency_id, created_at DESC);
 CREATE UNIQUE INDEX unit_owners_code ON public.unit_owners USING btree (agency_id, code);
 CREATE INDEX unit_owners_phones ON public.unit_owners USING gin (phones);
+CREATE INDEX idx_unit_photo_uploads_broker ON public.unit_photo_uploads USING btree (broker_id, created_at DESC);
+CREATE INDEX idx_unit_photo_uploads_state ON public.unit_photo_uploads USING btree (attached_at, created_at);
 CREATE INDEX unit_reference_agency_idx ON public.unit_reference USING btree (agency_id, purged_at DESC);
 CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
 CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);

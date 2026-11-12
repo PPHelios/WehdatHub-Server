@@ -742,7 +742,7 @@
   // Only the unit's public fields are kept; owner, notes, commission, address, location and photos never are.
   var DRAFT_KEY = "wh-unit-draft";
   var DRAFT_SKIP = /^(_csrf|version|code|photos|voice|describe|force|action|photo_order|remove_photo|photo_manual|owner_.*|notes|commission|co_broker|unit_no|address|pin)$/;
-  try { if (/[?&]saved=1/.test(location.search)) localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  try { if (/[?&]saved=1/.test(location.search)) { localStorage.removeItem(DRAFT_KEY); Object.keys(localStorage).forEach(function (k) { if (k.indexOf("wh-unit-photos:") === 0) localStorage.removeItem(k); }); } } catch (e) {}
   (function () {
     var form = document.getElementById("unit-form");
     if (!form || /\/edit$/.test(form.getAttribute("action") || "")) return;
