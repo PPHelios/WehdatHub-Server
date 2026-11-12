@@ -85,7 +85,7 @@ function register(api, { pool }) {
     return r.error ? fail(res, r) : res.json({ ok: true });
   });
 
-  api.get("/links", async (req, res) => {
+  api.get("/opened-links", async (req, res) => {
     const b = req.session.broker;
     const manager = Authz.isManager(b);
     const f = {
