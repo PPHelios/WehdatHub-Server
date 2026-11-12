@@ -45,7 +45,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <div class="row">
       <button type="button" class="secondary" data-ai="unit_fill" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
       <button type="button" class="secondary" data-ai="voice_unit_add" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
-      <label class="btn secondary">📎 ${L(lang, "ارفع ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" multiple hidden data-voice-file></label>
+      <label class="btn secondary">📎 ${L(lang, "ارفع ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" multiple hidden data-voice-file data-cost="${Credits.costOf("voice")}"></label>
       <span class="spinner" aria-hidden="true"></span>
     </div>
   </section>
@@ -127,11 +127,13 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("owner_phone", L(lang, "تليفون المالك *", "Owner phone *"), v.owner_phone, { type: "tel", dir: "ltr" })}
     <label class="check"><input type="checkbox" name="owner_name_from_phone" value="1"${chk(v.owner_name_from_phone)}>${L(lang, "مفيش اسم: استخدم التليفون كاسم", "No name: use the phone as the name")}</label>
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
+    <details class="more"${[v.commission, v.co_broker, v.unit_no, v.address, v.pin].some(Boolean) ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر (عمولة، وسيط، عنوان، لوكيشن)", "More details (commission, co-broker, address, location)")}</summary><div class="grid">
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
     ${input("co_broker", L(lang, "وسيط مشارك", "Co-broker"), v.co_broker)}
     ${input("unit_no", L(lang, "رقم الوحدة", "Unit no."), v.unit_no, { dir: "ltr" })}
     ${input("address", L(lang, "العنوان (للشركة بس)", "Address (agency only)"), v.address)}
     ${input("pin", L(lang, "لينك جوجل ماب أو الإحداثيات", "Google Maps link or coordinates"), v.pin, { dir: "ltr" })}
+    </div></details>
   </div>
   <label>${L(lang, "ملاحظات", "Notes")}<textarea name="notes" rows="2">${v.notes}</textarea></label></section>
 
@@ -170,13 +172,14 @@ const catalogueNotice = (c, lang) =>
   html`<p class="notice" data-catalogue-match="${c.code}">ℹ️ ${L(lang, "شبه", "Looks like")} ${c.model ? L(lang, "نموذج", "a model") : c.dev_code ? `${L(lang, "الوحدة", "unit")} ${c.dev_code}` : L(lang, "وحدة", "a unit")} ${L(lang, "في مشروع", "in")} ${c.project || "—"} ${L(lang, "في الكتالوج", "in your catalogue")} (<a href="/app/units/${encodeURIComponent(c.code)}">${c.code}</a>). ${L(lang, "لو هي نفسها، استخدم وحدة الكتالوج.", "If it is the same, use the catalogue unit.")}</p>`;
 
 /** Review panel: what blocks saving, the field warnings (only here and in WhatsApp review), the preview. */
-function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = null } = {}) {
+function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = null, changes = [] } = {}) {
   const { blockers, warnings, listing } = evaluation;
   return html`<section class="card" data-review="${blockers.length ? "blocked" : "ok"}">
   <h2>📋 ${L(lang, "مراجعة قبل الحفظ", "Review before saving")}</h2>
   ${blockers.length
     ? html`<div class="notice bad card"><strong>⛔ ${L(lang, "ناقص لإتمام الحفظ:", "Still needed to save:")}</strong><ul>${blockers.map((b) => html`<li data-blocker="${b.field}" role="button" tabindex="0">${lang === "en" ? b.label_en : b.label_ar}</li>`)}</ul></div>`
     : html`<p class="ok">✅ ${L(lang, "جاهزة للحفظ.", "Ready to save.")}</p>`}
+  ${changes.length ? html`<div class="notice card" data-changes><strong>✏️ ${L(lang, "اللي اتغير:", "What changed:")}</strong><ul>${changes.map((c) => html`<li data-change="${c.field}">${lang === "en" ? c.en : c.ar}: <span dir="ltr">${c.from} → ${c.to}</span></li>`)}</ul></div>` : ""}
   ${duplicate ? duplicateNotice(duplicate, lang) : catalogue ? catalogueNotice(catalogue, lang) : ""}
   ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>
   ${blockers.length ? "" : html`<label class="check"><input type="checkbox" data-warn-ack> ${L(lang, "راجعت التنبيهات وعايز أحفظ", "I checked the warnings and want to save")}</label>`}` : ""}

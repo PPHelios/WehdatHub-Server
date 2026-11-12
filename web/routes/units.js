@@ -519,7 +519,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       title: listing.code,
       nav: "units",
       body: html`<article class="card" data-code="${listing.code}">
-  ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
+  ${req.query.saved ? html`<div class="notice card ok" data-saved>✅ ${L(lang, "تم الحفظ", "Saved")} <a class="btn secondary" href="/app/units/new">➕ ${L(lang, "ضيف وحدة تانية", "Add another unit")}</a></div>` : ""}
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
