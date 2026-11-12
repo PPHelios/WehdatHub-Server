@@ -623,3 +623,4 @@ label.req > input, label.req > select, label.req > textarea { border-color: var(
 label.req.field-missing > input, label.req.field-missing > select, label.req.field-missing > textarea { border-color: var(--bad); box-shadow: none; }
 form[aria-busy="true"] { opacity: 0.65; cursor: progress; }
 [data-blocker] { cursor: pointer; text-decoration: underline; }
+details.more { grid-column: 1 / -1; }

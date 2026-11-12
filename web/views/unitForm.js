@@ -127,7 +127,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("owner_phone", L(lang, "تليفون المالك *", "Owner phone *"), v.owner_phone, { type: "tel", dir: "ltr" })}
     <label class="check"><input type="checkbox" name="owner_name_from_phone" value="1"${chk(v.owner_name_from_phone)}>${L(lang, "مفيش اسم: استخدم التليفون كاسم", "No name: use the phone as the name")}</label>
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
-    <details class="more" style="grid-column: 1 / -1"${[v.commission, v.co_broker, v.unit_no, v.address, v.pin].some(Boolean) ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر (عمولة، وسيط، عنوان، لوكيشن)", "More details (commission, co-broker, address, location)")}</summary><div class="grid">
+    <details class="more"${[v.commission, v.co_broker, v.unit_no, v.address, v.pin].some(Boolean) ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر (عمولة، وسيط، عنوان، لوكيشن)", "More details (commission, co-broker, address, location)")}</summary><div class="grid">
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
     ${input("co_broker", L(lang, "وسيط مشارك", "Co-broker"), v.co_broker)}
     ${input("unit_no", L(lang, "رقم الوحدة", "Unit no."), v.unit_no, { dir: "ltr" })}
