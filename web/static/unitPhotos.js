@@ -7,8 +7,8 @@
   var IMAGE = /\.(jpe?g|png|webp|gif|heic|heif)$/i;
   var MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif" };
   var T = document.documentElement.lang === "en"
-    ? { kept: "Kept {n} of {max}. Untick {x} to save.", dropped: "{n} video or non-photo file(s) left out.", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
-    : { kept: "المختار {n} من {max}. شيل {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
+    ? { kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
+    : { kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
   var fill = function (s, o) { return s.replace(/\{(\w+)\}/g, function (_, k) { return o[k]; }); };
 
   var tray = null; // { form, items: [{ file, keep, url }], dropped, busy }
@@ -47,10 +47,6 @@
       li.draggable = true;
       li.setAttribute("data-file", String(i));
       if (!it.keep) li.classList.add("skip");
-      var tick = document.createElement("input");
-      tick.type = "checkbox"; tick.checked = it.keep; tick.setAttribute("data-keep", String(i));
-      var label = document.createElement("label"); label.className = "check";
-      label.appendChild(tick);
       var img = document.createElement("img");
       img.alt = ""; img.loading = "lazy";
       if (!it.url) it.url = URL.createObjectURL(it.file);
@@ -62,7 +58,9 @@
       up.type = "button"; up.className = "secondary"; up.setAttribute("data-move", "up"); up.textContent = "↑";
       var down = document.createElement("button");
       down.type = "button"; down.className = "secondary"; down.setAttribute("data-move", "down"); down.textContent = "↓";
-      li.appendChild(label); li.appendChild(img); li.appendChild(name); li.appendChild(up); li.appendChild(down);
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "secondary"; del.setAttribute("data-delete", String(i)); del.textContent = T.del;
+      li.appendChild(img); li.appendChild(name); li.appendChild(up); li.appendChild(down); li.appendChild(del);
       list.appendChild(li);
     });
     list.hidden = !tray.items.length;
@@ -92,8 +90,7 @@
     var added = 0;
     Array.prototype.forEach.call(files, function (f) {
       if (!IMAGE.test(f.name) && !/^image\//.test(f.type)) { tray.dropped++; return; }
-      // The first MAX photos are ticked when they arrive; later ones start unticked.
-      var item = { file: f, keep: kept() < MAX, url: null };
+      var item = { file: f, keep: true, url: null };
       tray.items.push(item);
       shrink(f).then(function (small) { if (small !== f) { item.file = small; sync(); } });
       added++;
@@ -146,10 +143,13 @@
         if (manual) manual.checked = true;
         render();
       });
-      list.addEventListener("change", function (e) {
-        var i = Number(e.target.getAttribute && e.target.getAttribute("data-keep"));
+      list.addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-delete]");
+        if (!b) return;
+        var i = Number(b.getAttribute("data-delete"));
         if (isNaN(i) || !tray.items[i]) return;
-        tray.items[i].keep = e.target.checked;
+        if (tray.items[i].url) URL.revokeObjectURL(tray.items[i].url);
+        tray.items.splice(i, 1);
         render();
       });
     }

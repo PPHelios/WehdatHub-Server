@@ -75,19 +75,6 @@ function historyLine(rows, lang) {
   return html`<details data-price-history><summary>📈 ${L(lang, "تاريخ السعر", "Price history")}</summary><ul>${rows.map((r) => html`<li><span dir="ltr">${new Date(r.changed_at).toISOString().slice(0, 10)}</span>: ${Commission.money(r.price, lang)}</li>`)}</ul></details>`;
 }
 
-/** C3: link a broker's own resale unit to a catalogue project (its contract keeps its own terms). */
-function resaleLinkForm(listing, project, projects, lang, csrf) {
-  if (!projects.length && !project) return "";
-  return html`<details id="resale-project" ${project ? "" : "open"}><summary>🏗️ ${L(lang, "ربط الوحدة بمشروع في الكتالوج", "Link this unit to a catalogue project")}</summary>
-  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/project" class="row">
-    <input type="hidden" name="_csrf" value="${csrf}">
-    <select name="project_id"><option value="">${L(lang, "— بدون مشروع —", "— No project —")}</option>${projects.map((p) => html`<option value="${p.id}" ${p.id === listing.project_id ? "selected" : ""}>${lang === "en" ? p.name_en || p.name : p.name}</option>`)}</select>
-    <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
-  </form>
-  <p class="muted">${L(lang, "العقد بيفضل بشروط الدفع بتاعته. المشروع بيظهر التسليم والروابط بس.", "The contract keeps its own payment terms. The project adds its delivery and links only.")}</p>
-</details>`;
-}
-
 function marketLine(m, listing, lang) {
   const n = (x) => Number(x).toLocaleString("en-US");
   const diff = m.diffPct === null || Math.abs(m.diffPct) < 3
@@ -511,7 +498,6 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
     const [project, prices] = await Promise.all([Catalogue.projectForUnit(pool, listing), PriceSheets.history(pool, listing)]);
     const status = { active: L(lang, "🟢 نشطة", "🟢 Active"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived"), deleted: L(lang, "🗑️ محذوفة", "🗑️ Deleted") }[listing.status] || listing.status;
-    const linkable = !listing.details?.catalogue && listing.market === "resale" && listing.status === "active" && Authz.canEdit(broker, listing);
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     const view = await Privacy.forBroker(pool, broker, listing);
     const priv = await privateSection(broker, listing, view, lang, req.session.csrf, req.query.private);
@@ -525,7 +511,6 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
   ${listing.details?.owner_lead && Authz.canEdit(broker, listing) && !Authz.isDataEntry(broker) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
   ${!view.hidden && (!Authz.isDataEntry(broker) || (await Owners.dataEntryOwnersOn(pool, broker.agency_id))) ? await unitOwnerBlock(pool, broker, listing, lang, req.session.csrf) : ""}
-  ${linkable ? resaleLinkForm(listing, project, await Catalogue.listProjects(pool, broker), lang, req.session.csrf) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}

@@ -97,7 +97,7 @@ describe("resale link to a project", () => {
     await h.insertListing({ code: "BD-7", payment_terms: { plans: [{ name: "Resale rest", down_payment_pct: 50, years: 3 }] } });
     const { agent, csrf } = await signIn(h, "broker");
     const page = await agent.get("/app/units/BD-7");
-    expect(page.text).toMatch(/id="resale-project"/);
+    expect(page.text).not.toMatch(/id="resale-project"/); // the link form was removed from the unit page; the route stays
     const r = await form(agent, "/app/units/BD-7/project", csrf, { project_id: project.id });
     expect(r.status).toBe(303);
     expect((await unit("BD-7")).project_id).toBe(project.id);

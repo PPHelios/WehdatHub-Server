@@ -43,3 +43,21 @@ test("the first photo pick on the edit form shows in the list", async () => {
   expect(await pg.locator("[data-photo-preview] li").count()).toBe(1);
   await ctx.close();
 });
+
+test("a picked photo can be deleted with its button", async () => {
+  const base = "http://127.0.0.1:4572";
+  const ctx = await browser.newContext({ serviceWorkers: "block" });
+  const pg = await ctx.newPage();
+  const br = h.BROKERS.broker;
+  const token = await WebAuth.issueLoginToken(h.pool, { id: br.id, agency_id: br.agency_id });
+  await pg.goto(`${base}/app/login/confirm?t=${token}`);
+  await pg.click("form button[type=submit], form input[type=submit]");
+  await pg.waitForLoadState("networkidle");
+  await pg.goto(`${base}/app/units/NH-A20/edit`, { waitUntil: "networkidle" });
+  await pg.setInputFiles("input[data-photo-tray]", [{ name: "a.png", mimeType: "image/png", buffer: PNG }, { name: "b.png", mimeType: "image/png", buffer: PNG }]);
+  await pg.waitForSelector("[data-photo-preview] li");
+  expect(await pg.locator("[data-photo-preview] li").count()).toBe(2);
+  await pg.locator("[data-photo-preview] [data-delete]").first().click();
+  expect(await pg.locator("[data-photo-preview] li").count()).toBe(1);
+  await ctx.close();
+});
