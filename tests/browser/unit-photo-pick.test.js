@@ -97,18 +97,17 @@ test("saving reduces a big photo in the browser first and shows progress", async
   const { ctx, pg } = await openEdit();
   await pg.setInputFiles("input[data-photo-tray]", [{ name: "big.png", mimeType: "image/png", buffer: big }]);
   await pg.waitForSelector("[data-photo-preview] li");
-  // The post is stopped on its way out: the page stays and shows what the form was about to send.
-  await pg.route("**/app/units/NH-A20/edit", (route) => route.abort());
-  const sent = pg.waitForRequest((r) => r.method() === "POST" && /\/edit$/.test(r.url()));
+  // The final post is replaced by a recorder: the page stays and we see what the form was about to send.
   await pg.evaluate(() => {
+    HTMLFormElement.prototype.submit = function () {
+      const f = this.querySelector("input[data-photo-tray]").files[0];
+      window.__sent = { type: f.type, size: f.size, name: f.name };
+    };
     const f = document.querySelector("#unit-form");
     f.requestSubmit(f.querySelector("button[name=action]"));
   });
-  await sent;
-  const file = await pg.evaluate(() => {
-    const f = document.querySelector("input[data-photo-tray]").files[0];
-    return { type: f.type, size: f.size, name: f.name };
-  });
+  await pg.waitForFunction(() => window.__sent, null, { timeout: 20000 });
+  const file = await pg.evaluate(() => window.__sent);
   expect(file.type).toBe("image/jpeg");
   expect(file.size).toBeLessThan(big.length / 4);
   await ctx.close();
