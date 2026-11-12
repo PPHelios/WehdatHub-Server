@@ -51,3 +51,14 @@ test("the plan is for managers and the agency owner, not brokers", async () => {
   await h.seedBroker("manager");
   expect((await api().get("/api/v1/plan").set(await login("manager"))).status).toBe(200);
 });
+
+test("data entry gets the owners right only while the agency's switch is on", async () => {
+  await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  const auth = await login("colleague");
+  const off = await api().get("/api/v1/me").set(auth);
+  expect(off.body.rights).toMatchObject({ dataEntry: true, owners: false });
+  const owners = require("../../services/unitOwners");
+  jest.spyOn(owners, "dataEntryOwnersOn").mockResolvedValue(true);
+  const on = await api().get("/api/v1/me").set(auth);
+  expect(on.body.rights.owners).toBe(true);
+});
