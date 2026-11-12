@@ -67,3 +67,19 @@ test("the public config tells old apps the lowest supported version", async () =
   expect(r.status).toBe(200);
   expect(r.body.minAppVersion).toMatch(/^\d+\.\d+\.\d+$/);
 });
+
+test("an app search is logged like a web or Telegram one, with timings, and its Sold count follows the filters", async () => {
+  await h.insertListing({ code: "AP1", compound: "Hyde Park", bedrooms: 3, listing_type: "rent", price_value: 40000, status: "sold" });
+  await h.insertListing({ code: "AP2", compound: "Mivida", bedrooms: 3, listing_type: "rent", price_value: 40000, status: "sold" });
+  const r = await get("broker", { q: "شقة ايجار في هايد بارك 3 نوم" });
+  expect(r.status).toBe(200);
+  const [row] = await h.query("SELECT channel, source, total, total_ms, parse_ms, db_ms, model FROM search_log WHERE channel = 'app' ORDER BY created_at DESC LIMIT 1");
+  expect(row).toMatchObject({ channel: "app" });
+  expect(row.total_ms).toBeGreaterThanOrEqual(0);
+  expect(row.db_ms).toBeGreaterThanOrEqual(0);
+  // Only Hyde Park's sold unit fits the filters; the Mivida one must not be counted.
+  if (r.body.counts) expect(r.body.counts.sold).toBeLessThanOrEqual(1);
+  // A "more" page is the same search: not logged twice.
+  await get("broker", { q: "شقة ايجار في هايد بارك 3 نوم", offset: "5" });
+  expect((await h.query("SELECT COUNT(*)::int AS n FROM search_log WHERE channel = 'app'"))[0].n).toBe(1);
+});

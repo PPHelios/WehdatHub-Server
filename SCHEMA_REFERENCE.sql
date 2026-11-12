@@ -1387,7 +1387,11 @@ CREATE TABLE IF NOT EXISTS public.search_log (
   guesses jsonb,
   asked text[] DEFAULT '{}'::text[] NOT NULL,
   ai_error text,
-  audit_resolved_at timestamp with time zone
+  audit_resolved_at timestamp with time zone,
+  parse_ms integer,
+  db_ms integer,
+  total_ms integer,
+  model text
 );
 
 CREATE TABLE IF NOT EXISTS public.search_reports (
@@ -2228,6 +2232,7 @@ CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (age
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX search_aliases_status ON public.search_aliases USING btree (status, agreed DESC);
 CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id, created_at DESC);
+CREATE INDEX search_log_slow ON public.search_log USING btree (created_at DESC) WHERE (total_ms > 5000);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
 CREATE UNIQUE INDEX search_test_cases_text ON public.search_test_cases USING btree (lower(TRIM(BOTH FROM query_text)));
