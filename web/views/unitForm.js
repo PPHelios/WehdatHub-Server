@@ -182,7 +182,7 @@ function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = nu
   ${changes.length ? html`<div class="notice card" data-changes><strong>✏️ ${L(lang, "اللي اتغير:", "What changed:")}</strong><ul>${changes.map((c) => html`<li data-change="${c.field}">${lang === "en" ? c.en : c.ar}: <span dir="ltr">${c.from} → ${c.to}</span></li>`)}</ul></div>` : ""}
   ${duplicate ? duplicateNotice(duplicate, lang) : catalogue ? catalogueNotice(catalogue, lang) : ""}
   ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>
-  ${blockers.length ? "" : html`<label class="check"><input type="checkbox" data-warn-ack> ${L(lang, "راجعت التنبيهات وعايز أحفظ", "I checked the warnings and want to save")}</label>`}` : ""}
+  ${blockers.length ? "" : html`<label class="check ack"><input type="checkbox" data-warn-ack> ${L(lang, "راجعت التنبيهات وعايز أحفظ", "I checked the warnings and want to save")}</label><p class="muted" data-ack-hint>${L(lang, "زر الحفظ مقفول لحد ما تعلّم المربع ده.", "Save stays off until you tick this box.")}</p>`}` : ""}
   ${factList({ ...listing, code: listing.code || "—" }, lang)}
 </section>`;
 }

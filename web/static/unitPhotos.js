@@ -103,9 +103,11 @@
     render();
   }
 
-  function fromPicker(input) {
-    if (!input.files || !input.files.length) return;
-    addFiles(input.files);
+  // The files are taken before the tray starts: starting it re-syncs (and empties) the picker, which lost the first pick.
+  function fromPicker(input, files) {
+    files = files || (input.files ? Array.prototype.slice.call(input.files) : []);
+    if (!files.length) return;
+    addFiles(files);
     input.value = ""; // the picker is cleared; the tray holds the photos
     sync();
   }
@@ -166,8 +168,9 @@
     if (!t || !t.matches) return;
     var form = t.form;
     if (!form || !form.matches("#unit-form")) return;
+    var picked = t.matches("input[data-photo-tray]") && t.files ? Array.prototype.slice.call(t.files) : null;
     if (!tray || tray.form !== form) start(form);
-    if (t.matches("input[data-photo-tray]")) fromPicker(t);
+    if (t.matches("input[data-photo-tray]")) fromPicker(t, picked);
     else if (t.matches("input[data-photo-zip]")) fromZip(t);
   });
 

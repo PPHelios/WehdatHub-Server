@@ -114,6 +114,8 @@ input[type="file"] { padding: 8px; }
 input.narrow { width: 6em; }
 fieldset { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin: 0; }
 legend { padding: 0 6px; font-weight: 700; }
+.check.ack { padding: 12px 14px; border: 2px solid var(--brand); border-radius: 12px; background: var(--brand-soft); font-weight: 700; min-height: 52px; }
+.check.ack input { width: 28px; height: 28px; flex: none; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 400; min-height: 40px; }
 :root[data-theme="dark"] input, :root[data-theme="dark"] select, :root[data-theme="dark"] textarea { border-color: var(--line); }
 
@@ -612,7 +614,7 @@ label.field-missing input, label.field-missing select, label.field-missing texta
 
 /* Slow owner pages: the spinner shows while the content loads; the review map and the selected row. */
 [data-lazy] .spinner { display: inline-block; }
-[data-review] { height: 320px; border-radius: 12px; overflow: hidden; margin-block: 8px; }
+.map-view[data-review] { height: 320px; border-radius: 12px; overflow: hidden; margin-block: 8px; }
 .sat { max-width: 100%; border-radius: 12px; margin-block: 8px; }
 [data-row] { cursor: pointer; }
 [data-row].is-selected { outline: 2px solid var(--brand); }

@@ -791,6 +791,8 @@
     var ack = form.querySelector("[data-warn-ack]");
     var open = state === "ok" && (!warns || (ack && ack.checked));
     if (!panel) open = false;
+    var hint = form.querySelector("[data-ack-hint]");
+    if (hint) hint.hidden = Boolean(ack && ack.checked);
     save.disabled = !open;
     save.title = open ? "" : (state === "blocked" ? (EN ? "Fill in what is missing first" : "كمّل الناقص الأول") : (warns ? (EN ? "Tick that you checked the warnings" : "علّم إنك راجعت التنبيهات") : ""));
   }

@@ -77,3 +77,9 @@ test("owner lead code: unknown codes are refused, a known one is kept as L-0042 
   const other = await post(agent, csrf, { ...FIELDS, owner_lead: `L-${theirs.lead.ref}` });
   expect(other.status).toBe(422);
 });
+
+test("the map's review rule does not clip the unit review panel", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "../../web/static/app.css"), "utf8");
+  expect(css).not.toMatch(/^\[data-review\] \{/m);
+  expect(css).toMatch(/\.map-view\[data-review\] \{/);
+});
