@@ -657,7 +657,8 @@
       "MB": "Number",
       "uploads": ["fields", "params"],
       "PHOTO": "Object",
-      "VOICE": "Object"
+      "VOICE": "Object",
+      "VOICE_MANY": "Object"
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],

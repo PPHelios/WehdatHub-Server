@@ -14,11 +14,13 @@ const pick = (pair, lang) => (pair ? (lang === "en" ? pair[1] : pair[0]) : "");
 const sel = (on) => (on ? raw(" selected") : "");
 const chk = (on) => (on ? raw(" checked") : "");
 
+/** A label with a star is a required field: it gets the "req" outline (neutral colour; red only after a failed check). */
+const req = (label) => (/\*/.test(String(label)) ? raw(' class="req"') : "");
 function input(name, label, value, { type = "text", dir = null, extra = "" } = {}) {
-  return html`<label>${label}<input name="${name}" type="${type}" value="${value}"${dir ? html` dir="${dir}"` : ""}${raw(extra)}></label>`;
+  return html`<label${req(label)}>${label}<input name="${name}" type="${type}" value="${value}"${dir ? html` dir="${dir}"` : ""}${raw(extra)}></label>`;
 }
 function select(name, label, value, options) {
-  return html`<label>${label}<select name="${name}">${options.map(([v, t]) => html`<option value="${v}"${sel(String(value) === String(v))}>${t}</option>`)}</select></label>`;
+  return html`<label${req(label)}>${label}<select name="${name}">${options.map(([v, t]) => html`<option value="${v}"${sel(String(value) === String(v))}>${t}</option>`)}</select></label>`;
 }
 
 const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Describe.frequencyLabel(f, lang)])];
@@ -43,7 +45,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <div class="row">
       <button type="button" class="secondary" data-ai="unit_fill" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
       <button type="button" class="secondary" data-ai="voice_unit_add" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
-      <label class="btn secondary">📎 ${L(lang, "ارفع ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" hidden data-voice-file></label>
+      <label class="btn secondary">📎 ${L(lang, "ارفع ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" multiple hidden data-voice-file></label>
       <span class="spinner" aria-hidden="true"></span>
     </div>
   </section>
@@ -122,7 +124,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
 
   <section class="card" data-step="3"><h2>🔒 ${L(lang, "بيانات داخلية (مش بتظهر للعميل)", "Internal (never shown to clients)")}</h2><div class="grid">
     ${input("owner_name", L(lang, "المالك *", "Owner *"), v.owner_name)}
-    ${input("owner_phone", L(lang, "تليفون المالك", "Owner phone"), v.owner_phone, { type: "tel", dir: "ltr" })}
+    ${input("owner_phone", L(lang, "تليفون المالك *", "Owner phone *"), v.owner_phone, { type: "tel", dir: "ltr" })}
     <label class="check"><input type="checkbox" name="owner_name_from_phone" value="1"${chk(v.owner_name_from_phone)}>${L(lang, "مفيش اسم: استخدم التليفون كاسم", "No name: use the phone as the name")}</label>
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
@@ -150,9 +152,8 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <label class="check" data-photo-manual-box><input type="checkbox" name="photo_manual" value="on" data-photo-manual> ${L(lang, "رتّبتها بنفسي: من غير ترتيب بالذكاء الاصطناعي (بيوفر رصيد الذكاء الاصطناعي)", "I ordered them myself: no AI ordering (saves AI credits)")}</label>
   </section>
 
-  <div id="review" data-step="4">${review || ""}</div>
-  <div class="row" data-step="4">
-    <button type="button" class="secondary" hx-post="/app/units/review" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#review">📋 ${L(lang, "مراجعة", "Review")}</button>
+  <div id="review" data-step="4" data-auto-review hx-post="/app/units/review" hx-trigger="review-run" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="this" hx-swap="innerHTML">${review || ""}</div>
+  <div class="row" data-step="4" data-save-row>
     ${duplicate
       ? html`<button type="submit" name="force" value="1">✅ ${L(lang, "احفظ برضه", "Save anyway")}</button>`
       : html`<button type="submit" name="action" value="save" data-tg-main>✅ ${L(lang, "حفظ", "Save")}</button>`}
@@ -174,10 +175,11 @@ function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = nu
   return html`<section class="card" data-review="${blockers.length ? "blocked" : "ok"}">
   <h2>📋 ${L(lang, "مراجعة قبل الحفظ", "Review before saving")}</h2>
   ${blockers.length
-    ? html`<div class="notice bad card"><strong>⛔ ${L(lang, "ناقص لإتمام الحفظ:", "Still needed to save:")}</strong><ul>${blockers.map((b) => html`<li data-blocker="${b.field}">${lang === "en" ? b.label_en : b.label_ar}</li>`)}</ul></div>`
+    ? html`<div class="notice bad card"><strong>⛔ ${L(lang, "ناقص لإتمام الحفظ:", "Still needed to save:")}</strong><ul>${blockers.map((b) => html`<li data-blocker="${b.field}" role="button" tabindex="0">${lang === "en" ? b.label_en : b.label_ar}</li>`)}</ul></div>`
     : html`<p class="ok">✅ ${L(lang, "جاهزة للحفظ.", "Ready to save.")}</p>`}
   ${duplicate ? duplicateNotice(duplicate, lang) : catalogue ? catalogueNotice(catalogue, lang) : ""}
-  ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>` : ""}
+  ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>
+  ${blockers.length ? "" : html`<label class="check"><input type="checkbox" data-warn-ack> ${L(lang, "راجعت التنبيهات وعايز أحفظ", "I checked the warnings and want to save")}</label>`}` : ""}
   ${factList({ ...listing, code: listing.code || "—" }, lang)}
 </section>`;
 }

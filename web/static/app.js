@@ -362,7 +362,9 @@
     form.insertBefore(box, form.firstChild);
     var controls = form.querySelectorAll("button, input[type=submit]");
     for (var i = 0; i < controls.length; i++) controls[i].disabled = true;
+    setFormBusy(form, true);
     var stop = function (msg) {
+      setFormBusy(form, false);
       label.textContent = msg;
       for (var k = 0; k < controls.length; k++) controls[k].disabled = false;
     };
@@ -379,6 +381,29 @@
     xhr.ontimeout = function () { stop(UP.fail); };
     xhr.onload = function () {
       if (xhr.responseURL && xhr.responseURL !== location.href) { location.assign(xhr.responseURL); return; }
+      // A refusal on the unit form keeps the form as it is (the chosen photos can't be refilled by a script): only the
+      // message, the review and the Save button are taken from the answer.
+      if (form.id === "unit-form" && xhr.status >= 400 && xhr.status < 500 && window.DOMParser) {
+        var doc = new DOMParser().parseFromString(xhr.responseText, "text/html");
+        var nf = doc.getElementById("unit-form");
+        if (nf) {
+          if (box.parentNode) box.parentNode.removeChild(box);
+          var oldBanner = form.querySelector(":scope > .notice.bad");
+          if (oldBanner) oldBanner.remove();
+          var newBanner = nf.querySelector(":scope > .notice.bad");
+          if (newBanner) form.insertBefore(document.importNode(newBanner, true), form.firstChild.nextSibling);
+          var nr = nf.querySelector("[data-auto-review]"), orv = form.querySelector("[data-auto-review]");
+          if (nr && orv) orv.innerHTML = nr.innerHTML;
+          var ns = nf.querySelector("[data-save-row]"), os = form.querySelector("[data-save-row]");
+          if (ns && os) os.innerHTML = ns.innerHTML;
+          for (var j = 0; j < controls.length; j++) controls[j].disabled = false;
+          setFormBusy(form, false);
+          form.dispatchEvent(new CustomEvent("stepgoto", { detail: 99 }));
+          gateSave(form);
+          window.scrollTo(0, 0);
+          return;
+        }
+      }
       document.open();
       document.write(xhr.responseText);
       document.close();
@@ -676,6 +701,72 @@
       form.requestSubmit ? form.requestSubmit() : form.submit();
     });
   }
+  // A form that is waiting for the server can't be edited or tapped (inert), so nothing changes under the request.
+  function setFormBusy(form, on) {
+    if (!form) return;
+    if (on) form.setAttribute("aria-busy", "true"); else form.removeAttribute("aria-busy");
+    try { form.inert = on; } catch (e) {}
+  }
+  // The unit form's review panel: loaded by itself (last step, or on an edit page) and it decides whether Save is open.
+  function runReview(form) {
+    var r = form && form.querySelector("[data-auto-review]");
+    if (r && window.htmx) htmx.trigger(r, "review-run");
+  }
+  function gateSave(form) {
+    var save = form && form.querySelector("[data-save-row] button[type=submit]");
+    if (!save) return;
+    var panel = form.querySelector("[data-review]");
+    var state = panel ? panel.getAttribute("data-review") : "";
+    var warns = form.querySelectorAll("[data-warning]").length;
+    var ack = form.querySelector("[data-warn-ack]");
+    var open = state === "ok" && (!warns || (ack && ack.checked));
+    if (!panel) open = false;
+    save.disabled = !open;
+    save.title = open ? "" : (state === "blocked" ? (EN ? "Fill in what is missing first" : "كمّل الناقص الأول") : (warns ? (EN ? "Tick that you checked the warnings" : "علّم إنك راجعت التنبيهات") : ""));
+  }
+  var unitFormEl = document.getElementById("unit-form");
+  if (unitFormEl && unitFormEl.querySelector("[data-auto-review]")) {
+    gateSave(unitFormEl);
+    document.addEventListener("htmx:afterSwap", function (e) {
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) gateSave(unitFormEl);
+    });
+    // If the review can't be loaded the server still checks everything at Save, so Save is not left locked.
+    document.addEventListener("htmx:responseError", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) { var sv = unitFormEl.querySelector("[data-save-row] button[type=submit]"); if (sv) sv.disabled = false; } });
+    document.addEventListener("htmx:sendError", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) { var sv = unitFormEl.querySelector("[data-save-row] button[type=submit]"); if (sv) sv.disabled = false; } });
+    unitFormEl.addEventListener("change", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-warn-ack")) gateSave(unitFormEl); });
+    // An edit page (not stepped) shows its review at once and keeps it current while the form is changed.
+    if (!unitFormEl.hasAttribute("data-steps")) {
+      var rv = null;
+      setTimeout(function () { runReview(unitFormEl); }, 0);
+      unitFormEl.addEventListener("change", function (e) {
+        if (e.target && e.target.hasAttribute && (e.target.hasAttribute("data-warn-ack") || e.target.type === "file")) return;
+        clearTimeout(rv);
+        rv = setTimeout(function () { runReview(unitFormEl); }, 700);
+      });
+    }
+    // The form can't be touched while a button's request runs (the automatic review is quiet).
+    document.addEventListener("htmx:beforeRequest", function (e) {
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) return;
+      if (e.detail && e.detail.elt && unitFormEl.contains(e.detail.elt)) setFormBusy(unitFormEl, true);
+    });
+    document.addEventListener("htmx:afterRequest", function (e) {
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) return;
+      if (e.detail && e.detail.elt && unitFormEl.contains(e.detail.elt)) setFormBusy(unitFormEl, false);
+    });
+    // A missing item in the list takes you to its field (on its step).
+    var jump = function (li) {
+      var f = li.getAttribute("data-blocker");
+      var input = f && unitFormEl.querySelector('[name="' + f + '"]');
+      if (!input) return;
+      var part = input.closest("[data-step]");
+      if (part && part.hidden) unitFormEl.dispatchEvent(new CustomEvent("stepgoto", { detail: part.getAttribute("data-step") }));
+      var lab = input.closest("label");
+      if (lab) lab.classList.add("field-missing");
+      setTimeout(function () { input.focus(); input.scrollIntoView({ block: "center" }); }, 0);
+    };
+    unitFormEl.addEventListener("click", function (e) { var li = e.target.closest && e.target.closest("[data-blocker]"); if (li) jump(li); });
+    unitFormEl.addEventListener("keydown", function (e) { if (e.key !== "Enter" && e.key !== " ") return; var li = e.target.closest && e.target.closest("[data-blocker]"); if (li) { e.preventDefault(); jump(li); } });
+  }
   // Stepped forms (<form data-steps="A|B|C">): one step at a time with a progress bar, Back and Next. Next checks only
   // the fields of the step on screen. Without this script every step simply shows.
   function stepForm(form) {
@@ -723,11 +814,15 @@
       stepErr.hidden = true;
       window.scrollTo(0, 0);
       document.dispatchEvent(new CustomEvent("steps:change"));
+      // The last step is "check and save": the review loads by itself and decides whether Save is open.
+      if (at === names.length) runReview(form);
     }
     // Next: the browser's own checks first; then, when the form has a check address, the server's field rules for this
     // step (a spinner shows while they run). A blocker on a field of this step keeps the step open with its message.
     // If the check cannot be reached, Next still moves on: the final save checks everything.
+    form.addEventListener("stepgoto", function (e) { show(Number(e.detail)); });
     function busy(on) {
+      setFormBusy(form, on);
       next.disabled = on;
       next.classList.toggle("is-busy", on);
     }

@@ -49,4 +49,7 @@ function uploads(fields, { maxMb = 10, fieldSizeKb = 256 } = {}) {
 const PHOTO = { name: "photos", maxCount: 15, accept: /^image\// };
 const VOICE = { name: "voice", maxCount: 1, accept: /^(audio|video)\/(ogg|webm|mp4|mpeg|aac|wav|x-wav|x-m4a|m4a)/ };
 
-module.exports = { MB, uploads, PHOTO, VOICE };
+/** The unit form takes up to 5 voice notes (each is read by the AI and costs its credits). */
+const VOICE_MANY = { ...VOICE, maxCount: 5 };
+
+module.exports = { MB, uploads, PHOTO, VOICE, VOICE_MANY };
