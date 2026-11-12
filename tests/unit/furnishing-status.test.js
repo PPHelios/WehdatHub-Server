@@ -22,7 +22,7 @@ describe("kitchen and AC is a furnishing status", () => {
   });
   test("the search puts the exact status first, then blank status", () => {
     const { sql } = Search.buildSearchQuery("a", Q.fallbackParse("kitchen and ac"));
-    expect(sql).toMatch(/CASE WHEN l\.furnishing = \$\d+ OR \(l\.furnishing IS NULL AND l\.feature_keys @> \$\d+::text\[\]\) THEN 0 WHEN l\.furnishing = ANY/);
+    expect(sql).toMatch(/CASE WHEN l\.furnishing = ANY\(\$\d+::text\[\]\) OR \(l\.furnishing IS NULL AND l\.feature_keys @> \$\d+::text\[\]\) THEN 0 WHEN l\.furnishing = ANY/);
     expect(sql).toMatch(/l\.furnishing IS NULL OR l\.furnishing = ANY/);
   });
 });

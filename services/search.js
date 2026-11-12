@@ -18,9 +18,14 @@ const SEARCH_STATUSES = ["active", "sold", "archived"];
 const FURNISHING_TIERS = {
   kitchen_and_ac: [["kitchen_and_ac"], ["ac_only", "kitchen_only"], ["furnished", "semi_furnished"]],
   ac_only: [["ac_only"], ["kitchen_and_ac", "semi_furnished"], ["furnished"]],
-  kitchen_only: [["kitchen_only"], ["kitchen_and_ac", "semi_furnished"], ["furnished"]]
+  kitchen_only: [["kitchen_only"], ["kitchen_and_ac", "semi_furnished"], ["furnished"]],
+  // Semi-furnished usually means kitchen and AC (Haytham 2026-11-12); furnished is followed by semi-furnished.
+  semi_furnished: [["semi_furnished"], ["kitchen_and_ac"], ["ac_only"], ["kitchen_only"]],
+  furnished: [["furnished"], ["semi_furnished"]]
 };
-const FURNISHING_KEYS = { kitchen_and_ac: ["kitchen_installed", "ac_installed"], ac_only: ["ac_installed"], kitchen_only: ["kitchen_installed"] };
+const FURNISHING_KEYS = { kitchen_and_ac: ["kitchen_installed", "ac_installed"], ac_only: ["ac_installed"], kitchen_only: ["kitchen_installed"], semi_furnished: ["kitchen_installed", "ac_installed"], furnished: [] };
+// "Fully finished" is also answered by the finishes above it (Haytham 2026-11-12), after the exact ones.
+const FINISHING_ALSO = { fully_finished: ["super_lux", "ultra_super_lux"] };
 const SOFT_FEATURE_KEYS = new Set(require("../domain/features").FEATURES.filter((f) => f.group === "equipment" || f.group === "outdoor").map((f) => f.key));
 const SNAPSHOT_MAX = 100; // ids remembered for "more" (B1)
 const STEP_MONTHS_SQL = `CASE p->>'frequency' WHEN 'monthly' THEN 1 WHEN 'semi_annual' THEN 6 WHEN 'annual' THEN 12 ELSE 3 END`;
@@ -239,18 +244,21 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       // A blank finishing or furnishing matches both sides of the filter (only the special fields stay strict).
       if (f.finishing.length) {
         const fin = add(f.finishing);
-        where.push(`(l.finishing IS NULL OR l.finishing = ANY(${fin}::text[]))`);
-        // Exact finishing first, then the units whose finishing is blank (an unmapped old entry became blank).
-        exactFirst += `CASE WHEN l.finishing = ANY(${fin}::text[]) THEN 0 ELSE 1 END, `;
+        const also = [...new Set(f.finishing.filter((x) => FINISHING_ALSO[x]).flatMap((x) => FINISHING_ALSO[x]).filter((x) => !f.finishing.includes(x)))];
+        where.push(`(l.finishing IS NULL OR l.finishing = ANY(${also.length ? add([...f.finishing, ...also]) : fin}::text[]))`);
+        // Exact finishing first, then the finishes above it, then the units whose finishing is blank (an unmapped old entry became blank).
+        const alsoWhens = also.map((x, i) => `WHEN l.finishing = ${add(x)} THEN ${i + 1}`).join(" ");
+        exactFirst += `CASE WHEN l.finishing = ANY(${fin}::text[]) THEN 0 ${alsoWhens} ELSE ${also.length + 1} END, `;
       }
       if (f.furnishing) {
         const tiers = FURNISHING_TIERS[f.furnishing];
         if (tiers) {
           where.push(`(l.furnishing IS NULL OR l.furnishing = ANY(${add(tiers.flat())}::text[]) OR l.furnishing = ${add(f.furnishing)})`);
           // Exact status (or the extras recorded on the unit) first, then each tier, then units with nothing recorded.
-          const own = add(FURNISHING_KEYS[f.furnishing]);
-          const whens = tiers.map((t, i) => `WHEN l.furnishing = ANY(${add(t)}::text[]) THEN ${i + 1}`).join(" ");
-          exactFirst += `CASE WHEN l.furnishing = ${add(f.furnishing)} OR (l.furnishing IS NULL AND l.feature_keys @> ${own}::text[]) THEN 0 ${whens} WHEN l.furnishing IS NULL THEN ${tiers.length + 1} ELSE ${tiers.length + 2} END, `;
+          const keys = FURNISHING_KEYS[f.furnishing] || [];
+          const ownWhen = keys.length ? ` OR (l.furnishing IS NULL AND l.feature_keys @> ${add(keys)}::text[])` : "";
+          const whens = tiers.slice(1).map((t, i) => `WHEN l.furnishing = ANY(${add(t)}::text[]) THEN ${i + 1}`).join(" ");
+          exactFirst += `CASE WHEN l.furnishing = ANY(${add(tiers[0])}::text[])${ownWhen} THEN 0 ${whens} WHEN l.furnishing IS NULL THEN ${tiers.length} ELSE ${tiers.length + 1} END, `;
         } else {
           where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
           // Exact status first, then the units whose status is blank (Haytham 2026-11-04).

@@ -74,3 +74,38 @@ test("a blank unit that has the extras recorded counts as an exact match", async
   expect(got[2]).toBe("C3");
   expect(got.slice(0, 2).sort()).toEqual(["C1", "C2"]);
 });
+
+test('"semi furnished" lists semi first, then kitchen and AC, AC only, kitchen only, then blank', async () => {
+  const first = await mk("S1", "semi_furnished");
+  await mk("S2", "kitchen_and_ac");
+  await mk("S3", "ac_only");
+  await mk("S4", "kitchen_only");
+  await mk("S5", null);
+  await mk("S6", "furnished");
+  await mk("S7", "unfurnished");
+  const agency = await agencyOf(first);
+  expect(await ids(agency, "apartment for rent mivida semi furnished")).toEqual(["S1", "S2", "S3", "S4", "S5"]);
+});
+
+test('"furnished" lists furnished, then semi-furnished, then blank', async () => {
+  const first = await mk("U1", "semi_furnished");
+  await mk("U2", "furnished");
+  await mk("U3", null);
+  await mk("U4", "kitchen_and_ac");
+  const agency = await agencyOf(first);
+  expect(await ids(agency, "apartment for rent mivida furnished")).toEqual(["U2", "U1", "U3"]);
+});
+
+test('"fully finished" lists fully finished, then super lux, then ultra super lux, then blank; semi finished is left out', async () => {
+  const first = await mk("G1", null, { finishing: "ultra_super_lux" });
+  await mk("G2", null, { finishing: "super_lux" });
+  await mk("G3", null, { finishing: "fully_finished" });
+  await mk("G4", null);
+  await mk("G5", null, { finishing: "semi_finished" });
+  await h.query("UPDATE listings SET finishing = 'ultra_super_lux' WHERE code = 'G1'");
+  await h.query("UPDATE listings SET finishing = 'super_lux' WHERE code = 'G2'");
+  await h.query("UPDATE listings SET finishing = 'fully_finished' WHERE code = 'G3'");
+  await h.query("UPDATE listings SET finishing = 'semi_finished' WHERE code = 'G5'");
+  const agency = await agencyOf(first);
+  expect(await ids(agency, "apartment for rent mivida fully finished")).toEqual(["G3", "G2", "G1", "G4"]);
+});
