@@ -895,6 +895,9 @@ function disagreements(a, b) {
       x = (x || []).length > 0;
       y = (y || []).length > 0;
     }
+    // An unset currency means EGP, and a family of types read in another order is the same search: not disagreements.
+    if (k === "currency") (x = x || "EGP"), (y = y || "EGP");
+    if (k === "property_types") (x = [...(x || [])].sort()), (y = [...(y || [])].sort());
     if (JSON.stringify(x) !== JSON.stringify(y)) out.push(k);
   }
   return out;
@@ -972,7 +975,18 @@ function enforceInstallmentWords(parsed, text) {
   return parsed;
 }
 
+const RENT_WORD = /(^| )(ايجار|للايجار|ايجارات|rent|rental|for rent|tajeer)( |$)/;
+/** A down payment, installment or payment years only exist on a sale: with no rent word the search is a sale. */
+function enforceSaleForPayment(parsed, text) {
+  const f = parsed?.filters;
+  if (!f || f.listing_type === "sale") return parsed;
+  const pays = f.max_down_payment || f.max_installment || f.payment_installments || f.payment_years || (f.payment_down_pct !== null && f.payment_down_pct !== undefined);
+  if (pays && !RENT_WORD.test(normalizeSearch(String(text || "")))) f.listing_type = "sale";
+  return parsed;
+}
+
 module.exports = {
+  enforceSaleForPayment,
   enforceInstallmentWords,
   enforceMillionUnits,
   emptyFilters,

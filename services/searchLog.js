@@ -25,7 +25,8 @@ const ms = (v) => (Number.isFinite(Number(v)) && v !== null && v !== undefined ?
 async function record(pool, { broker, channel, text = "", parse = {}, used = null, total = 0, ids = [], relaxed = false, rerunOf = null, startedAt = null }) {
   try {
     const meta = parse.parsed?.meta || parse.local?.meta || {};
-    const { rows } = await pool.query(
+    const reasons = [...(parse.reasons || []), ...(broker.view_of ? ["admin_view"] : [])];
+    const { rows } = await require("../lib/viewGuard").runWritable(() => pool.query(
       `INSERT INTO search_log (agency_id, broker_id, channel, query_text, source, reasons, local_filters, ai_filters, used_filters,
                                unapplied, leftover, total, relaxed, result_ids, rerun_of, disagree, guesses, asked, ai_error,
                                parse_ms, db_ms, total_ms, model)
@@ -37,7 +38,7 @@ async function record(pool, { broker, channel, text = "", parse = {}, used = nul
         channel,
         cleanText(text),
         parse.source || "form",
-        parse.reasons || [],
+        reasons,
         parse.local ? JSON.stringify(parse.local.filters) : null,
         parse.ai ? JSON.stringify(parse.ai.filters) : null,
         used ? JSON.stringify(used) : null,
@@ -55,7 +56,7 @@ async function record(pool, { broker, channel, text = "", parse = {}, used = nul
         ms(parse.timings?.dbMs ?? parse.dbMs),
         ms(startedAt ? Date.now() - startedAt : null),
         parse.modelUsed ? String(parse.modelUsed).slice(0, 60) : null
-      ]
+      ])
     );
     return rows[0]?.id || null;
   } catch (err) {

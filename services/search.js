@@ -73,6 +73,8 @@ RULES:
 - بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".
 - "Lake View" is a compound: "compound": "Lake View". It is the lake-view feature ("view_lagoon") ONLY in "overlooking lake", "with lake view", "فيو بحيرة" and "فيو على بحيرة"; then do not put it in compound.
 - "20m" / "20 م" / "20M" with no word like متر, sqm or m2 means twenty million (price_max 20000000), never 20 square metres. An area is written with متر / sqm / m2, or is 30 or more.
+- "مش مفروشة" / "غير مفروشة" / "بدون فرش" / "not furnished" mean furnishing "unfurnished", never "furnished". "K/A" means kitchen and AC.
+- A down payment ("مقدم") or installment is only on a sale, so listing_type is "sale" unless the request says rent / ايجار.
 - "budget" / "بادجت" / "ميزانية" with a number is a price ceiling (price_max), never an installment. A monthly installment is set only when the request says "قسط" / "installment".
 - Names may be misspelled or written in Arabic letters; give the usual English spelling of the compound, and if you do not know a place put it in "locations" as said. Never guess a place you do not know.
 - Exclusions are NEVER filters: what follows "بدون" / "من غير" / "مش في" / "without" / "not" is left out completely ("شقة بدون مصعد" → apartment only, no elevator feature). "الدور الاخير" / "last floor" and "قانون جديد" / "new rent law" are also left out.`;
@@ -117,7 +119,7 @@ async function underAiFirstCap(pool) {
 async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true } = {}) {
   const t0 = Date.now();
   if (ctx.pool) await Vocab.ensureLoaded(ctx.pool);
-  const local = Q.fallbackParse(text);
+  const local = Q.enforceSaleForPayment(Q.fallbackParse(text), text);
   const reasons = local.meta?.reasons || [];
   // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).
   if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
@@ -139,7 +141,7 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
       ctx: free ? { pool: ctx.pool } : ctx
     });
     const raw = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
-    const parsed = Q.enforceMillionUnits(Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text), text);
+    const parsed = Q.enforceSaleForPayment(Q.enforceMillionUnits(Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text), text), text);
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
     // Phrases the filters cannot say are the parser's to report; the AI reading carries them over.
     parsed.meta = { ...(local.meta || {}), unsure: false };
@@ -336,11 +338,13 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
   const bedRank = f.bedrooms_min > 0 && (f.bedrooms_max == null || f.bedrooms_max === f.bedrooms_min)
     ? `CASE WHEN l.bedrooms - ${add(f.bedrooms_min)} = 0 THEN 0 WHEN l.bedrooms - ${add(f.bedrooms_min)} > 0 THEN l.bedrooms - ${add(f.bedrooms_min)} ELSE 100 END, `
     : "";
+  // A price in the search lists the cheapest first (units with no price last).
+  const priceRank = f.price_max || f.price_min ? "l.price_value ASC NULLS LAST, " : "";
   const sql = `
     SELECT l.*, COUNT(*) OVER() AS total_count
     FROM listings l
     WHERE ${Vis.units("l")} AND ${where.join("\n      AND ")}
-    ORDER BY ${rank} ${bedRank} ${typeRank} ${exactFirst} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
+    ORDER BY ${rank} ${bedRank} ${typeRank} ${exactFirst} ${priceRank}l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
     LIMIT ${add(limit)} OFFSET ${add(offset)}`;
   return { sql, params };
 }
