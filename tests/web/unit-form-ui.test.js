@@ -95,8 +95,9 @@ test("Next shows the server's location blocker on the compound field, and photos
 
 test("the unit page status row and action buttons are aligned by the stylesheet", () => {
   const css = require("fs").readFileSync(require("path").join(__dirname, "../../web/static/app.css"), "utf8");
-  expect(css).toContain("form[data-unit-status] { align-items: flex-end; }");
-  expect(css).toContain("#unit-actions { align-items: stretch; }");
+  expect(css).toMatch(/\[data-unit-status\] \{ display: grid;/);
+  expect(css).toMatch(/#unit-actions \{ display: grid;[^}]*align-items: stretch;/);
+  expect(css).toMatch(/#unit-actions > form\.inline \{ display: contents; \}/);
 });
 
 test("the edit page keeps its Save row in reach (sticky)", () => {

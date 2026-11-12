@@ -636,9 +636,16 @@ form[aria-busy="true"] { opacity: 0.65; cursor: progress; }
 [data-blocker] { cursor: pointer; text-decoration: underline; }
 details.more { grid-column: 1 / -1; }
 
-/* Unit page: the status dropdown and its button sit on the same line at the same height; the action buttons are one row, equal height. */
-form[data-unit-status] { align-items: flex-end; }
-form[data-unit-status] select { min-height: 48px; }
-#unit-actions { align-items: stretch; }
-#unit-actions form.inline { display: flex; margin: 0; }
-#unit-actions form.inline button, #unit-actions > .btn { min-height: 48px; }
+/* The Save button is its own progress bar while a unit saves: the fill moves across it and the label shows the percent. */
+button.saving:disabled { opacity: 1; cursor: progress; color: #fff; background: linear-gradient(90deg, #14558c var(--p, 0%), #6fa8d6 var(--p, 0%)); transition: background 0.25s linear; }
+[dir="rtl"] button.saving:disabled { background: linear-gradient(270deg, #14558c var(--p, 0%), #6fa8d6 var(--p, 0%)); }
+[data-save-status] { flex: 1 1 100%; margin: 0; }
+[data-save-status] button { margin-inline-start: 8px; }
+
+/* Unit page: the status line and the actions sit on one aligned grid, every control the same height. */
+[data-unit-status] { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+[data-unit-status] label { display: grid; gap: 4px; margin: 0; }
+[data-unit-status] select, [data-unit-status] button { min-height: 48px; margin: 0; }
+#unit-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: stretch; gap: 8px; }
+#unit-actions > form.inline { display: contents; }
+#unit-actions .btn, #unit-actions button { width: 100%; min-height: 48px; margin: 0; }
