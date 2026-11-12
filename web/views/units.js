@@ -9,7 +9,7 @@ const stripMarkdown = (s) => String(s || "").replace(/[*`_]/g, "");
 
 /** A unit card (search results, My units): code and price first, then size, payment and delivery as chips, and the
  * features on a copper strip. `selectable` adds a tick box for the bulk bar. */
-function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "", badge = "", restore = false } = {}) {
+function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "", badge = "", restore = false, thumb = null } = {}) {
   const en = lang === "en";
   const loc = en ? l.compound_en || l.details?.compound_en || l.compound || l.district : l.compound || l.compound_en || l.district;
   const size = [Describe.areaLabel(l, lang), Describe.bedsLabel(l, lang), Describe.bathsLabel(l, lang)].filter(Boolean).join(" · ");
@@ -19,7 +19,8 @@ function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "",
   const href = `/app/units/${encodeURIComponent(l.code)}`;
   return html`<li class="card result unitcard" data-code="${l.code}">
   ${selectable ? html`<input class="pick" type="checkbox" name="code" value="${l.code}" form="bulk" aria-label="${l.code}">` : ""}
-  <a class="uc-main" href="${href}">
+  <a class="uc-main${thumb ? " has-thumb" : ""}" href="${href}">
+    ${thumb ? html`<img class="uc-thumb" src="${thumb.thumb}" alt="" loading="lazy" width="96" height="72" data-full="${thumb.url}">` : ""}
     <span class="uc-top"><b class="code" dir="ltr">${l.code}</b>${badge ? html` <span class="badge" data-status-badge>${badge}</span>` : ""}<b class="uc-price">${stripMarkdown(Describe.priceLabel(l, lang) || "")}</b></span>
     <span class="uc-sub">${[Describe.typeLabel(l, lang), loc].filter(Boolean).join(" · ")}</span>
     ${size ? html`<span class="uc-size">${stripMarkdown(size)}</span>` : ""}

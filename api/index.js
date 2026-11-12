@@ -80,6 +80,9 @@ function mountApi(app, { pool }) {
   // Every refused or failed app request (4xx/5xx) is one row in the Failures list, tagged "app" (lib/failureLog.js).
   priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
+  // Data entry works on units and owners only: leads, deals, viewings, Ask and the rest are refused to that role.
+  const NOT_FOR_DATA_ENTRY = /^\/(deals|commissions|links|opened-links|viewings|ask|compare)(\/|$)/;
+  priv.use((req, res, next) => (NOT_FOR_DATA_ENTRY.test(req.path) && require("../lib/authz").isDataEntry(req.session.broker) ? res.status(403).json({ error: "forbidden" }) : next()));
   require("./units").register(priv, { pool });
   require("./today").register(priv, { pool });
   require("./search").register(priv, { pool });

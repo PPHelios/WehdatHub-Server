@@ -31,6 +31,13 @@ module.exports = {
     if (/^https?:\/\//i.test(value)) return value;
     return BASE + pathOf(value);
   },
+  thumbKey: (value) => (!value || typeof value !== "string" || /^https?:\/\//i.test(value) ? null : "thumbs/" + pathOf(value)),
+  thumbUrl: (value) => {
+    if (!value || typeof value !== "string") return null;
+    if (/^https?:\/\//i.test(value)) return value;
+    return BASE + "thumbs/" + pathOf(value);
+  },
+  uploadThumb: async () => true,
   downloadListingImage: async (keyOrUrl) => {
     if (typeof keyOrUrl !== "string" || !keyOrUrl) return null;
     const buffer = objects.get(pathOf(keyOrUrl));

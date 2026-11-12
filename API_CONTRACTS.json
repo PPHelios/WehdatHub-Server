@@ -177,6 +177,9 @@
     "lib/supabase.js": {
       "supabase": "Object",
       "photoUrl": ["value"],
+      "thumbKey": ["value"],
+      "thumbUrl": ["value"],
+      "uploadThumb": ["storagePath", "buffer"],
       "downloadListingImage": ["keyOrUrl"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
@@ -327,6 +330,7 @@
     "lib/listingStore.js": {
       "findCatalogueMatch": ["db", "agencyId", "l", "params"],
       "photosOf": ["db", "listing", "params"],
+      "coverImages": ["db", "agencyId", "listings"],
       "coverPhotos": ["db", "agencyId", "listings"],
       "findByCode": ["db", "agencyId", "code", "params"],
       "findDuplicate": ["db", "agencyId", "l", "params"],
@@ -649,7 +653,8 @@
     },
     "lib/images.js": {
       "MAX_PHOTOS": "Number",
-      "normalizeImageBuffer": ["rawBuffer"]
+      "normalizeImageBuffer": ["rawBuffer"],
+      "makeThumbBuffer": ["rawBuffer"]
     },
     "web/forms/unitForm.js": {
       "FORM_COLUMNS": "Array",

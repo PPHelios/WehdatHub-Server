@@ -85,7 +85,8 @@ test("catalogue, plan and platform follow the role", async () => {
   const br = await as("broker");
   const ow = await as("owner");
   expect((await api().get("/api/v1/catalogue").set(br)).status).toBe(200);
-  expect((await api().get("/api/v1/plan").set(br)).status).toBe(200);
+  expect((await api().get("/api/v1/plan").set(br)).status).toBe(403); // the plan and its payments are for managers and the agency owner
+  expect((await api().get("/api/v1/plan").set(ow)).status).toBe(200);
   expect((await api().get("/api/v1/usage").set(br)).status).toBe(200);
   expect((await api().get("/api/v1/library").set(br)).status).toBe(403);
   expect((await api().post("/api/v1/plan/pay").set(br).send({})).status).toBe(403);

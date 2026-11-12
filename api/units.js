@@ -29,6 +29,7 @@ const COLS = `listings.id, listings.code, listings.status, listings.title, listi
 
 const oneOf = (v, list) => (list.includes(String(v || "")) ? String(v) : "");
 const photoOf = (url) => (url ? Storage.photoUrl(url) : null);
+const thumbOf = (url) => (url ? Storage.thumbUrl(url) : null);
 
 /** A row for the app: plain names, numbers as numbers, photo as a full URL. */
 function unitView(r) {
@@ -116,7 +117,7 @@ function register(api, { pool }) {
       counts,
       limit,
       offset,
-      items: rows.map((r) => ({ ...unitView(r), mine: r.broker_id === broker.id, photo: photoOf(r.photo) }))
+      items: rows.map((r) => ({ ...unitView(r), mine: r.broker_id === broker.id, photo: photoOf(r.photo), thumb: thumbOf(r.photo) }))
     });
   });
 

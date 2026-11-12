@@ -7,6 +7,7 @@ const Shadow = require("../../services/searchShadow");
 const Search = require("../../services/search");
 const SearchLog = require("../../services/searchLog");
 const AI = require("../../lib/ai");
+const Store = require("../../lib/listingStore");
 const RateLimit = require("../../lib/rateLimit");
 const { logOperation } = require("../../lib/db");
 const { formatInterpretation } = require("../../lib/search");
@@ -117,7 +118,7 @@ function askCard({ ask, filters, q, lang, understood, logId }) {
 </div>`;
 }
 
-function resultsSection({ res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null, st = "active", switcher = "", restorable = new Set() }) {
+function resultsSection({ covers = new Map(), res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null, st = "active", switcher = "", restorable = new Set() }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
@@ -138,7 +139,7 @@ ${filters.code || st !== "active" || isDataEntry(Vis.viewer()) ? "" : html`<p><a
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { thumb: covers.get(r.id), ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
   ${pager(token, page, res.total, lang, sl, st)}
 </section>`;
 }
@@ -232,7 +233,7 @@ function register(web, { pool, page }) {
       }
       results = out.ask
         ? askCard({ ask: out.ask, filters, q, lang, understood, logId })
-        : resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
+        : resultsSection({ covers: await Store.coverImages(pool, broker.agency_id, out.rows), res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
       searchUrl = `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,
