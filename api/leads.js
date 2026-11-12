@@ -8,6 +8,11 @@ const Card = require("../domain/leadCard");
 const Stages = require("../domain/leadStages");
 const RateLimit = require("../lib/rateLimit");
 const ReadCaps = require("../lib/readCaps");
+const AI = require("../lib/ai");
+const Phone = require("../domain/phone");
+const Intake = require("../domain/leadIntake");
+const LeadIntake = require("../lib/leadIntake");
+const { logOperation } = require("../lib/db");
 
 const PAGE = 20;
 const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step"];
@@ -85,6 +90,26 @@ function register(api, { pool }) {
       lead: leadView(t.lead),
       timeline: t.rows.filter((e) => !e.undone_at).map((e) => ({ id: String(e.id), kind: e.kind, at: new Date(e.created_at).toISOString(), by: e.broker_name || null, text: e.data?.text || e.data?.note || null, stage: e.data?.stage || null }))
     });
+  });
+
+  // Fill a lead form from a pasted or shared message (nothing is saved): name, phones, kind, source and a note.
+  api.post("/leads/extract", async (req, res) => {
+    const { broker } = req.session;
+    const lang = broker.preferred_lang === "en" ? "en" : "ar";
+    const text = String(req.body?.message || "").trim().slice(0, 4000);
+    if (!text) return res.status(400).json({ error: "nothing_to_read" });
+    const gate = await RateLimit.hit(pool, `lead_extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker);
+    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    let ex = { phones: [], name: null, kind: null, source: null, note: null };
+    try {
+      ex = await LeadIntake.extractLead(AI, { text, voice: null, lang, ctx: { pool, broker } });
+    } catch (err) {
+      console.warn("App lead extraction failed:", err.message);
+    }
+    const found = (ex.phones || []).map((p) => Phone.toE164(p)).filter(Boolean);
+    const phones = (found.length ? found : Intake.findPhones(text)).slice(0, 3).map((p) => Phone.displayPhone(p).replace(/\s/g, ""));
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "app_lead_extract", metadata: { text: true } });
+    res.json({ name: ex.name || "", phones, kind: ex.kind || "buyer", source: ex.source || "", note: ex.note || "" });
   });
 
   api.post("/leads", async (req, res) => {
