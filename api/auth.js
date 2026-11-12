@@ -4,6 +4,7 @@
 
 const WebAuth = require("../lib/webAuth");
 const RateLimit = require("../lib/rateLimit");
+const Phone = require("../domain/phone");
 const Onboarding = require("../lib/onboarding");
 const { notifyPreferred } = require("../lib/dispatcher");
 const { logOperation: logOp } = require("../lib/db");
@@ -22,6 +23,15 @@ const BROKER_BY_PHONE = `SELECT id, agency_id, name, phone_number, phone_normali
 const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar" });
 const agencyView = (a) => ({ id: a.id, name: a.name, slug: a.slug, logoUrl: a.logo_url || null });
 
+/** True only for the demo broker (demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true"). */
+function isDemoBroker(env, broker) {
+  if (String(env.DEMO_LOGIN_ENABLED || "").toLowerCase() !== "true") return false;
+  if (!env.DEMO_LOGIN_PHONE || !broker) return false;
+  const phone = Phone.normalizePhone(env.DEMO_LOGIN_PHONE);
+  if (!phone || String(broker.phone_normalized || "") !== phone) return false;
+  return String(broker.agency_id) === String(env.DEMO_LOGIN_AGENCY_ID || "").trim();
+}
+
 function register(api, { pool }) {
   api.post("/auth/code/request", async (req, res) => {
     const ipGate = await RateLimit.hit(pool, `login_request:ip:${req.ip}`, RateLimit.LIMITS.loginRequestIp);
@@ -31,7 +41,8 @@ function register(api, { pool }) {
       const phoneGate = await RateLimit.hit(pool, `login_request:phone:${phone}`, RateLimit.LIMITS.loginRequestPhone);
       if (!phoneGate.allowed) return res.set("Retry-After", String(phoneGate.retryAfterSec)).status(429).json({ error: "too_many" });
       const broker = (await pool.query(BROKER_BY_PHONE, [phone])).rows[0];
-      if (broker) {
+      // The demo number never gets a real code: it signs in only with the saved demo code.
+      if (broker && !isDemoBroker(process.env, broker)) {
         const code = await WebAuth.issueLoginCode(pool, broker);
         const lang = broker.preferred_lang || "ar";
         const sent = await notifyPreferred(broker, t("web_login_code", lang, { code, minutes: WebAuth.LOGIN_CODE_TTL_MINUTES }), { pool, kind: "web_login_link", action: "sign_in" });
@@ -48,14 +59,15 @@ function register(api, { pool }) {
     const phoneGate = await RateLimit.hit(pool, `login_code_try:phone:${phone}`, { limit: 5, windowSec: 900 });
     if (!phoneGate.allowed) return res.set("Retry-After", String(phoneGate.retryAfterSec)).status(429).json({ error: "too_many" });
     const found = (await pool.query(BROKER_BY_PHONE, [phone])).rows[0];
-    const broker = await WebAuth.consumeLoginCode(pool, found, req.body?.code);
+    const demo = WebAuth.demoLoginAccepted(process.env, found, req.body?.code);
+    const broker = demo ? found : await WebAuth.consumeLoginCode(pool, found, req.body?.code);
     if (!broker) {
       logOperation(pool, { operation_type: "api_login_code", status: "failed", metadata: { ip: req.ip } });
       return res.status(401).json({ error: "invalid_code" }); // wrong, expired and used read the same
     }
     const { sid, expiresAt } = await WebAuth.createSession(pool, broker, { userAgent: req.get("user-agent") });
     const session = await WebAuth.getSession(pool, sid);
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "api_login_code", metadata: { ip: req.ip } });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "api_login_code", metadata: demo ? { ip: req.ip, demo: true } : { ip: req.ip } });
     return res.json({ token: sid, expiresAt, broker: brokerView(session.broker), agency: agencyView(session.agency) });
   });
 

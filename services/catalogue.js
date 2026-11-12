@@ -741,7 +741,7 @@ async function linkOpens(url, { fetchImpl = fetch, safe = require("../lib/flyerA
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), CHECK_TIMEOUT_MS);
     try {
-      const res = await fetchImpl(url, { method, redirect: "follow", signal: ctl.signal, headers: method === "GET" ? { Range: "bytes=0-0" } : {} });
+      const res = await fetchImpl(url, { method, redirect: "manual", signal: ctl.signal, headers: method === "GET" ? { Range: "bytes=0-0" } : {} });
       return res.status;
     } finally {
       clearTimeout(timer);

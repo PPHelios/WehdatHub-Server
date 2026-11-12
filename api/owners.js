@@ -6,6 +6,7 @@ const Owners = require("../services/unitOwners");
 const Portfolio = require("../services/privatePortfolio");
 const Store = require("../lib/listingStore");
 const Vis = require("../lib/visibility");
+const ReadCaps = require("../lib/readCaps");
 const { isDataEntry, isAgencyOwner } = require("../lib/authz");
 
 const STATUS = { forbidden: 403, not_found: 404, duplicate: 409 };
@@ -23,6 +24,8 @@ function register(api, { pool }) {
     const b = req.session.broker;
     const page = Math.max(0, parseInt(req.query.page, 10) || 0);
     const list = await Owners.listFor(pool, b, { q: String(req.query.q || "").slice(0, 80), limit: 50, offset: page * 50, onlyPrivate: req.query.private === "1" && isAgencyOwner(b) });
+    const cap = await ReadCaps.takeOwnerPhones(pool, b, list.rows.filter((o) => (o.phones || []).length).length, { channel: "app", ref: "owner_list" });
+    if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
     res.json({ items: list.rows, more: list.more });
   });
 
@@ -38,6 +41,10 @@ function register(api, { pool }) {
     const b = req.session.broker;
     const owner = await Owners.getFor(pool, b, req.params.id);
     if (!owner) return fail(res, "not_found");
+    if ((owner.phones || []).length) {
+      const cap = await ReadCaps.takeOwnerPhones(pool, b, 1, { channel: "app", ref: owner.code || null });
+      if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
+    }
     const [events, lead] = await Promise.all([Owners.history(pool, b, owner.id), isDataEntry(b) ? null : Owners.leadFor(pool, b, owner)]);
     return res.json({ owner, events, lead: lead ? { ref: lead.ref } : null });
   });

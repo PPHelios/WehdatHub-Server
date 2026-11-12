@@ -63,6 +63,8 @@ function register(web, { pool, page }) {
     const q = String(req.query.q || "").slice(0, 80);
     const onlyPrivate = req.query.private === "1" && isAgencyOwner(broker);
     const list = await Owners.listFor(pool, broker, { q, limit: PAGE, offset: n * PAGE, onlyPrivate });
+    const cap = await require("../../lib/readCaps").takeOwnerPhones(pool, broker, list.rows.filter((o) => (o.phones || []).length).length, { channel: "web", ref: "owner_list" });
+    if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).type("text/plain").send(L(lang, "وصلت للحد اليومي لعرض أرقام الملّاك. جرّب بكرة.", "You have reached today's limit for viewing owner numbers. Try again tomorrow."));
     const pendingCount = isDataEntry(broker) || isManager(broker) || isAgencyOwner(broker) ? (await Owners.pendingFor(pool, broker)).length : 0;
     const dataEntryOn = isAgencyOwner(broker) ? await Owners.dataEntryOwnersOn(pool, broker.agency_id) : false;
     return page(req, res, {
@@ -121,6 +123,10 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
     if (isDataEntry(broker) && !(await Owners.dataEntryOwnersOn(pool, broker.agency_id))) return res.redirect(303, "/app/units");
     const owner = await Owners.getFor(pool, broker, req.params.id);
     if (!owner) return next();
+    if ((owner.phones || []).length) {
+      const cap = await require("../../lib/readCaps").takeOwnerPhones(pool, broker, 1, { channel: "web", ref: owner.code || null });
+      if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).type("text/plain").send(L(lang, "وصلت للحد اليومي لعرض أرقام الملّاك. جرّب بكرة.", "You have reached today's limit for viewing owner numbers. Try again tomorrow."));
+    }
     const manager = isManager(broker);
     const lead = await Owners.leadFor(pool, broker, owner);
     const events = await Owners.history(pool, broker, owner.id);
