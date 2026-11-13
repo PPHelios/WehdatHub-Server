@@ -4,7 +4,6 @@
 
 const { html } = require("./html");
 
-const fmtDate = (iso, en) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(en ? "en-GB" : "ar-EG", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
 const url = (code) => `/app/units/${encodeURIComponent(code)}`;
 
 /** Old units: a row each opens the unit, with the unit's own Sold / Archive / Still available buttons there. */
@@ -16,15 +15,6 @@ function oldUnitsCard(c, en) {
   <p class="muted">${en ? "Nobody has confirmed these for 21 days. Open a unit to mark it sold, archived or still available." : "محدش أكدها بقالها 21 يوم. افتح الوحدة وغيّر حالتها: اتباعت، أرشيف أو لسه متاحة."}</p>
   <ul class="rows">${o.items.map((u) => html`<li><a class="listrow" href="${url(u.code)}"><span><b>${u.code}</b> · ${u.line}</span><span class="muted">${u.hidden ? (en ? "hidden" : "مخفية") : en ? `${u.days} days` : `${u.days} يوم`}</span></a></li>`)}</ul>
   ${o.total > o.items.length ? html`<a class="btn secondary" href="/app/units?status=active">${en ? `${o.total - o.items.length} more` : `${o.total - o.items.length} كمان`}</a>` : ""}
-</section>`;
-}
-
-function leaseCard(c, en) {
-  if (!c?.leases) return "";
-  return html`<section class="card stack" data-today-card="leases">
-  <h2>${en ? `Leases ending soon (${c.leases.total})` : `إيجارات قربت تخلص (${c.leases.total})`}</h2>
-  <ul class="rows">${c.leases.items.map((l) => html`<li class="row between"><a class="grow listrow" href="${url(l.code)}"><span><b>${l.code}</b>${l.tenant ? html` · ${l.tenant}` : ""}</span><span class="muted">${fmtDate(l.date, en)} · ${en ? `${l.days} days` : `${l.days} يوم`}</span></a>
-    <form method="post" action="/app/today/dismiss"><input type="hidden" name="kind" value="lease"><input type="hidden" name="key" value="${l.key}"><button type="submit" class="secondary small" aria-label="${en ? "Hide" : "إخفاء"}">✕</button></form></li>`)}</ul>
 </section>`;
 }
 
@@ -63,7 +53,7 @@ function infoCards(c, en) {
 
 /** All the cards of a person's Today. */
 function render(cards, en) {
-  return html`${infoCards(cards, en)}${leaseCard(cards, en)}${oldUnitsCard(cards, en)}`;
+  return html`${infoCards(cards, en)}${oldUnitsCard(cards, en)}`;
 }
 
 module.exports = { render, oldUnitsCard };

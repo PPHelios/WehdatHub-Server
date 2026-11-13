@@ -59,7 +59,6 @@ test("a broker with nothing waiting gets an empty list, not an error", async () 
 });
 
 const old = (days) => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
-const post = async (who, path, body) => request(h.app.app).post(`/api/v1${path}`).set("Authorization", `Bearer ${await token(who)}`).send(body);
 
 test("old units: a broker sees theirs, a manager and data entry see the agency's, private units stay hidden, status never changes", async () => {
   await h.insertListing({ code: "O-1", confirmed_at: old(30) });
@@ -79,20 +78,5 @@ test("old units: a broker sees theirs, a manager and data entry see the agency's
 
 test("a card with nothing in it is null", async () => {
   const c = (await get("broker")).body.cards;
-  expect(c).toMatchObject({ oldUnits: null, leases: null, ops: null, approvals: null, commissions: null });
-});
-
-test("leases show three months before the end, only to the right people, and a dismissal hides one for that person", async () => {
-  const unit = await h.insertListing({ code: "R-1", listing_type: "rent", confirmed_at: old(1) });
-  const start = new Date(Date.now() - 300 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  await h.query("INSERT INTO leases (agency_id, listing_id, broker_id, tenant_name, start_date, months, remind) VALUES ($1, $2, $3, 'Ali', $4, 12, false)", [unit.agency_id, unit.id, h.BROKERS.broker.id, start]);
-  const lease = (await get("broker")).body.cards.leases;
-  expect(lease.items[0]).toMatchObject({ code: "R-1", tenant: "Ali", kind: "end" });
-  expect(lease.items[0].days).toBeLessThanOrEqual(90);
-  expect((await get("colleague")).body.cards.leases).toBeNull();
-  expect((await get("manager")).body.cards.leases.total).toBe(1);
-  expect((await post("broker", "/today/dismiss", { kind: "lease", key: lease.items[0].key })).status).toBe(200);
-  expect((await get("broker")).body.cards.leases).toBeNull();
-  expect((await get("manager")).body.cards.leases.total).toBe(1);
-  expect((await post("broker", "/today/dismiss", { kind: "lease", key: "bad key!" })).status).toBe(422);
+  expect(c).toMatchObject({ oldUnits: null, ops: null, approvals: null, commissions: null });
 });

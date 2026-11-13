@@ -20,11 +20,6 @@ function welcomeCard(w, en) {
 }
 
 function register(web, { pool, page }) {
-  // Hide a lease card from this person's Today.
-  web.post("/today/dismiss", async (req, res) => {
-    await Today.dismiss(pool, req.session.broker, String(req.body?.kind || ""), String(req.body?.key || ""));
-    return res.redirect(303, "/app/");
-  });
   web.post("/onboarding/welcome", async (req, res) => {
     await Onboarding.closeWelcome(pool, req.session.broker);
     return res.redirect(303, "/app/");

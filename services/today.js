@@ -1,5 +1,5 @@
 // services/today.js — The one Today for the app and the website: the broker's tasks (services/dailyDigest.js briefData) plus
-// the cards each role needs (old units, target, leases, ops, commissions, approvals). A card with nothing in it is null, so
+// the cards each role needs (old units, target, ops, commissions, approvals). A card with nothing in it is null, so
 // Today stays short. Everything reads behind lib/visibility; unit status is never changed here (the person edits it or uses
 // the unit's own buttons).
 "use strict";
@@ -8,7 +8,6 @@ const Digest = require("./dailyDigest");
 const Targets = require("./targets");
 const Owners = require("./unitOwners");
 const Describe = require("../domain/describe");
-const Lz = require("../domain/leases");
 const Vis = require("../lib/visibility");
 const Authz = require("../lib/authz");
 const { refLabel } = require("../domain/leadCard");
@@ -16,12 +15,9 @@ const { refLabel } = require("../domain/leadCard");
 const MAX_TASKS = 20;
 const CARD_ITEMS = 5;
 const OLD_AFTER_DAYS = 21; // the "Still available?" question starts here (services/unitChecks.js)
-const LEASE_END_DAYS = 90; // three months before the lease ends
-const LEASE_INCREASE_DAYS = 30;
 const DAY = 24 * 3600 * 1000;
 const VOUCHED = "COALESCE(l.confirmed_at, l.updated_at, l.created_at)";
 const digits = (p) => String(p || "").replace(/[^0-9]/g, "");
-const cairoDay = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 
 function tasksOf(d) {
   const seen = new Set();
@@ -68,28 +64,6 @@ async function oldUnits(pool, v, ids, now) {
   };
 }
 
-/** Lease ends in the next 90 days and yearly increases in the next 30, not dismissed by this person. */
-async function leaseCard(pool, v, ids, now) {
-  const args = [v.agency_id, v.id];
-  if (ids) args.push(ids);
-  const { rows } = await pool.query(
-    `SELECT z.*, l.code FROM leases z JOIN listings l ON l.id = z.listing_id
-      WHERE ${Vis.units("l")} AND z.agency_id = $1 AND l.status <> 'deleted'${ids ? " AND (z.broker_id = ANY($3::uuid[]) OR l.broker_id = ANY($3::uuid[]))" : ""}
-        AND NOT EXISTS (SELECT 1 FROM today_dismissals d WHERE d.broker_id = $2 AND d.kind = 'lease' AND d.key = l.code || ':end:' || to_char(z.start_date + make_interval(months => z.months), 'YYYY-MM-DD'))`,
-    args
-  );
-  const today = Date.parse(`${cairoDay(now)}T00:00:00Z`);
-  const items = [];
-  for (const r of rows) {
-    const end = Lz.endDate(r);
-    const days = Math.round((end.getTime() - today) / DAY);
-    if (days >= 0 && days <= LEASE_END_DAYS) items.push({ key: `${r.code}:end:${end.toISOString().slice(0, 10)}`, code: r.code, tenant: r.tenant_name || null, kind: "end", date: end.toISOString().slice(0, 10), days });
-  }
-  items.sort((a, b) => a.days - b.days);
-  if (!items.length) return null;
-  return { total: items.length, items: items.slice(0, CARD_ITEMS) };
-}
-
 /** Leads nobody holds, nobody contacted for a day, and overdue follow-ups: the agency (manager, owner) or the team (team lead). */
 async function opsCard(pool, v, now) {
   if (Authz.isDataEntry(v) || (!Authz.isManager(v) && !Authz.isTeamLead(v))) return null;
@@ -120,7 +94,7 @@ async function build(pool, viewer, now = new Date()) {
     : await Digest.briefData(pool, viewer, now);
   const tasks = tasksOf(d);
   const ids = await scopeIds(pool, viewer);
-  const [old, leases, ops, approvals] = await Promise.all([oldUnits(pool, viewer, ids, now), dataEntry ? null : leaseCard(pool, viewer, ids, now), opsCard(pool, viewer, now), approvalsCard(pool, viewer)]);
+  const [old, ops, approvals] = await Promise.all([oldUnits(pool, viewer, ids, now), opsCard(pool, viewer, now), approvalsCard(pool, viewer)]);
   const t = d.target;
   const com = d.commissions;
   return {
@@ -130,7 +104,6 @@ async function build(pool, viewer, now = new Date()) {
     cards: {
       oldUnits: old,
       target: t ? { deals: t.deals, commission: t.commission, targetDeals: t.target_deals, targetCommission: t.target_commission, daysLeft: t.month.days - t.month.dayOf + 1 } : null,
-      leases,
       ops,
       commissions: com && (com.overdue.length || com.registrations.length) ? { overdue: com.overdue.length, registrations: com.registrations.length } : null,
       approvals
@@ -138,16 +111,9 @@ async function build(pool, viewer, now = new Date()) {
   };
 }
 
-/** A person hides a card from their own Today. */
-async function dismiss(pool, viewer, kind, key) {
-  if (kind !== "lease" || !/^[A-Za-z0-9._:-]{1,80}$/.test(String(key || ""))) return { error: "bad_request" };
-  await pool.query("INSERT INTO today_dismissals (broker_id, kind, key) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [viewer.id, kind, key]);
-  return { ok: true };
-}
-
 /** Just the old units card (a data entry person's Units page shows it above the list). */
 async function oldUnitsFor(pool, viewer, now = new Date()) {
   return oldUnits(pool, viewer, await scopeIds(pool, viewer), now);
 }
 
-module.exports = { build, tasksOf, dismiss, oldUnitsFor, OLD_AFTER_DAYS, LEASE_END_DAYS };
+module.exports = { build, tasksOf, oldUnitsFor, OLD_AFTER_DAYS };
