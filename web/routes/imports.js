@@ -290,14 +290,14 @@ ${tabs("import_tab", [
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>💬 ${L(lang, "بوستات الجروبات", "Group posts")}</h2>
   <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
-  <label>${L(lang, "أو ارفع تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
+  <label>${L(lang, "أو حمل تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
   <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
   <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
   <button type="submit">${L(lang, "اقرأ البوستات", "Read the posts")}</button>
 </form>`],
   [html`<span class="ti">📷</span>${L(lang, "شات بالصور", "Chat with photos")}`, html`${err(2)}<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-start-url="/app/import/match/start" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}">
   <h2>📷 ${L(lang, "تطابق الصور من شات واتساب", "Match photos from a WhatsApp chat")}</h2>
-  <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيترفع، فمفيش حد أقصى لحجمه. بنوزع كل صورة على وحدتها حسب الكود في الوصف أو حسب الترتيب والراسل، وإنت بتراجع قبل أي رفع. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its unit by the code in the description, or by order and sender, and you review it before anything is sent. Only the photos you choose are saved.")}</p>
+  <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيتحمل، فمفيش حد أقصى لحجمه. بنوزع كل صورة على وحدتها حسب الكود في الوصف أو حسب الترتيب والراسل، وإنت بتراجع قبل أي رفع. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its unit by the code in the description, or by order and sender, and you review it before anything is sent. Only the photos you choose are saved.")}</p>
   <input type="file" accept=".zip,.txt,application/zip,text/plain" data-cp-file>
   <label>${L(lang, "الوحدات", "Units")}<select data-cp-mode>
     <option value="codes">${L(lang, "الوحدات اللي في التطبيق (بالكود)", "Units already in the app (by code)")}</option>
@@ -352,7 +352,7 @@ ${tabs("import_tab", [
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
+    if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.sheet || [])[0];
     let sheet;
     if (file?.buffer && file.buffer.length > BIG_SERVER_SHEET) {
@@ -374,7 +374,7 @@ ${tabs("import_tab", [
     if (missing.length) {
       const name = { code: L(lang, "الكود", "Code"), price_value: L(lang, "السعر", "Price"), area_value: L(lang, "المساحة", "Area") };
       const list = missing.map((k) => name[k] || k).join("، ");
-      return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="empty-column">⚠️ ${L(lang, `العمود ده فاضي في كل الصفوف: ${list}. ملفش اتحفظ حاجة. ضيف القيم وارفع تاني.`, `These columns are empty on every row: ${list}. Nothing was saved. Fill them in and upload again.`)}</p>` }), 422);
+      return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="empty-column">⚠️ ${L(lang, `العمود ده فاضي في كل الصفوف: ${list}. ملفش اتحفظ حاجة. ضيف القيم وحمل تاني.`, `These columns are empty on every row: ${list}. Nothing was saved. Fill them in and upload again.`)}</p>` }), 422);
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
     const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped, skipped: sheet.skipped || [] }, { filename: String(file.originalname || "").slice(0, 120) });
@@ -391,7 +391,7 @@ ${tabs("import_tab", [
     const { broker } = req.session;
     const say = (status, message, extra = {}) => res.status(status).json({ message, ...extra });
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return say(429, L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    if (!gate.allowed) return say(429, L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
     const tabsIn = Array.isArray(req.body?.tabs) ? req.body.tabs : null;
     if (!tabsIn || !tabsIn.length || tabsIn.length > SheetGrid.MAX_TABS) return say(422, L(lang, "الملف مفيهوش تابات صالحة.", "The file has no usable tabs."));
     let rawRows = 0;
@@ -433,7 +433,7 @@ ${tabs("import_tab", [
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
+    if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
     const found = Chat.candidatePosts(text, { since: req.body.since });

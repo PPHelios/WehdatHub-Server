@@ -56,13 +56,13 @@ const TIPS = {
     ["المديرين بيشوفوا صفقات الفريق كله.", "Managers see the whole team's deals."]
   ],
   import: [
-    ["ارفع شيت إكسيل أو شات واتساب فيه وحداتك.", "Upload an Excel sheet or a WhatsApp chat with your units."],
+    ["حمل شيت إكسيل أو شات واتساب فيه وحداتك.", "Upload an Excel sheet or a WhatsApp chat with your units."],
     ["راجع اللي اتقرا قبل الحفظ.", "Review what was read before saving."],
     ["الوحدات المكررة بتتعلّم عشان متتضافش مرتين.", "Duplicates are flagged so nothing is added twice."]
   ],
   catalogue: [
     ["مشاريع المطورين بأسعارها وأنظمة السداد.", "Developers' projects with prices and payment plans."],
-    ["المديرين بيرفعوا شيت الأسعار والبروشور والصور.", "Managers upload price sheets, brochures and photos."],
+    ["المديرين بيحملوا شيت الأسعار والبروشور والصور.", "Managers upload price sheets, brochures and photos."],
     ["قراية قوايم الأسعار (PDF وصور) بالذكاء الاصطناعي ليها حد صفحات شهري ومقفولة لحد ما صاحب التطبيق يفتحها؛ شيت إكسيل بيتقرا ببلاش.", "AI reading of price lists (PDF and photos) has a monthly page limit and is off until the app owner switches it on; an Excel sheet is read free."],
     ["ابعت للعميل رابط المشروع أو الوحدة.", "Send the client the project or unit link."]
   ],

@@ -61,7 +61,7 @@ const SECTIONS = [
     title: ["👤 العملاء", "👤 Clients"],
     items: [
       ["ابعت «ليد» ومعاه رسالة العميل أو فويس، أو حوّل رسالته، أو ابعت رقمه. البوت يعمل كارت العميل بعد ما تأكد.", "Send \"lead\" with the client's message or a voice note, forward their message, or send their number. The bot makes the client's card once you confirm."],
-      ["عملاء إعلانات فيسبوك: المدير يرفع ملف CSV من Meta Leads Center في «العملاء ← استيراد».", "Facebook ad leads: a manager uploads the Meta Leads Center CSV under \"Leads → Import\"."],
+      ["عملاء إعلانات فيسبوك: المدير يحمل ملف CSV من Meta Leads Center في «العملاء ← استيراد».", "Facebook ad leads: a manager uploads the Meta Leads Center CSV under \"Leads → Import\"."],
       ["أزرار الكارت: 📞 كلمته، 📅 متابعة، 🔄 المرحلة. كل مرحلة بتتسجل في التقارير.", "Card buttons: 📞 Called, 📅 Follow-up, 🔄 Stage. Every stage counts in the reports."],
       ["محتاج مدير في عميل؟ من الكارت دوس 🔄 المرحلة واختار «🙋 محتاج مدير»، واكتب للمدير محتاج إيه (اختياري، أو ابعت من غير ملاحظة). المديرين بيتبلغوا فوراً.", "Need a manager on a client? From the card tap 🔄 Stage and choose \"🙋 Needs manager\", then write what you need (optional, or send it without a note). The managers are alerted straight away."],
       ["أو قول في فويس أو اكتب «محتاج المدير في ليد أحمد»، والبوت يعرضلك التأكيد قبل ما يحفظ.", "Or say or type \"I need my manager on Ahmed's lead\"; the bot shows you a confirmation before it saves."],

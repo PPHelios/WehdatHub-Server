@@ -705,6 +705,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   listing_id uuid,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   read_at timestamp with time zone,
+  dismissed_at timestamp with time zone,
   channel text,
   reason text,
   status text DEFAULT 'pending'::text NOT NULL,

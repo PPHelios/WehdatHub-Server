@@ -48,7 +48,7 @@ const READ_ERRORS = {
   too_many_pages: [`${Reading.MAX_PAGES} صفحات بالكتير في المرة.`, `At most ${Reading.MAX_PAGES} pages at a time.`],
   CONFIRM: ["القراية دي كبيرة. اتأكد من عدد الصفحات والتكلفة وادوس اقرا تاني (هتظهر رسالة تأكيد).", "This is a large read. Check the page count and cost, then press Read again and confirm."],
   ALLOWANCE: ["رصيد الشهر مش كفاية للملف ده.", "This month's credits aren't enough for this file."],
-  AI_FAILED: ["القراءة فشلت؛ جرب تاني أو ارفع شيت إكسيل.", "Reading failed; try again or upload an Excel sheet."],
+  AI_FAILED: ["القراءة فشلت؛ جرب تاني أو حمل شيت إكسيل.", "Reading failed; try again or upload an Excel sheet."],
   NO_ROWS: ["ملقيناش جدول أسعار في الصفحات دي.", "No price table found on those pages."]
 };
 const ROW_ERRORS = {
@@ -96,7 +96,7 @@ function syncForm(lang, base, project) {
 function readForm(lang, base, reading) {
   if (!reading?.enabled) return "";
   return html`<form method="post" action="${base}/sheets/read" enctype="multipart/form-data" class="stack" data-ai-read>
-    <label>🤖 ${L(lang, "أو ارفع قايمة الأسعار PDF أو صورها", "Or upload the price list as a PDF or photos")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label>
+    <label>🤖 ${L(lang, "أو حمل قايمة الأسعار PDF أو صورها", "Or upload the price list as a PDF or photos")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label>
     <label>${L(lang, "صفحات الأسعار في الـ PDF", "Price pages in the PDF")} <input name="pages" dir="ltr" placeholder="2-4, 7" maxlength="40"></label>
     <input type="hidden" name="confirmed" value="0" data-confirmed>
     <p class="muted" data-ai-estimate aria-live="polite">${L(lang, `كل صفحة = ${reading.credits_per_page} رصيد (المتبقي ${reading.credits_left}). اختار الملف والصفحات وهيظهر التكلفة بالظبط قبل ما تدوس.`, `Each page = ${reading.credits_per_page} credits (${reading.credits_left} left). Pick the file and pages and the exact cost shows before you press.`)}</p>
@@ -118,7 +118,7 @@ function pricesSection(lang, manager, { project, units, sheets, increases, phase
   ${priced.length ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "كود المطور", "Developer code")}</th><th>${L(lang, "النوع", "Type")}</th><th>${L(lang, "المساحة", "Area")}</th><th>${L(lang, "السعر", "Price")}</th><th>${L(lang, "للمتر", "Per m²")}</th></tr></thead>
   <tbody>${priced.map((u) => html`<tr data-unit-price="${u.code}"><td><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a></td><td dir="ltr">${u.developer_unit_code || (u.inventory_type === "developer_model" ? L(lang, "موديل", "Model") : "—")}</td><td>${typeLabel(u.property_type)}${u.bedrooms !== null && u.bedrooms !== undefined ? ` · ${u.bedrooms} ${L(lang, "غرف", "bd")}` : ""}</td><td dir="ltr">${u.area_value ? `${Number(u.area_value)}${u.details?.area_to ? `–${u.details.area_to}` : ""}` : "—"}</td><td>${u.details?.price_from ? L(lang, "من ", "from ") : ""}${money(Number(u.price_value), lang)}${u.status === "sold" ? html` <span class="muted">(${L(lang, "مباعة", "sold")})</span>` : ""}</td><td>${u.area_value ? money(Math.round(Number(u.price_value) / Number(u.area_value)), lang) : "—"}</td></tr>`)}</tbody></table></div>` : ""}
   ${manager ? html`<form method="post" action="${base}/sheets" enctype="multipart/form-data" class="stack" data-sheet-upload data-progress>
-    <label>${L(lang, "ارفع شيت المطور (.xlsx أو CSV)", "Upload the developer's sheet (.xlsx or CSV)")} <input type="file" name="sheet" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+    <label>${L(lang, "حمل شيت المطور (.xlsx أو CSV)", "Upload the developer's sheet (.xlsx or CSV)")} <input type="file" name="sheet" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
     <p class="muted">${L(lang, "الأعمدة: كود الوحدة، النوع، المبنى أو المرحلة، الدور، المساحة (أو من–إلى)، الغرف، الحديقة، الروف، السعر، الحالة. صف من غير كود = موديل «يبدأ من». هتشوف الجديد والمتغير قبل أي حفظ.", "Columns: unit code, type, building or phase, floor, area (or from–to), bedrooms, garden, roof, price, status. A row without a code is a model (\"from\" price). You see what is new and what changed before anything is saved.")}</p>
     <p class="muted">${L(lang, "المطلوب في كل صف: السعر بس.", "Required in each row: the price only.")} <a href="/app/static/samples/price-sheet-sample.csv" download>${L(lang, "نزّل شيت مثال", "Download a sample sheet")}</a></p>
     <button type="submit" class="secondary">${L(lang, "معاينة الشيت", "Preview the sheet")}</button>
@@ -171,7 +171,7 @@ function register(web, { pool, page }) {
     const broker = req.session.broker;
     if (!isManager(broker)) return forbidden(req, res);
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
     const file = req.files?.sheet?.[0];
     if (!file) return res.redirect(303, back(req, "sheet_error=NOT_XLSX"));
     const r = await PriceSheets.upload(pool, broker, req.params.id, file.buffer, { fileName: file.originalname });
@@ -186,7 +186,7 @@ function register(web, { pool, page }) {
     const broker = req.session.broker;
     if (!isManager(broker)) return forbidden(req, res);
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
     // A large read needs the manager's yes to the page count and cost (the form asks; this keeps a form without it honest).
     if (req.body.confirmed !== "1") {
       const e = await PriceReading.estimate(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });

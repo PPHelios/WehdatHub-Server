@@ -18,7 +18,7 @@ const uploadDoc = uploads([DOC], { maxMb: 25 });
 Session.allowMultipart(/^\/catalogue\/projects\/[^/]+\/gallery$/);
 
 const ERRORS = {
-  OFF: ["ملف PDF محتاج قراءة الملفات تكون مفعّلة. ارفع صور.", "A PDF needs document reading switched on. Upload photos instead."],
+  OFF: ["ملف PDF محتاج قراءة الملفات تكون مفعّلة. حمل صور.", "A PDF needs document reading switched on. Upload photos instead."],
   NO_FILE: ["اختار صور أو ملف PDF.", "Choose photos or a PDF."],
   ONE_PDF: ["ملف PDF واحد بس في المرة.", "One PDF at a time."],
   NOT_PDF: ["الملف ده مش PDF مقروء.", "That file isn't a readable PDF."],
@@ -77,12 +77,12 @@ function gallerySection(lang, manager, data, { reading = null, query = {} } = {}
     : html`<p class="muted">${L(lang, "لسه مفيش صور.", "No photos yet.")}</p>`}
   ${manager
     ? html`<form method="post" action="${base}" enctype="multipart/form-data" class="stack" data-gallery-upload>
-    <label>${L(lang, `ارفع صور (لحد ${G.MAX_FILES}) أو PDF`, `Upload photos (up to ${G.MAX_FILES}) or a PDF`)} <input type="file" name="doc" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required></label>
+    <label>${L(lang, `حمل صور (لحد ${G.MAX_FILES}) أو PDF`, `Upload photos (up to ${G.MAX_FILES}) or a PDF`)} <input type="file" name="doc" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required></label>
     <label>${L(lang, "الصفحات (للـ PDF)", "Pages (for a PDF)")} <input name="pages" dir="ltr" placeholder="1-6" maxlength="40"></label>
     <p class="muted">${reading?.enabled
       ? L(lang, `الذكاء الاصطناعي بيفرز كل صورة (منظور، خدمات، مخطط عام، مخطط وحدة) ويربط المخططات بالوحدات حسب النوع والمساحة. من صفحات الشهر (فاضل ${reading.left}).`, `AI sorts each photo (render, amenity, master plan, unit layout) and attaches layouts to units by type and area. From this month's pages (${reading.left} left).`)
       : L(lang, "قراءة الملفات مقفولة: الصور بتتضاف «لكل الوحدات» وتقدر تغيّر دور كل صورة.", "Document reading is off: photos are added for all units and you can change each one's role.")}</p>
-    <button type="submit" class="secondary">${L(lang, "رفع", "Upload")}</button>
+    <button type="submit" class="secondary">${L(lang, "تحميل", "Upload")}</button>
   </form>`
     : ""}
 </section>`;
@@ -103,7 +103,7 @@ function register(web, { pool }) {
     const broker = req.session.broker;
     if (!isManager(broker)) return deny(req, res, 403, L(lang, "للمديرين بس", "Managers only"));
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return deny(req, res, 429, L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    if (!gate.allowed) return deny(req, res, 429, L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
     const r = await Gallery.upload(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
     if (r.error === "not_found") return deny(req, res, 404, L(lang, "مش موجود", "Not found"));
     if (r.error) return res.redirect(303, back(req, `gallery_error=${encodeURIComponent(r.error)}`));

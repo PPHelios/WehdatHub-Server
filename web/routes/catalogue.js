@@ -78,7 +78,7 @@ function plansReadSection(lang, project, reading, query = {}) {
     : "";
   const form = reading?.enabled
     ? html`<form method="post" action="${base}/plans/read" enctype="multipart/form-data" class="stack" data-plans-read>
-    <label>🤖 ${L(lang, "ارفع ملف أنظمة السداد من المطور (PDF أو صور أو إكسيل)", "Upload the developer's payment plans file (PDF, photos or Excel)")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp,.xlsx,.csv" multiple required></label>
+    <label>🤖 ${L(lang, "حمل ملف أنظمة السداد من المطور (PDF أو صور أو إكسيل)", "Upload the developer's payment plans file (PDF, photos or Excel)")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp,.xlsx,.csv" multiple required></label>
     <label>${L(lang, "الصفحات (للـ PDF)", "Pages (for a PDF)")} <input name="pages" dir="ltr" placeholder="1-3" maxlength="40"></label>
     <p class="muted">${L(lang, `${PR.MAX_PAGES} صفحات بالكتير (الشيت بصفحة)، من صفحات الشهر (فاضل ${reading.left}). مفيش حاجة بتتحفظ قبل ما تراجع. الملف بيتحفظ في الملفات (داخلي).`, `At most ${PR.MAX_PAGES} pages (a sheet counts as one), from this month's pages (${reading.left} left). Nothing is saved until you check it. The file is kept under Materials (internal).`)}</p>
     <button type="submit" class="secondary">${L(lang, "اقرا الأنظمة", "Read the plans")}</button>
@@ -147,7 +147,7 @@ const FIELD = {
 };
 const errorText = (r, lang) => {
   if (r.error === "duplicate") return L(lang, "الاسم ده موجود قبل كده.", "That name is already used.");
-  if (r.error === "upload_failed") return L(lang, "الملف مارفعش. جرب تاني.", "The file did not upload. Try again.");
+  if (r.error === "upload_failed") return L(lang, "الملف ماتحملش. جرب تاني.", "The file did not upload. Try again.");
   if (r.error === "notes_too_long" || r.error === "notes_full") return L(lang, "الملاحظات وصلت للحد (4000 حرف). اختصرها الأول، وبعدين ضيف.", "These notes are full (4,000 characters). Trim them first, then add.");
   const f = FIELD[r.field];
   return f ? f[lang === "en" ? 1 : 0] : L(lang, "في حاجة مش مظبوطة.", "Something is not right.");
@@ -385,7 +385,7 @@ ${gallery || ""}
     <p class="muted">${L(lang, "بنتأكد مرة في الأسبوع إن كل لينك لسه بيفتح ونبلغ المديرين لو واحد وقف.", "Once a week every link is checked and managers hear about broken ones.")}</p>
   </form>` : ""}
   ${manager ? html`<form method="post" action="${base}/materials/upload" enctype="multipart/form-data" class="stack" data-material-upload>
-    <h3>📎 ${L(lang, "ارفع ملف", "Upload a file")}</h3>
+    <h3>📎 ${L(lang, "حمل ملف", "Upload a file")}</h3>
     <input type="file" name="file" required accept="application/pdf,image/jpeg,image/png,image/webp" aria-label="${L(lang, "الملف", "File")}">
     <div class="row">
       <input name="label" maxlength="80" placeholder="${L(lang, "الاسم (اختياري، اسم الملف لو فاضي)", "Label (optional, file name when empty)")}" aria-label="${L(lang, "الاسم", "Label")}">
@@ -393,7 +393,7 @@ ${gallery || ""}
     </div>
     <input name="unit_type" maxlength="60" placeholder="${L(lang, "نوع الوحدة (للمخطط، اختياري)", "Unit type (for a layout, optional)")}" aria-label="${L(lang, "نوع الوحدة", "Unit type")}">
     <label><input type="checkbox" name="client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
-    <button type="submit" class="secondary">${L(lang, "رفع", "Upload")}</button>
+    <button type="submit" class="secondary">${L(lang, "تحميل", "Upload")}</button>
   </form>` : ""}
 </section>
 ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة (للمديرين بس)", "Commission (managers only)")}</h2>
@@ -656,7 +656,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     const broker = actorOf(req);
     if (!isManager(broker)) return forbidden(req, res);
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
     const r = await PlanReading.read(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
     if (r.error === "not_found") return notFound(req, res);
     if (r.error) return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_error=${encodeURIComponent(r.error)}${r.error === "ALLOWANCE" ? `&left=${r.left}&needed=${r.needed}` : ""}#plans-read`);
