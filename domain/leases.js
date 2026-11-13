@@ -1,9 +1,9 @@
 // domain/leases.js — Rental renewal rules (Release B, N4), pure: the lease end date, the yearly increase dates, which
-// reminders are due on a Cairo day (60 and 30 days before the end, 30 days before each yearly increase while the lease
+// reminders are due on a Cairo day (90 and 60 days before the end, 30 days before each yearly increase while the lease
 // runs) and the lease form.
 "use strict";
 
-const END_DAYS = [60, 30];
+const END_DAYS = [90, 60]; // 3 and 2 months before the end
 const INCREASE_DAYS = 30;
 const DAY = 24 * 3600 * 1000;
 
@@ -31,7 +31,7 @@ function increaseDates(lease) {
 
 /** Reminders due by `today` (YYYY-MM-DD) and not sent yet: [{ key, kind: 'end'|'increase', date, days }]. */
 function dueReminders(lease, today) {
-  if (!lease.remind) return [];
+  if (!lease.remind || lease.done_at) return [];
   const t = utcDate(today).getTime();
   const sent = new Set(lease.reminded || []);
   const out = [];

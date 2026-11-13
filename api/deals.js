@@ -1,6 +1,7 @@
 // api/deals.js — Deals, commissions, lead sources, portal enquiries and opened links for the app. Same services and rules as the website.
 "use strict";
 
+const Leases = require("../services/leases");
 const Deals = require("../services/deals");
 const Commissions = require("../services/commissions");
 const Sources = require("../services/leadSources");
@@ -27,7 +28,9 @@ function register(api, { pool }) {
 
   api.get("/deals/:ref", async (req, res) => {
     const deal = await Deals.getDeal(pool, req.session.broker, req.params.ref);
-    return deal ? res.json({ deal, editable: Authz.canEditDeal(req.session.broker, deal) }) : res.status(404).json({ error: "not_found" });
+    if (!deal) return res.status(404).json({ error: "not_found" });
+    const editable = Authz.canEditDeal(req.session.broker, deal);
+    return res.json({ deal, editable, leasePrompt: editable ? await Leases.promptFor(pool, req.session.broker, deal) : null });
   });
 
   // Status change for anyone who may edit the deal; the version guards against two people editing at once.

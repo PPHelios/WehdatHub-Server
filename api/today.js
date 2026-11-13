@@ -3,6 +3,7 @@
 "use strict";
 
 const Digest = require("../services/dailyDigest");
+const Leases = require("../services/leases");
 const { refLabel } = require("../domain/leadCard");
 
 const MAX_TASKS = 20;
@@ -28,9 +29,11 @@ function register(api, { pool }) {
   api.get("/today", async (req, res) => {
     const d = await Digest.briefData(pool, req.session.broker, new Date());
     const tasks = tasksOf(d);
+    const leases = (await Leases.list(pool, req.session.broker, { soon: true })).slice(0, 5).map((r) => ({ code: r.code, tenant: r.tenant_name, end: r.end.toISOString().slice(0, 10), daysLeft: r.daysLeft }));
     return res.json({
       counts: { followUpsToday: d.calls.length + d.viewings.length, viewings: d.viewings.length, newLeads: d.uncontacted },
       tasks: tasks.slice(0, MAX_TASKS),
+      leases,
       moreTasks: Math.max(0, tasks.length - MAX_TASKS)
     });
   });

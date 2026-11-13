@@ -83,24 +83,33 @@ function marketLine(m, listing, lang) {
   return html`<p class="muted" data-market="${m.diffPct}">📊 ${n(m.perM2)} ${L(lang, "ج.م للمتر", "EGP per m²")}${listing.listing_type === "rent" ? L(lang, " في الشهر", " a month") : ""} · ${diff} ${L(lang, `وسيط ${m.units} وحدة${Insights.likeLabel(m, lang) ? ` (${Insights.likeLabel(m, lang)})` : ""} في ${m.place}`, `the median of ${m.units} ${Insights.likeLabel(m, lang) ? `${Insights.likeLabel(m, lang)} ` : ""}units in ${m.place}`)} (${n(m.median)}) · <a href="/app/insights">${L(lang, "أسعار المتر", "Prices per m²")}</a></p>`;
 }
 
+/** The lease's buttons: message the tenant or the owner on WhatsApp, and mark the lease handled so the reminders stop. */
+function leaseActions(listing, lease, lang, csrf, contacts) {
+  const wa = (c, ar, en) => (c ? html`<a class="btn secondary" href="https://wa.me/${c.phone}" target="_blank" rel="noopener" data-lease-wa>${icon("chat", 18)} ${L(lang, ar, en)}${c.name ? ` · ${c.name}` : ""}</a>` : "");
+  const path = `/app/units/${encodeURIComponent(listing.code)}/lease/done`;
+  const kinds = [["renewed", "اتجدد", "Renewed"], ["leaving", "المستأجر ماشي", "Tenant leaving"], ["relist", "هنعرضها تاني", "Re-list"]];
+  return html`<div class="row actions" data-lease-actions>${wa(contacts.tenant, "واتساب المستأجر", "WhatsApp tenant")}${wa(contacts.owner, "واتساب المالك", "WhatsApp owner")}</div>
+  ${lease.done_at ? "" : html`<form method="post" action="${path}" class="row actions" data-lease-done><input type="hidden" name="_csrf" value="${csrf}">${kinds.map(([k, ar, en]) => html`<button type="submit" name="kind" value="${k}" class="secondary">✅ ${L(lang, ar, en)}</button>`)}</form>`}`;
+}
+
 /** N4: the lease card on a rent unit (who may edit it). */
-function leaseSection(listing, lease, lang, csrf, notice, tenants = []) {
+function leaseSection(listing, lease, lang, csrf, notice, tenants = [], contacts = { tenant: null, owner: null }, prefill = {}) {
   const end = lease ? LeaseRules.ymd(LeaseRules.endDate(lease)) : null;
   const notes = { saved: L(lang, "✅ الإيجار اتحفظ.", "✅ Lease saved."), removed: L(lang, "الإيجار اتمسح.", "Lease removed."), bad_start_date: L(lang, "اختار تاريخ بداية.", "Choose a start date."), bad_months: L(lang, "المدة بالشهور من 1 لـ 120.", "Length in months, 1 to 120."), bad_rent: L(lang, "الإيجار مش مفهوم.", "The rent isn't valid."), bad_increase_pct: L(lang, "الزيادة من 0 لـ 100%.", "Increase from 0 to 100%."), bad_not_rent: L(lang, "الوحدة دي مش إيجار.", "This unit isn't for rent."), bad_bad_tenant: L(lang, "رقم العميل (L-…) مش موجود.", "That lead reference (L-…) doesn't exist.") };
   return html`<section class="card stack" id="lease" data-lease="${lease ? "yes" : "no"}">
   <h2>🔑 ${L(lang, "عقد الإيجار والتذكير بالتجديد", "Lease and renewal reminders")}</h2>
   ${notice && notes[notice] ? html`<p class="notice" data-lease-notice="${notice}">${notes[notice]}</p>` : ""}
-  <p class="muted">${L(lang, "اختياري: لو الوحدة اتأجرت، سجل بداية العقد ومدته. لو علّمت «فكرني»، هتوصلك رسالة قبل نهاية العقد بـ 60 و30 يوم، وقبل كل زيادة سنوية بـ 30 يوم.", "Optional: once the unit is rented, enter the lease start and length. With \"remind me\" ticked you hear 60 and 30 days before it ends, and 30 days before each yearly increase.")}</p>
-  ${lease ? html`<p data-lease-end>${L(lang, `العقد بيخلص ${end}`, `The lease ends ${end}`)}${lease.remind ? " · 🔔" : ""}</p>` : ""}
+  <p class="muted">${L(lang, "سجل بداية العقد ومدته. التذكير بيوصل تلقائي قبل النهاية بـ 3 شهور وشهرين، لك ولمديرك والمدير، وقبل كل زيادة سنوية بـ 30 يوم.", "Enter the lease start and length. Reminders go out automatically 3 and 2 months before the end to you, your team lead and the managers, and 30 days before each yearly increase.")}</p>
+  ${lease ? html`<p data-lease-end>${L(lang, `العقد بيخلص ${end}`, `The lease ends ${end}`)}${lease.done_at ? ` · ✅ ${L(lang, "اتعامل معاه", "Handled")}` : " · 🔔"}</p>` : ""}
+  ${lease ? leaseActions(listing, lease, lang, csrf, contacts) : ""}
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease" class="grid">
     <input type="hidden" name="_csrf" value="${csrf}">
-    <label>${L(lang, "المستأجر: رقم العميل (L-0042) أو الاسم (اختياري)", "Tenant: lead ref (L-0042) or name (optional)")}<input name="tenant_name" maxlength="120" list="tenant-leads" autocomplete="off" value="${lease?.tenant_name || ""}"></label>
+    <label>${L(lang, "المستأجر: رقم العميل (L-0042) أو الاسم (اختياري)", "Tenant: lead ref (L-0042) or name (optional)")}<input name="tenant_name" maxlength="120" list="tenant-leads" autocomplete="off" value="${lease?.tenant_name || prefill.tenant || ""}"></label>
     <datalist id="tenant-leads">${tenants.map((t) => html`<option value="${t.label}"></option>`)}</datalist>
-    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : Stages.cairoDay()}"></label>
+    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : prefill.start || Stages.cairoDay()}"></label>
     <label>${L(lang, "المدة (شهور)", "Length (months)")}<input type="number" name="months" min="1" max="120" required value="${lease?.months || 12}"></label>
-    <label>${L(lang, "الإيجار الشهري (اختياري)", "Monthly rent (optional)")}<input name="rent" inputmode="numeric" value="${lease?.rent ? Math.round(Number(lease.rent)) : ""}"></label>
+    <label>${L(lang, "الإيجار الشهري (اختياري)", "Monthly rent (optional)")}<input name="rent" inputmode="numeric" value="${lease?.rent ? Math.round(Number(lease.rent)) : prefill.rent || ""}"></label>
     <label>${L(lang, "الزيادة السنوية % (اختياري)", "Yearly increase % (optional)")}<input name="increase_pct" inputmode="decimal" value="${lease?.increase_pct ?? ""}"></label>
-    <label class="check"><input type="checkbox" name="remind" value="1"${lease?.remind ? html` checked` : ""}> ${L(lang, "فكرني بالتجديد والزيادة", "Remind me about renewal and increases")}</label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form>
   ${lease ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="remove" value="1"><button type="submit" class="secondary">${L(lang, "امسح العقد", "Remove the lease")}</button></form>` : ""}
@@ -388,6 +397,22 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
   });
 
+  async function leaseCard(req, broker, listing, lang) {
+    const lease = await Leases.forListing(pool, listing);
+    const contacts = lease ? await Leases.contacts(pool, broker, listing, lease) : { tenant: null, owner: null };
+    const prefill = { tenant: String(req.query.lease_tenant || "").slice(0, 120), start: /^\d{4}-\d{2}-\d{2}$/.test(req.query.lease_start || "") ? req.query.lease_start : "", rent: String(req.query.lease_rent || "").replace(/[^0-9.]/g, "").slice(0, 12) };
+    return leaseSection(listing, lease, lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker), contacts, prefill);
+  }
+
+  web.post("/units/:code/lease/done", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return next();
+    const out = await Leases.done(pool, broker, listing, req.body.kind);
+    if (out.error === "forbidden") return res.status(403).send(L(langOf(req), "مش مسموح.", "Not allowed."));
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?lease=${out.error ? `bad_${out.error}` : "saved"}#lease`);
+  });
+
   // N4: the lease of a rented unit, with opt-in renewal and increase reminders (services/leases.js).
   web.post("/units/:code/lease", async (req, res, next) => {
     const { broker } = req.session;
@@ -528,7 +553,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button>${listing.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 </article>
 ${priv}
-${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}
+${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? await leaseCard(req, broker, listing, lang) : ""}
 ${listing.status === "active" && !Authz.isDataEntry(broker) ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`
     });
