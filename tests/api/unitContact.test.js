@@ -43,7 +43,7 @@ test("another agency's unit has no contact and no link", async () => {
   expect((await api().post("/api/v1/units/B-1/share-link").set(auth).send({})).status).toBe(404);
 });
 
-test("a client link is made for an active unit only, and carries no internal data", async () => {
+test("a client link is made for any unit (sold or archived too), and carries no internal data", async () => {
   await h.insertListing({ code: "A-1", compound: "Mivida" });
   await h.insertListing({ code: "A-S", compound: "Mivida", status: "sold" });
   const auth = await login("broker");
@@ -51,5 +51,5 @@ test("a client link is made for an active unit only, and carries no internal dat
   expect(ok.status).toBe(200);
   expect(ok.body.url).toMatch(/^https?:\/\//);
   expect(ok.body.url).toContain("A-1");
-  expect((await api().post("/api/v1/units/A-S/share-link").set(auth).send({})).status).toBe(409);
+  expect((await api().post("/api/v1/units/A-S/share-link").set(auth).send({})).status).toBe(200);
 });

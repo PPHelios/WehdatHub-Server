@@ -56,6 +56,7 @@ function notifyRow(k, policy, broker, lang, tgOn) {
     ["both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)"), tgOn],
     ["telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)"), tgOn],
     ["web", L(lang, "الموقع (ببلاش)", "Website (free)"), true],
+    ["app", L(lang, "التطبيق (ببلاش)", "Phone app (free)"), true],
     ["whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"), true]
   ].filter(([, , show]) => show);
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>

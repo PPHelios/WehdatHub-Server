@@ -218,7 +218,6 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
-    if (found.status !== "active") return res.status(409).json({ error: "not_active" });
     const lang = req.body?.lang === "en" ? "en" : "ar";
     // Who it goes to: a lead (L-0042) or a mobile number, same as the website and Telegram; empty means no recipient.
     const recipient = await Recipients.resolveRecipient(pool, broker, req.body && req.body.to);

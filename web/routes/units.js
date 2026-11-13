@@ -316,7 +316,6 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
 
   /** Share section: a new client link (public page) and the broker's earlier links with their opens. */
   async function shareSection(broker, listing, lang, fresh = null) {
-    if (listing.status !== "active") return "";
     const links = await Share.linksFor(pool, broker, listing);
     const copy = fresh ? `${Describe.clientCopy(listing, broker, { lang: fresh.lang })}\n\n🔗 ${fresh.url}` : null;
     return html`<section class="card" id="share">
@@ -347,7 +346,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const lang = langOf(req);
     const { broker } = req.session;
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
-    if (!listing || !Authz.canView(broker, listing) || listing.status !== "active") return next();
+    if (!listing || !Authz.canView(broker, listing)) return next();
     const linkLang = req.body.lang === "en" ? "en" : "ar";
     const recipient = await Recipients.resolveRecipient(pool, broker, req.body.to);
     if (recipient.error) {

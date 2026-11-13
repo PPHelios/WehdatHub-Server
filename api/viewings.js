@@ -32,11 +32,11 @@ function register(api, { pool }) {
       if (!listing) return res.status(422).json({ error: "unit_not_found" });
     }
     const lang = b.lang === "en" ? "en" : "ar";
+    const clientLang = lead.lang || lang;
     const version = b.version === undefined || b.version === null || b.version === "" ? null : Number(b.version);
-    const r = await Viewings.schedule(pool, broker, lead.id, { at, listing, place: b.place, version, lang });
+    const r = await Viewings.schedule(pool, broker, lead.id, { at, listing, place: b.place, version, lang: clientLang });
     if (r.conflict) return res.status(409).json({ error: "conflict", lead: leadView((await Leads.getLead(pool, broker, lead.id)) || lead) });
     if (r.error) return res.status(ERRORS[r.error] || 422).json({ error: r.error });
-    const clientLang = lead.lang || lang;
     const message = Viewings.clientMessage({ lead, actor: broker, listing, at, place: r.viewing.place, url: r.url, lang: clientLang });
     return res.status(201).json({ lead: leadView(r.lead || lead), viewing: { id: r.viewing.id, startsAt: iso(r.viewing.starts_at), place: r.viewing.place, status: r.viewing.status }, url: r.url, message, wa: r.wa || null });
   });

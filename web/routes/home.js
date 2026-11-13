@@ -50,6 +50,10 @@ ${groups.map(([g, label]) => {
 })}
 <section class="card list"><ul class="rows">
   <li><a class="listrow" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${icon("globe")}<span>${en ? "عربي" : "English"}</span></a></li>
+  <li><div class="listrow theme-row" data-theme-row>${icon("sun")}<span>${en ? "Appearance" : "المظهر"}</span><span class="row">
+    <button type="button" class="chip" data-theme-set="system">${en ? "System" : "النظام"}</button>
+    <button type="button" class="chip" data-theme-set="light">${en ? "Light" : "فاتح"}</button>
+    <button type="button" class="chip" data-theme-set="dark">${en ? "Dark" : "داكن"}</button></span></div></li>
   ${row("/app/report", "bug", en ? "Report a problem" : "بلّغ عن مشكلة")}
   ${support ? html`<li><a class="listrow" href="${support}" target="_blank" rel="noopener" data-support>${icon("support")}<span>${en ? "Talk to a person" : "كلّم حد من فريقنا"}</span></a></li>` : ""}
   <li><form method="post" action="/app/logout" class="logout"><button type="submit" class="listrow danger">${icon("logout")}<span>${en ? "Sign out" : "خروج"}</span></button></form></li>
