@@ -123,6 +123,7 @@ function register(api, { pool }) {
       source: OpenedLinks.SOURCES.includes(req.query.source) ? req.query.source : "all",
       broker: manager ? String(req.query.broker || "") : "",
       team: manager ? String(req.query.team || "") : "",
+      days: req.query.days,
       page: req.query.page
     };
     res.json(await OpenedLinks.list(pool, b, f));

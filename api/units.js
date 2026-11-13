@@ -208,7 +208,7 @@ function register(api, { pool }) {
     if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
     const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
-    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: broker.preferred_lang === "en" ? "en" : "ar", unbranded: req.body?.unbranded === true });
+    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: req.body?.lang === "en" || req.body?.lang === "ar" ? req.body.lang : broker.preferred_lang === "en" ? "en" : "ar", unbranded: req.body?.unbranded === true });
     if (out.error) return res.status(out.error === "busy" ? 503 : 502).json({ error: out.error });
     return res.json({ url: out.url });
   });
@@ -218,7 +218,6 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
-    if (found.status !== "active") return res.status(409).json({ error: "not_active" });
     const lang = req.body?.lang === "en" ? "en" : "ar";
     // Who it goes to: a lead (L-0042) or a mobile number, same as the website and Telegram; empty means no recipient.
     const recipient = await Recipients.resolveRecipient(pool, broker, req.body && req.body.to);

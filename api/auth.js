@@ -77,6 +77,17 @@ function register(api, { pool }) {
     return res.json({ ok: true });
   });
 
+  // The language button in the app: the same preferred_lang the website switch and the bot command change.
+  api.post("/me/lang", async (req, res) => {
+    if (!req.session) return res.status(401).json({ error: "unauthorized" });
+    const lang = req.body?.lang === "en" ? "en" : req.body?.lang === "ar" ? "ar" : null;
+    if (!lang) return res.status(422).json({ error: "lang" });
+    const b = req.session.broker;
+    await pool.query("UPDATE brokers SET preferred_lang = $3 WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id, lang]);
+    b.preferred_lang = lang;
+    return res.json({ ok: true, lang });
+  });
+
   api.get("/me", async (req, res) => {
     if (!req.session) return res.status(401).json({ error: "unauthorized" });
     const TestRole = require("../lib/testRole");

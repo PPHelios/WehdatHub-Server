@@ -212,7 +212,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
       return { outcome: "merged", lead: rows[0], claimed: claim };
     }
 
-    const seq = await client.query("UPDATE agencies SET lead_ref_seq = lead_ref_seq + 1 WHERE id = $1 RETURNING lead_ref_seq", [actor.agency_id]);
+    const seq = await client.query("UPDATE agencies SET lead_ref_seq = GREATEST(lead_ref_seq, COALESCE((SELECT max(ref) FROM leads WHERE agency_id = $1 /* vis:exempt */), 0)) + 1 WHERE id = $1 RETURNING lead_ref_seq", [actor.agency_id]);
     const { rows } = await client.query(
       `INSERT INTO leads (agency_id, ref, kind, assigned_broker_id, created_by_broker_id, name, phone_e164, phones, lang, source,
                           lawful_basis, consent_at, consent_note, notes, stage, lost_reason, last_activity_at, created_at, updated_at,

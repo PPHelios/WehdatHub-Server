@@ -536,6 +536,25 @@
     var lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
     document.documentElement.setAttribute("data-theme", lum < 0.5 ? "dark" : "light");
   })();
+  // Appearance: System (the phone's, or Telegram's) unless the user picked Light or Dark on the More page; kept on this device.
+  (function () {
+    var root = document.documentElement, auto = root.getAttribute("data-theme");
+    function stored() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
+    function apply(v) {
+      if (v === "light" || v === "dark") root.setAttribute("data-theme", v);
+      else if (auto) root.setAttribute("data-theme", auto);
+      else root.removeAttribute("data-theme");
+      document.querySelectorAll("[data-theme-set]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-theme-set") === v)); });
+    }
+    apply(stored());
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-theme-set]");
+      if (!b) return;
+      var v = b.getAttribute("data-theme-set");
+      try { localStorage.setItem("theme", v); } catch (err) { /* private window: the choice lasts this page only */ }
+      apply(v);
+    });
+  })();
   // Telegram Mini App bridge (no SDK: the CSP allows only our own scripts). Telegram's Back button goes back a page,
   // its Main button presses the page's main action ([data-tg-main], the first one not hidden), and the safe area
   // Telegram reports pads the page. Outside Telegram nothing here runs.
@@ -806,6 +825,19 @@
       inp.addEventListener("input", run);
       run();
     }
+    // The price field shows thousands separators as it is typed (caret at the end); they are stripped again on submit.
+    (function () {
+      var inp = form.querySelector('[name="price_value"]');
+      if (!inp) return;
+      inp.addEventListener("input", function () {
+        if (inp.selectionStart !== inp.value.length) return;
+        var d = latin(inp.value).replace(/[^\d.]/g, "");
+        if (!d) return;
+        var parts = d.split(".");
+        inp.value = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (parts.length > 1 ? "." + parts[1] : "");
+      });
+      form.addEventListener("submit", function () { inp.value = latin(inp.value).replace(/,/g, ""); }, true);
+    })();
     hint("price_value", function (v) { var n = readPrice(v); return n ? "= " + n.toLocaleString("en") : (EN ? "Not read as a price yet" : "لسه مش مقروء كسعر"); });
     hint("owner_phone", function (v) { var d = latin(v).replace(/\D/g, ""); return /^(20)?0?1[0125]\d{8}$/.test(d) ? "✅" : (EN ? "⚠️ Egyptian mobile numbers have 11 digits (01…)" : "⚠️ الموبايل المصري 11 رقم (01…)"); });
   })();

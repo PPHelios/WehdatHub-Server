@@ -22,7 +22,7 @@ function register(api, { pool }) {
   api.post("/report", async (req, res) => {
     const text = String(req.body?.text || "").trim();
     if (text.length < 3) return res.status(422).json({ error: "text" });
-    const r = await ErrorReports.submitReport(pool, req.session.broker, { text, channel: "app", path: null, userAgent: req.get("user-agent") });
+    const r = await ErrorReports.submitReport(pool, req.session.broker, { text, channel: "app", path: null, userAgent: req.get("user-agent"), device: req.body?.device && typeof req.body.device === "object" ? req.body.device : null, type: String(req.body?.type || "bug") });
     return r.limited ? res.status(429).json({ error: "rate_limited" }) : res.json({ ok: true, id: r.id });
   });
 }

@@ -21,7 +21,7 @@ const { isManager } = require("../lib/authz");
 const Vis = require("../lib/visibility");
 
 // Limits on what is sent to the model, not on what is searched: every active project is scanned for offers.
-const MAX_PROJECTS = 10;
+const MAX_PROJECTS = 20;
 const MAX_NAMES = 200;
 const MAX_OFFER_LINES = 15;
 const MAX_LEADS = 60;

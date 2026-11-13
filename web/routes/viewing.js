@@ -19,13 +19,14 @@ const STATUS = {
 
 function langFor(req, v) {
   if (req.query.lang === "ar" || req.query.lang === "en") return req.query.lang;
-  return req.cookies?.aq_lang ? req.lang : v.lang;
+  return v.lang === "en" ? "en" : "ar"; // the language chosen for this client when the viewing was made
 }
 
 function viewingPage(v, token, lang, { notice = null } = {}) {
   const entry = Viewings.calendarEntry(v, { lang });
   const call = v.broker_phone ? Phone.normalizePhone(v.broker_phone) : null;
   return html`<section class="card stack" id="viewing" data-status="${v.status}">
+  <p><a class="lang" data-lang-switch href="?lang=${lang === "en" ? "ar" : "en"}">${lang === "en" ? "عربي" : "English"}</a></p>
   <h1>🏠 ${L(lang, "ميعاد المعاينة", "Your viewing")}</h1>
   <p class="muted">${v.agency_name}${v.broker_name ? ` · ${v.broker_name}` : ""}</p>
   ${notice || ""}
