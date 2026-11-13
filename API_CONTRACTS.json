@@ -838,6 +838,7 @@
       "parseOwnerLine": ["texts"]
     },
     "domain/phone.js": {
+      "maskPhone": ["raw"],
       "toAsciiDigits": ["s"],
       "normalizePhone": ["raw"],
       "isEgyptMobile": ["d"],
@@ -908,6 +909,7 @@
       "listInbox": ["pool", "broker", "params"],
       "unreadCount": ["pool", "broker"],
       "markRead": ["pool", "broker", "id"],
+      "dismiss": ["pool", "broker", "id"],
       "agencyLog": ["pool", "manager", "params"],
       "people": ["pool", "manager"],
       "savePrefs": ["pool", "broker", "params"],
