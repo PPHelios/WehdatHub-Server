@@ -104,6 +104,19 @@ ${groups.map(([g, label]) => {
     const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Today.build(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null))]);
     return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en }) });
   });
+
+  // Leases being tracked: the broker's own, a team lead's team, or all for managers (services/leases.js list).
+  web.get("/leases", async (req, res) => {
+    const en = req.session.broker.preferred_lang === "en";
+    const rows = await require("../../services/leases").list(pool, req.session.broker);
+    return page(req, res, {
+      title: en ? "Leases" : "العقود",
+      body: html`<h1>🔑 ${en ? "Leases" : "العقود"}</h1>
+${rows.length
+  ? html`<div class="stack" data-leases>${rows.map((z) => html`<a class="card task" href="/app/units/${encodeURIComponent(z.code)}#lease" data-lease-row="${z.code}"><div class="row between"><span><b>${z.code}</b> <span class="muted">${z.tenant_name || "—"} · ${z.broker_name || "—"}</span></span><span class="chip ${z.done ? "ok" : z.daysLeft <= 60 ? "late" : "new"}">${z.done ? "✅" : en ? `${z.daysLeft} days` : `${z.daysLeft} يوم`}</span></div><div class="muted small" dir="ltr">${z.end.toISOString().slice(0, 10)}</div></a>`)}</div>`
+  : html`<p class="card muted empty">${en ? "No leases yet. Add one after closing a rent deal." : "مفيش عقود لسه. ضيف عقد بعد ما تقفل صفقة إيجار."}</p>`}`
+    });
+  });
 }
 
 const fmtTime = (d, en) => new Date(d).toLocaleTimeString(en ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
@@ -157,6 +170,10 @@ ${welcome ? welcomeCard(welcome, en) : ""}
   ${total > shown.length ? html`<a class="btn secondary" href="/app/leads?tab=overdue">${en ? `${total - shown.length} more` : `${total - shown.length} كمان`}</a>` : ""}
 </section>
 ${TodayCards.render(d.cards || {}, en)}
+${(d.leases || []).length
+  ? html`<section class="stack" data-today-leases><div class="row between"><h2>🔑 ${en ? "Leases ending soon" : "عقود قربت تخلص"}</h2><a href="/app/leases">${en ? "All" : "الكل"}</a></div>
+  ${(d.leases || []).slice(0, 5).map((z) => html`<a class="card task" href="/app/units/${encodeURIComponent(z.code)}#lease" data-lease-soon="${z.code}"><div class="row between"><span><b>${z.code}</b> <span class="muted">${z.tenant_name || ""}</span></span><span class="chip ${z.daysLeft <= 60 ? "late" : "new"}">${en ? `${z.daysLeft} days` : `${z.daysLeft} يوم`}</span></div></a>`)}</section>`
+  : ""}
 ${Dash.isManager(broker)
   ? html`<div class="row shortcuts"><a class="btn secondary" href="/app/dashboard">${icon("chart", 20)} ${en ? "Agency dashboard" : "لوحة الشركة"}</a>${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${icon("tools", 20)} ${en ? "App tracking" : "متابعة التطبيق"}</a>` : ""}</div>`
   : ""}`;

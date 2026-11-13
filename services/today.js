@@ -1,11 +1,11 @@
 // services/today.js — The one Today for the app and the website: the broker's tasks (services/dailyDigest.js briefData) plus
-// the cards each role needs (old units, target, ops, commissions, approvals). A card with nothing in it is null, so
+// the soon-ending leases and the cards each role needs (old units, target, ops, commissions, approvals). A card with nothing in it is null, so
 // Today stays short. Everything reads behind lib/visibility; unit status is never changed here (the person edits it or uses
 // the unit's own buttons).
 "use strict";
 
 const Digest = require("./dailyDigest");
-const Targets = require("./targets");
+const Leases = require("./leases");
 const Owners = require("./unitOwners");
 const Describe = require("../domain/describe");
 const Vis = require("../lib/visibility");
@@ -94,12 +94,14 @@ async function build(pool, viewer, now = new Date()) {
     : await Digest.briefData(pool, viewer, now);
   const tasks = tasksOf(d);
   const ids = await scopeIds(pool, viewer);
-  const [old, ops, approvals] = await Promise.all([oldUnits(pool, viewer, ids, now), opsCard(pool, viewer, now), approvalsCard(pool, viewer)]);
+  const [old, ops, approvals, leases] = await Promise.all([oldUnits(pool, viewer, ids, now), opsCard(pool, viewer, now), approvalsCard(pool, viewer), dataEntry ? [] : Leases.list(pool, viewer, { soon: true, now })]);
   const t = d.target;
   const com = d.commissions;
   return {
     counts: { followUpsToday: d.calls.length + d.viewings.length, viewings: d.viewings.length, newLeads: d.uncontacted },
     tasks: tasks.slice(0, MAX_TASKS),
+    // Leases ending within 3 months and not yet handled (services/leases.js list); the Leases page has the rest.
+    leases: leases.slice(0, 5).map((r) => ({ code: r.code, tenant: r.tenant_name, end: r.end.toISOString().slice(0, 10), daysLeft: r.daysLeft })),
     moreTasks: Math.max(0, tasks.length - MAX_TASKS),
     cards: {
       oldUnits: old,

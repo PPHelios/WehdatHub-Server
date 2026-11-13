@@ -27,8 +27,9 @@ test("rules: end date, increases, the nearest reminder only", () => {
   expect(Lz.ymd(Lz.endDate({ start_date: "2025-01-31", months: 1 }))).toBe("2025-02-28");
   const lease = { start_date: "2025-01-01", months: 36, remind: true, reminded: [] };
   expect(Lz.increaseDates(lease).map((x) => Lz.ymd(x.date))).toEqual(["2026-01-01", "2027-01-01"]);
+  expect(Lz.dueReminders(lease, "2027-10-05").map((r) => r.key)).toEqual(["end90"]);
   expect(Lz.dueReminders(lease, "2027-11-05").map((r) => r.key)).toEqual(["end60"]);
-  expect(Lz.dueReminders(lease, "2027-12-10").map((r) => r.key)).toEqual(["end30"]);
+  expect(Lz.dueReminders({ ...lease, done_at: new Date() }, "2027-11-05")).toEqual([]);
   expect(Lz.dueReminders(lease, "2026-12-10").map((r) => r.key)).toEqual(["inc2"]);
   expect(Lz.dueReminders({ ...lease, remind: false }, "2027-12-10")).toEqual([]);
   expect(Lz.fromForm({ start_date: "x", months: "12" })).toEqual({ error: "start_date" });
@@ -47,8 +48,8 @@ test("unit page: save a lease with reminders; reminders once each; managers see 
   expect(await Leases.remindDue(h.pool)).toEqual({ sent: 1 });
   expect(await Leases.remindDue(h.pool)).toEqual({ sent: 0 });
   expect((await notes())[0].title).toMatch(/RENT-1: الإيجار بيخلص/);
-  // Fifteen days on: the 30-day reminder.
-  expect(await Leases.remindDue(h.pool, { now: new Date(Date.now() + 16 * 24 * 3600 * 1000) })).toEqual({ sent: 1 });
+  // The 2-month reminder is the last one for the end; nothing more is sent later.
+  expect(await Leases.remindDue(h.pool, { now: new Date(Date.now() + 16 * 24 * 3600 * 1000) })).toEqual({ sent: 0 });
 
   const admin = await signIn(h, "admin");
   const dash = await admin.agent.get("/app/dashboard");
@@ -62,12 +63,18 @@ test("unit page: save a lease with reminders; reminders once each; managers see 
   expect((await agent.get("/app/units/SALE-1")).text).not.toContain('id="lease"');
 });
 
-test("no tick, no reminders", async () => {
+test("reminders are automatic, go to the managers too, and stop once the lease is handled", async () => {
   await h.insertListing({ code: "RENT-2", listing_type: "rent", broker_id: h.BROKERS.broker.id });
+  await h.seedBroker("admin");
   const { agent, csrf } = await signIn(h, "broker");
   const start = new Date(Date.now() - 320 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   await agent.post("/app/units/RENT-2/lease").type("form").send({ _csrf: csrf, start_date: start, months: "12" });
+  const [row] = await h.query("SELECT remind FROM leases");
+  expect(row.remind).toBe(true);
+  const done = await agent.post("/app/units/RENT-2/lease/done").type("form").send({ _csrf: csrf, kind: "leaving" });
+  expect(done.headers.location).toContain("lease=saved");
   expect(await Leases.remindDue(h.pool)).toEqual({ sent: 0 });
+  expect((await agent.get("/app/leases")).text).toContain('data-lease-row="RENT-2"');
 });
 
 test("F10: the tenant is picked by lead ref; the lease shows on that lead; an unknown ref is refused", async () => {

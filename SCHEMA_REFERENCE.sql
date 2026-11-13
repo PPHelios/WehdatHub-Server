@@ -1173,7 +1173,9 @@ CREATE TABLE IF NOT EXISTS public.leases (
   reminded text[] DEFAULT '{}'::text[] NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  tenant_lead_id uuid
+  tenant_lead_id uuid,
+  done_at timestamp with time zone,
+  done_kind text
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_intakes (
@@ -1844,6 +1846,7 @@ ALTER TABLE leads ADD CONSTRAINT leads_phones_check CHECK (((cardinality(phones)
 ALTER TABLE leads ADD CONSTRAINT leads_ref_check CHECK ((ref > 0));
 ALTER TABLE leads ADD CONSTRAINT leads_source_check CHECK (((source IS NULL) OR (length(source) <= 60)));
 ALTER TABLE leads ADD CONSTRAINT leads_stage_check CHECK ((stage = ANY (ARRAY['new'::text, 'contacted'::text, 'interested'::text, 'viewing'::text, 'negotiation'::text, 'won'::text, 'lost'::text])));
+ALTER TABLE leases ADD CONSTRAINT leases_done_kind_check CHECK ((done_kind = ANY (ARRAY['renewed'::text, 'leaving'::text, 'relist'::text])));
 ALTER TABLE leases ADD CONSTRAINT leases_increase_pct_check CHECK (((increase_pct IS NULL) OR ((increase_pct >= (0)::numeric) AND (increase_pct <= (100)::numeric))));
 ALTER TABLE leases ADD CONSTRAINT leases_months_check CHECK (((months >= 1) AND (months <= 120)));
 ALTER TABLE leases ADD CONSTRAINT leases_rent_check CHECK (((rent IS NULL) OR (rent >= (0)::numeric)));
