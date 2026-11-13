@@ -126,7 +126,7 @@ function register(api, { pool }) {
     const listing = await unitFor(req, res);
     if (!listing) return;
     const l = await Leases.forListing(pool, listing);
-    return res.json({ rent: listing.listing_type === "rent", lease: l ? { startDate: String(l.start_date).slice(0, 10), months: l.months, rent: l.rent, increasePct: l.increase_pct, tenantName: l.tenant_name, remind: !!l.remind } : null });
+    return res.json({ rent: listing.listing_type === "rent", lease: l ? { startDate: String(l.start_date).slice(0, 10), months: l.months, rent: l.rent, increasePct: l.increase_pct, tenantName: l.tenant_name, remind: !!l.remind, done: !!l.done_at } : null });
   });
   api.post("/units/:code/lease", async (req, res) => {
     const b = req.session.broker;
