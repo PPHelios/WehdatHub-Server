@@ -83,3 +83,8 @@ test("an app search is logged like a web or Telegram one, with timings, and its 
   await get("broker", { q: "شقة ايجار في هايد بارك 3 نوم", offset: "5" });
   expect((await h.query("SELECT COUNT(*)::int AS n FROM search_log WHERE channel = 'app'"))[0].n).toBe(1);
 });
+
+test("an answer carries the reading in words, with sale or rent", async () => {
+  const r = await get("broker", { q: "شقة 3 غرف في التجمع" });
+  if (r.body.status === "results" || r.body.status === "none") expect(r.body.reading).toMatch(/بيع أو إيجار|بيع|إيجار/);
+});

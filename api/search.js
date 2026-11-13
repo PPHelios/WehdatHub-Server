@@ -59,6 +59,8 @@ function register(api, { pool }) {
       total: Math.min(out.total, Search.SNAPSHOT_MAX),
       relaxed: out.relaxed,
       ignoredTerms: out.ignoredTerms || [],
+      // What was understood, in words (sale or rent, place, price, furnishing, finishing...), in the broker's language.
+      reading: require("../lib/search").formatInterpretation(found.parsed, broker.preferred_lang === "en" ? "en" : "ar"),
       items: out.rows.map((r) => ({ ...unitView(r), mine: r.broker_id === broker.id, photo: photoOf.get(r.id) || null, thumb: thumbOf.get(r.id) || null }))
     });
   });
