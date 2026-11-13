@@ -38,6 +38,8 @@ const upload = uploads([PHOTO, VOICE_MANY]);
 for (const re of [/^\/units\/new$/, /^\/units\/extract$/, /^\/units\/review$/, /^\/units\/step-check$/, /^\/units\/[^/]+\/edit$/]) Session.allowMultipart(re);
 
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
+// Photos the page still has to upload at Save (nothing is uploaded before): the review and the Next check count them so they never warn "no photos".
+const pendingOf = (req) => Math.min(Math.max(parseInt((req.body || {}).photo_pending, 10) || 0, 0), MAX_PHOTOS);
 const ctxOf = (pool, req) => ({ pool, broker: req.session.broker, agency: req.session.agency, lang: langOf(req) });
 
 /**
@@ -243,7 +245,7 @@ function register(web, { pool, page, assets }) {
     const removeIds = [].concat(req.body.remove_photo || []);
     const current = existing ? (await imagesOf(pool, existing)).filter((i) => !removeIds.includes(i.id)).length : 0;
     const form = Form.unitFromForm(req.body);
-    const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length + Uploads.keysOf(req.body).length });
+    const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length + Uploads.keysOf(req.body).length + pendingOf(req) });
     ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: !existing, existing }))];
     ev.ok = ev.blockers.length === 0;
     const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
@@ -258,7 +260,7 @@ function register(web, { pool, page, assets }) {
   web.post("/units/step-check", upload, async (req, res) => {
     const lang = langOf(req);
     const form = Form.unitFromForm(req.body);
-    const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length + Uploads.keysOf(req.body).length });
+    const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length + Uploads.keysOf(req.body).length + pendingOf(req) });
     ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: true }))];
     ev.ok = ev.blockers.length === 0;
     // A unit that looks like one the agency already has is flagged at the first Next, not only at the final save.
@@ -324,7 +326,8 @@ function register(web, { pool, page, assets }) {
     const form = Form.unitFromForm(req.body);
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
     const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
-    const ev = evaluate({ existing: null, form, lang, photoCount: files.length + keys.length });
+    const checkOnly = req.body.check_only === "1";
+    const ev = evaluate({ existing: null, form, lang, photoCount: files.length + keys.length + (checkOnly ? pendingOf(req) : 0) });
     const again = (status, error, duplicate = null) => {
       traceRefusal(pool, req, { reason: `create_refused_${status}`, listingCode: form.code || null, blockers: ev.blockers.map((b) => b.field) });
       return formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
@@ -336,14 +339,17 @@ function register(web, { pool, page, assets }) {
     if (compError) return again(422, compError);
     const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
     if (leadError) return again(422, leadError);
-    // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
-    if (req.body.force !== "1") {
+    // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1, and a warning accepted at Next sends dup_ack=1 (never asked again).
+    if (req.body.force !== "1" && req.body.dup_ack !== "1") {
       const duplicate = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
       if (duplicate) {
         const photosNote = files.length ? L10n(lang, " (اختار الصور تاني قبل الحفظ.)", " (Choose the photos again before saving.)") : "";
         return again(409, L10n(lang, `⚠️ شكلها نفس الوحدة ${duplicate}.${photosNote}`, `⚠️ This looks like ${duplicate}.${photosNote}`), duplicate);
       }
     }
+
+    // The page asks first, before it uploads anything: every check above passed, so it may go on to upload the photos and save.
+    if (checkOnly) return res.json({ ok: true });
 
     // Photos that went straight to storage must all be there, the broker's own and unused (checked before any work).
     const staged = await Uploads.verify(pool, broker, keys);
@@ -418,6 +424,7 @@ function register(web, { pool, page, assets }) {
     const removeIds = [].concat(req.body.remove_photo || []).filter((id) => /^[0-9a-f-]{36}$/.test(id));
     const files = filesOf(req, "photos");
     const expectedVersion = Number(req.body.version) || -1;
+    const checkOnly = req.body.check_only === "1"; // the page asks first, before it uploads any photo
     const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
     if (prior) return res.redirect(303, `/app/units/${encodeURIComponent(prior)}?saved=1`);
     const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
@@ -434,7 +441,7 @@ function register(web, { pool, page, assets }) {
       if (!key.first) return { rollback: true, repeat: key.code || listing.code };
       if (!Authz.canEdit(broker, listing)) return { rollback: true, forbidden: true };
       const { rows } = await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1 AND NOT (id = ANY($2::uuid[]))", [listing.id, removeIds]);
-      const photoCount = rows[0].n + photos.urls.length + keys.length;
+      const photoCount = rows[0].n + photos.urls.length + keys.length + (checkOnly ? pendingOf(req) : 0);
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
       const nameError = ownerNameError(ev.listing, req.body, lang);
@@ -446,6 +453,7 @@ function register(web, { pool, page, assets }) {
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
       if (staged.missing.length) return { rollback: true, listing, ev, photoMissing: true };
       const patch = Edits.diffPatch(listing, ev.listing);
+      if (checkOnly) return { rollback: true, listing, ev, checked: true, stale: listing.version !== expectedVersion };
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, listing, ev, conflict: true };
       await savePin(client, res2.listing, pinFrom(req.body));
@@ -458,6 +466,10 @@ function register(web, { pool, page, assets }) {
       const reordered = (order.length > 1 || req.body.photo_manual === "on") && (await Store.reorderPhotos(client, res2.listing, order, { force: req.body.photo_manual === "on" }));
       return { saved: res2.listing, removed, reordered, columns: Object.keys(patch) };
     });
+
+    // Checked only: every rule passed and nothing was saved. A stale version is refused here too, so no photo is uploaded for nothing.
+    if (out.checked && !out.stale) return res.json({ ok: true });
+    if (out.checked) out.conflict = true;
 
     if (out.repeat) {
       Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));

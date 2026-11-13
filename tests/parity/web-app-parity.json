@@ -89,6 +89,7 @@
  "/units-export.xlsx": "web-only: spreadsheet download",
  "/units/:code": "api:/units/:code",
  "/units/:code/edit": "api:/units/:code/edit",
+ "/units/:code/flyer": "api:/units/:code/flyer",
  "/units/:code/photos/:id": "app-only: photos load from their URLs",
  "/units/:code/share-media": "app-only: the phone's share sheet",
  "/units/new": "api:/units",

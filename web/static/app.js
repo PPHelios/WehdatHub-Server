@@ -279,6 +279,8 @@
     })).then(function (files) {
       files = files.filter(Boolean);
       var data = { files: files, text: box.getAttribute("data-share-text") || "" };
+      // Some apps (WhatsApp on Android) drop the text sent with photos, so the description is copied first: paste it after the photos.
+      try { if (navigator.clipboard && data.text) navigator.clipboard.writeText(data.text).then(function () { say(document.documentElement.lang === "en" ? "Description copied: paste it under the photos if it is missing." : "الوصف اتنسخ: الصقه تحت الصور لو مش ظاهر."); }, function () {}); } catch (e) { /* the text is also on the page */ }
       if (!files.length) return say("No photos could be loaded.");
       if (!navigator.canShare || !navigator.canShare({ files: files })) return say("This browser can't share photos. Long-press a photo to save it.");
       return navigator.share(data).catch(function (err) {
@@ -741,7 +743,7 @@
   // ---- The new-unit form: a draft kept on this phone, a warning before leaving unsaved work, live price/phone readback.
   // Only the unit's public fields are kept; owner, notes, commission, address, location and photos never are.
   var DRAFT_KEY = "wh-unit-draft";
-  var DRAFT_SKIP = /^(_csrf|version|code|photos|voice|describe|force|action|photo_order|remove_photo|photo_manual|owner_.*|notes|commission|co_broker|unit_no|address|pin)$/;
+  var DRAFT_SKIP = /^(_csrf|version|code|photos|voice|describe|force|dup_ack|photo_pending|photo_keys|action|photo_order|remove_photo|photo_manual|owner_.*|notes|commission|co_broker|unit_no|address|pin)$/;
   try { if (/[?&]saved=1/.test(location.search)) { localStorage.removeItem(DRAFT_KEY); Object.keys(localStorage).forEach(function (k) { if (k.indexOf("wh-unit-photos:") === 0) localStorage.removeItem(k); }); } } catch (e) {}
   (function () {
     var form = document.getElementById("unit-form");
@@ -782,7 +784,7 @@
     } catch (e) {}
     form.addEventListener("input", function () { dirty = true; clearTimeout(timer); timer = setTimeout(save, 500); });
     form.addEventListener("submit", function () { dirty = false; });
-    window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+    window.addEventListener("beforeunload", function (e) { if (dirty && !window.__whSaved) { e.preventDefault(); e.returnValue = ""; } });
     // Price and phone: say how the typed text is read, as you type.
     var DIG = { "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
     function latin(t) { return String(t).replace(/[٠-٩]/g, function (c) { return DIG[c]; }); }
@@ -957,7 +959,7 @@
             var input = form.querySelector('[data-step="' + here + '"] [name="' + fname + '"]');
             if (input) shown.push({ field: fname, label: blockers[b].label });
           }
-          // A look-alike unit is a red warning with a link, shown once; tapping Next again goes on (the final save asks again).
+          // A look-alike unit is a red warning with a link, shown once; tapping Next again goes on (the final save does not ask again: dup_ack).
           var dup = j && j.duplicate;
           if (!shown.length && dup && warnedDup !== dup) {
             warnedDup = dup;
@@ -970,6 +972,12 @@
             stepErr.appendChild(document.createTextNode(EN ? " already in your list. Tap Next again if it is a different unit." : " اللي عندك. لو دي وحدة تانية دوس التالي تاني."));
             stepErr.hidden = false;
             return;
+          }
+          // Tapping Next past the look-alike warning accepts it: the final save never asks about it again (dup_ack).
+          if (!shown.length && dup && warnedDup === dup) {
+            var da = form.querySelector('input[name="dup_ack"]');
+            if (!da) { da = document.createElement("input"); da.type = "hidden"; da.name = "dup_ack"; form.appendChild(da); }
+            da.value = "1";
           }
           if (!shown.length) { show(here + 1); return; }
           // Red outline on each field that blocks this step; it clears when the field is changed.

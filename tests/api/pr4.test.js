@@ -83,5 +83,8 @@ test("flyer link: made once, then the same link; a stranger gets 404", async () 
   expect(one.body.url).toMatch(/^https?:|^\//);
   const two = await api().post("/api/v1/units/A-1/flyer").set(auth).send({});
   expect(two.body.url).toBe(one.body.url);
+  const plain = await api().post("/api/v1/units/A-1/flyer").set(auth).send({ unbranded: true });
+  expect(plain.status).toBe(200);
+  expect(plain.body.url).not.toBe(one.body.url);
   expect((await api().post("/api/v1/units/A-1/flyer").set(await login("rival")).send({})).status).toBe(404);
 });

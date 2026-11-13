@@ -95,7 +95,7 @@ test("Next shows the server's location blocker on the compound field, and photos
 
 test("the unit page status row and action buttons are aligned by the stylesheet", () => {
   const css = require("fs").readFileSync(require("path").join(__dirname, "../../web/static/app.css"), "utf8");
-  expect(css).toMatch(/\[data-unit-status\] \{ display: grid;/);
+  expect(css).toMatch(/\[data-unit-status\] \{ display: contents;/);
   expect(css).toMatch(/#unit-actions \{ display: grid;[^}]*align-items: stretch;/);
   expect(css).toMatch(/#unit-actions > form\.inline \{ display: contents; \}/);
 });
@@ -103,4 +103,62 @@ test("the unit page status row and action buttons are aligned by the stylesheet"
 test("the edit page keeps its Save row in reach (sticky)", () => {
   const css = require("fs").readFileSync(require("path").join(__dirname, "../../web/static/app.css"), "utf8");
   expect(css).toMatch(/#unit-form:not\(\[data-steps\]\) \[data-save-row\] \{ position: sticky;/);
+});
+
+// Photos upload at Save, so the page checks the form first (check_only) and tells the review how many photos wait (photo_pending).
+const { force: _f, ...NOFORCE } = FIELDS;
+const review = (agent, csrf, extra) => {
+  let r = agent.post("/app/units/review").field("_csrf", csrf);
+  for (const [k, v] of Object.entries({ ...NOFORCE, ...extra })) r = r.field(k, v);
+  return r;
+};
+
+test("the review counts photos still waiting for Save, so it never says 'no photos' for them", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  const none = await review(agent, csrf, { photo_pending: "0" });
+  const waiting = await review(agent, csrf, { photo_pending: "2" });
+  expect(none.text).toMatch(/الصور غير مسجل|Photos not recorded|Photos/);
+  expect(waiting.text).not.toMatch(/الصور غير مسجل/);
+  expect(waiting.text.length).toBeLessThan(none.text.length);
+});
+
+test("check_only answers ok before any photo work and saves nothing; a refusal comes back as the form", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  const before = (await h.query("SELECT count(*)::int AS n FROM listings"))[0].n;
+  const ok = await post(agent, csrf, { ...NOFORCE, check_only: "1" });
+  expect(ok.status).toBe(200);
+  expect(ok.body).toEqual({ ok: true });
+  const missing = await post(agent, csrf, { ...NOFORCE, check_only: "1", area_value: "" });
+  expect(missing.status).toBe(422);
+  expect(missing.text).toContain('id="unit-form"');
+  expect((await h.query("SELECT count(*)::int AS n FROM listings"))[0].n).toBe(before);
+});
+
+test("a look-alike unit is refused once; accepted at Next (dup_ack) or with Save anyway it is not asked again", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  await h.insertListing({ code: "HP300", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", bedrooms: 3, area_value: 150, price_value: 9e6 });
+  const asked = await post(agent, csrf, { ...NOFORCE, code: "HP302" });
+  expect(asked.status).toBe(409);
+  expect(asked.text).toContain("HP300");
+  const checkAsked = await post(agent, csrf, { ...NOFORCE, code: "HP302", check_only: "1" });
+  expect(checkAsked.status).toBe(409);
+  const acked = await post(agent, csrf, { ...NOFORCE, code: "HP302", dup_ack: "1" });
+  expect(acked.status).toBe(303);
+});
+
+test("edit: check_only answers ok without saving; a stale version is refused before any photo is uploaded", async () => {
+  const row = await h.insertListing({ code: "NH-E1", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", bedrooms: 3, area_value: 150, price_value: 9e6 });
+  const { agent, csrf } = await signIn(h, "broker");
+  const edit = (extra) => {
+    let r = agent.post("/app/units/NH-E1/edit").field("_csrf", csrf).field("check_only", "1");
+    for (const [k, v] of Object.entries({ ...NOFORCE, code: "NH-E1", ...extra })) r = r.field(k, v);
+    return r;
+  };
+  const ok = await edit({ version: String(row.version), price_value: "9.5 مليون" });
+  expect(ok.status).toBe(200);
+  expect(ok.body).toEqual({ ok: true });
+  expect(Number((await h.query("SELECT price_value FROM listings WHERE code = 'NH-E1'"))[0].price_value)).toBe(9e6);
+  const stale = await edit({ version: String(row.version + 5), price_value: "9.5 مليون" });
+  expect(stale.status).toBe(409);
+  expect(stale.text).toContain('id="unit-form"');
 });

@@ -44,4 +44,20 @@ describe("unit status on the web", () => {
     const r = await agent.get("/app/units?status=sold");
     expect(r.text).toContain("(1)");
   });
+
+  test("the unit page has Change status, client link and flyer buttons; the flyer page makes the image, with or without brand", async () => {
+    await h.insertListing({ code: "VIL-44", compound: "Hyde Park" });
+    const { agent } = await signIn(h, "manager");
+    const page = await agent.get("/app/units/VIL-44");
+    expect(page.text).toContain("status-menu");
+    expect(page.text).toContain('href="#share"');
+    expect(page.text).toContain("/app/units/VIL-44/flyer");
+    const branded = await agent.get("/app/units/VIL-44/flyer");
+    expect(branded.status).toBe(200);
+    const src = (r) => (r.text.match(/data-flyer-image/) ? r.text.match(/<img src="([^"]+)"[^>]*data-flyer-image/)?.[1] : null);
+    expect(src(branded)).toBeTruthy();
+    const plain = await agent.get("/app/units/VIL-44/flyer?unbranded=1");
+    expect(src(plain)).toBeTruthy();
+    expect(src(plain)).not.toBe(src(branded));
+  });
 });
