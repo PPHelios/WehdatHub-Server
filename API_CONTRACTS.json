@@ -386,6 +386,18 @@
       "withCodeLock": ["pool", "agencyId", "code", "fn"],
       "FIELD_LABELS": "Object"
     },
+    "services/agencyLogo.js": {
+      "setLogo": ["pool", "broker", "file"],
+      "removeLogo": ["pool", "broker"]
+    },
+    "services/savedSearches.js": {
+      "MAX_SAVED": "Number",
+      "save": ["pool", "broker", "params"],
+      "list": ["pool", "broker"],
+      "get": ["pool", "broker", "id"],
+      "markSeen": ["pool", "id", "ids"],
+      "remove": ["pool", "broker", "id"]
+    },
     "services/search.js": {
       "PAGE_SIZE": "Number",
       "TG_PAGE_SIZE": "Number",
@@ -1245,6 +1257,10 @@
       "resaleCommissions": ["pool", "actor", "params"],
       "monthlyTotals": ["pool", "actor", "params"],
       "updateDeal": ["pool", "actor", "key", "change", "params"]
+    },
+    "lib/dealForm.js": {
+      "inputFromForm": ["body", "broker"],
+      "correctionFrom": ["body"]
     },
     "lib/deals.js": {
       "parseDealCommand": ["text"],

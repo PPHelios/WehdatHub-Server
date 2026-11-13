@@ -7,11 +7,10 @@
 const crypto = require("crypto");
 const Deals = require("../../services/deals");
 const Leases = require("../../services/leases");
+const { inputFromForm: inputOf, correctionFrom } = require("../../lib/dealForm");
 const Leads = require("../../services/leads");
 const Card = require("../../domain/leadCard");
 const Commission = require("../../domain/commission");
-const { parseCommission } = require("../../lib/deals");
-const T = require("../../lib/text");
 const { isManager, canEditDeal } = require("../../lib/authz");
 const { html } = require("../html");
 const { dealsSwitch } = require("../views/tabs");
@@ -48,32 +47,6 @@ const errorText = (code, lang) => (ERRORS[code] || [code, code])[lang === "en" ?
 async function colleagues(pool, broker) {
   const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [broker.agency_id]);
   return rows;
-}
-
-/** Form fields → services/deals.js input. */
-function inputOf(body, broker) {
-  const commission = parseCommission(String(body.commission || "")) || {};
-  const extText = String(body.external || "").trim();
-  const extPct = Commission.parsePct(extText);
-  const extAmount = !extPct && extText ? T.parseEgyptianPrice(T.normalizeDigits(extText))?.priceValue || null : null;
-  const external = extPct ? { pct: extPct.pct, name: body.external_name } : extAmount ? { amount: extAmount, name: body.external_name } : null;
-  const price = String(body.price || "").trim() ? T.parseEgyptianPrice(T.normalizeDigits(String(body.price)))?.priceValue || -1 : null;
-  const splitPct = Number(String(body.split_pct || "").replace(/[%٪\s]/g, ""));
-  return {
-    leadKey: String(body.lead || "").trim(),
-    unitCode: String(body.unit || "").trim() || null,
-    price,
-    mode: commission.mode,
-    pct: commission.pct,
-    amount: commission.amount,
-    external,
-    splits: body.split_with ? [{ brokerId: body.split_with, pct: splitPct }] : [],
-    dealType: body.deal_type,
-    status: body.status,
-    markSold: body.mark_sold === "1",
-    notes: body.notes,
-    closingBrokerId: isManager(broker) && body.closing_broker ? body.closing_broker : null
-  };
 }
 
 function register(web, { pool, page }) {
@@ -247,14 +220,9 @@ ${manager
     const change = {};
     if (req.body.status !== undefined) change.status = req.body.status;
     if (req.body.commission !== undefined) {
-      const c = parseCommission(String(req.body.commission || ""));
+      const c = correctionFrom(req.body);
       if (!c) return dealPage(req, res, deal, { notice: `⚠️ ${errorText("commission_missing", lang)}`, status: 422 });
       Object.assign(change, c);
-      const price = T.parseEgyptianPrice(T.normalizeDigits(String(req.body.price || "")))?.priceValue;
-      if (price) change.price = price;
-      const ext = String(req.body.external || "").trim();
-      const pct = Commission.parsePct(ext);
-      change.external = pct ? { pct: pct.pct } : { amount: ext ? T.parseEgyptianPrice(T.normalizeDigits(ext))?.priceValue || 0 : 0 };
     }
     const r = await Deals.updateDeal(pool, broker, deal.id, change, { version: req.body.version });
     if (r.ok || r.unchanged) return res.redirect(303, `/app/deals/${Deals.refLabel(deal.ref)}?done=1`);

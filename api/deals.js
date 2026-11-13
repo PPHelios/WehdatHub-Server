@@ -2,6 +2,7 @@
 "use strict";
 
 const Leases = require("../services/leases");
+const { inputFromForm, correctionFrom } = require("../lib/dealForm");
 const Deals = require("../services/deals");
 const Commissions = require("../services/commissions");
 const Sources = require("../services/leadSources");
@@ -31,6 +32,30 @@ function register(api, { pool }) {
     if (!deal) return res.status(404).json({ error: "not_found" });
     const editable = Authz.canEditDeal(req.session.broker, deal);
     return res.json({ deal, editable, leasePrompt: editable ? await Leases.promptFor(pool, req.session.broker, deal) : null });
+  });
+
+  // Record a deal: the same form fields and the same service as the website (lib/dealForm.js, services/deals.js createDeal).
+  api.post("/deals", async (req, res) => {
+    const b = req.session.broker;
+    const body = req.body || {};
+    const input = inputFromForm(body, b);
+    if (!input.mode) return res.status(422).json({ error: "commission_missing" });
+    const idem = /^[0-9a-f]{16}$/.test(String(body.idem || "")) ? `app:${b.id}:${body.idem}` : null;
+    const r = await Deals.createDeal(pool, b, input, { idemKey: idem });
+    if (r.ok) return res.json({ ok: true, ref: Deals.refLabel(r.deal.ref), duplicate: !!r.duplicate });
+    return res.status(r.error === "forbidden" ? 403 : r.error === "unit_conflict" ? 409 : 422).json({ error: r.error || "failed" });
+  });
+
+  // A manager's correction of price, commission and the external share (same as the website's "Correct" box).
+  api.post("/deals/:ref/correct", async (req, res) => {
+    const b = req.session.broker;
+    if (!Authz.isManager(b)) return res.status(403).json({ error: "forbidden" });
+    const deal = await Deals.getDeal(pool, b, req.params.ref);
+    if (!deal) return res.status(404).json({ error: "not_found" });
+    const change = correctionFrom(req.body || {});
+    if (!change) return res.status(422).json({ error: "commission_missing" });
+    const r = await Deals.updateDeal(pool, b, deal.id, change, { version: (req.body || {}).version ?? deal.version });
+    return r.ok || r.unchanged ? res.json({ ok: true }) : r.conflict ? res.status(409).json({ error: "conflict" }) : fail(res, r);
   });
 
   // Status change for anyone who may edit the deal; the version guards against two people editing at once.

@@ -97,9 +97,10 @@ describe("resale link to a project", () => {
     await h.insertListing({ code: "BD-7", payment_terms: { plans: [{ name: "Resale rest", down_payment_pct: 50, years: 3 }] } });
     const { agent, csrf } = await signIn(h, "broker");
     const page = await agent.get("/app/units/BD-7");
-    expect(page.text).not.toMatch(/id="resale-project"/); // the link form was removed from the unit page; the route stays
-    const r = await form(agent, "/app/units/BD-7/project", csrf, { project_id: project.id });
-    expect(r.status).toBe(303);
+    expect(page.text).not.toMatch(/id="resale-project"/); // no link form on the web; the web route is gone too
+    expect((await form(agent, "/app/units/BD-7/project", csrf, { project_id: project.id })).status).toBe(404);
+    const asRow = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
+    expect(await Catalogue.linkResale(h.pool, await asRow("broker"), await unit("BD-7"), project.id)).toMatchObject({ ok: true });
     expect((await unit("BD-7")).project_id).toBe(project.id);
 
     await Catalogue.savePlan(h.pool, admin, project.id, { name: "10% / 8y", down_payment_pct: "10", years: "8" });
@@ -119,10 +120,10 @@ describe("resale link to a project", () => {
     expect(shown.text).toMatch(/Q2 2028/);
 
     // Clearing the link; nobody else may link it; catalogue units are linked on the project page only.
-    await form(agent, "/app/units/BD-7/project", csrf, { project_id: "" });
+    await Catalogue.linkResale(h.pool, await asRow("broker"), await unit("BD-7"), null);
     expect((await unit("BD-7")).project_id).toBeNull();
     const other = await signIn(h, "colleague");
-    expect((await form(other.agent, "/app/units/BD-7/project", other.csrf, { project_id: project.id })).status).toBe(403);
+    expect(await Catalogue.linkResale(h.pool, await asRow("colleague"), await unit("BD-7"), project.id)).toEqual({ error: "forbidden" });
     expect(await Catalogue.linkResale(h.pool, admin, await unit("CAT-U1"), project.id)).toEqual({ error: "catalogue_unit" });
   });
 });

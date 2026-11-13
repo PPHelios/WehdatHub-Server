@@ -5,6 +5,7 @@
 const Switches = require("../../services/aiSwitches");
 const Shadow = require("../../services/searchShadow");
 const Search = require("../../services/search");
+const Saved = require("../../services/savedSearches");
 const SearchLog = require("../../services/searchLog");
 const AI = require("../../lib/ai");
 const Store = require("../../lib/listingStore");
@@ -24,7 +25,7 @@ const Privacy = require("../../services/unitPrivacy");
 const { refineForm } = require("../views/searchForm");
 
 const WEB_PAGE_SIZE = 20;
-const MAX_SAVED = 50;
+const MAX_SAVED = Saved.MAX_SAVED;
 const MAX_SPOKEN_SEARCH = 200;
 const FORM_KEYS = ["code", "listing_type", "market", "type", "place", "price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "floor_max", "finishing", "furnishing", "ready", "by_year", "cash", "installments", "max_down_payment", "max_installment", "feature", "other"];
 
@@ -295,35 +296,16 @@ ${results}`
   /* Saved searches (per broker, agency-scoped). */
 
   web.post("/searches", async (req, res) => {
-    const { broker } = req.session;
-    const filters = SearchLink.decodeFilters(String(req.body.f || ""));
-    const name = String(req.body.name || "").trim().slice(0, 80);
-    if (!filters || !Q.hasAnyFilter({ filters }) || !name) return res.status(400).send("A name and a valid search are required");
-    const { rows } = await pool.query("SELECT count(*)::int AS n FROM saved_searches WHERE agency_id = $1 AND broker_id = $2 AND lead_id IS NULL", [broker.agency_id, broker.id]);
-    if (rows[0].n >= MAX_SAVED) return res.status(409).send(`At most ${MAX_SAVED} saved searches`);
-    const out = await Search.runSearch(pool, broker.agency_id, { filters });
-    await pool.query(
-      `INSERT INTO saved_searches (agency_id, broker_id, name, filters, seen_ids, last_run_at) VALUES ($1, $2, $3, $4::jsonb, $5::uuid[], NOW())`,
-      [broker.agency_id, broker.id, name, JSON.stringify(filters), out.ids]
-    );
+    const out = await Saved.save(pool, req.session.broker, { token: req.body.f, name: req.body.name });
+    if (out.error === "invalid") return res.status(400).send("A name and a valid search are required");
+    if (out.error === "limit") return res.status(409).send(`At most ${MAX_SAVED} saved searches`);
     return res.redirect(303, "/app/searches");
   });
 
   web.get("/searches", async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
-    const { rows } = await pool.query(
-      "SELECT id, name, filters, seen_ids, last_run_at FROM saved_searches WHERE agency_id = $1 AND broker_id = $2 AND lead_id IS NULL ORDER BY created_at DESC",
-      [broker.agency_id, broker.id]
-    );
-    const items = [];
-    for (const s of rows) {
-      const filters = SearchLink.sanitizeFilters(s.filters);
-      const out = await Search.runSearch(pool, broker.agency_id, { filters });
-      const seen = new Set(s.seen_ids || []);
-      const fresh = out.ids.filter((id) => !seen.has(id)).length;
-      items.push({ s, filters, total: out.total, fresh });
-    }
+    const items = (await Saved.list(pool, broker)).map((x) => ({ s: x, filters: x.filters, total: x.total, fresh: x.fresh }));
     return page(req, res, {
       title: L(lang, "البحث المحفوظ", "Saved searches"),
       nav: "search",
@@ -346,11 +328,12 @@ ${items.length
     const lang = langOf(req);
     const { broker } = req.session;
     if (!/^[0-9a-f-]{36}$/.test(req.params.id)) return next();
-    const { rows } = await pool.query("SELECT * FROM saved_searches WHERE id = $1 AND agency_id = $2 AND broker_id = $3 AND lead_id IS NULL", [req.params.id, broker.agency_id, broker.id]);
-    if (!rows[0]) return next();
-    const filters = SearchLink.sanitizeFilters(rows[0].filters);
+    const saved = await Saved.get(pool, broker, req.params.id);
+    if (!saved) return next();
+    const rows = [saved];
+    const filters = saved.filters;
     const out = await runFilters(pool, broker.agency_id, filters, 1);
-    await pool.query("UPDATE saved_searches SET seen_ids = $2::uuid[], last_run_at = NOW() WHERE id = $1", [rows[0].id, out.ids]);
+    await Saved.markSeen(pool, saved.id, out.ids);
     const token = SearchLink.encodeFilters(filters);
     return page(req, res, {
       title: rows[0].name,
@@ -360,10 +343,7 @@ ${items.length
   });
 
   web.post("/searches/:id/delete", async (req, res) => {
-    const { broker } = req.session;
-    if (/^[0-9a-f-]{36}$/.test(req.params.id)) {
-      await pool.query("DELETE FROM saved_searches WHERE id = $1 AND agency_id = $2 AND broker_id = $3 AND lead_id IS NULL", [req.params.id, broker.agency_id, broker.id]);
-    }
+    await Saved.remove(pool, req.session.broker, req.params.id);
     return res.redirect(303, "/app/searches");
   });
 }
