@@ -31,7 +31,7 @@
 {"q":"شقة نص تشطيب","expect":{"property_types":["apartment"],"finishing":["semi_finished"]}},
 {"q":"شقة بمطبخ وتكييفات","expect":{"property_types":["apartment"],"furnishing":"kitchen_and_ac"}},
 {"q":"شقة مطبخ وتكييف ايجار","expect":{"listing_type":"rent","property_types":["apartment"],"furnishing":"kitchen_and_ac"}},
-{"q":"شقة ارضي بجاردن","expect":{"property_types":["apartment"],"features":["private_garden"]},"gap":true},
+{"q":"شقة ارضي بجاردن","expect":{"property_types":["apartment"],"floor_min":0,"features":["private_garden"]}},
 {"q":"شقة الدور التاني","expect":{"property_types":["apartment"],"floor_min":2}},
 {"q":"شقة دور متكرر","expect":{"property_types":["apartment"],"floor_min":1}},
 {"q":"شقة اخر دور","expect":{"property_types":["apartment"]}},

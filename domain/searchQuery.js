@@ -501,6 +501,8 @@ function fallbackParse(text) {
 
   // "بجنينة" / "بغرفة مربية" / "بتراس": the attached "ب" (with) is dropped before a feature word.
   hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن|سطح|دولار|يورو)/g, " $1");
+  // "ارضي بجاردن" (ground floor with a garden) is a floor and a garden, not the land type.
+  hay = hay.replace(/ ارضي (?:ب|مع )?(?:جاردن|حديقه|حديقة|جنينه) /g, " دور ارضي جنينه ");
   // Franco-Arabic (Arabic in Latin letters): the common words become their Arabic spelling so the rules below read them.
   hay = hay
     .replace(/ (?:shaqa|shaqqa|sha2a|shu2a|sha2'a) /g, " شقه ")
