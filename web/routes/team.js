@@ -21,7 +21,7 @@ const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
-const ROLE_LABEL = { data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قايد فريق", "Team lead"] };
+const ROLE_LABEL = { data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قائد فريق", "Team lead"] };
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };
 const LINKS = { limit: 30, windowSec: 24 * 3600 };
@@ -142,11 +142,11 @@ function cairoDay(d) {
 /** The agency owner moves a broker to manager or a manager back to broker. */
 // Team lead: a manager or the owner makes a broker a team lead, or takes the role back, and puts brokers under a team lead.
 function teamLeadForm(b, lang, teamLeads) {
-  if (b.role === "team_lead") return html`<form method="post" action="/app/team/${b.id}/team-role" data-confirm="${L(lang, "متأكد؟ الفريق اللي تحته هيتشال منه.", "Sure? The team under them is cleared.")}"><input type="hidden" name="on" value="0"><button type="submit" class="secondary">${L(lang, "⬇️ شيل دور قايد الفريق", "⬇️ Remove team lead role")}</button></form>`;
+  if (b.role === "team_lead") return html`<form method="post" action="/app/team/${b.id}/team-role" data-confirm="${L(lang, "متأكد؟ الفريق اللي تحته هيتشال منه.", "Sure? The team under them is cleared.")}"><input type="hidden" name="on" value="0"><button type="submit" class="secondary">${L(lang, "⬇️ شيل دور قائد الفريق", "⬇️ Remove team lead role")}</button></form>`;
   if (b.role !== "broker") return "";
   const current = b.team_lead_id || "";
   const options = teamLeads.map((t) => html`<option value="${t.id}"${t.id === current ? html` selected` : ""}>${t.name}</option>`);
-  return html`<form method="post" action="/app/team/${b.id}/team" class="row"><label>${L(lang, "الفريق", "Team")} <select name="team_lead_id"><option value="">${L(lang, "من غير فريق", "No team")}</option>${options}</select></label><button type="submit" class="secondary">${L(lang, "احفظ الفريق", "Save team")}</button></form><form method="post" action="/app/team/${b.id}/team-role"><input type="hidden" name="on" value="1"><button type="submit" class="secondary">${L(lang, "⭐ خليه قايد فريق", "⭐ Make team lead")}</button></form>`;
+  return html`<form method="post" action="/app/team/${b.id}/team" class="row"><label>${L(lang, "الفريق", "Team")} <select name="team_lead_id"><option value="">${L(lang, "من غير فريق", "No team")}</option>${options}</select></label><button type="submit" class="secondary">${L(lang, "احفظ الفريق", "Save team")}</button></form><form method="post" action="/app/team/${b.id}/team-role"><input type="hidden" name="on" value="1"><button type="submit" class="secondary">${L(lang, "⭐ خليه قائد فريق", "⭐ Make team lead")}</button></form>`;
 }
 
 function roleForm(b, lang) {
@@ -210,7 +210,7 @@ ${tabs("team_tab", [
   <form method="post" action="/app/team/invite" class="stack">
   <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80"></label>
   <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>
-  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="team_lead">${L(lang, "قايد فريق", "Team lead")}</option><option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
+  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="team_lead">${L(lang, "قائد فريق", "Team lead")}</option><option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
   <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en">English</option></select></label>
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>
@@ -257,7 +257,7 @@ function register(web, { pool, page }) {
     const r = await Team.setTeamLeadRole(pool, req.session.broker, req.params.id, req.body.on === "1");
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
     logOperation(pool, { agency_id: req.session.broker.agency_id, broker_id: req.session.broker.id, operation_type: "team_lead_role", metadata: { broker_id: r.broker.id, from: r.from, to: r.to } });
-    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} بقى ${r.to === "team_lead" ? "قايد فريق" : "بروكر"}.`, `${r.broker.name} is now ${r.to === "team_lead" ? "a team lead" : "a broker"}.`)}</p>` });
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} بقى ${r.to === "team_lead" ? "قائد فريق" : "بروكر"}.`, `${r.broker.name} is now ${r.to === "team_lead" ? "a team lead" : "a broker"}.`)}</p>` });
   });
 
   web.post("/team/:id/team", async (req, res) => {

@@ -19,6 +19,12 @@ const Plans = require("../domain/plans");
 const FormChecks = require("../lib/formChecks");
 const Form = require("../web/forms/unitForm");
 const { uploads, PHOTO, VOICE } = require("../web/uploads");
+const SaveKeys = require("../lib/saveKeys");
+const Uploads = require("../lib/unitUploads");
+const UnitDelete = require("../services/unitDelete");
+const Leases = require("../services/leases");
+const Privacy = require("../services/unitPrivacy");
+const Catalogue = require("../services/catalogue");
 
 const MAX_DESCRIBE = 4000;
 const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -61,10 +67,102 @@ async function storePhotos(broker, files) {
   return { urls, failed };
 }
 
+/** The body of a repeated create: the unit the first try saved, with its photo count. */
+async function repeatBody(pool, broker, code) {
+  const { rows } = await pool.query("SELECT count(li.*)::int AS n FROM listings l LEFT JOIN listing_images li ON li.listing_id = l.id WHERE l.agency_id = $1 AND l.code = $2", [broker.agency_id, code]);
+  return { code, photos: rows[0] ? rows[0].n : 0, photosFailed: 0, repeat: true };
+}
+
 function register(api, { pool }) {
   const upload = uploads([PHOTO, VOICE]);
 
   // Fill the fields from a typed description (a shared WhatsApp message) and/or a voice note. Nothing is saved.
+  // Lifecycle from the unit page: active / sold / archived, delete (kept 10 days) and restore. Same rules as the website.
+  const unitFor = async (req, res) => {
+    const b = req.session.broker;
+    const listing = await Store.findByCode(pool, b.agency_id, req.params.code);
+    if (!listing || !Authz.canView(b, listing)) {
+      res.status(404).json({ error: "not_found" });
+      return null;
+    }
+    return listing;
+  };
+  api.post("/units/:code/status", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const status = String((req.body || {}).status || "");
+    if (!["active", "sold", "archived"].includes(status)) return res.status(422).json({ error: "unknown_status" });
+    if (listing.status === "deleted") return res.status(422).json({ error: "deleted" });
+    if (!Authz.canEdit(b, listing) || !(await Rights.mayWrite(pool, b))) return res.status(403).json({ error: "forbidden" });
+    if (listing.status !== status) {
+      const out = await Store.applyListingPatch(pool, b, { listing, patch: { status } });
+      if (out.conflict) return res.status(409).json({ error: "conflict" });
+      logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: `listing_status_${status}`, metadata: { from: listing.status } });
+    }
+    return res.json({ ok: true, status });
+  });
+  api.post("/units/:code/delete", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const out = await UnitDelete.softDelete(pool, b, listing.id);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: "unit_soft_delete", metadata: {} });
+    return res.json({ ok: true });
+  });
+  api.post("/units/:code/restore", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await Store.findByCode(pool, b.agency_id, req.params.code);
+    if (!listing) return res.status(404).json({ error: "not_found" });
+    const out = await UnitDelete.restore(pool, b, listing.id);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: "unit_restore", metadata: {} });
+    return res.json({ ok: true, code: out.code });
+  });
+
+  // Lease of a rented unit, the agency-only details (pin, unit number, address) and the project link. Same services as the website.
+  api.get("/units/:code/lease", async (req, res) => {
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const l = await Leases.forListing(pool, listing);
+    return res.json({ rent: listing.listing_type === "rent", lease: l ? { startDate: String(l.start_date).slice(0, 10), months: l.months, rent: l.rent, increasePct: l.increase_pct, tenantName: l.tenant_name, remind: !!l.remind } : null });
+  });
+  api.post("/units/:code/lease", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const body = req.body || {};
+    const out = body.remove ? await Leases.remove(pool, b, listing) : await Leases.save(pool, b, listing, { start_date: body.startDate, months: body.months, rent: body.rent, increase_pct: body.increasePct, tenant_name: body.tenantName, remind: body.remind ? "1" : "" });
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    return res.json({ ok: true });
+  });
+  api.post("/units/:code/private", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    if (!Authz.canEdit(b, listing)) return res.status(403).json({ error: "forbidden" });
+    const body = req.body || {};
+    const raw = String(body.pin || "").trim();
+    const pin = raw ? Privacy.parsePin(raw) : null;
+    if (raw && !pin) return res.status(422).json({ error: "bad_pin" });
+    await Privacy.setPin(pool, b, listing, pin, { source: "app" });
+    const clean = (v, n) => String(v || "").trim().slice(0, n) || null;
+    await pool.query(
+      `UPDATE listings SET details = (details - 'unit_no' - 'address') || jsonb_strip_nulls(jsonb_build_object('unit_no', $3::text, 'address', $4::text)), updated_at = now() WHERE id = $1 AND agency_id = $2`,
+      [listing.id, b.agency_id, clean(body.unitNo, 40), clean(body.address, 200)]
+    );
+    return res.json({ ok: true });
+  });
+  api.post("/units/:code/project", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const out = await Catalogue.linkResale(pool, b, listing, (req.body || {}).projectId || null);
+    if (out.error) return res.status(out.error === "forbidden" || out.error === "catalogue_unit" ? 403 : 422).json({ error: out.error });
+    return res.json({ ok: true });
+  });
+
   api.post("/units/extract", upload, async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
     const lang = langOf(req);
@@ -129,10 +227,15 @@ function register(api, { pool }) {
     const expectedVersion = Number(req.body && req.body.version);
     if (!Number.isInteger(expectedVersion)) return res.status(400).json({ error: "version_required" });
     const form = Form.unitFromForm(fieldsOf(req.body));
+    const saveKey = SaveKeys.keyOf(req.body);
+    const t0 = Date.now();
     const out = await Edits.withCodeLock(pool, broker.agency_id, req.params.code, async (client) => {
       const listing = await Store.findByCode(client, broker.agency_id, req.params.code, { forUpdate: true });
       if (!listing) return { missing: true };
       if (!Authz.canEdit(broker, listing)) return { forbidden: true };
+      // The same save sent again (a lost answer, the 60-second check's Retry): the first result, never a second change.
+      const key = await SaveKeys.claim(client, broker.agency_id, saveKey, "edit");
+      if (!key.first) return { rollback: true, repeat: listing };
       const photoCount = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1", [listing.id])).rows[0].n;
       const ev = Rules.evaluate(Form.composeFromForm({ existing: listing, form, lang }), { lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
@@ -140,13 +243,15 @@ function register(api, { pool }) {
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, conflict: true };
       if (res2.forbidden) return { rollback: true, forbidden: true };
+      await SaveKeys.attach(client, broker.agency_id, saveKey, res2.listing.code);
       return { saved: res2.listing, columns: Object.keys(patch) };
     });
+    if (out.repeat) return res.json({ code: out.repeat.code, version: out.repeat.version, repeat: true });
     if (out.missing) return res.status(404).json({ error: "not_found" });
     if (out.forbidden) return res.status(403).json({ error: "forbidden" });
     if (out.conflict) return res.status(409).json({ error: "conflict" });
     if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev) });
-    require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", metadata: { columns: out.columns } });
+    require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", total_duration_ms: Date.now() - t0, metadata: { columns: out.columns, save_key: Boolean(saveKey) } });
     return res.json({ code: out.saved.code, version: out.saved.version });
   });
 
@@ -167,15 +272,20 @@ function register(api, { pool }) {
     };
     const removeIds = ids(req.body && req.body.remove);
     const order = ids(req.body && req.body.order).filter((id) => !removeIds.includes(id));
-    const photos = await storePhotos(broker, filesOf(req, "photos").slice(0, MAX_PHOTOS));
+    const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
+    const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
+    const staged = await Uploads.verify(pool, broker, keys);
+    if (staged.missing.length) return res.status(422).json({ error: "photo_missing", keys: staged.missing });
+    const photos = await storePhotos(broker, files);
     const out = await Edits.withCodeLock(pool, broker.agency_id, req.params.code, async (client) => {
       const listing = await Store.findByCode(client, broker.agency_id, req.params.code, { forUpdate: true });
       if (!listing) return { rollback: true, missing: true };
       if (!Authz.canEdit(broker, listing)) return { rollback: true, forbidden: true };
+      if (!(await Uploads.attach(client, broker, keys))) return { rollback: true, photosUsed: true };
       const left = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1 AND NOT (id = ANY($2::uuid[]))", [listing.id, removeIds])).rows[0].n;
-      if (left + photos.urls.length > MAX_PHOTOS) return { rollback: true, tooMany: true };
+      if (left + photos.urls.length + keys.length > MAX_PHOTOS) return { rollback: true, tooMany: true };
       const removed = await Store.removePhotos(client, listing, removeIds);
-      await Store.addPhotos(client, listing, photos.urls);
+      await Store.addPhotos(client, listing, [...staged.paths, ...photos.urls]);
       if (order.length > 1) await Store.reorderPhotos(client, listing, order);
       await client.query("UPDATE listings SET flyer_cache = '{}'::jsonb, updated_at = now() WHERE id = $1", [listing.id]);
       const images = (await client.query("SELECT id, url, position FROM listing_images WHERE listing_id = $1 ORDER BY position", [listing.id])).rows;
@@ -184,10 +294,23 @@ function register(api, { pool }) {
     if (!out.images) Supabase.deleteStorageFiles(photos.urls).catch(() => {});
     if (out.missing) return res.status(404).json({ error: "not_found" });
     if (out.forbidden) return res.status(403).json({ error: "forbidden" });
+    if (out.photosUsed) return res.status(409).json({ error: "photos_used" });
     if (out.tooMany) return res.status(422).json({ error: "too_many_photos", max: MAX_PHOTOS });
     if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(() => {});
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.listing.code, operation_type: "app_unit_photos", metadata: { added: photos.urls.length, removed: out.removed.length } });
     return res.json({ images: out.images.map((i) => ({ id: i.id, url: Supabase.photoUrl(i.url), position: i.position })), failed: photos.failed });
+  });
+
+  // One-time upload links so the app sends each photo straight to storage (never through this server). Then create or add photos
+  // with the returned `key`s as `photo_keys`.
+  api.post("/units/photo-upload", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    const out = await Uploads.sign(pool, broker, (req.body || {}).count, "app");
+    res.set("Cache-Control", "no-store");
+    if (out.limited) return res.status(429).json({ error: "rate_limited" });
+    if (out.failed) return res.status(503).json({ error: "storage_unavailable" });
+    return res.json({ ...out, expires_in: 7200 });
   });
 
   // Save: the field table must pass; insert-only (a used code is refused, never overwritten).
@@ -198,8 +321,13 @@ function register(api, { pool }) {
     const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
     const fields = fieldsOf(req.body);
+    const t0 = Date.now();
+    const saveKey = SaveKeys.keyOf(req.body);
+    const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
+    if (prior) return res.status(201).json(await repeatBody(pool, broker, prior));
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
-    const { form, ev } = evaluate(fields, lang, files.length);
+    const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
+    const { form, ev } = evaluate(fields, lang, files.length + keys.length);
     if (!ev.ok) return res.status(422).json({ error: "incomplete", blockers: blockersOf(ev) });
     // An owner phone with no name is refused unless the broker says to use the phone as the name.
     const d = ev.listing.details || {};
@@ -217,24 +345,45 @@ function register(api, { pool }) {
       const duplicate = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
       if (duplicate) return res.status(409).json({ error: "duplicate", duplicate });
     }
+    const staged = await Uploads.verify(pool, broker, keys);
+    if (staged.missing.length) return res.status(422).json({ error: "photo_missing", keys: staged.missing });
+    const tPhotos = Date.now();
     const photos = await storePhotos(broker, files);
+    const photoMs = Date.now() - tPhotos;
+    const tDb = Date.now();
     const client = await pool.connect();
     let result;
+    let repeat = null;
+    let photosUsed = false;
     try {
       await client.query("BEGIN");
-      result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
-      if (result.listing) {
-        const added = await Store.addPhotos(client, result.listing, photos.urls);
+      const key = await SaveKeys.claim(client, broker.agency_id, saveKey, "create");
+      if (!key.first) {
+        repeat = key;
+        await client.query("ROLLBACK");
+      } else result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
+      if (result && result.listing) {
+        await SaveKeys.attach(client, broker.agency_id, saveKey, result.listing.code);
+        if (!(await Uploads.attach(client, broker, keys))) photosUsed = true;
+        const added = await Store.addPhotos(client, result.listing, photosUsed ? [] : [...staged.paths, ...photos.urls]);
         // The broker ordered the photos by hand (drag and drop in the app): AI ordering is skipped for this unit (saves AI credits).
         if (!(fields.photo_ai === true || fields.photo_ai === "1") && added.length) await Store.reorderPhotos(client, result.listing, added.map((r) => r.id), { force: true });
       }
-      await client.query(result.listing ? "COMMIT" : "ROLLBACK");
+      if (!repeat) await client.query(result.listing && !photosUsed ? "COMMIT" : "ROLLBACK");
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
       throw err;
     } finally {
       client.release();
+    }
+    if (photosUsed) {
+      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      return res.status(409).json({ error: "photos_used" });
+    }
+    if (repeat) {
+      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      return res.status(201).json(await repeatBody(pool, broker, repeat.code));
     }
     if (!result.listing) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
@@ -243,8 +392,8 @@ function register(api, { pool }) {
       if (result.conflict) return res.status(409).json({ error: "code_used", code: result.code });
       return res.status(422).json({ error: "not_saved" });
     }
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "app_unit_create", metadata: { photos: photos.urls.length, photo_failures: photos.failed } });
-    return res.status(201).json({ code: result.listing.code, photos: photos.urls.length, photosFailed: photos.failed });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "app_unit_create", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { photos: photos.urls.length + staged.paths.length, direct: staged.paths.length, photo_failures: photos.failed, save_key: Boolean(saveKey) } });
+    return res.status(201).json({ code: result.listing.code, photos: photos.urls.length + staged.paths.length, photosFailed: photos.failed });
   });
 }
 

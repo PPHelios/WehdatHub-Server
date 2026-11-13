@@ -38,6 +38,11 @@ module.exports = {
     return BASE + "thumbs/" + pathOf(value);
   },
   uploadThumb: async () => true,
+  createSignedUpload: async (storagePath) => "https://storage.test/upload/sign/" + pathOf(storagePath) + "?token=test",
+  objectInfo: async (keyOrUrl) => {
+    const buf = objects.get(pathOf(keyOrUrl));
+    return buf ? { size: buf.length, contentType: "image/jpeg" } : null;
+  },
   downloadListingImage: async (keyOrUrl) => {
     if (typeof keyOrUrl !== "string" || !keyOrUrl) return null;
     const buffer = objects.get(pathOf(keyOrUrl));

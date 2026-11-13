@@ -132,7 +132,7 @@ function resolvePlaceNames(names = []) {
 
 // Words that name a kind of place, not a place: "compound mivida" must search for Mivida only, since the word would match
 // every unit whose text says compound.
-const GENERIC_PLACE_WORDS = new Set(["compound", "compounds", "كمبوند", "كمبوندات", "كومبوند", "project", "projects", "مشروع", "مشاريع"].map(normalizeSearch));
+const GENERIC_PLACE_WORDS = new Set(["compound", "compounds", "كمبوند", "كمبوندات", "كومبوند", "project", "projects", "مشروع", "مشاريع", "any", "اي", "أي", "اى", "ايه"].map(normalizeSearch));
 function dropGenericPlaceWords(term) {
   return normalizeSearch(term).split(" ").filter((w) => w && !GENERIC_PLACE_WORDS.has(w)).join(" ");
 }
@@ -242,6 +242,15 @@ function normalizeAiSearch(raw) {
     feature_terms: other
   });
 
+  // AC and kitchen are a furnishing status (the same reading the quick reader makes): both, AC alone or kitchen alone ("with AC").
+  if (!filters.furnishing) {
+    const k = filters.features.includes("kitchen_installed");
+    const a = filters.features.includes("ac_installed");
+    if (k || a) {
+      filters.features = filters.features.filter((x) => x !== "kitchen_installed" && x !== "ac_installed");
+      filters.furnishing = k && a ? "kitchen_and_ac" : a ? "ac_only" : "kitchen_only";
+    }
+  }
   return {
     intent: ["search", "listing", "other"].includes(r.intent) ? r.intent : "search",
     transcript: String(r.transcript ?? "").slice(0, 500),
@@ -266,7 +275,7 @@ const STOP = new Set(
     "ممكن", "تكرمت", "تكرم", "تدورلي", "تدور", "ادورلي", "بلاش", "اللي", "يا", "باشا", "بيه", "ريس", "هندسه", "استاذ", "اخي", "تمام", "طيب",
     "بسعر", "سعر", "ميزانيه", "ميزانيتي", "بميزانيه", "بادجت", "جنيه", "جنية", "جنيها", "الشهر", "شهريا", "شهري", "وصاله", "صاله",
     "مساحتها", "مساحه", "الاقل", "كومباوند", "كومبوند", "كمبوند", "كمبوندات", "كومباوندات", "قريبه", "ابغي", "ابي", "عندكم", "عندكو", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب",
-    "more", "شقتين", "فيلتين", "وحدتين", "بدور", "دور", "البادجت", "بدجت", "بودجت", "الميزانيه", "بدوّر", "عاوزه", "عايزين", "محتاجه"
+    "more", "less", "than", "دولار", "يورو", "دولارات", "dollar", "dollars", "euro", "euros", "usd", "eur", "شقتين", "فيلتين", "وحدتين", "بدور", "دور", "البادجت", "بدجت", "بودجت", "الميزانيه", "بدوّر", "عاوزه", "عايزين", "محتاجه"
   ].map(normalizeSearch)
 );
 
@@ -290,7 +299,7 @@ function speakNumbers(hay) {
     .replace(/ (?:نص|نصف) مليون /g, " 0.5 مليون ")
     .replace(/ ربع مليون /g, " 0.25 مليون ")
     .replace(/ (?:تلت|ثلث) مليون /g, " 0.33 مليون ")
-    .replace(/ (مليونين|مليونان) /g, " 2 مليون ")
+    .replace(/ ب?(مليونين|مليونان) /g, " 2 مليون ")
     .replace(/ (الفين|الفان) /g, " 2 الف ")
     .replace(/ (?:الاف|تلاف) /g, " الف ")
     .replace(/ (\d+) مليون ونص /g, (_, d) => ` ${Number(d) + 0.5} مليون `)
@@ -411,7 +420,9 @@ function takeUnapplied(hay, unapplied) {
   let h = ` ${out.join(" ")} `;
   for (const re of [
     / (?:ب|بال)?(?:الدور الاخير|اخر دور|الدور الاخر|top floor|last floor) /,
-    / (?:قانون جديد|قانون قديم|ايجار قديم|ايجار جديد|new rent law|old rent law) /
+    / (?:قانون جديد|قانون قديم|ايجار قديم|ايجار جديد|new rent law|old rent law) /,
+    // "down payment less than 10%": a ceiling on the down payment percent, which the filters cannot say.
+    / (?:down ?payment|مقدم) (?:less than|under|below|max|maximum|اقل من|تحت|حد اقصي) \d+(?:\.\d+)? ?(?:%|percent|بالمية|فالمية) /
   ]) {
     const m = h.match(re);
     if (m) {
@@ -489,7 +500,16 @@ function fallbackParse(text) {
   hay = hay.replace(/ و(?=\d|حمام|[ء-ي]+ حمام)/g, " ");
 
   // "بجنينة" / "بغرفة مربية" / "بتراس": the attached "ب" (with) is dropped before a feature word.
-  hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن)/g, " $1");
+  hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن|سطح|دولار|يورو)/g, " $1");
+  // Franco-Arabic (Arabic in Latin letters): the common words become their Arabic spelling so the rules below read them.
+  hay = hay
+    .replace(/ (?:shaqa|shaqqa|sha2a|shu2a|sha2'a) /g, " شقه ")
+    .replace(/ (?:be?l? ?)?(?:tagheez|tashteeb|tasheeb) (?:kamel|kaamel|full) /g, " تشطيب كامل ")
+    .replace(/ (?:ghorfa|ghorfet|ghurfa) (?:morabeya|morabbya|morabia|nanny) /g, " غرفه مربيه ")
+    .replace(/ (?:ghorf|ghoraf|ghorfa|ghurf|oda|odaa|oda2) /g, " غرف ")
+    .replace(/ (?:ejar|egar|igar|ijar|e7gar|eigar) /g, " ايجار ")
+    .replace(/ (?:lel ?bay3|lel ?beya3|lel ?bei3|lelbay3|lelbei3) /g, " للبيع ")
+    .replace(/ (?:fe|fi|fel|fil|fee) /g, " في ");
   // English words written in Arabic letters.
   hay = hay
     .replace(/ (ابارتمنت|ابارتمنتس|أبارتمنت|ابرتمنت) /g, " شقه ")
@@ -548,8 +568,8 @@ function fallbackParse(text) {
   }
 
   // Money: ranges, "above", down payment and monthly installment come before the plain budget ceiling.
-  const MONEY = "(\\d+(?:\\.\\d+)?) (مليون|million|m|الف|k|thousand)";
-  const money = (num, unit) => parseMoneyWords(String(num), unit);
+  const MONEY = "(\\d+(?:\\.\\d+)?|\\d+ \\d{1,2}) (مليون|million|m|الف|k|thousand)";
+  const money = (num, unit) => parseMoneyWords(String(num).replace(" ", "."), unit);
   c = consume(hay, new RegExp(` (?:من |from )?(\\d+(?:\\.\\d+)?)(?: (مليون|million|m|الف|k|thousand))? (?:ل|الي|to|-) ${MONEY} `));
   if (c.m) {
     const hi = money(c.m[3], c.m[4]);
@@ -562,6 +582,7 @@ function fallbackParse(text) {
   }
   const CAP = "(?:حدود |تحت |اقل من |under |max |less than |at most |below |up to |مش (?:عايز )?(?:اكتر|اكثر) من |بحد اقصي |حد اقصي |اقصي |لحد )?";
   c = consume(hay, new RegExp(` و?(?:مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment) ${CAP}${MONEY} `));
+  if (!c.m) c = consume(hay, / (\d+(?:\.\d+)?) (مليون|million|الف|k|thousand) (?:مقدم|دفعه اولي|down payment|downpayment) /); // "نص مليون مقدم": the amount comes first
   if (c.m) {
     f.max_down_payment = money(c.m[1], c.m[2]);
     hay = c.hay;
@@ -586,7 +607,7 @@ function fallbackParse(text) {
     if (v) f.price_max = v;
     hay = c.hay;
   }
-  c = consume(hay, new RegExp(` (?:فوق|اكتر من|اكثر من|above|over|more than|min) ${MONEY} `));
+  c = consume(hay, new RegExp(`(?<!not|no|مش) (?:فوق|اكتر من|اكثر من|above|over|more than|min) ${MONEY} `));
   if (c.m) {
     const v = money(c.m[1], c.m[2]);
     if (v) f.price_min = v;
@@ -594,7 +615,7 @@ function fallbackParse(text) {
   }
 
   // A budget with the short "م" ("تحت 9م"): read before the area rule, so it is not square metres.
-  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to) (\d+(?:\.\d+)?|[ء-ي]+) (م|m) /);
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|not more than|no more than|not over|not above|maximum) (\d+(?:\.\d+)?|[ء-ي]+) (م|m) /);
   if (c.m) {
     const v = spokenAmount(c.m[1]);
     if (v !== null) f.price_max = parseMoneyWords(String(v), "م");
@@ -602,7 +623,7 @@ function fallbackParse(text) {
   }
   // A dollar or euro budget with no unit word ("تحت 1000 دولار", "under 1000 dollars"): the number is the amount.
   if (f.currency && f.price_max === null) {
-    c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to) (\d+(?:\.\d+)?)(?! (?:مليون|million|m|الف|ألف|k|thousand|م) ) /);
+    c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|not more than|no more than|not over|not above|maximum) (\d+(?:\.\d+)?)(?! (?:مليون|million|m|الف|ألف|k|thousand|م) ) /);
     if (c.m) {
       f.price_max = Math.round(Number(c.m[1]));
       hay = c.hay;
@@ -616,9 +637,20 @@ function fallbackParse(text) {
     f.area_max = Number(c.m[2]);
     hay = c.hay;
   } else {
-    c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
+    // "m" / "م" alone is metres only from 30 up; "20m" / "20 م" is twenty million (a unit is never 20 m2).
+    c = consume(hay, / (\d{2,4}) (متر|m2|sqm|meter|meters) /);
+    if (!c.m) c = consume(hay, / (\d{3,4}|[3-9]\d) (م|m) /);
     if (c.m) {
       f.area_min = Number(c.m[1]);
+      hay = c.hay;
+    }
+  }
+
+  // "20 م" alone (under 30) is twenty million, not metres.
+  if (f.area_min === null && f.price_max === null && f.price_min === null) {
+    c = consume(hay, / (\d{1,2}(?:\.\d+)?) م /);
+    if (c.m) {
+      f.price_max = Math.round(Number(c.m[1]) * 1e6);
       hay = c.hay;
     }
   }
@@ -633,7 +665,7 @@ function fallbackParse(text) {
   }
 
   // Budget: "تحت 8 مليون" / "under 8 million" / "8 مليون" (a ceiling).
-  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|budget|(?:ال)?(?:بادجت|بدجت|بودجت|ميزانيه|ميزانيتي))? ?(\d+(?:\.\d+)?|\d+ \d+|[ء-ي]+) (مليون|million|m|الف|k|thousand)( ونص)? /);
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|بحد اقصي|حد اقصي|اقصي|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|not more than|no more than|not over|not above|maximum|budget|(?:ال)?(?:بادجت|بدجت|بودجت|ميزانيه|ميزانيتي))? ?(\d+(?:\.\d+)?|\d+ \d+|[ء-ي]+) (مليون|million|m|الف|k|thousand)( ونص)? /);
   if (c.m) {
     const n = spokenAmount(c.m[1].replace(" ", "."));
     const v = n === null ? null : parseMoneyWords(String(n), c.m[2]);
@@ -644,7 +676,7 @@ function fallbackParse(text) {
 
   // "بحد اقصى 8000" / "تحت 15000": a bare number of four digits or more after a limit word is the price ceiling (rent).
   if (f.price_max === null) {
-    c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|الميزانيه|بادجت|البادجت|بدجت|بودجت|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget) (\d{4,9}) /);
+    c = consume(hay, / (?:بحد اقصي|حد اقصي|اقصي|ميزانيتي|ميزانيه|الميزانيه|بادجت|البادجت|بدجت|بودجت|تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|not more than|no more than|not over|not above|maximum|budget) (\d{4,9}) /);
     if (c.m) {
       f.price_max = Number(c.m[1]);
       hay = c.hay;
@@ -682,7 +714,7 @@ function fallbackParse(text) {
       break;
     }
   }
-  c = consume(hay, / (?:غير مفروشه|فاضيه|unfurnished) /);
+  c = consume(hay, / (?:غير مفروشه|غير مفروش|مش مفروشه|مش مفروش|بدون فرش|بدون مفروشه|بدون مفروش|من غير فرش|فاضيه|unfurnished|not furnished|non furnished|without furniture) /);
   if (c.m) f.furnishing = "unfurnished";
   else {
     c = consume(hay, / (?:نص فرش|نصف فرش|semi furnished|semi-furnished) /);
@@ -693,6 +725,16 @@ function fallbackParse(text) {
     }
   }
   hay = c.hay;
+  // "مش مفروشة" / "بدون فرش" / "not furnished": the furnished word was already taken as a feature, so the negation is read from the whole text.
+  const nfurn = normalizeSearch(raw);
+  if (/(?:^| )(?:مش|غير|بدون|من غير|not|non|without) (?:مفروش[ء-ي]*|فرش|furnished|furniture)(?: |$)/.test(nfurn)) {
+    f.furnishing = "unfurnished";
+    f.features = f.features.filter((k) => k !== "furnished");
+    hay = hay.replace(/ (?:مش|غير|بدون|من غير|not|non|without) /g, " ");
+  } else if (/(?:^| )(?:نص|نصف|semi|half) (?:مفروش[ء-ي]*|فرش|furnished)(?: |$)/.test(nfurn)) {
+    f.furnishing = "semi_furnished";
+    f.features = f.features.filter((k) => k !== "furnished");
+  }
   if (!f.furnishing && f.features.includes("furnished")) f.furnishing = "furnished";
   const ORD = {
     الاول: 1, الاولي: 1, اول: 1, التاني: 2, الثاني: 2, تاني: 2, ثاني: 2, التالت: 3, الثالث: 3, تالت: 3, ثالث: 3, الرابع: 4, رابع: 4,
@@ -807,17 +849,19 @@ function fallbackParse(text) {
   // "AC only" / "kitchen only" (بس is optional in Arabic) are the other two statuses of the same field.
   if (!f.furnishing) {
     const nraw = ` ${normalizeSearch(raw)} `;
-    const onlyAc = /(?:تكييف|تكييفات|تكيفات|\bac\b|\bacs\b|air condition\w*)(?: بس)? only | (?:تكييف|تكييفات|تكيفات|\bac\b|\bacs\b) بس /.test(nraw);
-    const onlyKitchen = /(?:مطبخ|kitchen)(?: بس)? only | مطبخ بس /.test(nraw);
+    // "K/A" is how brokers write kitchen and AC.
+    if (/(?:^|\s)k\s?\/\s?a(?:\s|$)/i.test(String(raw))) {
+      for (const k of ["kitchen_installed", "ac_installed"]) if (!f.features.includes(k)) f.features.push(k);
+    }
     const hasK = f.features.includes("kitchen_installed");
     const hasA = f.features.includes("ac_installed");
     if (hasK && hasA) {
       f.features = f.features.filter((k) => k !== "kitchen_installed" && k !== "ac_installed");
       f.furnishing = "kitchen_and_ac";
-    } else if (hasA && onlyAc) {
+    } else if (hasA && !hasK) {
       f.features = f.features.filter((k) => k !== "ac_installed");
       f.furnishing = "ac_only";
-    } else if (hasK && onlyKitchen) {
+    } else if (hasK && !hasA) {
       f.features = f.features.filter((k) => k !== "kitchen_installed");
       f.furnishing = "kitchen_only";
     }
@@ -862,6 +906,9 @@ function disagreements(a, b) {
       x = (x || []).length > 0;
       y = (y || []).length > 0;
     }
+    // An unset currency means EGP, and a family of types read in another order is the same search: not disagreements.
+    if (k === "currency") (x = x || "EGP"), (y = y || "EGP");
+    if (k === "property_types") (x = [...(x || [])].sort()), (y = [...(y || [])].sort());
     if (JSON.stringify(x) !== JSON.stringify(y)) out.push(k);
   }
   return out;
@@ -913,6 +960,20 @@ function ensureFilters(parsed) {
 // message itself says installment (EN) or قسط / أقساط / تقسيط (AR). The AI reading can drop that word;
 // without it the number moves to the price ceiling (when no price was given).
 const INSTALLMENT_WORD = /installment|instalment|قسط|اقساط|تقسيط/;
+// A "20m" / "20 م" the AI read as 20 square metres: with no area word it is twenty million, a price ceiling.
+function enforceMillionUnits(parsed, text) {
+  const f = parsed?.filters;
+  if (!f || f.area_min === null || f.area_min === undefined || Number(f.area_min) >= 30) return parsed;
+  const t = ` ${normalizeSearch(String(text || ""))} `;
+  if (/ (?:متر|m2|sqm|meter|meters) /.test(t) || /\d(?:m2|sqm)/.test(t)) return parsed;
+  const m = t.match(/ (\d{1,2}(?:\.\d+)?) ?(?:m|م) /);
+  if (!m || Number(m[1]) !== Number(f.area_min)) return parsed;
+  if ((f.price_max === null || f.price_max === undefined) && (f.price_min === null || f.price_min === undefined)) f.price_max = Math.round(Number(m[1]) * 1e6);
+  f.area_min = null;
+  f.area_max = null;
+  return parsed;
+}
+
 function enforceInstallmentWords(parsed, text) {
   const said = INSTALLMENT_WORD.test(normalizeSearch(String(text || "")));
   const f = parsed?.filters;
@@ -925,8 +986,20 @@ function enforceInstallmentWords(parsed, text) {
   return parsed;
 }
 
+const RENT_WORD = /(^| )(ايجار|للايجار|ايجارات|rent|rental|for rent|tajeer)( |$)/;
+/** A down payment, installment or payment years only exist on a sale: with no rent word the search is a sale. */
+function enforceSaleForPayment(parsed, text) {
+  const f = parsed?.filters;
+  if (!f || f.listing_type === "sale") return parsed;
+  const pays = f.max_down_payment || f.max_installment || f.payment_installments || f.payment_years || (f.payment_down_pct !== null && f.payment_down_pct !== undefined);
+  if (pays && !RENT_WORD.test(normalizeSearch(String(text || "")))) f.listing_type = "sale";
+  return parsed;
+}
+
 module.exports = {
+  enforceSaleForPayment,
   enforceInstallmentWords,
+  enforceMillionUnits,
   emptyFilters,
   normalizeCode,
   normalizeAiSearch,

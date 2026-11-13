@@ -16,17 +16,21 @@ function cleanText(text) {
     .slice(0, MAX_TEXT);
 }
 
+const ms = (v) => (Number.isFinite(Number(v)) && v !== null && v !== undefined ? Math.max(0, Math.round(Number(v))) : null);
+
 /**
  * Saves one search. Returns the log id, or null when it could not be saved.
  * parse: the reading ({ source, local, ai, parsed, reasons }); used: the filters that ran.
  */
-async function record(pool, { broker, channel, text = "", parse = {}, used = null, total = 0, ids = [], relaxed = false, rerunOf = null }) {
+async function record(pool, { broker, channel, text = "", parse = {}, used = null, total = 0, ids = [], relaxed = false, rerunOf = null, startedAt = null }) {
   try {
     const meta = parse.parsed?.meta || parse.local?.meta || {};
-    const { rows } = await pool.query(
+    const reasons = [...(parse.reasons || []), ...(broker.view_of ? ["admin_view"] : [])];
+    const { rows } = await require("../lib/viewGuard").runWritable(() => pool.query(
       `INSERT INTO search_log (agency_id, broker_id, channel, query_text, source, reasons, local_filters, ai_filters, used_filters,
-                               unapplied, leftover, total, relaxed, result_ids, rerun_of, disagree, guesses, asked, ai_error)
-       VALUES ($1, $2, $3, $4, $5, $6::text[], $7::jsonb, $8::jsonb, $9::jsonb, $10::text[], $11::text[], $12, $13, $14::uuid[], $15, $16::text[], $17::jsonb, $18::text[], $19)
+                               unapplied, leftover, total, relaxed, result_ids, rerun_of, disagree, guesses, asked, ai_error,
+                               parse_ms, db_ms, total_ms, model)
+       VALUES ($1, $2, $3, $4, $5, $6::text[], $7::jsonb, $8::jsonb, $9::jsonb, $10::text[], $11::text[], $12, $13, $14::uuid[], $15, $16::text[], $17::jsonb, $18::text[], $19, $20, $21, $22, $23)
        RETURNING id`,
       [
         broker.agency_id,
@@ -34,7 +38,7 @@ async function record(pool, { broker, channel, text = "", parse = {}, used = nul
         channel,
         cleanText(text),
         parse.source || "form",
-        parse.reasons || [],
+        reasons,
         parse.local ? JSON.stringify(parse.local.filters) : null,
         parse.ai ? JSON.stringify(parse.ai.filters) : null,
         used ? JSON.stringify(used) : null,
@@ -47,8 +51,12 @@ async function record(pool, { broker, channel, text = "", parse = {}, used = nul
         parse.disagree || [],
         meta.guesses?.length ? JSON.stringify(meta.guesses) : null,
         [...(parse.ask?.terms || []), ...(parse.ask?.numbers || [])].map(String).slice(0, 10),
-        parse.aiError || null
-      ]
+        parse.aiError || null,
+        ms(parse.timings?.parseMs ?? parse.ms),
+        ms(parse.timings?.dbMs ?? parse.dbMs),
+        ms(startedAt ? Date.now() - startedAt : null),
+        parse.modelUsed ? String(parse.modelUsed).slice(0, 60) : null
+      ])
     );
     return rows[0]?.id || null;
   } catch (err) {

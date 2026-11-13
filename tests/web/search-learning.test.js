@@ -131,3 +131,23 @@ test("a feature the owner switched off is marked for graying out on the web, and
   expect(Bot.feedbackButtons("l1", "parser", "en").map((b) => b.id)).toEqual(["sx:bad:l1", "sx:ai:l1"]);
   void csrf;
 });
+
+test("the nightly check names the filter that emptied a search and finds units the plain check says were missed", async () => {
+  const a = await h.insertListing({ code: "V1", compound: "Hyde Park", bedrooms: 4, area_value: 300, price_value: 9e6, property_type: "villa" });
+  const b = await h.insertListing({ code: "V2", compound: "Hyde Park", bedrooms: 5, area_value: 320, price_value: 8e6, property_type: "villa" });
+  const { rows } = await h.pool.query("SELECT agency_id FROM listings WHERE id = $1", [a.id]);
+  const agency = rows[0].agency_id;
+  const f = (o) => JSON.stringify({ ...Q.emptyFilters(), ...o });
+  await h.query(
+    `INSERT INTO search_log (agency_id, channel, query_text, source, used_filters, total, result_ids) VALUES
+       ($1, 'app', 'zero', 'parser', $2, 0, '{}'),
+       ($1, 'app', 'one of two', 'parser', $3, 1, ARRAY[$4]::uuid[])`,
+    [agency, f({ property_types: ["villa"], bedrooms_min: 9 }), f({ property_types: ["villa"], bedrooms_min: 4 }), a.id]
+  );
+  const c = await Audit.run(h.pool, { now: new Date(Date.now() + 1000) });
+  expect(c).toMatchObject({ searches: 2, zero: 1, core_missed: 1 });
+  const zero = (await h.query("SELECT audit FROM search_log WHERE query_text = 'zero'"))[0].audit;
+  expect(zero.drop_one).toEqual({ bedrooms: 2 });
+  const miss = (await h.query("SELECT audit FROM search_log WHERE query_text = 'one of two'"))[0].audit;
+  expect(miss.core_missed_ids).toEqual([b.id]);
+});

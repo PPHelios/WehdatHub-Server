@@ -28,6 +28,7 @@ CREATE SEQUENCE IF NOT EXISTS public.share_link_opens_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_access_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_owner_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_reference_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.usage_events_id_seq;
 
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
  RETURNS trigger
@@ -1386,7 +1387,11 @@ CREATE TABLE IF NOT EXISTS public.search_log (
   guesses jsonb,
   asked text[] DEFAULT '{}'::text[] NOT NULL,
   ai_error text,
-  audit_resolved_at timestamp with time zone
+  audit_resolved_at timestamp with time zone,
+  parse_ms integer,
+  db_ms integer,
+  total_ms integer,
+  model text
 );
 
 CREATE TABLE IF NOT EXISTS public.search_reports (
@@ -1564,6 +1569,49 @@ CREATE TABLE IF NOT EXISTS public.place_proposals (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.save_keys (
+  agency_id uuid NOT NULL,
+  key text NOT NULL,
+  kind text NOT NULL,
+  listing_code text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.unit_photo_uploads (
+  key text NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid NOT NULL,
+  path text NOT NULL,
+  thumb_path text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  attached_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.usage_events (
+  id bigint DEFAULT nextval('usage_events_id_seq'::regclass) NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  agency_id uuid,
+  broker_id uuid,
+  channel text NOT NULL,
+  event text NOT NULL,
+  ok boolean DEFAULT true NOT NULL,
+  ms integer,
+  meta jsonb
+);
+
+CREATE TABLE IF NOT EXISTS public.log_daily_summary (
+  day date NOT NULL,
+  agency_id uuid DEFAULT '00000000-0000-0000-0000-000000000000'::uuid NOT NULL,
+  source text NOT NULL,
+  name text NOT NULL,
+  n integer DEFAULT 0 NOT NULL,
+  ok_n integer DEFAULT 0 NOT NULL,
+  ms_n integer DEFAULT 0 NOT NULL,
+  ms_sum bigint DEFAULT 0 NOT NULL,
+  ms_avg integer,
+  ms_max integer
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1607,6 +1655,7 @@ ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
+ALTER TABLE log_daily_summary ADD CONSTRAINT log_daily_summary_pkey PRIMARY KEY (day, agency_id, source, name);
 ALTER TABLE map_places ADD CONSTRAINT map_places_pkey PRIMARY KEY (id);
 ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
@@ -1627,6 +1676,7 @@ ALTER TABLE project_phases ADD CONSTRAINT project_phases_pkey PRIMARY KEY (id);
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_pkey PRIMARY KEY (id);
 ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_pkey PRIMARY KEY (agency_id, key);
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_pkey PRIMARY KEY (id);
 ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_pkey PRIMARY KEY (id);
@@ -1641,7 +1691,9 @@ ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMAR
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_pkey PRIMARY KEY (key);
 ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_pkey PRIMARY KEY (id);
+ALTER TABLE usage_events ADD CONSTRAINT usage_events_pkey PRIMARY KEY (id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_pkey PRIMARY KEY (id);
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
@@ -1858,6 +1910,8 @@ ALTER TABLE project_plans ADD CONSTRAINT project_plans_years_check CHECK (((year
 ALTER TABLE projects ADD CONSTRAINT projects_delivery_quarter_check CHECK (((delivery_quarter IS NULL) OR ((delivery_quarter >= 1) AND (delivery_quarter <= 4))));
 ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_key_check CHECK (((length(key) >= 8) AND (length(key) <= 64)));
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_kind_check CHECK ((kind = ANY (ARRAY['create'::text, 'edit'::text])));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_kind_check CHECK ((kind = ANY (ARRAY['place'::text, 'type'::text, 'feature'::text, 'furnishing'::text, 'finishing'::text, 'listing_type'::text])));
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'ai'::text, 'manual'::text])));
@@ -1871,6 +1925,7 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_note_length CHECK (((note IS 
 ALTER TABLE share_links ADD CONSTRAINT share_links_source_check CHECK (((source IS NULL) OR (source = ANY (ARRAY['bot'::text, 'web'::text, 'lead'::text]))));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text, 'rename_requested'::text, 'rename_approved'::text, 'rename_rejected'::text])));
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_key_check CHECK (((length(key) >= 8) AND (length(key) <= 64)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_client_note_check CHECK (((client_note IS NULL) OR (length(client_note) <= 300)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
@@ -2009,6 +2064,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_developer_id_fkey FOREIGN KEY (deve
 ALTER TABLE projects ADD CONSTRAINT projects_global_id_fkey FOREIGN KEY (global_id) REFERENCES global_projects(id) ON DELETE SET NULL;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE save_keys ADD CONSTRAINT save_keys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -2036,7 +2092,11 @@ ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_broker_id_fkey FO
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE CASCADE;
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_reference ADD CONSTRAINT unit_reference_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE usage_events ADD CONSTRAINT usage_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE usage_events ADD CONSTRAINT usage_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -2166,11 +2226,13 @@ CREATE UNIQUE INDEX uq_project_phases_name ON public.project_phases USING btree 
 CREATE INDEX idx_project_plans_project ON public.project_plans USING btree (project_id, "position");
 CREATE UNIQUE INDEX uq_projects_agency_lower_name ON public.projects USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING btree (broker_id);
+CREATE INDEX idx_save_keys_created ON public.save_keys USING btree (created_at);
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
 CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_saved_searches_lead ON public.saved_searches USING btree (agency_id, lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX search_aliases_status ON public.search_aliases USING btree (status, agreed DESC);
 CREATE INDEX search_log_agency_time ON public.search_log USING btree (agency_id, created_at DESC);
+CREATE INDEX search_log_slow ON public.search_log USING btree (created_at DESC) WHERE (total_ms > 5000);
 CREATE INDEX search_log_time ON public.search_log USING btree (created_at DESC);
 CREATE INDEX search_reports_open ON public.search_reports USING btree (created_at) WHERE (status = 'open'::text);
 CREATE UNIQUE INDEX search_test_cases_text ON public.search_test_cases USING btree (lower(TRIM(BOTH FROM query_text)));
@@ -2184,7 +2246,11 @@ CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (ow
 CREATE INDEX unit_owners_agency ON public.unit_owners USING btree (agency_id, created_at DESC);
 CREATE UNIQUE INDEX unit_owners_code ON public.unit_owners USING btree (agency_id, code);
 CREATE INDEX unit_owners_phones ON public.unit_owners USING gin (phones);
+CREATE INDEX idx_unit_photo_uploads_broker ON public.unit_photo_uploads USING btree (broker_id, created_at DESC);
+CREATE INDEX idx_unit_photo_uploads_state ON public.unit_photo_uploads USING btree (attached_at, created_at);
 CREATE INDEX unit_reference_agency_idx ON public.unit_reference USING btree (agency_id, purged_at DESC);
+CREATE INDEX usage_events_agency_event ON public.usage_events USING btree (agency_id, event, created_at DESC);
+CREATE INDEX usage_events_time ON public.usage_events USING btree (created_at);
 CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
 CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree (broker_id, created_at DESC);

@@ -1,5 +1,31 @@
 {
   "libraries": {
+    "lib/logRollup.js": {
+      "rollUp": ["pool", "params"],
+      "cutoff": ["now"],
+      "KEEP_DAYS": "Number"
+    },
+    "lib/usageLog.js": {
+      "APP_EVENTS": "Set",
+      "cleanBatch": ["body"],
+      "record": ["pool", "params"],
+      "track": ["pool"]
+    },
+    "lib/unitUploads.js": {
+      "keysOf": ["body"],
+      "sign": ["pool", "broker", "count", "source"],
+      "verify": ["pool", "broker", "keys"],
+      "attach": ["client", "broker", "keys"],
+      "ready": ["pool", "broker", "keys"],
+      "purgeOld": ["pool", "params"]
+    },
+    "lib/saveKeys.js": {
+      "keyOf": ["body"],
+      "claim": ["client", "agencyId", "key", "kind"],
+      "attach": ["client", "agencyId", "key", "code"],
+      "lookup": ["pool", "agencyId", "key"],
+      "purgeOld": ["pool", "params"]
+    },
     "domain/dealType.js": {
       "DEALS": "Array",
       "LABELS": "Object",
@@ -181,6 +207,8 @@
       "thumbUrl": ["value"],
       "uploadThumb": ["storagePath", "buffer"],
       "downloadListingImage": ["keyOrUrl"],
+      "objectInfo": ["keyOrUrl"],
+      "createSignedUpload": ["storagePath"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],
@@ -494,6 +522,8 @@
     },
     "domain/searchQuery.js": {
       "enforceInstallmentWords": ["parsed", "text"],
+      "enforceMillionUnits": ["parsed", "text"],
+      "enforceSaleForPayment": ["parsed", "text"],
       "emptyFilters": [],
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],
@@ -2363,6 +2393,8 @@
     "services/searchAudit.js": {
       "disagreements": ["a", "b"],
       "badUnits": ["filters", "units"],
+      "dropOne": ["pool", "agencyId", "used"],
+      "coreMissed": ["pool", "row"],
       "run": ["pool", "params"],
       "summary": ["pool", "counts"],
       "auditJob": []
@@ -2418,6 +2450,7 @@
     },
     "lib/viewGuard.js": {
       "runReadOnly": ["fn"],
+      "runWritable": ["fn"],
       "active": [],
       "isReadOnlySql": ["text"],
       "guardPool": ["pool"]

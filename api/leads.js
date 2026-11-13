@@ -13,6 +13,12 @@ const Phone = require("../domain/phone");
 const Intake = require("../domain/leadIntake");
 const LeadIntake = require("../lib/leadIntake");
 const { logOperation } = require("../lib/db");
+const Authz = require("../lib/authz");
+const LeadMerge = require("../services/leadMerge");
+const LeadRequests = require("../services/leadRequests");
+const FollowUpDrafts = require("../services/followUpDrafts");
+const Privacy = require("../services/privacy");
+const Store = require("../lib/listingStore");
 
 const PAGE = 20;
 const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step"];
@@ -79,7 +85,7 @@ function register(api, { pool }) {
   api.get("/leads/counts", async (req, res) => {
     const { broker } = req.session;
     const q = String(req.query.q || "").slice(0, 80);
-    const entries = await Promise.all(TABS.map(async (t) => [t, (await Leads.listLeads(pool, broker, { ...tabFilter(t), q, countOnly: true })).total]));
+    const entries = await Promise.all(TABS.map(async (t) => [t, (await Leads.listLeads(pool, broker, { ...tabFilter(t), q, brokerId: String(req.query.broker || ""), countOnly: true })).total]));
     res.json({ counts: Object.fromEntries(entries) });
   });
 
@@ -137,6 +143,44 @@ function register(api, { pool }) {
     if (!lead) return;
     const b = req.body || {};
     return answer(req, res, lead, await Leads.assignLead(pool, req.session.broker, lead.id, b.brokerId || null, { version: versionOf(b) }));
+  });
+
+  // Managers merge a duplicate record into this one; they erase a client (typing the last 4 digits). Same services as the website.
+  api.post("/leads/:ref/merge", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const b = req.body || {};
+    const out = await LeadMerge.merge(pool, req.session.broker, lead.id, String(b.other || "").trim(), { confirm: String(b.confirm || "").trim() });
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : out.error === "not_found" ? 404 : 422).json({ error: out.error });
+    return res.json({ lead: leadView(out.lead) });
+  });
+  api.post("/leads/:ref/erase", async (req, res) => {
+    if (!Authz.isManager(req.session.broker)) return res.status(403).json({ error: "forbidden" });
+    if (!(await writeGate(req, res))) return;
+    const r = await Privacy.eraseLead(pool, req.session.broker, req.params.ref, { confirm: String((req.body || {}).confirm || "") });
+    if (r.error) return res.status(r.error === "not_found" ? 404 : r.error === "confirm" ? 422 : 403).json({ error: r.error });
+    return res.json({ ok: true });
+  });
+  // The next message to the client, drafted from the lead's record; and "send to client": a share link with the unit, WhatsApp-ready.
+  api.post("/leads/:ref/draft", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const lang = lead.lang === "en" || lead.lang === "ar" ? lead.lang : req.body?.lang === "en" ? "en" : "ar";
+    const out = await FollowUpDrafts.draft(pool, req.session.broker, lead.id, { lang });
+    if (out.error) return res.status(out.error === "ai" ? 503 : out.error === "not_found" ? 404 : 429).json({ error: out.error });
+    return res.json({ text: out.text, wa: out.wa || null });
+  });
+  api.post("/leads/:ref/send", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const b = req.session.broker;
+    const unit = await Store.findByCode(pool, b.agency_id, String((req.body || {}).code || ""));
+    const r = await LeadRequests.sendToClient(pool, b, lead.id, unit, { lang: req.body?.lang === "en" ? "en" : "ar" });
+    if (r.ok) return res.json({ url: r.url });
+    return res.status(r.error === "forbidden" ? 403 : 422).json({ error: r.error || "unit" });
   });
 
   // Ask manager: a broker asks managers (or the owner) for help on a lead; a manager marks it handled with an optional reply.

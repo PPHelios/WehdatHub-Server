@@ -22,8 +22,8 @@ describe("kitchen and AC is a furnishing status", () => {
   });
   test("the search puts the exact status first, then blank status", () => {
     const { sql } = Search.buildSearchQuery("a", Q.fallbackParse("kitchen and ac"));
-    expect(sql).toMatch(/CASE WHEN l\.furnishing = \$\d+ THEN 0 ELSE 1 END/);
-    expect(sql).toMatch(/l\.furnishing IS NULL OR l\.furnishing = /);
+    expect(sql).toMatch(/CASE WHEN l\.furnishing = ANY\(\$\d+::text\[\]\) OR \(l\.furnishing IS NULL AND l\.feature_keys @> \$\d+::text\[\]\) THEN 0 WHEN l\.furnishing = ANY/);
+    expect(sql).toMatch(/l\.furnishing IS NULL OR l\.furnishing = ANY/);
   });
 });
 
@@ -72,10 +72,10 @@ describe("AC only and kitchen only are searchable statuses", () => {
     expect(f.furnishing).toBe("kitchen_only");
     expect(f.features).not.toContain("kitchen_installed");
   });
-  test("plain AC with no 'only' stays a feature filter", () => {
-    const f = Q.fallbackParse("apartment with ac").filters;
-    expect(f.furnishing).toBeNull();
-    expect(f.features).toContain("ac_installed");
+  test("plain AC or plain kitchen ('with AC') reads as the AC-only / kitchen-only status, which lists kitchen and AC next (Haytham 2026-11-12)", () => {
+    expect(Q.fallbackParse("apartment with ac").filters).toMatchObject({ furnishing: "ac_only", features: [] });
+    expect(Q.fallbackParse("apartment with kitchen").filters).toMatchObject({ furnishing: "kitchen_only", features: [] });
+    expect(Q.normalizeAiSearch({ filters: { features: ["ac_installed"] } }).filters.furnishing).toBe("ac_only");
   });
   test("the AI's finishing and furnishing values are mapped to the fixed set", () => {
     const f = Q.normalizeAiSearch({ intent: "search", filters: { furnishing: "semi furnished", finishing: ["نص تشطيب"] } }).filters;

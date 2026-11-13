@@ -143,7 +143,7 @@ function mountWeb(app, { pool, config }) {
     return next();
   });
   // Data entry: only units (add, edit, look up), search, settings and notifications. Everything else is closed to them.
-  const DATA_ENTRY_PATHS = /^\/(units|search|settings|passkeys?|notifications|guide|more|owners|logout|csrf|push|test-role)(\/|$)/;
+  const DATA_ENTRY_PATHS = /^\/(units|search|settings|passkeys?|notifications|guide|more|owners|logout|csrf|push|test-role|test-view)(\/|$)/;
   priv.use((req, res, next) => {
     if (!Authz.isDataEntry(req.session.broker)) return next();
     if (req.path === "/" && req.method === "GET") return res.redirect(303, "/app/units");

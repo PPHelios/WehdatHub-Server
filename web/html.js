@@ -231,7 +231,7 @@ function crmTabBar(tab, lang) {
 function testRoleForm(broker, lang) {
   const en = lang === "en";
   const TestRole = require("../lib/testRole");
-  const names = { owner: en ? "Owner" : "مالك", manager: en ? "Manager" : "مدير", team_lead: en ? "Team lead" : "قايد فريق", broker: en ? "Broker" : "بروكر", data_entry: en ? "Data entry" : "مدخل بيانات" };
+  const names = { owner: en ? "Owner" : "مالك", manager: en ? "Manager" : "مدير", team_lead: en ? "Team lead" : "قائد فريق", broker: en ? "Broker" : "بروكر", data_entry: en ? "Data entry" : "مدخل بيانات" };
   return html`<form method="post" action="/app/test-role" class="test-role" data-test-role><label><span class="sr-only">${en ? "Test role" : "دور التجربة"}</span><select name="role" data-autosubmit>${TestRole.ROLES.map((r) => html`<option value="${r}"${r === (broker.home_role || broker.role) ? raw(" selected") : ""}>${names[r]}</option>`)}</select></label><noscript><button type="submit">✓</button></noscript></form>`;
 }
 

@@ -82,3 +82,24 @@ test("extract reads a pasted message into a lead form and never saves", async ()
   expect((await call("broker", "get", "/leads")).body.total).toBe(0);
   expect((await call("broker", "post", "/leads/extract", {})).status).toBe(400);
 });
+
+test("merge and erase are for managers; erase needs the last 4 digits; draft and send answer", async () => {
+  const a = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Sara", kind: "buyer", lawfulBasis: "client_request" })).body.lead;
+  const b = (await call("broker", "post", "/leads", { phone1: "01099887766", name: "Sara H", kind: "buyer", lawfulBasis: "client_request" })).body.lead;
+  expect((await call("broker", "post", `/leads/${a.ref}/merge`, { other: b.ref, confirm: "x" })).status).toBe(403);
+  expect((await call("broker", "post", `/leads/${a.ref}/erase`, { confirm: "5678" })).status).toBe(403);
+  expect((await call("broker", "post", `/leads/${a.ref}/send`, { code: "NOPE" })).status).toBe(422);
+  await h.seedBroker("manager");
+  expect((await call("manager", "post", `/leads/${a.ref}/erase`, { confirm: "0000" })).status).toBe(422);
+  expect((await call("manager", "post", `/leads/${b.ref}/erase`, { confirm: "7766" })).status).toBe(200);
+  expect((await call("manager", "get", `/leads/${b.ref}`)).status).toBe(404);
+});
+
+test("lead counts can be limited to one broker (managers)", async () => {
+  await call("broker", "post", "/leads", { phone1: "01012345678", name: "Sara", kind: "buyer", lawfulBasis: "client_request" });
+  const all = await call("broker", "get", "/leads/counts");
+  expect(all.body.counts.all).toBe(1);
+  await h.seedBroker("manager");
+  const other = await call("manager", "get", `/leads/counts?broker=${h.BROKERS.colleague.id}`);
+  expect(other.body.counts.all).toBe(0);
+});

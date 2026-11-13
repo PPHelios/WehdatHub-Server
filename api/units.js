@@ -61,6 +61,8 @@ function unitView(r) {
   };
 }
 
+const SaveKeys = require("../lib/saveKeys");
+
 function register(api, { pool }) {
   api.get("/units", async (req, res) => {
     const { broker } = req.session;
@@ -143,6 +145,14 @@ function register(api, { pool }) {
       args
     );
     return res.json({ items: rows });
+  });
+
+  // "Is it saved?": the app asks this when a save has had no answer for a minute. Read only.
+  api.get("/units/save-status", async (req, res) => {
+    const key = SaveKeys.keyOf({ save_key: String(req.query.key || "") });
+    const code = key ? await SaveKeys.lookup(pool, req.session.broker.agency_id, key) : null;
+    res.set("Cache-Control", "no-store");
+    return res.json(code ? { saved: true, code } : { saved: false });
   });
 
   api.get("/units/:code", async (req, res) => {
