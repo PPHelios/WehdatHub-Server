@@ -66,6 +66,7 @@ test("old units: a broker sees theirs, a manager and data entry see the agency's
   await h.insertListing({ code: "O-NEW", confirmed_at: old(2) });
   await h.insertListing({ code: "O-P", confirmed_at: old(40), is_private: true });
   await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  await h.seedBroker("manager");
   const mine = (await get("broker")).body.cards.oldUnits;
   expect(mine.items.map((u) => u.code)).toEqual(["O-1"]);
   const mgr = (await get("manager")).body.cards.oldUnits;

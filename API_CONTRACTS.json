@@ -206,9 +206,9 @@
       "thumbKey": ["value"],
       "thumbUrl": ["value"],
       "uploadThumb": ["storagePath", "buffer"],
-      "downloadListingImage": ["keyOrUrl"],
-      "objectInfo": ["keyOrUrl"],
       "createSignedUpload": ["storagePath"],
+      "objectInfo": ["keyOrUrl"],
+      "downloadListingImage": ["keyOrUrl"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],
@@ -521,9 +521,9 @@
       "NORMALIZE_SEARCH_SQL": "String"
     },
     "domain/searchQuery.js": {
+      "enforceSaleForPayment": ["parsed", "text"],
       "enforceInstallmentWords": ["parsed", "text"],
       "enforceMillionUnits": ["parsed", "text"],
-      "enforceSaleForPayment": ["parsed", "text"],
       "emptyFilters": [],
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],
@@ -568,6 +568,12 @@
       "slugify": ["name"],
       "baseSlug": ["name", "id"],
       "isValidSlug": ["slug"]
+    },
+    "services/today.js": {
+      "build": ["pool", "viewer", "now"],
+      "tasksOf": ["d"],
+      "oldUnitsFor": ["pool", "viewer", "now"],
+      "OLD_AFTER_DAYS": "Number"
     },
     "web/assets.js": {
       "STATIC_DIR": "String",
@@ -671,6 +677,10 @@
     "web/routes/units.js": {
       "register": ["web", "params"],
       "imagesOf": ["pool", "listing"]
+    },
+    "web/todayCards.js": {
+      "render": ["cards", "en"],
+      "oldUnitsCard": ["c", "en"]
     },
     "web/views/units.js": {
       "stripMarkdown": ["s"],
@@ -1371,12 +1381,9 @@
     },
     "services/unitChecks.js": {
       "ASK_AFTER_DAYS": "Number",
-      "HIDE_AFTER_DAYS": "Number",
       "askStale": ["pool", "params"],
-      "hideStale": ["pool", "params"],
       "pendingFor": ["pool", "broker", "params"],
       "askMessage": ["broker", "units"],
-      "hiddenMessage": ["broker", "units"],
       "unitCheckJob": []
     },
     "services/dashboards.js": {
@@ -2449,8 +2456,8 @@
       "visibleFees": ["fees", "unitKeys"]
     },
     "lib/viewGuard.js": {
-      "runReadOnly": ["fn"],
       "runWritable": ["fn"],
+      "runReadOnly": ["fn"],
       "active": [],
       "isReadOnlySql": ["text"],
       "guardPool": ["pool"]
