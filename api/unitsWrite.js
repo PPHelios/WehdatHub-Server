@@ -121,7 +121,7 @@ function register(api, { pool }) {
     return res.json({ ok: true, code: out.code });
   });
 
-  // Lease of a rented unit, the agency-only details (pin, unit number, address) and the project link. Same services as the website.
+  // Lease of a rented unit and the agency-only details (pin, unit number, address). Same services as the website.
   api.get("/units/:code/lease", async (req, res) => {
     const listing = await unitFor(req, res);
     if (!listing) return;
@@ -152,14 +152,6 @@ function register(api, { pool }) {
       `UPDATE listings SET details = (details - 'unit_no' - 'address') || jsonb_strip_nulls(jsonb_build_object('unit_no', $3::text, 'address', $4::text)), updated_at = now() WHERE id = $1 AND agency_id = $2`,
       [listing.id, b.agency_id, clean(body.unitNo, 40), clean(body.address, 200)]
     );
-    return res.json({ ok: true });
-  });
-  api.post("/units/:code/project", async (req, res) => {
-    const b = req.session.broker;
-    const listing = await unitFor(req, res);
-    if (!listing) return;
-    const out = await Catalogue.linkResale(pool, b, listing, (req.body || {}).projectId || null);
-    if (out.error) return res.status(out.error === "forbidden" || out.error === "catalogue_unit" ? 403 : 422).json({ error: out.error });
     return res.json({ ok: true });
   });
 

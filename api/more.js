@@ -48,6 +48,17 @@ function register(api, { pool }) {
     return r?.error ? fail(res, r) : res.json({ ok: true });
   });
 
+  // Catalogue editing (managers): the same services as the website's forms. Files (project image, price list) stay on the website.
+  const ok = (res, r) => (r?.error ? fail(res, r) : res.json({ ok: true, id: r?.id || r?.project?.id || r?.developer?.id || null }));
+  api.post("/catalogue/developers", managers, async (req, res) => ok(res, await Catalogue.saveDeveloper(pool, req.session.broker, req.body || {})));
+  api.post("/catalogue/developers/:id", managers, async (req, res) => ok(res, await Catalogue.saveDeveloper(pool, req.session.broker, { ...(req.body || {}), id: req.params.id })));
+  api.post("/catalogue/projects", managers, async (req, res) => ok(res, await Catalogue.saveProject(pool, req.session.broker, req.body || {})));
+  api.post("/catalogue/projects/:id", managers, async (req, res) => ok(res, await Catalogue.saveProject(pool, req.session.broker, { ...(req.body || {}), id: req.params.id })));
+  api.post("/catalogue/projects/:id/phases", managers, async (req, res) => ok(res, await Catalogue.savePhase(pool, req.session.broker, req.params.id, req.body || {})));
+  api.post("/catalogue/projects/:id/phases/:phaseId/delete", managers, async (req, res) => ok(res, await Catalogue.deletePhase(pool, req.session.broker, req.params.id, req.params.phaseId)));
+  api.post("/catalogue/projects/:id/plans", managers, async (req, res) => ok(res, await Catalogue.savePlan(pool, req.session.broker, req.params.id, req.body || {})));
+  api.post("/catalogue/projects/:id/plans/:planId/delete", managers, async (req, res) => ok(res, await Catalogue.deletePlan(pool, req.session.broker, req.params.id, req.params.planId)));
+
   // Library
   api.get("/library", managers, async (req, res) => {
     const out = await Lib.listPage(pool, { agencyId: req.session.broker.agency_id, q: String(req.query.q || "").slice(0, 60), page: req.query.page });

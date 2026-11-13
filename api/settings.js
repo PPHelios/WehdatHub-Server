@@ -6,6 +6,8 @@ const Authz = require("../lib/authz");
 const Rights = require("../services/unitRights");
 const UnitOwners = require("../services/unitOwners");
 const FollowUpDrafts = require("../services/followUpDrafts");
+const AgencyLogo = require("../services/agencyLogo");
+const { uploads } = require("../web/uploads");
 
 function register(api, { pool }) {
   api.get("/settings", async (req, res) => {
@@ -32,4 +34,17 @@ function register(api, { pool }) {
   });
 }
 
-module.exports = { register };
+// Logo (managers, the agency owner, admins): a picture up to 2 MB, or remove it. Same service as the website's Settings.
+function registerLogo(api, { pool }) {
+  api.post("/settings/logo", uploads([{ name: "logo", maxCount: 1, accept: /^image\/(png|jpeg|webp)$/ }], { maxMb: 2 }), async (req, res) => {
+    const out = await AgencyLogo.setLogo(pool, req.session.broker, (req.files?.logo || [])[0]);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    return res.json({ ok: true, url: out.url });
+  });
+  api.post("/settings/logo/remove", async (req, res) => {
+    const out = await AgencyLogo.removeLogo(pool, req.session.broker);
+    return out.error ? res.status(403).json({ error: out.error }) : res.json({ ok: true });
+  });
+}
+
+module.exports = { register: (api, deps) => { register(api, deps); registerLogo(api, deps); } };

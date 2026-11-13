@@ -387,16 +387,6 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     return res.send(file.buffer);
   });
 
-  web.post("/units/:code/project", async (req, res, next) => {
-    const { broker } = req.session;
-    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
-    if (!listing || !Authz.canView(broker, listing)) return next();
-    const out = await Catalogue.linkResale(pool, broker, listing, req.body.project_id || null);
-    if (out.error === "forbidden" || out.error === "catalogue_unit") return res.status(403).send("forbidden");
-    if (out.error) return res.status(400).send("bad project");
-    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
-  });
-
   async function leaseCard(req, broker, listing, lang) {
     const lease = await Leases.forListing(pool, listing);
     const contacts = lease ? await Leases.contacts(pool, broker, listing, lease) : { tenant: null, owner: null };

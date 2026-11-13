@@ -8,11 +8,10 @@ const { html } = require("../html");
 const Passkeys = require("../../services/passkeys");
 const { passkeySection } = require("./passkeys");
 const { isManager, isDataEntry, isCrmOwner } = require("../../lib/authz");
+const AgencyLogo = require("../../services/agencyLogo");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
 const { uploads } = require("../uploads");
-const crypto = require("crypto");
-const sharp = require("sharp");
 
 // C7: the agency logo on client pages and PDFs (managers upload it here).
 const uploadLogo = uploads([{ name: "logo", maxCount: 1, accept: /^image\/(png|jpeg|webp)$/ }], { maxMb: 2 });
@@ -190,27 +189,14 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
   });
 
   web.post("/settings/logo", uploadLogo, async (req, res) => {
-    const { broker } = req.session;
-    if (!isManager(broker)) return res.status(403).send("Managers only");
-    const file = (req.files?.logo || [])[0];
-    let png = null;
-    try {
-      png = file ? await sharp(file.buffer, { failOn: "error" }).rotate().resize(512, 512, { fit: "inside", withoutEnlargement: true }).png().toBuffer() : null;
-    } catch {
-      png = null;
-    }
-    if (!png) return res.redirect(303, "/app/settings?logo=bad#brand");
-    const hash = crypto.createHash("sha256").update(png).digest("hex").slice(0, 12);
-    const url = await Storage.uploadAgencyLogo(broker.agency_id, `${broker.agency_id}/brand/logo-${hash}.png`, png);
-    if (!url) return res.redirect(303, "/app/settings?logo=failed#brand");
-    await pool.query("UPDATE agencies SET logo_url = $2 WHERE id = $1", [broker.agency_id, url]);
-    return res.redirect(303, "/app/settings?logo=saved#brand");
+    const out = await AgencyLogo.setLogo(pool, req.session.broker, (req.files?.logo || [])[0]);
+    if (out.error === "forbidden") return res.status(403).send("Managers only");
+    return res.redirect(303, `/app/settings?logo=${out.ok ? "saved" : out.error === "bad" ? "bad" : "failed"}#brand`);
   });
 
   web.post("/settings/logo/remove", async (req, res) => {
-    const { broker } = req.session;
-    if (!isManager(broker)) return res.status(403).send("Managers only");
-    await pool.query("UPDATE agencies SET logo_url = NULL WHERE id = $1", [broker.agency_id]);
+    const out = await AgencyLogo.removeLogo(pool, req.session.broker);
+    if (out.error === "forbidden") return res.status(403).send("Managers only");
     return res.redirect(303, "/app/settings?logo=removed#brand");
   });
 

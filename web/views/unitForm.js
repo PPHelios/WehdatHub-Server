@@ -54,7 +54,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   <section class="card" data-step="1"><h2>🏠 ${L(lang, "الوحدة", "Unit")}</h2><div class="grid">
     ${mode === "new" ? input("code", L(lang, "الكود (اختياري)", "Code (optional)"), v.code, { dir: "ltr" }) : html`<p><strong>${code}</strong></p>`}
     ${select("listing_type", L(lang, "بيع أو إيجار *", "Sale or rent *"), v.listing_type, [["", "—"], ["sale", L(lang, "بيع", "Sale")], ["rent", L(lang, "إيجار", "Rent")]])}
-    ${select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]])}
+    ${v.market === "primary" ? select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]]) : ""}
     ${select("property_type", L(lang, "النوع *", "Type *"), v.property_type, [["", "—"], ...Rules.PROPERTY_TYPES.map((t) => [t, pick(Describe.TYPE_LABELS[t], lang)])])}
     ${input("compound", L(lang, "الكمبوند (أو اختار منطقة)", "Compound (or pick an area)"), v.compound, { extra: ' list="approved-places" autocomplete="off" data-place-suggest' })}
     <label>${L(lang, "المنطقة (لو من غير كمبوند)", "Area (if no compound)")}<select name="area_id"><option value="">—</option>${areas.filter((a) => !a.parent_id).map((a) => html`<option value="${a.id}"${sel(String(v.area_id) === String(a.id))}>${a.name_en || a.name_ar}</option>`)}</select></label>

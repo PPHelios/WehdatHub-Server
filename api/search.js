@@ -12,6 +12,7 @@ const AiBlock = require("../lib/aiBlock");
 const { isAgencyOwner } = require("../lib/authz");
 const { uploads, VOICE } = require("../web/uploads");
 const { unitView } = require("./units");
+const SearchLink = require("../domain/searchLink");
 
 const PAGE = 20;
 const MAX_SPOKEN_SEARCH = 200;
@@ -31,7 +32,7 @@ function register(api, { pool }) {
     const st = Search.SEARCH_STATUSES.includes(req.query.status) ? req.query.status : "active";
     // The one search service, as the website and Telegram use it: same reading, same budget question, same "words not understood" ask.
     const found = await Search.search({ pool, AI, agencyId: broker.agency_id, text, ctx: { pool, AI, broker, agency: req.session.agency, lang: broker.preferred_lang === "en" ? "en" : "ar" }, pageSize: PAGE, forceAi, allowDrop: drop, status: st });
-    const base = { source: found.source, aiError: found.aiError || null };
+    const base = { source: found.source, aiError: found.aiError || null, f: found.parsed?.filters ? SearchLink.encodeFilters(found.parsed.filters) : null };
     if (!["results", "none", "ask"].includes(found.status)) return res.json({ ...base, status: found.status, total: 0, items: [] });
     const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, Search.SNAPSHOT_MAX));
     // Only the first page of a search is logged ("more" pages are the same search).
