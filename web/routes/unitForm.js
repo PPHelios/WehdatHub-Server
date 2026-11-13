@@ -424,6 +424,7 @@ function register(web, { pool, page, assets }) {
     const removeIds = [].concat(req.body.remove_photo || []).filter((id) => /^[0-9a-f-]{36}$/.test(id));
     const files = filesOf(req, "photos");
     const expectedVersion = Number(req.body.version) || -1;
+    const checkOnly = req.body.check_only === "1"; // the page asks first, before it uploads any photo
     const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
     if (prior) return res.redirect(303, `/app/units/${encodeURIComponent(prior)}?saved=1`);
     const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
@@ -440,7 +441,7 @@ function register(web, { pool, page, assets }) {
       if (!key.first) return { rollback: true, repeat: key.code || listing.code };
       if (!Authz.canEdit(broker, listing)) return { rollback: true, forbidden: true };
       const { rows } = await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1 AND NOT (id = ANY($2::uuid[]))", [listing.id, removeIds]);
-      const photoCount = rows[0].n + photos.urls.length + keys.length;
+      const photoCount = rows[0].n + photos.urls.length + keys.length + (checkOnly ? pendingOf(req) : 0);
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
       const nameError = ownerNameError(ev.listing, req.body, lang);
@@ -452,6 +453,7 @@ function register(web, { pool, page, assets }) {
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
       if (staged.missing.length) return { rollback: true, listing, ev, photoMissing: true };
       const patch = Edits.diffPatch(listing, ev.listing);
+      if (checkOnly) return { rollback: true, listing, ev, checked: true, stale: listing.version !== expectedVersion };
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, listing, ev, conflict: true };
       await savePin(client, res2.listing, pinFrom(req.body));
@@ -464,6 +466,10 @@ function register(web, { pool, page, assets }) {
       const reordered = (order.length > 1 || req.body.photo_manual === "on") && (await Store.reorderPhotos(client, res2.listing, order, { force: req.body.photo_manual === "on" }));
       return { saved: res2.listing, removed, reordered, columns: Object.keys(patch) };
     });
+
+    // Checked only: every rule passed and nothing was saved. A stale version is refused here too, so no photo is uploaded for nothing.
+    if (out.checked && !out.stale) return res.json({ ok: true });
+    if (out.checked) out.conflict = true;
 
     if (out.repeat) {
       Supabase.deleteStorageFiles(photos.urls).catch(Swallow.logged(pool, "unitForm.cleanupPhotos"));

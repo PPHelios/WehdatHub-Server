@@ -551,7 +551,7 @@
     };
     // Before any photo is uploaded the server checks the form (missing fields, a look-alike unit): a refusal costs no upload at all.
     var precheckStep = function () {
-      if (!form.hasAttribute("data-check") || !chosen().some(function (x) { return !x.key && uploading(x); })) return Promise.resolve();
+      if (!chosen().some(function (x) { return !x.key && uploading(x); })) return Promise.resolve();
       return new Promise(function (ok, no) {
         var fd = new FormData(form);
         fd.delete("photos");

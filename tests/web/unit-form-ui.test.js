@@ -145,3 +145,20 @@ test("a look-alike unit is refused once; accepted at Next (dup_ack) or with Save
   const acked = await post(agent, csrf, { ...NOFORCE, code: "HP302", dup_ack: "1" });
   expect(acked.status).toBe(303);
 });
+
+test("edit: check_only answers ok without saving; a stale version is refused before any photo is uploaded", async () => {
+  const row = await h.insertListing({ code: "NH-E1", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", bedrooms: 3, area_value: 150, price_value: 9e6 });
+  const { agent, csrf } = await signIn(h, "broker");
+  const edit = (extra) => {
+    let r = agent.post("/app/units/NH-E1/edit").field("_csrf", csrf).field("check_only", "1");
+    for (const [k, v] of Object.entries({ ...NOFORCE, code: "NH-E1", ...extra })) r = r.field(k, v);
+    return r;
+  };
+  const ok = await edit({ version: String(row.version), price_value: "9.5 مليون" });
+  expect(ok.status).toBe(200);
+  expect(ok.body).toEqual({ ok: true });
+  expect(Number((await h.query("SELECT price_value FROM listings WHERE code = 'NH-E1'"))[0].price_value)).toBe(9e6);
+  const stale = await edit({ version: String(row.version + 5), price_value: "9.5 مليون" });
+  expect(stale.status).toBe(409);
+  expect(stale.text).toContain('id="unit-form"');
+});
