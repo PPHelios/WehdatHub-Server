@@ -6,7 +6,8 @@ const Swallow = require("../../lib/swallow");
 const { icon } = require("../icons");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
-const Digest = require("../../services/dailyDigest");
+const Today = require("../../services/today");
+const TodayCards = require("../todayCards");
 
 /** Onboarding: the welcome card after the first sign-in, until the broker closes it. */
 function welcomeCard(w, en) {
@@ -19,6 +20,11 @@ function welcomeCard(w, en) {
 }
 
 function register(web, { pool, page }) {
+  // Hide a lease card from this person's Today.
+  web.post("/today/dismiss", async (req, res) => {
+    await Today.dismiss(pool, req.session.broker, String(req.body?.kind || ""), String(req.body?.key || ""));
+    return res.redirect(303, "/app/");
+  });
   web.post("/onboarding/welcome", async (req, res) => {
     await Onboarding.closeWelcome(pool, req.session.broker);
     return res.redirect(303, "/app/");
@@ -100,30 +106,29 @@ ${groups.map(([g, label]) => {
     if (require("../../lib/authz").isCrmOwner(broker)) return crmHome(req, res);
     const en = broker.preferred_lang === "en";
     const now = new Date();
-    const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null))]);
+    const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Today.build(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null))]);
     return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en }) });
   });
 }
 
 const fmtTime = (d, en) => new Date(d).toLocaleTimeString(en ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
 const fmtDay = (d, en) => new Date(d).toLocaleDateString(en ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", weekday: "long", day: "numeric", month: "long" });
-const digits = (p) => String(p || "").replace(/[^0-9]/g, "");
 
 /** Today: the broker's day at a glance (counts, then the people who need them now with Call and WhatsApp). */
 function todayPage({ broker, agency, welcome, day, now, en }) {
-  const d = day || { viewings: [], calls: [], overdue: [], hot: [], matches: [], uncontacted: 0 };
-  const seen = new Set();
-  const tasks = [];
-  const add = (r, chip, cls, note) => {
-    if (!r || seen.has(r.ref)) return;
-    seen.add(r.ref);
-    tasks.push({ ...r, chip, cls, note });
+  const d = day || { counts: { followUpsToday: 0, viewings: 0, newLeads: 0 }, tasks: [], moreTasks: 0, cards: {} };
+  const chips = {
+    late: [en ? "Late" : "متأخرة", "late", (t) => (t.at ? fmtDay(t.at, en) : "")],
+    viewing: [en ? "Viewing" : "معاينة", "good", (t) => `${fmtTime(t.at, en)}${t.unitCode ? ` · ${t.unitCode}` : ""}`],
+    hot: [en ? "Very interested" : "مهتم جداً", "hot", () => (en ? "Opened your link" : "فتح الرابط اللي بعته")],
+    call: [en ? "Call" : "مكالمة", "new", (t) => fmtTime(t.at, en)],
+    matches: [null, "new", () => (en ? "New units fit this client" : "وحدات جديدة تناسب العميل")]
   };
-  for (const r of d.overdue) add(r, en ? "Late" : "متأخرة", "late", r.next_follow_up_at ? fmtDay(r.next_follow_up_at, en) : "");
-  for (const r of d.viewings) add(r, en ? "Viewing" : "معاينة", "good", `${fmtTime(r.next_follow_up_at, en)}${r.unit_code ? ` · ${r.unit_code}` : ""}`);
-  for (const r of d.hot) add(r, en ? "Very interested" : "مهتم جداً", "hot", en ? "Opened your link" : "فتح الرابط اللي بعته");
-  for (const r of d.calls) add(r, en ? "Call" : "مكالمة", "new", fmtTime(r.next_follow_up_at, en));
-  for (const r of d.matches) add(r, en ? `${r.n} new matches` : `${r.n} وحدة مناسبة`, "new", en ? "New units fit this client" : "وحدات جديدة تناسب العميل");
+  const tasks = d.tasks.map((t) => {
+    const [chip, cls, note] = chips[t.kind];
+    return { ...t, chip: t.kind === "matches" ? (en ? `${t.matches} new matches` : `${t.matches} وحدة مناسبة`) : chip, cls, note: note(t) };
+  });
+  const total = tasks.length + d.moreTasks;
   const shown = tasks.slice(0, 8);
   const greet = en ? `Hello ${broker.name}` : `أهلاً ${broker.name}`;
   const count = (n, label, href, cls = "") => html`<a class="count ${cls}" href="${href}"><strong>${n}</strong><span>${label}</span></a>`;
@@ -136,9 +141,9 @@ function todayPage({ broker, agency, welcome, day, now, en }) {
   </form>
 </section>
 <div class="counts">
-  ${count(d.calls.length + d.viewings.length, en ? "Follow-ups today" : "متابعات النهارده", "/app/leads?tab=due_today")}
-  ${count(d.viewings.length, en ? "Viewings" : "معاينات", "/app/leads?tab=viewing")}
-  ${count(d.uncontacted, en ? "New leads" : "عملاء جداد", "/app/leads?tab=new", d.uncontacted ? "hot" : "")}
+  ${count(d.counts.followUpsToday, en ? "Follow-ups today" : "متابعات النهارده", "/app/leads?tab=due_today")}
+  ${count(d.counts.viewings, en ? "Viewings" : "معاينات", "/app/leads?tab=viewing")}
+  ${count(d.counts.newLeads, en ? "New leads" : "عملاء جداد", "/app/leads?tab=new", d.counts.newLeads ? "hot" : "")}
 </div>
 ${welcome ? welcomeCard(welcome, en) : ""}
 <section class="stack" data-today>
@@ -148,14 +153,15 @@ ${welcome ? welcomeCard(welcome, en) : ""}
         (t) => html`<article class="card task" data-task="${t.ref}">
     <div class="row between"><a class="grow" href="/app/leads/${t.ref}"><b>${t.name || t.ref}</b><span class="muted">${t.note}</span></a><span class="chip ${t.cls}">${t.chip}</span></div>
     <div class="row actions">
-      ${t.phone_e164 ? html`<a class="btn call" href="tel:+${digits(t.phone_e164)}">${en ? "Call" : "اتصال"}</a><a class="btn secondary" href="https://wa.me/${digits(t.phone_e164)}" target="_blank" rel="noopener">${en ? "WhatsApp" : "واتساب"}</a>` : ""}
+      ${t.phone ? html`<a class="btn call" href="tel:+${t.phone}">${en ? "Call" : "اتصال"}</a><a class="btn secondary" href="https://wa.me/${t.phone}" target="_blank" rel="noopener">${en ? "WhatsApp" : "واتساب"}</a>` : ""}
       <a class="btn secondary" href="/app/leads/${t.ref}" aria-label="${en ? "Open" : "افتح"}">${icon("back", 20)}</a>
     </div>
   </article>`
       )
     : html`<p class="card muted empty">${en ? "Nothing waiting. Add a unit or a lead with the + button." : "مفيش حاجة مستنياك. ضيف وحدة أو عميل من زرار +."}</p>`}
-  ${tasks.length > shown.length ? html`<a class="btn secondary" href="/app/leads?tab=overdue">${en ? `${tasks.length - shown.length} more` : `${tasks.length - shown.length} كمان`}</a>` : ""}
+  ${total > shown.length ? html`<a class="btn secondary" href="/app/leads?tab=overdue">${en ? `${total - shown.length} more` : `${total - shown.length} كمان`}</a>` : ""}
 </section>
+${TodayCards.render(d.cards || {}, en)}
 ${Dash.isManager(broker)
   ? html`<div class="row shortcuts"><a class="btn secondary" href="/app/dashboard">${icon("chart", 20)} ${en ? "Agency dashboard" : "لوحة الشركة"}</a>${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${icon("tools", 20)} ${en ? "App tracking" : "متابعة التطبيق"}</a>` : ""}</div>`
   : ""}`;

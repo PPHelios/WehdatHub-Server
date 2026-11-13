@@ -1,6 +1,6 @@
 // tests/crm/unit-checks.test.js — "Still available?" (6.3) on a fixed clock: asked once after 21 days unconfirmed (one
-// unit with the three quick buttons, several grouped with Review), not at night, not developer models, archived at 30
-// days and told, "Still available" brings it back and resets the clock, two passes never ask twice.
+// unit with the three quick buttons, several grouped with Review), not at night, not developer models, a unit is never
+// archived by itself (only the buttons or an edit change its status), "Still available" resets the clock, two passes never ask twice.
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
@@ -62,16 +62,15 @@ test("several units are grouped per broker with a Review list; nothing is asked 
   expect(JSON.stringify(review)).not.toMatch(/HP-3/);
 });
 
-test("still unconfirmed at 30 days: archived and told; Still available brings it back and resets the clock", async () => {
+test("unconfirmed for a month: the job never changes the status; Still available resets the clock", async () => {
   const u = await unit("HP-1", 22);
   await UC.askStale(h.pool, { now: NOW });
-  // Nine days later (31 days unconfirmed) nobody has answered.
-  const later = new Date(NOW.getTime() + 9 * 24 * 3600 * 1000);
-  expect(await UC.hideStale(h.pool, { now: later })).toEqual({ hidden: 1, brokers: 1 });
-  let [row] = await h.query("SELECT status, stale_hidden_at, confirmed_at FROM listings WHERE id = $1", [u.id]);
-  expect(row.status).toBe("archived");
-  expect((await notes("broker")).pop().title).toMatch(/HP-1 اتخفت من البحث/);
-  expect((await UC.hideStale(h.pool, { now: later })).hidden).toBe(0);
+  expect(UC.hideStale).toBeUndefined();
+  const job = UC.unitCheckJob();
+  await job.run({ pool: h.pool, now: new Date(NOW.getTime() + 9 * 24 * 3600 * 1000) });
+  let [row] = await h.query("SELECT status, stale_hidden_at FROM listings WHERE id = $1", [u.id]);
+  expect(row.status).toBe("active");
+  expect(row.stale_hidden_at).toBeNull();
 
   const replies = await h.tgTap("broker", "qu:available:HP-1");
   expect(textOf(replies)).toMatch(/HP-1/);
@@ -79,13 +78,6 @@ test("still unconfirmed at 30 days: archived and told; Still available brings it
   expect(row.status).toBe("active");
   // The tap vouches for the unit (confirmed_at = the database's now), which clears the question.
   expect(new Date(row.confirmed_at).getTime()).toBeGreaterThan(new Date(u.confirmed_at).getTime());
-});
-
-test("a unit confirmed after the question is never archived", async () => {
-  const u = await unit("HP-1", 22);
-  await UC.askStale(h.pool, { now: NOW });
-  await h.query("UPDATE listings SET confirmed_at = $2 WHERE id = $1", [u.id, new Date(NOW.getTime() + 3600 * 1000).toISOString()]);
-  expect((await UC.hideStale(h.pool, { now: new Date(NOW.getTime() + 9 * 24 * 3600 * 1000) })).hidden).toBe(0);
 });
 
 test("the job is registered", () => {

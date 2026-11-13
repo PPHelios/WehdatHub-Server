@@ -1564,6 +1564,13 @@ CREATE TABLE IF NOT EXISTS public.place_proposals (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.today_dismissals (
+  broker_id uuid NOT NULL,
+  kind text NOT NULL,
+  key text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1638,6 +1645,7 @@ ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_pkey PRIMARY KEY (i
 ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMARY KEY (token_hash);
+ALTER TABLE today_dismissals ADD CONSTRAINT today_dismissals_pkey PRIMARY KEY (broker_id, kind, key);
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
@@ -2027,6 +2035,7 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_lead_id_fkey FOREIGN KEY (lea
 ALTER TABLE share_links ADD CONSTRAINT share_links_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE today_dismissals ADD CONSTRAINT today_dismissals_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES brokers(id) ON DELETE SET NULL;

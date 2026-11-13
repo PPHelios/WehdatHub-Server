@@ -23,6 +23,8 @@ const Owners = require("../../services/unitOwners");
 const Bulk = require("../../services/bulk");
 const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
+const Today = require("../../services/today");
+const TodayCards = require("../todayCards");
 const { resultItem, factList } = require("../views/units");
 const Vis = require("../../lib/visibility");
 
@@ -177,11 +179,14 @@ function register(web, { pool, page }) {
     const opt = (v, cur, label) => html`<option value="${v}"${v === cur ? html` selected` : ""}>${label}</option>`;
     const lab = (map, key) => (lang === "en" ? map[key][1] : map[key][0]);
     const pages = Math.max(1, Math.ceil(total / UNITS_PAGE));
+    // A data entry person has no Today: the units nobody has confirmed (agency-wide) sit above their list instead.
+    const oldStrip = Authz.isDataEntry(broker) && status === "active" && !(Number(req.query.page) > 0) ? TodayCards.oldUnitsCard({ oldUnits: await Today.oldUnitsFor(pool, broker) }, lang === "en") : "";
     return page(req, res, {
       title: L(lang, "الوحدات", "Units"),
       nav: "units",
       body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a><a class="btn secondary small" href="/app/owners">👤 ${L(lang, "المُلّاك", "Owners")}</a></div>
 ${notice || ""}
+${oldStrip}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
   ${tab("active", L(lang, "نشطة", "Active"), statusCounts.active || 0)}${tab("sold", L(lang, "مباعة", "Sold"), statusCounts.sold || 0)}${tab("archived", L(lang, "مؤرشفة", "Archived"), statusCounts.archived || 0)}${Authz.isManager(broker) ? tab("deleted", L(lang, "🗑️ المحذوفة", "🗑️ Recently deleted")) : ""}
 </nav>
