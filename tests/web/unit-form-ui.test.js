@@ -136,8 +136,7 @@ test("check_only answers ok before any photo work and saves nothing; a refusal c
 
 test("a look-alike unit is refused once; accepted at Next (dup_ack) or with Save anyway it is not asked again", async () => {
   const { agent, csrf } = await signIn(h, "broker");
-  const first = await post(agent, csrf, { ...NOFORCE, force: "1", code: "HP300" });
-  expect(first.status).toBe(303);
+  await h.insertListing({ code: "HP300", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", bedrooms: 3, area_value: 150, price_value: 9e6 });
   const asked = await post(agent, csrf, { ...NOFORCE, code: "HP302" });
   expect(asked.status).toBe(409);
   expect(asked.text).toContain("HP300");
