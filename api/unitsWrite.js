@@ -22,6 +22,9 @@ const { uploads, PHOTO, VOICE } = require("../web/uploads");
 const SaveKeys = require("../lib/saveKeys");
 const Uploads = require("../lib/unitUploads");
 const UnitDelete = require("../services/unitDelete");
+const Leases = require("../services/leases");
+const Privacy = require("../services/unitPrivacy");
+const Catalogue = require("../services/catalogue");
 
 const MAX_DESCRIBE = 4000;
 const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -116,6 +119,48 @@ function register(api, { pool }) {
     if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
     logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: "unit_restore", metadata: {} });
     return res.json({ ok: true, code: out.code });
+  });
+
+  // Lease of a rented unit, the agency-only details (pin, unit number, address) and the project link. Same services as the website.
+  api.get("/units/:code/lease", async (req, res) => {
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const l = await Leases.forListing(pool, listing);
+    return res.json({ rent: listing.listing_type === "rent", lease: l ? { startDate: String(l.start_date).slice(0, 10), months: l.months, rent: l.rent, increasePct: l.increase_pct, tenantName: l.tenant_name, remind: !!l.remind } : null });
+  });
+  api.post("/units/:code/lease", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const body = req.body || {};
+    const out = body.remove ? await Leases.remove(pool, b, listing) : await Leases.save(pool, b, listing, { start_date: body.startDate, months: body.months, rent: body.rent, increase_pct: body.increasePct, tenant_name: body.tenantName, remind: body.remind ? "1" : "" });
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    return res.json({ ok: true });
+  });
+  api.post("/units/:code/private", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    if (!Authz.canEdit(b, listing)) return res.status(403).json({ error: "forbidden" });
+    const body = req.body || {};
+    const raw = String(body.pin || "").trim();
+    const pin = raw ? Privacy.parsePin(raw) : null;
+    if (raw && !pin) return res.status(422).json({ error: "bad_pin" });
+    await Privacy.setPin(pool, b, listing, pin, { source: "app" });
+    const clean = (v, n) => String(v || "").trim().slice(0, n) || null;
+    await pool.query(
+      `UPDATE listings SET details = (details - 'unit_no' - 'address') || jsonb_strip_nulls(jsonb_build_object('unit_no', $3::text, 'address', $4::text)), updated_at = now() WHERE id = $1 AND agency_id = $2`,
+      [listing.id, b.agency_id, clean(body.unitNo, 40), clean(body.address, 200)]
+    );
+    return res.json({ ok: true });
+  });
+  api.post("/units/:code/project", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const out = await Catalogue.linkResale(pool, b, listing, (req.body || {}).projectId || null);
+    if (out.error) return res.status(out.error === "forbidden" || out.error === "catalogue_unit" ? 403 : 422).json({ error: out.error });
+    return res.json({ ok: true });
   });
 
   api.post("/units/extract", upload, async (req, res) => {

@@ -121,3 +121,18 @@ test("status, delete and restore from the app: own unit only, deleted units cann
   const col = await login("colleague");
   expect((await api().post("/api/v1/units/A-1/status").set(col).send({ status: "archived" })).status).toBe(403);
 });
+
+test("lease, private details and project link from the app follow the same rules", async () => {
+  await h.insertListing({ code: "R-1", listing_type: "rent", compound: "Mivida", price_value: 30000 });
+  const auth = await login("manager");
+  expect((await api().get("/api/v1/units/R-1/lease").set(auth)).body.lease).toBeNull();
+  const bad = await api().post("/api/v1/units/R-1/lease").set(auth).send({ startDate: "nope", months: 12 });
+  expect(bad.status).toBe(422);
+  const ok = await api().post("/api/v1/units/R-1/lease").set(auth).send({ startDate: "2026-01-01", months: 12, rent: 30000, tenantName: "Ali" });
+  expect(ok.status).toBe(200);
+  expect((await api().get("/api/v1/units/R-1/lease").set(auth)).body.lease.months).toBe(12);
+  expect((await api().post("/api/v1/units/R-1/lease").set(auth).send({ remove: true })).status).toBe(200);
+  expect((await api().post("/api/v1/units/R-1/private").set(auth).send({ unitNo: "12", address: "Street 9" })).status).toBe(200);
+  expect((await api().post("/api/v1/units/R-1/private").set(auth).send({ pin: "not a pin" })).status).toBe(422);
+  expect((await api().post("/api/v1/units/R-1/lease").set(await login("colleague")).send({ startDate: "2026-01-01", months: 12 })).status).toBe(403);
+});
