@@ -329,7 +329,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       <input name="to" dir="ltr" inputmode="tel" maxlength="40" placeholder="01xxxxxxxxx · L-0042" autocomplete="off"></label>
     <label>${L(lang, "ملاحظة (اختياري)", "Note (optional)")} <input name="note" maxlength="200"></label>
     <div class="row">
-      <select name="lang"><option value="ar">عربي</option><option value="en">English</option></select>
+      <select name="lang"><option value="ar">العربية</option><option value="en">English</option></select>
       <button type="submit" class="secondary">${L(lang, "رابط جديد", "New link")}</button>
     </div>
   </form>
