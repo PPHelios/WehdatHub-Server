@@ -111,7 +111,7 @@ function mountLanding(app, { pool, assets }) {
             head: html`<meta name="description" content="${T(lang, "WehdatHub: مساعد الوحدات والعملاء للبروكرز والشركات العقارية في مصر، على تيليجرام والموقع.", "WehdatHub: the units and clients assistant for real estate brokers and agencies in Egypt, on Telegram and the web.")}">
 <meta property="og:title" content="${BRAND.name}">
 <link rel="alternate" hreflang="${other}" href="/?lang=${other}">`,
-            body: html`<nav class="top lp-top"><span class="brand"><img src="${assets.url(BRAND.logo)}" alt="" width="28" height="28">${BRAND.name}</span><a class="logout" href="/?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a class="btn small" href="/app/">${T(lang, "دخول", "Sign in")}</a></nav>
+            body: html`<nav class="top lp-top"><span class="brand"><img src="${assets.url(BRAND.logo)}" alt="" width="28" height="28">${lang === "en" ? BRAND.name : "وحدات هب"}</span><a class="logout" href="/?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a class="btn small" href="/app/">${T(lang, "دخول", "Sign in")}</a></nav>
 ${landingBody(lang, { telegramUrl, form: tryForm(lang, form), logo: assets.url(BRAND.logo), signupOpen, actions })}`
           })
         )
