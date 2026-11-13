@@ -22,7 +22,7 @@ function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "",
   <a class="uc-main${thumb ? " has-thumb" : ""}" href="${href}">
     ${thumb ? html`<img class="uc-thumb" src="${thumb.thumb}" alt="" loading="lazy" width="96" height="72" data-full="${thumb.url}">` : ""}
     <span class="uc-top"><b class="code" dir="ltr">${l.code}</b>${badge ? html` <span class="badge" data-status-badge>${badge}</span>` : ""}<b class="uc-price">${stripMarkdown(Describe.priceLabel(l, lang) || "")}</b></span>
-    <span class="uc-sub">${[Describe.typeLabel(l, lang), loc].filter(Boolean).join(" · ")}</span>
+    <span class="uc-sub">${[Describe.typeLabel(l, lang), l.listing_type === "rent" ? (en ? "For rent" : "للإيجار") : l.listing_type === "sale" ? (en ? "For sale" : "للبيع") : "", loc].filter(Boolean).join(" · ")}</span>
     ${size ? html`<span class="uc-size">${stripMarkdown(size)}</span>` : ""}
   </a>
   ${pay || delivery ? html`<ul class="tags">${pay ? html`<li>${stripMarkdown(pay)}</li>` : ""}${delivery ? html`<li class="chip good">${stripMarkdown(delivery)}</li>` : ""}</ul>` : ""}

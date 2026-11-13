@@ -33,3 +33,16 @@ test("the search log can write through the read-only view", async () => {
   await ViewGuard.runWritable(async () => seen.push(ViewGuard.active()));
   expect(seen).toEqual([false]);
 });
+
+test("a unit card says for sale or for rent", () => {
+  const { resultItem } = require("../../web/views/units");
+  const base = { id: "1", code: "A1", property_type: "apartment", price_value: 1000000, details: {} };
+  expect(String(resultItem({ ...base, listing_type: "rent" }, "en"))).toMatch(/For rent/);
+  expect(String(resultItem({ ...base, listing_type: "sale" }, "ar"))).toMatch(/للبيع/);
+});
+
+test("Franco-Arabic and attached words are read", () => {
+  const f = Q.fallbackParse("shaqa 3 ghorf ejar fe mivida").filters;
+  expect([f.listing_type, f.property_types, f.bedrooms_min]).toEqual(["rent", ["apartment"], 3]);
+  expect(Q.fallbackParse("شقة للبيع في مفيدا").filters.places.map((p) => p.key)).toEqual(["mivida"]);
+});
