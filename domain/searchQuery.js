@@ -275,7 +275,7 @@ const STOP = new Set(
     "ممكن", "تكرمت", "تكرم", "تدورلي", "تدور", "ادورلي", "بلاش", "اللي", "يا", "باشا", "بيه", "ريس", "هندسه", "استاذ", "اخي", "تمام", "طيب",
     "بسعر", "سعر", "ميزانيه", "ميزانيتي", "بميزانيه", "بادجت", "جنيه", "جنية", "جنيها", "الشهر", "شهريا", "شهري", "وصاله", "صاله",
     "مساحتها", "مساحه", "الاقل", "كومباوند", "كومبوند", "كمبوند", "كمبوندات", "كومباوندات", "قريبه", "ابغي", "ابي", "عندكم", "عندكو", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب",
-    "more", "شقتين", "فيلتين", "وحدتين", "بدور", "دور", "البادجت", "بدجت", "بودجت", "الميزانيه", "بدوّر", "عاوزه", "عايزين", "محتاجه"
+    "more", "less", "than", "دولار", "يورو", "دولارات", "dollar", "dollars", "euro", "euros", "usd", "eur", "شقتين", "فيلتين", "وحدتين", "بدور", "دور", "البادجت", "بدجت", "بودجت", "الميزانيه", "بدوّر", "عاوزه", "عايزين", "محتاجه"
   ].map(normalizeSearch)
 );
 
@@ -420,7 +420,9 @@ function takeUnapplied(hay, unapplied) {
   let h = ` ${out.join(" ")} `;
   for (const re of [
     / (?:ب|بال)?(?:الدور الاخير|اخر دور|الدور الاخر|top floor|last floor) /,
-    / (?:قانون جديد|قانون قديم|ايجار قديم|ايجار جديد|new rent law|old rent law) /
+    / (?:قانون جديد|قانون قديم|ايجار قديم|ايجار جديد|new rent law|old rent law) /,
+    // "down payment less than 10%": a ceiling on the down payment percent, which the filters cannot say.
+    / (?:down ?payment|مقدم) (?:less than|under|below|max|maximum|اقل من|تحت|حد اقصي) \d+(?:\.\d+)? ?(?:%|percent|بالمية|فالمية) /
   ]) {
     const m = h.match(re);
     if (m) {
@@ -498,7 +500,16 @@ function fallbackParse(text) {
   hay = hay.replace(/ و(?=\d|حمام|[ء-ي]+ حمام)/g, " ");
 
   // "بجنينة" / "بغرفة مربية" / "بتراس": the attached "ب" (with) is dropped before a feature word.
-  hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن)/g, " $1");
+  hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن|سطح|دولار|يورو)/g, " $1");
+  // Franco-Arabic (Arabic in Latin letters): the common words become their Arabic spelling so the rules below read them.
+  hay = hay
+    .replace(/ (?:shaqa|shaqqa|sha2a|shu2a|sha2'a) /g, " شقه ")
+    .replace(/ (?:be?l? ?)?(?:tagheez|tashteeb|tasheeb) (?:kamel|kaamel|full) /g, " تشطيب كامل ")
+    .replace(/ (?:ghorfa|ghorfet|ghurfa) (?:morabeya|morabbya|morabia|nanny) /g, " غرفه مربيه ")
+    .replace(/ (?:ghorf|ghoraf|ghorfa|ghurf|oda|odaa|oda2) /g, " غرف ")
+    .replace(/ (?:ejar|egar|igar|ijar|e7gar|eigar) /g, " ايجار ")
+    .replace(/ (?:lel ?bay3|lel ?beya3|lel ?bei3|lelbay3|lelbei3) /g, " للبيع ")
+    .replace(/ (?:fe|fi|fel|fil|fee) /g, " في ");
   // English words written in Arabic letters.
   hay = hay
     .replace(/ (ابارتمنت|ابارتمنتس|أبارتمنت|ابرتمنت) /g, " شقه ")

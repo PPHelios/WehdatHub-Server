@@ -92,7 +92,7 @@ const EXTRA_COMPOUNDS = {
   "mountain_view_executive_residence": ["new_cairo", null, "mver", "mountain view executive", "mountain view katameya", "ماونتن فيو اكزيكتيف", "ماونتن فيو قطامية"],
   "mountain_view_icity_new_cairo": ["new_cairo", null, "icity new cairo", "icity tagamoa", "اي سيتي التجمع", "ايسيتي"],
   "hyde_park": ["new_cairo", null, "هيد بارك"],
-  "mivida": ["new_cairo", null, "mevida", "مڤيدا", "مافيدا"],
+  "mivida": ["new_cairo", null, "mevida", "مڤيدا", "مافيدا", "مفيدا", "ميفيده", "مفيده"],
   "villette_sodic": ["new_cairo", null, "villette sodic", "فيليت سوديك", "فليت"],
   "eastown": ["new_cairo", null, "eastown sodic", "ايستاون", "إيست تاون سوديك"],
   "ednc": ["new_cairo", null, "ednc", "eastown district new cairo", "اي دي ان سي"],

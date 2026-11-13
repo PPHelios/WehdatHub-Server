@@ -6,7 +6,7 @@
 const Q = require("../../domain/searchQuery");
 const cases = require("../eval/search-egyptian-cases.json");
 
-const MIN_ACCURACY = 0.9;
+const MIN_ACCURACY = 0.95;
 const KEYS = ["listing_type", "property_types", "price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "furnishing", "finishing", "features", "feature_terms", "place_terms", "max_down_payment", "max_installment", "payment_years", "payment_down_pct", "payment_cash", "delivery_ready", "delivery_by_year", "market", "currency", "code", "places"];
 
 const read = (q) => {
