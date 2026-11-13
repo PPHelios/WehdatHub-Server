@@ -137,7 +137,7 @@ ${filters.code || st !== "active" || isDataEntry(Vis.viewer()) ? "" : html`<p><a
     <form method="post" action="/app/searches" class="row">
     <input type="hidden" name="f" value="${token}">
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
-    <button type="submit">${L(lang, "حفظ", "Save")}</button>
+    <button type="submit" data-no-tg-main>${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
   <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { thumb: covers.get(r.id), ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
   ${pager(token, page, res.total, lang, sl, st)}

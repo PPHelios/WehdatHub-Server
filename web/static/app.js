@@ -572,7 +572,7 @@
       if (link && link.href && new URL(link.href).origin === location.origin && link.href !== location.href) { location.href = link.href; return; }
       if (history.length > 1) history.back(); else location.href = "/app/";
     };
-    function shown(el) { return el && !el.disabled && !el.closest("[hidden]"); }
+    function shown(el) { return el && !el.disabled && !el.closest("[hidden]") && !el.closest("details:not([open])"); }
     function mainTarget() {
       var all = document.querySelectorAll("[data-tg-main]");
       for (var i = 0; i < all.length; i++) if (shown(all[i])) return all[i];

@@ -46,3 +46,9 @@ test("Franco-Arabic and attached words are read", () => {
   expect([f.listing_type, f.property_types, f.bedrooms_min]).toEqual(["rent", ["apartment"], 3]);
   expect(Q.fallbackParse("شقة للبيع في مفيدا").filters.places.map((p) => p.key)).toEqual(["mivida"]);
 });
+
+test("the Telegram Main button never picks a button inside a closed box", () => {
+  const fs = require("fs");
+  expect(fs.readFileSync("web/static/app.js", "utf8")).toMatch(/closest\("details:not\(\[open\]\)"\)/);
+  expect(fs.readFileSync("web/routes/search.js", "utf8")).toMatch(/<button type="submit" data-no-tg-main>/);
+});
