@@ -159,10 +159,10 @@ function privacySection(scope, lang, csrf, notice, canSwitch = false) {
 /** The agency owner's switch for brokers adding and editing units (on by default; managers and data entry are never limited). */
 function brokerEditSection(allowed, lang, csrf, canSwitch) {
   return html`<section class="card stack" id="broker-edit">
-  <h2>${L(lang, "إضافة وتعديل الوحدات للسماسرة", "Brokers adding and editing units")}</h2>
+  <h2>${L(lang, "إضافة وتعديل الوحدات للبروكرز", "Brokers adding and editing units")}</h2>
   <form method="post" action="/app/dashboard/brokers-edit-units" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
-    <label class="pill"><input type="checkbox" name="allowed" value="on"${allowed ? html` checked` : ""}${canSwitch ? "" : html` disabled`}><span>${L(lang, "السماسرة يقدروا يضيفوا ويعدّلوا وحدات", "Brokers may add and edit units")}</span></label>
-    <p class="muted small">${L(lang, "لو اتقفلت، السماسرة ومسؤولو الفرق يشوفوا الوحدات بس. المديرين وإدخال البيانات مش متأثرين.", "When off, brokers and team leaders can only view units. Managers and data entry are not affected.")}</p>
+    <label class="pill"><input type="checkbox" name="allowed" value="on"${allowed ? html` checked` : ""}${canSwitch ? "" : html` disabled`}><span>${L(lang, "البروكرز يقدروا يضيفوا ويعدّلوا وحدات", "Brokers may add and edit units")}</span></label>
+    <p class="muted small">${L(lang, "لو اتقفلت، البروكرز ومسؤولو الفرق يشوفوا الوحدات بس. المديرين وإدخال البيانات مش متأثرين.", "When off, brokers and team leaders can only view units. Managers and data entry are not affected.")}</p>
     ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
 </section>`;
@@ -584,7 +584,7 @@ function register(web, { pool, page }) {
     const per = Period.parse(req.query.period);
     const pf = await Dash.ownerPeriod(pool, req.session.broker, per);
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
-    const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("سماسرة نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
+    const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("بروكرز نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
     const [agencies, log, places] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool)]);
     return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);

@@ -174,7 +174,7 @@ function register(web, { pool, page, assets }) {
     if (await Rights.mayWrite(pool, req.session.broker)) return false;
     const lang = langOf(req);
     traceRefusal(pool, req, { reason: "writes_off" });
-    res.status(403).type("text/plain").send(L10n(lang, "مالك الشركة قفل إضافة وتعديل الوحدات للسماسرة.", "The agency owner has switched off adding and editing units for brokers."));
+    res.status(403).type("text/plain").send(L10n(lang, "مالك الشركة قفل إضافة وتعديل الوحدات للبروكرز.", "The agency owner has switched off adding and editing units for brokers."));
     return true;
   };
 
