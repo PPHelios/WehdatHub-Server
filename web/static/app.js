@@ -457,7 +457,14 @@
     var cols = wrap && wrap.querySelector("[data-board]");
     if (!cols) return;
     var col = cols.querySelector(".bcol");
-    cols.scrollBy({ left: Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12), behavior: "smooth" });
+    var delta = Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12);
+    var before = cols.scrollLeft, max = cols.scrollWidth - cols.clientWidth;
+    cols.scrollBy({ left: delta, behavior: "smooth" });
+    // Loop: when the edge stops the step, jump to the other end (any sign of scrollLeft, RTL or LTR).
+    setTimeout(function () {
+      if (Math.abs(cols.scrollLeft - before) >= 2) return;
+      cols.scrollTo({ left: Math.abs(before) < 4 ? (delta > 0 ? -max : max) : 0, behavior: "smooth" });
+    }, 400);
   });
   // ← Back (and the open menu button): the previous page when it is ours, else the link's own address.
   document.addEventListener("click", function (e) {
