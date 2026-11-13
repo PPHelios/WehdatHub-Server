@@ -21,6 +21,7 @@ afterAll(() => closeHarness());
 
 const api = () => request(h.app.app);
 async function login(who) {
+  if (h.BROKERS[who].lazy) await h.seedBroker(who);
   const b = h.BROKERS[who];
   const code = await WebAuth.issueLoginCode(h.pool, { id: b.id, agency_id: b.agency_id });
   const res = await api().post("/api/v1/auth/code/verify").send({ phone: b.phone, code });
@@ -104,4 +105,19 @@ test("the unit page says whether this person can edit it", async () => {
   await ownUnit();
   expect((await api().get("/api/v1/units/A-1").set(await login("broker"))).body.canEdit).toBe(true);
   expect((await api().get("/api/v1/units/A-1").set(await login("colleague"))).body.canEdit).toBe(false);
+});
+
+test("status, delete and restore from the app: own unit only, deleted units cannot change status", async () => {
+  await ownUnit();
+  const auth = await login("broker");
+  expect((await api().post("/api/v1/units/A-1/status").set(auth).send({ status: "wat" })).status).toBe(422);
+  expect((await api().post("/api/v1/units/A-1/status").set(auth).send({ status: "sold" })).status).toBe(200);
+  expect((await h.query("SELECT status FROM listings WHERE code = 'A-1' AND agency_id = $1", [h.BROKERS.broker.agency_id]))[0].status).toBe("sold");
+  expect((await api().post("/api/v1/units/A-1/delete").set(auth)).status).toBe(200);
+  expect((await api().post("/api/v1/units/A-1/status").set(auth).send({ status: "active" })).status).toBe(422);
+  expect((await api().post("/api/v1/units/A-1/restore").set(auth)).status).toBe(403);
+  await h.seedBroker("manager");
+  expect((await api().post("/api/v1/units/A-1/restore").set(await login("manager"))).status).toBe(200);
+  const col = await login("colleague");
+  expect((await api().post("/api/v1/units/A-1/status").set(col).send({ status: "archived" })).status).toBe(403);
 });
