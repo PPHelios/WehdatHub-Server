@@ -285,7 +285,7 @@ async function handleInteractive(broker, message, ctx) {
 
   // 8. ON-DEMAND BROCHURE GENERATION (DEL-01)
   if (replyId.startsWith("flyer:")) {
-    const [, flyerLang, theme, rawCode] = replyId.split(":");
+    const [, flyerLang, theme, rawCode, flyerMode] = replyId.split(":");
     const code = T.extractCleanCode(rawCode);
     const cooldownKey = `flyer:${broker.agency_id}:${code}`;
 
@@ -304,7 +304,7 @@ async function handleInteractive(broker, message, ctx) {
 
     // One message: the flyer itself (the typing indicator covers the render).
     const Flyer = require("../lib/flyer");
-    return await Flyer.renderFlyerOnDemand(broker, code, flyerLang, theme, ctx);
+    return await Flyer.renderFlyerOnDemand(broker, code, flyerLang, theme, flyerMode === "nb" ? { ...ctx, unbranded: true } : ctx);
   }
 
   // 9. DEVELOPER INSTALLMENT MATRIX OVERVIEW (DEL-03)
@@ -522,6 +522,8 @@ async function handleInteractive(broker, message, ctx) {
     const [, action, rawCode] = replyId.split(":");
     const code = T.extractCleanCode(rawCode);
     if (action === "edit") return await Edits.startEdit(broker, code, ctx);
+    // The flyer without the agency logo and contact details (the typed "unbranded CODE" command does the same).
+    if (action === "flyer_nb") return await require("../lib/flyer").renderFlyerOnDemand(broker, code, "en", "dark", { ...ctx, unbranded: true });
     if (["sold", "available", "archive"].includes(action)) return await Edits.quickUpdate(broker, { action, code }, ctx);
   }
 

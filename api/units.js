@@ -208,7 +208,7 @@ function register(api, { pool }) {
     if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
     const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
-    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: broker.preferred_lang === "en" ? "en" : "ar" });
+    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: broker.preferred_lang === "en" ? "en" : "ar", unbranded: req.body?.unbranded === true });
     if (out.error) return res.status(out.error === "busy" ? 503 : 502).json({ error: out.error });
     return res.json({ url: out.url });
   });

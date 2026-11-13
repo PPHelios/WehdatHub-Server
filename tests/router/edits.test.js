@@ -92,7 +92,7 @@ describe("Quick updates by voice and by button", () => {
     expect(ids(card)).toEqual(["client:HP-201", "flyer:en:dark:HP-201", "qu_menu:HP-201"]);
     const menu = await h.tap("broker", "qu_menu:HP-201");
     expect(menu[0].type).toBe("list");
-    expect(menu[0].sections[0].rows.map((r) => r.id)).toEqual(["qu:available:HP-201", "qu:sold:HP-201", "qu:archive:HP-201", "qu:edit:HP-201"]);
+    expect(menu[0].sections[0].rows.map((r) => r.id)).toEqual(["qu:available:HP-201", "qu:sold:HP-201", "qu:archive:HP-201", "qu:edit:HP-201", "qu:flyer_nb:HP-201"]);
     await h.pick("broker", "qu:sold:HP-201");
     expect((await row("HP-201")).status).toBe("sold");
   });

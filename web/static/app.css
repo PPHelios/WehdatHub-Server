@@ -643,9 +643,11 @@ button.saving:disabled { opacity: 1; cursor: progress; color: #fff; background: 
 [data-save-status] button { margin-inline-start: 8px; }
 
 /* Unit page: the status line and the actions sit on one aligned grid, every control the same height. */
-[data-unit-status] { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-[data-unit-status] label { display: grid; gap: 4px; margin: 0; }
-[data-unit-status] select, [data-unit-status] button { min-height: 48px; margin: 0; }
-#unit-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: stretch; gap: 8px; }
+[data-unit-status] { display: contents; }
+.status-menu summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 0; }
+.status-menu summary::-webkit-details-marker { display: none; }
+.status-menu[open] .status-options { display: grid; gap: 8px; margin-top: 8px; }
+#unit-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: stretch; gap: 10px; margin: 12px 0; padding-inline: 6px; }
+[data-flyer] .btn.active { outline: 2px solid var(--brand); }
 #unit-actions > form.inline { display: contents; }
 #unit-actions .btn, #unit-actions button { width: 100%; min-height: 48px; margin: 0; }

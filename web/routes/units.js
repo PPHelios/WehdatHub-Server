@@ -9,6 +9,8 @@ const Share = require("../../lib/shareLinks");
 const LeadRequests = require("../../services/leadRequests");
 const Card = require("../../domain/leadCard");
 const Storage = require("../../lib/supabase");
+const Flyer = require("../../lib/flyer");
+const RateLimit = require("../../lib/rateLimit");
 const Insights = require("../../services/priceInsights");
 const Catalogue = require("../../services/catalogue");
 const PriceSheets = require("../../services/priceSheets");
@@ -358,6 +360,35 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
 
   // Photos to a client in one tap: the browser's share sheet (navigator.share with files) opens WhatsApp with the
   // pictures; Telegram can't forward several photos without its own captions and timestamps.
+  // The unit's flyer on the web: made on the first call, then cached. "Without brand" drops the agency logo and contact details.
+  web.get("/units/:code/flyer", async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing) || listing.status !== "active" || Authz.isDataEntry(broker)) return next();
+    const theme = req.query.theme === "light" ? "light" : "dark";
+    const unbranded = req.query.unbranded === "1";
+    const code = encodeURIComponent(listing.code);
+    const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
+    const out = gate.allowed ? await Flyer.flyerUrlFor(pool, broker, listing, { theme, lang, unbranded }) : { error: "rate" };
+    const link = (t, u, label) => html`<a class="btn secondary${theme === t && unbranded === u ? " active" : ""}" href="/app/units/${code}/flyer?theme=${t}${u ? "&unbranded=1" : ""}">${label}</a>`;
+    return page(req, res, {
+      title: listing.code,
+      nav: "units",
+      body: html`<h1>🖼 ${L(lang, `فلاير ${listing.code}`, `Flyer ${listing.code}`)}</h1>
+<section class="card stack" data-flyer>
+  <div class="row">
+    ${link("dark", false, L(lang, "غامق", "Dark"))}${link("light", false, L(lang, "فاتح", "Light"))}${link("dark", true, L(lang, "غامق من غير بيانات الشركة", "Dark, no brand"))}${link("light", true, L(lang, "فاتح من غير بيانات الشركة", "Light, no brand"))}
+  </div>
+  ${out.url
+    ? html`<img src="${out.url}" alt="" style="max-width:100%;height:auto" data-flyer-image>
+  <div class="row"><a class="btn" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
+  <a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></div>`
+    : html`<p class="notice bad">${out.error === "busy" || out.error === "rate" ? L(lang, "الفلاير مشغول دلوقتي. جرب بعد شوية.", "The flyer maker is busy. Try again in a moment.") : L(lang, "معرفناش نعمل الفلاير. جرب تاني.", "The flyer could not be made. Try again.")}</p>`}
+</section>`
+    });
+  });
+
   web.get("/units/:code/share-media", async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -373,6 +404,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
 <section class="card stack" id="share-media" data-share-text="${text}">
   ${images.length
     ? html`<div class="photos">${images.map((i) => html`<img src="/app/units/${code}/photos/${i.id}" alt="" loading="lazy" data-share-photo>`)}</div>
+  <label class="stack">${L(lang, "وصف الوحدة (بيتبعت مع الصور، وبيتنسخ لو التطبيق شال النص)", "Unit description (sent with the photos, and copied in case the app drops the text)")}<textarea readonly rows="6" data-share-copy>${text}</textarea></label>
   <button type="button" data-share-media>📤 ${L(lang, `ابعت ${images.length} صور (واتساب أو أي تطبيق)`, `Send ${images.length} photos (WhatsApp or any app)`)}</button>
   <p class="muted" data-share-status></p>
   <p class="muted">${L(lang, "لو الزرار مش شغال على جهازك: اضغط على الصورة مطولاً واحفظها، أو ابعت رابط الوحدة.", "If the button doesn't work on this device: long-press a photo to save it, or send the unit link.")}</p>`
@@ -542,14 +574,15 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
-  ${Authz.canEdit(broker, listing) && listing.status !== "deleted" ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/status" class="row" data-unit-status><input type="hidden" name="_csrf" value="${req.session.csrf}">
-    <label>${L(lang, "الحالة", "Status")} <select name="status">${[["active", L(lang, "نشطة", "Active")], ["sold", L(lang, "مباعة", "Sold")], ["archived", L(lang, "مؤرشفة", "Archived")]].map(([v, t]) => html`<option value="${v}"${v === listing.status ? html` selected` : ""}>${t}</option>`)}</select></label>
-    <button type="submit" class="secondary">${L(lang, "احفظ الحالة", "Save status")}</button>
-  </form>` : ""}
   <div class="row" id="unit-actions">
+    ${Authz.canEdit(broker, listing) && listing.status !== "deleted" ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/status" class="inline" data-unit-status><input type="hidden" name="_csrf" value="${req.session.csrf}">
+      <details class="status-menu"><summary class="btn secondary">🔄 ${L(lang, "غيّر الحالة", "Change status")}</summary>
+        <div class="status-options">${[["active", L(lang, "نشطة", "Active")], ["sold", L(lang, "مباعة", "Sold")], ["archived", L(lang, "مؤرشفة", "Archived")]].filter(([v]) => v !== listing.status).map(([v, t]) => html`<button type="submit" name="status" value="${v}" class="secondary">${t}</button>`)}</div></details></form>` : ""}
     ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
     ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
+    ${listing.status === "active" ? html`<a class="btn secondary" href="#share">🔗 ${L(lang, "لينك للعميل", "Link for a client")}</a>` : ""}
+    ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/flyer">🖼 ${L(lang, "الفلاير", "Flyer")}</a>` : ""}
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
   ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button>${listing.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}

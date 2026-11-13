@@ -75,22 +75,31 @@ const openEdit = async () => {
   return { ctx, pg };
 };
 
-test("only 15 photos can be added; the rest are counted and said", async () => {
+test("up to 60 photos can be picked and 15 are kept; the rest wait as not kept", async () => {
   const { ctx, pg } = await openEdit();
   const files = Array.from({ length: 20 }, (_, i) => ({ name: `p${i}.png`, mimeType: "image/png", buffer: PNG }));
   await pg.setInputFiles("input[data-photo-tray]", files);
   await pg.waitForSelector("[data-photo-preview] li");
-  expect(await pg.locator("[data-photo-preview] li").count()).toBe(15);
+  expect(await pg.locator("[data-photo-preview] li").count()).toBe(20);
+  expect(await pg.locator("[data-photo-preview] [data-keep]", { hasText: "✓" }).count()).toBe(15);
   const note = pg.locator("[data-photo-note]");
   expect(await note.isVisible()).toBe(true);
-  expect(await note.textContent()).toMatch(/5/);
-  expect(await note.getAttribute("class")).toContain("bad");
+  expect(await note.textContent()).toMatch(/20/);
+  expect(await note.textContent()).toMatch(/15/);
+  // Nothing is uploaded while picking, and the review is told how many photos wait for Save.
+  expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("15");
+  expect(await pg.locator('input[data-photo-tray]').evaluate((i) => i.files.length)).toBe(0);
+  // Swapping: a not-kept photo cannot be kept while 15 are kept; taking one off makes room.
+  await pg.locator("[data-photo-preview] [data-keep]", { hasText: "✓" }).first().click();
+  expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("14");
+  await pg.locator("[data-photo-preview] [data-keep]", { hasText: /Not kept|مش هتتحفظ/ }).first().click();
+  expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("15");
   await ctx.close();
 });
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "*", "access-control-allow-headers": "*" };
 
-test("a picked photo is reduced in the browser and goes straight to storage; Save then sends only its key", async () => {
+test("a picked photo is uploaded only at Save, reduced in the browser; the form then sends only its key", async () => {
   const sharp = require("sharp");
   const Fake = require("../harness/fake-supabase");
   const w = 3000, hgt = 2000;
@@ -115,19 +124,20 @@ test("a picked photo is reduced in the browser and goes straight to storage; Sav
   await pg.reload({ waitUntil: "networkidle" });
   await pg.setInputFiles("input[data-photo-tray]", [{ name: "big.png", mimeType: "image/png", buffer: big }]);
   await pg.waitForSelector("[data-photo-preview] li");
-  await pg.waitForFunction(() => /✓/.test((document.querySelector("[data-photo-state]") || {}).textContent || ""), null, { timeout: 20000 });
-  // Both copies went up, reduced: the photo is far smaller than the 3000 px original, and the form names it by key.
-  expect(puts).toHaveLength(2);
-  expect(puts[0].jpeg).toBe(true);
-  expect(puts[0].size).toBeLessThan(big.length / 4);
-  expect(puts[1].path).toMatch(/^thumbs\//);
-  expect(await pg.locator('input[name="photo_keys"]').count()).toBe(1);
+  // Picking uploads nothing: the review is told one photo waits for Save (so it never says "no photos").
+  expect(puts).toHaveLength(0);
+  expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("1");
+  expect(await pg.locator('input[name="photo_keys"]').count()).toBe(0);
   expect(await pg.locator('input[data-photo-tray]').evaluate((i) => i.files.length)).toBe(0);
-  // Save: the form goes without any photo bytes and the unit gets the photo.
   await pg.waitForSelector("[data-review]");
   if (await pg.locator("[data-warn-ack]").count()) await pg.check("[data-warn-ack]");
   await pg.click("[data-save-row] button[type=submit]");
   await pg.waitForURL(/saved=1/, { timeout: 30000 });
+  // Both copies went up at Save, reduced: the photo is far smaller than the 3000 px original.
+  expect(puts).toHaveLength(2);
+  expect(puts[0].jpeg).toBe(true);
+  expect(puts[0].size).toBeLessThan(big.length / 4);
+  expect(puts[1].path).toMatch(/^thumbs\//);
   const n = (await h.query("SELECT count(*)::int AS n FROM listing_images li JOIN listings l ON l.id = li.listing_id WHERE l.code = 'NH-A20'"))[0].n;
   expect(n).toBe(1);
   expect((await h.query("SELECT count(*)::int AS n FROM unit_photo_uploads WHERE attached_at IS NOT NULL"))[0].n).toBe(1);
@@ -141,9 +151,6 @@ test("when storage cannot be reached the photo goes with the form, as before", a
   // Uploads to storage fail (the address is blocked by the page's own rules): the tray marks it failed and Save still works.
   await pg.setInputFiles("input[data-photo-tray]", [{ name: "c.png", mimeType: "image/png", buffer: PNG }]);
   await pg.waitForSelector("[data-photo-preview] li");
-  await pg.waitForFunction(() => /⚠|✓/.test((document.querySelector("[data-photo-state]") || {}).textContent || ""), null, { timeout: 20000 });
-  expect(await pg.locator('input[name="photo_keys"]').count()).toBe(0);
-  expect(await pg.locator('input[data-photo-tray]').evaluate((i) => i.files.length)).toBe(1);
   await pg.waitForSelector("[data-review]");
   if (await pg.locator("[data-warn-ack]").count()) await pg.check("[data-warn-ack]");
   await pg.click("[data-save-row] button[type=submit]");
