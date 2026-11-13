@@ -57,3 +57,35 @@ test("a broker with nothing waiting gets an empty list, not an error", async () 
   expect(res.status).toBe(200);
   expect(res.body.tasks).toEqual([]);
 });
+
+const old = (days) => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+
+test("old units: a broker sees theirs, a manager and data entry see the agency's, private units stay hidden, status never changes", async () => {
+  await h.insertListing({ code: "O-1", confirmed_at: old(30) });
+  await h.insertListing({ code: "O-2", broker_id: h.BROKERS.colleague.id, confirmed_at: old(25) });
+  await h.insertListing({ code: "O-NEW", confirmed_at: old(2) });
+  await h.insertListing({ code: "O-P", confirmed_at: old(40), is_private: true });
+  await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  await h.seedBroker("manager");
+  const mine = (await get("broker")).body.cards.oldUnits;
+  expect(mine.items.map((u) => u.code)).toEqual(["O-1"]);
+  const mgr = (await get("manager")).body.cards.oldUnits;
+  expect(mgr.items.map((u) => u.code).sort()).toEqual(["O-1", "O-2"]);
+  const de = await get("colleague");
+  expect(de.body.cards.oldUnits.total).toBe(2);
+  expect(de.body.tasks).toEqual([]);
+  expect((await h.query("SELECT status FROM listings WHERE code = 'O-1'"))[0].status).toBe("active");
+});
+
+test("a card with nothing in it is null", async () => {
+  const c = (await get("broker")).body.cards;
+  expect(c).toMatchObject({ oldUnits: null, ops: null, approvals: null, commissions: null });
+});
+
+test("the units list can show just the old units the card points to", async () => {
+  await h.insertListing({ code: "O-1", confirmed_at: old(30) });
+  await h.insertListing({ code: "O-NEW", confirmed_at: old(2) });
+  const res = await request(h.app.app).get("/api/v1/units?status=active&old=1").set("Authorization", `Bearer ${await token("broker")}`);
+  expect(res.status).toBe(200);
+  expect(res.body.items.map((u) => u.code)).toEqual(["O-1"]);
+});
