@@ -52,3 +52,10 @@ test("the Telegram Main button never picks a button inside a closed box", () => 
   expect(fs.readFileSync("web/static/app.js", "utf8")).toMatch(/closest\("details:not\(\[open\]\)"\)/);
   expect(fs.readFileSync("web/routes/search.js", "utf8")).toMatch(/<button type="submit" data-no-tg-main>/);
 });
+
+test("the reading shows furnishing and finishing", () => {
+  const f = { ...Q.emptyFilters(), property_types: ["apartment"], furnishing: "ac_only", finishing: ["fully_finished"] };
+  const ar = formatInterpretation({ filters: f }, "ar");
+  expect(ar).toMatch(/تكييف/);
+  expect(ar).toMatch(/تشطيب|كامل/);
+});
