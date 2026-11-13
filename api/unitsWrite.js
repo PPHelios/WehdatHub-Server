@@ -21,6 +21,7 @@ const Form = require("../web/forms/unitForm");
 const { uploads, PHOTO, VOICE } = require("../web/uploads");
 const SaveKeys = require("../lib/saveKeys");
 const Uploads = require("../lib/unitUploads");
+const UnitDelete = require("../services/unitDelete");
 
 const MAX_DESCRIBE = 4000;
 const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -73,6 +74,50 @@ function register(api, { pool }) {
   const upload = uploads([PHOTO, VOICE]);
 
   // Fill the fields from a typed description (a shared WhatsApp message) and/or a voice note. Nothing is saved.
+  // Lifecycle from the unit page: active / sold / archived, delete (kept 10 days) and restore. Same rules as the website.
+  const unitFor = async (req, res) => {
+    const b = req.session.broker;
+    const listing = await Store.findByCode(pool, b.agency_id, req.params.code);
+    if (!listing || !Authz.canView(b, listing)) {
+      res.status(404).json({ error: "not_found" });
+      return null;
+    }
+    return listing;
+  };
+  api.post("/units/:code/status", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const status = String((req.body || {}).status || "");
+    if (!["active", "sold", "archived"].includes(status)) return res.status(422).json({ error: "unknown_status" });
+    if (listing.status === "deleted") return res.status(422).json({ error: "deleted" });
+    if (!Authz.canEdit(b, listing) || !(await Rights.mayWrite(pool, b))) return res.status(403).json({ error: "forbidden" });
+    if (listing.status !== status) {
+      const out = await Store.applyListingPatch(pool, b, { listing, patch: { status } });
+      if (out.conflict) return res.status(409).json({ error: "conflict" });
+      logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: `listing_status_${status}`, metadata: { from: listing.status } });
+    }
+    return res.json({ ok: true, status });
+  });
+  api.post("/units/:code/delete", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const out = await UnitDelete.softDelete(pool, b, listing.id);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: "unit_soft_delete", metadata: {} });
+    return res.json({ ok: true });
+  });
+  api.post("/units/:code/restore", async (req, res) => {
+    const b = req.session.broker;
+    const listing = await Store.findByCode(pool, b.agency_id, req.params.code);
+    if (!listing) return res.status(404).json({ error: "not_found" });
+    const out = await UnitDelete.restore(pool, b, listing.id);
+    if (out.error) return res.status(out.error === "forbidden" ? 403 : 422).json({ error: out.error });
+    logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: "unit_restore", metadata: {} });
+    return res.json({ ok: true, code: out.code });
+  });
+
   api.post("/units/extract", upload, async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
     const lang = langOf(req);
