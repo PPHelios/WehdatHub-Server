@@ -2073,7 +2073,12 @@
       "remove": ["db", "actor", "listing"],
       "upcoming": ["db", "manager", "params"],
       "remindDue": ["db", "params"],
-      "reminderJob": []
+      "reminderJob": [],
+      "done": ["db", "actor", "listing", "kind"],
+      "list": ["db", "actor", "params"],
+      "contacts": ["db", "actor", "listing", "lease"],
+      "promptFor": ["db", "actor", "deal"],
+      "KINDS": "Array"
     },
     "services/systemAlerts.js": {
       "limits": [],

@@ -100,8 +100,21 @@ ${groups.map(([g, label]) => {
     if (require("../../lib/authz").isCrmOwner(broker)) return crmHome(req, res);
     const en = broker.preferred_lang === "en";
     const now = new Date();
-    const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null))]);
-    return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en }) });
+    const [welcome, day, leases] = await Promise.all([Onboarding.welcomeFor(pool, broker), Digest.briefData(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null)), require("../../services/leases").list(pool, broker, { soon: true }).catch(Swallow.logged(pool, "home.leases", []))]);
+    return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en, leases }) });
+  });
+
+  // Leases being tracked: the broker's own, a team lead's team, or all for managers (services/leases.js list).
+  web.get("/leases", async (req, res) => {
+    const en = req.session.broker.preferred_lang === "en";
+    const rows = await require("../../services/leases").list(pool, req.session.broker);
+    return page(req, res, {
+      title: en ? "Leases" : "العقود",
+      body: html`<h1>🔑 ${en ? "Leases" : "العقود"}</h1>
+${rows.length
+  ? html`<div class="stack" data-leases>${rows.map((z) => html`<a class="card task" href="/app/units/${encodeURIComponent(z.code)}#lease" data-lease-row="${z.code}"><div class="row between"><span><b>${z.code}</b> <span class="muted">${z.tenant_name || "—"} · ${z.broker_name || "—"}</span></span><span class="chip ${z.done ? "ok" : z.daysLeft <= 60 ? "late" : "new"}">${z.done ? "✅" : en ? `${z.daysLeft} days` : `${z.daysLeft} يوم`}</span></div><div class="muted small" dir="ltr">${z.end.toISOString().slice(0, 10)}</div></a>`)}</div>`
+  : html`<p class="card muted empty">${en ? "No leases yet. Add one after closing a rent deal." : "مفيش عقود لسه. ضيف عقد بعد ما تقفل صفقة إيجار."}</p>`}`
+    });
   });
 }
 
@@ -110,7 +123,7 @@ const fmtDay = (d, en) => new Date(d).toLocaleDateString(en ? "en-GB" : "ar-EG",
 const digits = (p) => String(p || "").replace(/[^0-9]/g, "");
 
 /** Today: the broker's day at a glance (counts, then the people who need them now with Call and WhatsApp). */
-function todayPage({ broker, agency, welcome, day, now, en }) {
+function todayPage({ broker, agency, welcome, day, now, en, leases = [] }) {
   const d = day || { viewings: [], calls: [], overdue: [], hot: [], matches: [], uncontacted: 0 };
   const seen = new Set();
   const tasks = [];
@@ -156,6 +169,10 @@ ${welcome ? welcomeCard(welcome, en) : ""}
     : html`<p class="card muted empty">${en ? "Nothing waiting. Add a unit or a lead with the + button." : "مفيش حاجة مستنياك. ضيف وحدة أو عميل من زرار +."}</p>`}
   ${tasks.length > shown.length ? html`<a class="btn secondary" href="/app/leads?tab=overdue">${en ? `${tasks.length - shown.length} more` : `${tasks.length - shown.length} كمان`}</a>` : ""}
 </section>
+${leases.length
+  ? html`<section class="stack" data-today-leases><div class="row between"><h2>🔑 ${en ? "Leases ending soon" : "عقود قربت تخلص"}</h2><a href="/app/leases">${en ? "All" : "الكل"}</a></div>
+  ${leases.slice(0, 5).map((z) => html`<a class="card task" href="/app/units/${encodeURIComponent(z.code)}#lease" data-lease-soon="${z.code}"><div class="row between"><span><b>${z.code}</b> <span class="muted">${z.tenant_name || ""}</span></span><span class="chip ${z.daysLeft <= 60 ? "late" : "new"}">${en ? `${z.daysLeft} days` : `${z.daysLeft} يوم`}</span></div></a>`)}</section>`
+  : ""}
 ${Dash.isManager(broker)
   ? html`<div class="row shortcuts"><a class="btn secondary" href="/app/dashboard">${icon("chart", 20)} ${en ? "Agency dashboard" : "لوحة الشركة"}</a>${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${icon("tools", 20)} ${en ? "App tracking" : "متابعة التطبيق"}</a>` : ""}</div>`
   : ""}`;

@@ -6,6 +6,7 @@
 
 const crypto = require("crypto");
 const Deals = require("../../services/deals");
+const Leases = require("../../services/leases");
 const Leads = require("../../services/leads");
 const Card = require("../../domain/leadCard");
 const Commission = require("../../domain/commission");
@@ -89,7 +90,6 @@ function register(web, { pool, page }) {
       nav: "deals",
       body: html`<h1>🤝 ${L(lang, "الصفقات", "Deals")}</h1>
 ${dealsSwitch(lang, "/app/deals")}
-<p><a class="btn secondary" href="/app/commissions" data-commissions-link>💸 ${L(lang, "العمولات", "Commissions")}</a></p>
 <section class="card" id="totals"><h2>📊 ${manager ? L(lang, "إجمالي الشهور", "Monthly totals") : L(lang, "نصيبك كل شهر", "Your share per month")}</h2>
 ${totals.length
   ? html`<table class="table"><thead><tr><th>${L(lang, "الشهر", "Month")}</th><th>${L(lang, "صفقات", "Deals")}</th>${manager
@@ -191,12 +191,18 @@ ${notice ? html`<div class="card notice bad" role="alert">⚠️ ${notice}</div>
     const { broker } = req.session;
     const manager = isManager(broker);
     const editable = canEditDeal(broker, deal);
+    const leasePrompt = editable ? await Leases.promptFor(pool, broker, deal) : null;
     const hidden = html`<input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${deal.version}">`;
     return page(req, res, {
       title: `${Deals.refLabel(deal.ref)} · ${L(lang, "صفقة", "Deal")}`,
       nav: "deals",
       body: html`${notice ? html`<div class="card notice${status >= 400 ? " bad" : ""}" role="status">${notice}</div>` : ""}
 <h1>🤝 ${Deals.refLabel(deal.ref)} · ${Deals.statusLabel(deal.status, lang)}</h1>
+${leasePrompt
+  ? html`<section class="card" id="lease-prompt" data-lease-prompt><h2>🔑 ${L(lang, "الوحدة إيجار: ضيف بيانات العقد", "A rented unit: add the lease")}</h2>
+  <p class="muted">${L(lang, "مدة العقد بتحدد تذكيرات التجديد (قبل النهاية بـ 3 شهور وشهرين) ليك وللمدير.", "The lease length sets the renewal reminders (3 and 2 months before the end) for you and the managers.")}</p>
+  <a class="btn" href="/app/units/${encodeURIComponent(leasePrompt.code)}?lease_tenant=${encodeURIComponent(leasePrompt.tenant || "")}&lease_start=${leasePrompt.startDate}&lease_rent=${leasePrompt.rent || ""}#lease">🔑 ${L(lang, "أضف العقد", "Add the lease")}</a></section>`
+  : ""}
 <section class="card">
   <p>👤 ${deal.client_name || "—"}${deal.lead_ref ? html` · <a href="/app/leads/${Card.refLabel(deal.lead_ref)}">${Card.refLabel(deal.lead_ref)}</a>` : ""}</p>
   <p>🏠 ${deal.unit_code || "—"} · ${deal.deal_type === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")} · ${when(deal.closed_at)}</p>
