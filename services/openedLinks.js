@@ -41,6 +41,10 @@ function conditions(viewer, f, now) {
   if (f.status === "repeat") where.push("s.open_count >= 2");
   if (f.status === "recent") put("s.last_opened_at > ?", [new Date(now.getTime() - 48 * 3600 * 1000).toISOString()]);
 
+  // Sent in the last N days (7, 30 or 90); no value means all.
+  const days = [7, 30, 90].includes(Number(f.days)) ? Number(f.days) : 0;
+  if (days) put("s.created_at > ?", [new Date(now.getTime() - days * 86400000).toISOString()]);
+
   const q = String(f.q || "").trim().slice(0, 60);
   if (q) {
     const digits = Phone.toAsciiDigits(q).replace(/\D/g, "").replace(/^0+/, "");
