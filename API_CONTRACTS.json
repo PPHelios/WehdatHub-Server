@@ -525,7 +525,7 @@
       "matchProjects": ["projects", "words"],
       "noteLines": ["notes", "numbers"],
       "projectReply": ["project", "text", "lang"],
-      "notesReply": ["hits", "lang"]
+      "notesReply": ["hits", "lang", "total"]
     },
     "domain/searchText.js": {
       "normalizeSearch": ["text"],
