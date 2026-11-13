@@ -121,6 +121,8 @@ function register(web, { pool, page }) {
     // Recently deleted (soft delete, services/unitDelete.js) is for managers and the owner only.
     const status = req.query.status === "deleted" && Authz.isManager(broker) ? "deleted" : STATUSES.includes(req.query.status) ? req.query.status : "active";
     const mine = req.query.mine === "1";
+    // "Units to check" (Today's card): active units nobody has confirmed for 21 days, oldest first.
+    const oldOnly = req.query.old === "1" && status === "active";
     const onlyPrivate = req.query.private === "1" && Authz.isAgencyOwner(broker);
     // Filters: fixed lists (type, furnishing, finishing), the agency's own compounds, and a search on the code.
     const oneOf = (v, list) => (list.includes(String(v || "")) ? String(v) : "");
@@ -147,6 +149,10 @@ function register(web, { pool, page }) {
     };
     if (mine) add("broker_id = ?", broker.id);
     if (onlyPrivate) where.push("is_private");
+    if (oldOnly) {
+      where.push("inventory_type IS DISTINCT FROM 'developer_model'");
+      add("COALESCE(confirmed_at, updated_at, created_at) < ?", new Date(Date.now() - Today.OLD_AFTER_DAYS * 24 * 3600 * 1000).toISOString());
+    }
     if (compound) add("compound = ?", compound);
     if (type) add("property_type = ?", type);
     if (furnishing === "none") where.push("furnishing IS NULL");
@@ -164,13 +170,13 @@ function register(web, { pool, page }) {
       (await pool.query(`SELECT status, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status IN ('active', 'sold', 'archived') GROUP BY status`, [broker.agency_id])).rows.map((r) => [r.status, r.n])
     );
     const { rows } = await pool.query(
-      `SELECT ${LIST_COLS} FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
+      `SELECT ${LIST_COLS} FROM listings WHERE ${Vis.units("listings")} AND ${cond} ORDER BY ${oldOnly ? "COALESCE(confirmed_at, updated_at, created_at) ASC, id" : "confirmed_at DESC NULLS LAST, created_at DESC, id DESC"} LIMIT ${UNITS_PAGE} OFFSET ${pageNo * UNITS_PAGE}`,
       args
     );
     const covers = status === "deleted" ? new Map() : await Store.coverImages(pool, broker.agency_id, rows);
     const link = (over = {}) => {
       const p = new URLSearchParams();
-      const all = { status, mine: mine ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, deal, pmin, pmax, ...over };
+      const all = { status, mine: mine ? "1" : "", old: oldOnly ? "1" : "", private: onlyPrivate ? "1" : "", q, compound, type, furnishing, finishing, deal, pmin, pmax, ...over };
       for (const [k, v] of Object.entries(all)) if (v !== "" && v !== null && v !== undefined) p.set(k, v);
       return `/app/units?${p.toString()}`;
     };
@@ -187,6 +193,7 @@ function register(web, { pool, page }) {
       body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a><a class="btn secondary small" href="/app/owners">👤 ${L(lang, "المُلّاك", "Owners")}</a></div>
 ${notice || ""}
 ${oldStrip}
+${oldOnly ? html`<p class="card notice" data-old-filter>${L(lang, "الوحدات اللي محدش أكدها من 21 يوم، الأقدم الأول.", "Units nobody has confirmed for 21 days, oldest first.")} <a href="${link({ old: "", page: "" })}">${L(lang, "اعرض الكل", "Show all")}</a></p>` : ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
   ${tab("active", L(lang, "نشطة", "Active"), statusCounts.active || 0)}${tab("sold", L(lang, "مباعة", "Sold"), statusCounts.sold || 0)}${tab("archived", L(lang, "مؤرشفة", "Archived"), statusCounts.archived || 0)}${Authz.isManager(broker) ? tab("deleted", L(lang, "🗑️ المحذوفة", "🗑️ Recently deleted")) : ""}
 </nav>

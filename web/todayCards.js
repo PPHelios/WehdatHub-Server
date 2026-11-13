@@ -11,10 +11,10 @@ function oldUnitsCard(c, en) {
   if (!c?.oldUnits) return "";
   const o = c.oldUnits;
   return html`<section class="card stack" data-today-card="old-units">
-  <h2>${en ? `Units to check (${o.total})` : `وحدات محتاجة مراجعة (${o.total})`}</h2>
+  <h2><a href="/app/units?status=active&old=1">${en ? `Units to check (${o.total})` : `وحدات محتاجة مراجعة (${o.total})`}</a></h2>
   <p class="muted">${en ? "Nobody has confirmed these for 21 days. Open a unit to mark it sold, archived or still available." : "محدش أكدها بقالها 21 يوم. افتح الوحدة وغيّر حالتها: اتباعت، أرشيف أو لسه متاحة."}</p>
   <ul class="rows">${o.items.map((u) => html`<li><a class="listrow" href="${url(u.code)}"><span><b>${u.code}</b> · ${u.line}</span><span class="muted">${u.hidden ? (en ? "hidden" : "مخفية") : en ? `${u.days} days` : `${u.days} يوم`}</span></a></li>`)}</ul>
-  ${o.total > o.items.length ? html`<a class="btn secondary" href="/app/units?status=active">${en ? `${o.total - o.items.length} more` : `${o.total - o.items.length} كمان`}</a>` : ""}
+  ${o.total > o.items.length ? html`<a class="btn secondary" href="/app/units?status=active&old=1">${en ? `${o.total - o.items.length} more` : `${o.total - o.items.length} كمان`}</a>` : ""}
 </section>`;
 }
 

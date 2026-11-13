@@ -89,6 +89,11 @@ function register(api, { pool }) {
     const pmax = Deal.parseMoney(String(q.pmax || ""));
     if (pmin) add("listings.price_value >= ?", pmin);
     if (pmax) add("listings.price_value <= ?", pmax);
+    // "Units to check" (Today's card): active units nobody has confirmed for 21 days.
+    if (q.old === "1") {
+      where.push("listings.inventory_type IS DISTINCT FROM 'developer_model'");
+      add("COALESCE(listings.confirmed_at, listings.updated_at, listings.created_at) < now() - (?::int * interval '1 day')", 21);
+    }
     // Not updated for N days (data entry's "stale" filter).
     const staleDays = parseInt(q.staleDays, 10);
     if (staleDays >= 1 && staleDays <= 3650) add("COALESCE(listings.updated_at, listings.created_at) < now() - (?::int * interval '1 day')", staleDays);

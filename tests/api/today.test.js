@@ -80,3 +80,11 @@ test("a card with nothing in it is null", async () => {
   const c = (await get("broker")).body.cards;
   expect(c).toMatchObject({ oldUnits: null, ops: null, approvals: null, commissions: null });
 });
+
+test("the units list can show just the old units the card points to", async () => {
+  await h.insertListing({ code: "O-1", confirmed_at: old(30) });
+  await h.insertListing({ code: "O-NEW", confirmed_at: old(2) });
+  const res = await request(h.app.app).get("/api/v1/units?status=active&old=1").set("Authorization", `Bearer ${await token("broker")}`);
+  expect(res.status).toBe(200);
+  expect(res.body.items.map((u) => u.code)).toEqual(["O-1"]);
+});
