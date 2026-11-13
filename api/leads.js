@@ -85,7 +85,7 @@ function register(api, { pool }) {
   api.get("/leads/counts", async (req, res) => {
     const { broker } = req.session;
     const q = String(req.query.q || "").slice(0, 80);
-    const entries = await Promise.all(TABS.map(async (t) => [t, (await Leads.listLeads(pool, broker, { ...tabFilter(t), q, countOnly: true })).total]));
+    const entries = await Promise.all(TABS.map(async (t) => [t, (await Leads.listLeads(pool, broker, { ...tabFilter(t), q, brokerId: String(req.query.broker || ""), countOnly: true })).total]));
     res.json({ counts: Object.fromEntries(entries) });
   });
 
