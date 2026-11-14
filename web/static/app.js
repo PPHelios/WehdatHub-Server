@@ -1299,6 +1299,7 @@
         .then(function (r) { return r.ok ? r.json() : { items: [] }; })
         .then(function (d) {
           list.innerHTML = "";
+          window.__placeItems = d.items || [];
           (d.items || []).forEach(function (it) {
             var o = document.createElement("option");
             o.value = it.name_en || it.name_ar;
@@ -1308,5 +1309,35 @@
         })
         .catch(function () {});
     }, 200);
+  });
+  // A compound brings its own area (filled and locked); a compound or area the list does not know makes the area
+  // mandatory and ticks "not in the list" so the new place goes to the approval queue with its area.
+  document.addEventListener("change", function (e) {
+    var input = e.target;
+    if (!input || !input.matches || !input.matches("[data-place-suggest]")) return;
+    var form = input.form;
+    var areaSel = form && form.querySelector('select[name="area_id"]');
+    var subSel = form && form.querySelector('select[name="subzone_id"]');
+    var isNew = form && form.querySelector('input[name="compound_new"]');
+    if (!areaSel) return;
+    var v = input.value.trim().toLowerCase();
+    var hit = (window.__placeItems || []).filter(function (it) { return (it.name_en || "").toLowerCase() === v || (it.name_ar || "").toLowerCase() === v; })[0];
+    areaSel.classList.remove("need", "locked");
+    areaSel.removeAttribute("required");
+    if (!v) { if (isNew) isNew.checked = false; return; }
+    if (hit && hit.kind === "compound" && hit.area_id) {
+      areaSel.value = hit.area_id;
+      if (subSel) subSel.value = hit.subzone_id || "";
+      areaSel.classList.add("locked");
+      if (isNew) isNew.checked = false;
+    } else if (hit && hit.kind !== "compound") {
+      areaSel.value = hit.area_id || areaSel.value;
+      if (subSel && hit.subzone_id) subSel.value = hit.subzone_id;
+      if (isNew) isNew.checked = false;
+    } else {
+      areaSel.classList.add("need");
+      areaSel.setAttribute("required", "required");
+      if (isNew && !hit) isNew.checked = true;
+    }
   });
 })();

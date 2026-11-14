@@ -654,3 +654,7 @@ button.saving:disabled { opacity: 1; cursor: progress; color: #fff; background: 
 [data-flyer] .btn.active { outline: 2px solid var(--brand); }
 #unit-actions > form.inline { display: contents; }
 #unit-actions .btn, #unit-actions button { width: 100%; min-height: 48px; margin: 0; }
+
+/* Place rules: a compound's area is filled and locked; an unknown place needs its area (highlighted like the other required fields). */
+select.locked { background: var(--soft); border-color: #BFE3CB; pointer-events: none; }
+select.need { border: 2px solid var(--brand); }
