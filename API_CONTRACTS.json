@@ -391,6 +391,8 @@
       "removeLogo": ["pool", "broker"]
     },
     "services/savedSearches.js": {
+      "MAX_ALERTING": "Number",
+      "alertingCount": ["pool", "broker"],
       "MAX_SAVED": "Number",
       "save": ["pool", "broker", "params"],
       "list": ["pool", "broker"],
@@ -517,6 +519,7 @@
       "NOTE_MAX": "Number"
     },
     "services/projectAnswer.js": {
+      "projectResults": ["pool", "agencyId", "filters", "params"],
       "offersFor": ["pool", "agencyId", "filters", "params"],
       "clientText": ["hits", "lang"],
       "answer": ["pool", "agencyId", "text", "lang", "filters"],
