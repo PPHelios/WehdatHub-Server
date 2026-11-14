@@ -41,6 +41,8 @@ async function openAs(who = "broker") {
   const pg = await ctx.newPage();
   const errors = [];
   pg.on("pageerror", (e) => errors.push(String(e.message || e)));
+  pg.on("requestfinished", async (r) => { if (/step-check/.test(r.url())) CHECKS.push(`${(await r.response())?.status()} ${(await (await r.response())?.text().catch(() => "")) ?.slice(0, 200)}`); });
+  pg.on("requestfailed", (r) => { if (/step-check/.test(r.url())) CHECKS.push(`failed ${r.failure()?.errorText}`); });
   const br = h.BROKERS[who];
   const token = await WebAuth.issueLoginToken(h.pool, { id: br.id, agency_id: br.agency_id });
   await pg.goto(`${BASE}/app/login/confirm?t=${token}`);
@@ -49,9 +51,20 @@ async function openAs(who = "broker") {
   return { ctx, pg, errors };
 }
 
-/** What the page says right now (step error, refusal banner, save status), for failure messages. */
-const pageSays = (pg) => pg.evaluate(() => [...document.querySelectorAll("#unit-form .notice.bad, [data-step-error], [data-save-status], .step-err")]
-  .filter((n) => !n.hidden && n.textContent.trim()).map((n) => n.textContent.trim()).join(" | "));
+/** What the page says right now (step error, refusal banner, save status, fields the browser refuses, a busy Next, the last
+ * step checks and their answers), for failure messages. */
+const pageSays = (pg) => pg.evaluate(() => {
+  const out = [...document.querySelectorAll("#unit-form .notice.bad, [data-step-error], [data-save-status], .step-err")]
+    .filter((n) => !n.hidden && n.textContent.trim()).map((n) => n.textContent.trim());
+  const step = [...document.querySelectorAll("#unit-form [data-step]")].find((n) => !n.hidden);
+  for (const f of step ? step.querySelectorAll("input, select, textarea") : []) {
+    if (f.willValidate && !f.checkValidity()) out.push(`invalid ${f.name}="${f.value}": ${f.validationMessage}`);
+  }
+  const nx = [...document.querySelectorAll("#unit-form button[type=button]")].find((b) => /^(Next|التالي)$/.test(b.textContent.trim()));
+  if (nx && (nx.disabled || nx.classList.contains("is-busy"))) out.push("Next is busy (waiting for the step check)");
+  return out.join(" | ");
+}).then((t) => `${t}${CHECKS.length ? ` | step checks: ${CHECKS.slice(-3).join(", ")}` : ""}`);
+const CHECKS = [];
 
 const visibleStep = (pg) => pg.evaluate(() => {
   const s = [...document.querySelectorAll("#unit-form [data-step]")].find((n) => !n.hidden);
