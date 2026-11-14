@@ -164,7 +164,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return importPage(req, res, formBody(req, { error: L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.") }), 429);
+    if (!gate.allowed) return importPage(req, res, formBody(req, { error: L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.") }), 429);
     if (req.body.confirm !== "1" || !Stages.LAWFUL_BASES.includes(req.body.basis)) {
       return importPage(req, res, formBody(req, { error: L(lang, "لازم تختار الأساس القانوني وتأكده قبل الاستيراد.", "Pick the lawful basis and confirm it before importing.") }), 422);
     }

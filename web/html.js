@@ -246,7 +246,7 @@ function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   const { icon, MARK } = require("./icons");
   const TestRole = require("../lib/testRole");
   return html`<header class="top">
-  <a class="brand" href="${broker ? "/app/" : "/"}" aria-label="WehdatHub">${MARK}<span dir="ltr">Wehdat<b>Hub</b></span></a>
+  <a class="brand" href="${broker ? "/app/" : "/"}" aria-label="${en ? "Wehdat Hub" : "وحدات هب"}">${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>
   ${broker && TestRole.canSwitch(broker) && (TestRole.canView(broker) || broker.view_of) ? viewAgencyForm(broker, lang) : ""}
   ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
   ${broker

@@ -380,7 +380,7 @@
   // Uploads with a progress bar (forms with data-progress): the file goes up with XMLHttpRequest so the bar shows how much has
   // gone; then the server reads it. The answer replaces the page (a redirect is followed).
   var UP = document.documentElement.lang === "ar"
-    ? { up: "بنرفع الملف…", read: "السيرفر بيقرا الملف…", fail: "الرفع ما نجحش. جرب تاني.", net: "في مشكلة في الاتصال. جرب تاني." }
+    ? { up: "بنحمل الملف…", read: "السيرفر بيقرا الملف…", fail: "التحميل ما نجحش. جرب تاني.", net: "في مشكلة في الاتصال. جرب تاني." }
     : { up: "Uploading…", read: "The server is reading the file…", fail: "The upload failed. Try again.", net: "A connection problem. Try again." };
   document.addEventListener("submit", function (ev) {
     var form = ev.target;
@@ -457,7 +457,14 @@
     var cols = wrap && wrap.querySelector("[data-board]");
     if (!cols) return;
     var col = cols.querySelector(".bcol");
-    cols.scrollBy({ left: Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12), behavior: "smooth" });
+    var delta = Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12);
+    var before = cols.scrollLeft, max = cols.scrollWidth - cols.clientWidth;
+    cols.scrollBy({ left: delta, behavior: "smooth" });
+    // Loop: when the edge stops the step, jump to the other end (any sign of scrollLeft, RTL or LTR).
+    setTimeout(function () {
+      if (Math.abs(cols.scrollLeft - before) >= 2) return;
+      cols.scrollTo({ left: Math.abs(before) < 4 ? (delta > 0 ? -max : max) : 0, behavior: "smooth" });
+    }, 400);
   });
   // ← Back (and the open menu button): the previous page when it is ours, else the link's own address.
   document.addEventListener("click", function (e) {
@@ -681,14 +688,41 @@
     }, 0);
     setTimeout(unlock, 15000);
   });
-  window.addEventListener("pageshow", unlock);
+  window.addEventListener("pageshow", function () {
+    unlock();
+    var lk = document.querySelectorAll("a.btn.busy, a.btn.is-disabled");
+    for (var i = 0; i < lk.length; i++) lk[i].classList.remove("busy", "is-disabled");
+  });
+  // Share the flyer image (the phone's share sheet) when the browser can; Download stays for the rest.
+  (function () {
+    var sb = document.querySelector("[data-share-image]");
+    if (!sb) return;
+    if (!navigator.share || !navigator.canShare) { sb.hidden = true; return; }
+    sb.addEventListener("click", function () {
+      fetch(sb.getAttribute("data-share-image"), { credentials: "same-origin" }).then(function (r) { return r.blob(); }).then(function (b) {
+        var f = new File([b], sb.getAttribute("data-share-name") || "flyer.jpg", { type: b.type || "image/jpeg" });
+        if (!navigator.canShare({ files: [f] })) return;
+        return navigator.share({ files: [f] });
+      }).catch(function () { /* cancelled */ });
+    });
+  })();
+  // The notifications page with nothing unread: close the phone's tray notifications and clear the icon counter.
+  if (location.pathname === "/app/notifications" && !document.querySelector(".inbox .unread")) {
+    if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function () {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.ready.then(function (reg) { return reg.getNotifications(); }).then(function (list) { list.forEach(function (n) { n.close(); }); }).catch(function () {});
+  }
   // Any submit button locks at the tap, even when the page handles its form itself (AJAX or htmx), so the spinner shows
   // until the answer. A button whose form is not valid sends nothing, so it is not locked. Unlocked after 15 s at the latest.
   document.addEventListener("click", function (e) {
     // Button-style links (Edit, Compare, Send photos) show the same spinner while the next page loads.
     var link = e.target && e.target.closest ? e.target.closest("a.btn") : null;
-    if (link && link.getAttribute("href") && !link.hasAttribute("target") && !link.hasAttribute("data-no-lock") && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) {
-      setTimeout(function () { link.classList.add("busy"); }, 0);
+    if (link && link.getAttribute("href") && link.getAttribute("href").charAt(0) !== "#" && !link.hasAttribute("target") && !link.hasAttribute("data-no-lock") && !(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) {
+      setTimeout(function () {
+        link.classList.add("busy");
+        // The flyer types: while one is loading the others cannot be tapped.
+        var fl = link.closest("[data-flyer]");
+        if (fl) Array.prototype.forEach.call(fl.querySelectorAll("a.btn"), function (a) { if (a !== link) a.classList.add("is-disabled"); });
+      }, 0);
       setTimeout(unlock, 15000);
       return;
     }

@@ -93,6 +93,12 @@ function telUrl(raw) {
   return d ? `tel:+${d}` : null;
 }
 
+/** A phone with only its last 4 digits shown ("••••5678"), for lists: the full number is counted and shown only when one owner is opened. */
+function maskPhone(raw) {
+  const l = last4(raw);
+  return l ? `••••${l}` : "";
+}
+
 /** The last 4 digits ("5678"): the "Client ••5678" fallback and the erase confirmation. */
 function last4(raw) {
   const d = normalizePhone(raw) || String(raw ?? "").replace(/\D/g, "");
@@ -100,6 +106,7 @@ function last4(raw) {
 }
 
 module.exports = {
+  maskPhone,
   toAsciiDigits,
   normalizePhone,
   isEgyptMobile,

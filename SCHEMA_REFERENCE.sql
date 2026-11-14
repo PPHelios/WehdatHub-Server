@@ -710,7 +710,8 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   status text DEFAULT 'pending'::text NOT NULL,
   deliver_after timestamp with time zone,
   delivered_at timestamp with time zone,
-  merged_into bigint
+  merged_into bigint,
+  dismissed_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (

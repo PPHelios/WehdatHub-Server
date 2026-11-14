@@ -125,7 +125,7 @@ async function ingestImage(broker, message, ctx) {
       broker,
       lang === "en"
         ? "⚠️ Image format error. Please upload standard JPEG or PNG photos."
-        : "⚠️ صيغة الصورة غير صالحة. يرجى رفع صور قياسية بصيغة JPG أو PNG."
+        : "⚠️ صيغة الصورة غير صالحة. يرجى تحميل صور قياسية بصيغة JPG أو PNG."
     );
     return "done";
   }

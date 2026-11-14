@@ -46,7 +46,7 @@ function mergeForms(g, lang, csrf) {
 
 function placesSection(q, lang, csrf) {
   return html`<div id="places"><h2>${L(lang, "أماكن مستنية", "Places waiting")}</h2>
-<p class="muted small">${L(lang, "كمبوندات ومناطق جديدة اقترحها السماسرة. الأسماء الشبه بعض متجمعة؛ اعتمد، أو اربط بمكان موجود، أو ارفض بسبب.", "New compounds and areas brokers suggested. Alike names are grouped; approve, link to an existing place, or reject with a reason.")}</p>
+<p class="muted small">${L(lang, "كمبوندات ومناطق جديدة اقترحها البروكرز. الأسماء الشبه بعض متجمعة؛ اعتمد، أو اربط بمكان موجود، أو ارفض بسبب.", "New compounds and areas brokers suggested. Alike names are grouped; approve, link to an existing place, or reject with a reason.")}</p>
 ${q.groups.length
   ? html`<ul class="stack" data-places-waiting>${q.groups.map((g) => html`<li class="card" data-place-group="${g.lead.id}">
   <b dir="ltr">${g.lead.name_en || g.lead.name_ar}</b> <span class="chip">${g.kind === "compound" ? L(lang, "كمبوند", "Compound") : L(lang, "منطقة", "Area")}</span> <span class="chip">${g.times_seen} ${L(lang, "مرة", "×")}</span>

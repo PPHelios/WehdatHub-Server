@@ -151,7 +151,7 @@ function pageBody(doc, lang, other) {
         : ""
     }</section>`
   );
-  return html`<nav class="top lp-top"><span class="brand">${BRAND.name}</span><a class="logout" href="${base}?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a class="btn small" href="/app/">${T(lang, ["دخول", "Sign in"])}</a></nav>
+  return html`<nav class="top lp-top"><span class="brand">${lang === "en" ? BRAND.name : "وحدات هب"}</span><a class="logout" href="${base}?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a class="btn small" href="/app/">${T(lang, ["دخول", "Sign in"])}</a></nav>
 <article class="card stack privacy">
   <h1>${T(lang, doc.title)}</h1>
   <p class="muted">${T(lang, doc.updated)}</p>

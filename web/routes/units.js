@@ -380,8 +380,8 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     ${link("dark", false, L(lang, "غامق", "Dark"))}${link("light", false, L(lang, "فاتح", "Light"))}${link("dark", true, L(lang, "غامق من غير بيانات الشركة", "Dark, no brand"))}${link("light", true, L(lang, "فاتح من غير بيانات الشركة", "Light, no brand"))}
   </div>
   ${out.url
-    ? html`<img src="${out.url}" alt="" style="max-width:100%;height:auto" data-flyer-image>
-  <div class="row"><a class="btn" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
+    ? html`<img src="${out.url}" alt="" style="max-width:min(100%,380px);height:auto" data-flyer-image>
+  <div class="row"><button type="button" data-share-image="${out.url}" data-share-name="${listing.code}-flyer.jpg">📤 ${L(lang, "شارك الفلاير", "Share flyer")}</button> <a class="btn secondary" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
   <a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></div>`
     : html`<p class="notice bad">${out.error === "busy" || out.error === "rate" ? L(lang, "الفلاير مشغول دلوقتي. جرب بعد شوية.", "The flyer maker is busy. Try again in a moment.") : L(lang, "معرفناش نعمل الفلاير. جرب تاني.", "The flyer could not be made. Try again.")}</p>`}
 </section>`

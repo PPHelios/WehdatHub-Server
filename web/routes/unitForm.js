@@ -40,6 +40,9 @@ for (const re of [/^\/units\/new$/, /^\/units\/extract$/, /^\/units\/review$/, /
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
 // Photos the page still has to upload at Save (nothing is uploaded before): the review and the Next check count them so they never warn "no photos".
 const pendingOf = (req) => Math.min(Math.max(parseInt((req.body || {}).photo_pending, 10) || 0, 0), MAX_PHOTOS);
+// The page's form (warn_gate) must carry the tick when the review has warnings: the browser lock is not the only guard.
+const warnTickMissing = (ev, body) => body.warn_gate === "1" && (ev.warnings || []).length > 0 && body.warn_ack !== "1";
+const WARN_TICK_TEXT = (lang) => L10n(lang, "⚠️ علّم إنك راجعت التنبيهات قبل الحفظ.", "⚠️ Tick that you checked the warnings before saving.");
 const ctxOf = (pool, req) => ({ pool, broker: req.session.broker, agency: req.session.agency, lang: langOf(req) });
 
 /**
@@ -171,7 +174,7 @@ function register(web, { pool, page, assets }) {
     if (await Rights.mayWrite(pool, req.session.broker)) return false;
     const lang = langOf(req);
     traceRefusal(pool, req, { reason: "writes_off" });
-    res.status(403).type("text/plain").send(L10n(lang, "مالك الشركة قفل إضافة وتعديل الوحدات للسماسرة.", "The agency owner has switched off adding and editing units for brokers."));
+    res.status(403).type("text/plain").send(L10n(lang, "مالك الشركة قفل إضافة وتعديل الوحدات للبروكرز.", "The agency owner has switched off adding and editing units for brokers."));
     return true;
   };
 
@@ -262,6 +265,14 @@ function register(web, { pool, page, assets }) {
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length + Uploads.keysOf(req.body).length + pendingOf(req) });
     ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: true }))];
+    // A code typed on step 1 that another unit already uses is refused at the first Next, not at the final save.
+    if (form.code) {
+      const used = await Store.findByCode(pool, req.session.broker.agency_id, form.code).catch(() => null);
+      if (used) {
+        const msg = L10n(lang, `الكود ${used.code} مستخدم لوحدة تانية. اكتب كود مختلف أو سيبه فاضي.`, `Code ${used.code} is already used by another unit. Choose another code or leave it empty.`);
+        ev.blockers.push({ field: "code", label_ar: msg, label_en: msg, label: msg });
+      }
+    }
     ev.ok = ev.blockers.length === 0;
     // A unit that looks like one the agency already has is flagged at the first Next, not only at the final save.
     let duplicate = null;
@@ -333,6 +344,7 @@ function register(web, { pool, page, assets }) {
       return formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     };
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
+    if (warnTickMissing(ev, req.body)) return again(422, WARN_TICK_TEXT(lang));
     const nameError = ownerNameError(ev.listing, req.body, lang);
     if (nameError) return again(422, nameError);
     const compError = await compoundError(pool, ev.listing, req.body, lang);
@@ -353,7 +365,7 @@ function register(web, { pool, page, assets }) {
 
     // Photos that went straight to storage must all be there, the broker's own and unused (checked before any work).
     const staged = await Uploads.verify(pool, broker, keys);
-    if (staged.missing.length) return again(422, L10n(lang, "⚠️ صورة أو أكتر ما خلصش رفعها. ضيفها تاني.", "⚠️ A photo did not finish uploading. Add it again."));
+    if (staged.missing.length) return again(422, L10n(lang, "⚠️ صورة أو أكتر ما خلصش تحميلها. ضيفها تاني.", "⚠️ A photo did not finish uploading. Add it again."));
     // Already saved under this key (a repeat of a save whose answer was lost): no photo work, just the first result.
     const prior = await SaveKeys.lookup(pool, broker.agency_id, saveKey);
     if (prior) return res.redirect(303, `/app/units/${encodeURIComponent(prior)}?saved=1`);
@@ -444,6 +456,7 @@ function register(web, { pool, page, assets }) {
       const photoCount = rows[0].n + photos.urls.length + keys.length + (checkOnly ? pendingOf(req) : 0);
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
+      if (warnTickMissing(ev, req.body)) return { rollback: true, listing, ev, leadError: WARN_TICK_TEXT(lang) };
       const nameError = ownerNameError(ev.listing, req.body, lang);
       if (nameError) return { rollback: true, listing, ev, leadError: nameError };
       const compError = ev.listing.compound !== listing.compound ? await compoundError(client, ev.listing, req.body, lang) : null;
@@ -495,7 +508,7 @@ function register(web, { pool, page, assets }) {
         : out.tooMany
         ? L10n(lang, `⚠️ الحد الأقصى ${MAX_PHOTOS} صورة للوحدة.`, `⚠️ At most ${MAX_PHOTOS} photos per unit.`)
         : out.photoMissing
-        ? L10n(lang, "⚠️ صورة أو أكتر ما خلصش رفعها. ضيفها تاني.", "⚠️ A photo did not finish uploading. Add it again.")
+        ? L10n(lang, "⚠️ صورة أو أكتر ما خلصش تحميلها. ضيفها تاني.", "⚠️ A photo did not finish uploading. Add it again.")
         : out.photosUsed
         ? L10n(lang, "⚠️ الصور دي اتستخدمت في حفظ تاني. ضيفها تاني.", "⚠️ These photos were used by another save. Add them again.")
         : L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing.");

@@ -36,7 +36,7 @@ function brandSection(lang, agency, notice) {
   ${agency.logo_url ? html`<img class="logo" src="${Storage.photoUrl(agency.logo_url)}" alt="" data-agency-logo>` : html`<p class="muted" data-agency-logo="none">${L(lang, "لسه مفيش شعار.", "No logo yet.")}</p>`}
   <form method="post" action="/app/settings/logo" enctype="multipart/form-data" class="row">
     <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
-    <button type="submit" class="secondary">${L(lang, "رفع الشعار", "Upload logo")}</button>
+    <button type="submit" class="secondary">${L(lang, "تحميل الشعار", "Upload logo")}</button>
   </form>
   ${agency.logo_url ? html`<form method="post" action="/app/settings/logo/remove" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}"><button type="submit" class="link">${L(lang, "شيل الشعار", "Remove the logo")}</button></form>` : ""}
 </section>`;
@@ -83,7 +83,7 @@ function register(web, { pool, page }) {
     const policy = require("../../lib/notificationPolicy").policyOf((await pool.query("SELECT notify_policy FROM agencies WHERE id = $1", [broker.agency_id])).rows[0]);
     const dataEntry = isDataEntry(broker) || crm;
     const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
-    const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. ارفع PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ الرفع فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
+    const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. حمل PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ التحميل فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
     const passkeyNotice = { on: ["✅ اتفتحت. ضيف Passkey على الجهاز ده.", "✅ On. Add a passkey on this device."], off: ["اتقفلت، والـ Passkeys اتمسحت.", "Off; your passkeys were removed."], removed: ["الـ Passkey اتمسحت.", "Passkey removed."] }[req.query.passkey];
     return page(req, res, {
       title: L(lang, "الإعدادات", "Settings"),

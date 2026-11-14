@@ -14,9 +14,9 @@
       photos: "صورة", units: "وحدة", noPhotos: "وحدات من غير صور", tray: "صور مش متوزعة", unknown: "أكواد في الشات مش موجودة", pattern: "ترتيب الشات", p_photos_first: "الصور الأول وبعدها الوصف", p_text_first: "الوصف الأول وبعدها الصور", p_mixed: "مختلط (مفيش قاعدة واحدة)", p_unknown: "مش واضح",
       reason_orphan: "مفيش وصف جنبها", reason_ambiguous: "بين وحدتين: اختار", reason_against_pattern: "عكس ترتيب الشات: اختار", reason_multi_code: "الرسالة فيها أكتر من كود: اختار", assign: "اكتب الكود", assigned: "اتوزعت على", skip: "سيبها",
       overCap: "زيادة عن الحد (بتتساب)", existing: "فيها صور بالفعل", missing: "مش موجودة في الملف", use: "استخدم", omitted: "صور متحملتش في التصدير", skippedMedia: "فيديو أو ملفات اتتخطت", duplicates: "بوستات مكررة",
-      addNew: "ضيف الصور الجديدة بس", skipHave: "سيب الوحدات اللي فيها صور", apply: "ابدأ الرفع", cancel: "إلغاء", keepOpen: "سيب الصفحة مفتوحة والشاشة منورة لحد ما يخلص.",
-      stageShrink: "تصغير ورفع الصور", of: "من", left: "دقيقة متبقية تقريباً", done: "خلص", uploaded: "اترفعت", dup: "مكررة (موجودة)", full: "الوحدة اكتملت 15 صورة", unreadable: "مش قابلة للقراءة", failed: "فشلت", cancelled: "اتلغى",
-      seeUnits: "افتح الوحدات", seeReview: "افتح المراجعة", nothing: "مفيش صور لرفعها.", noPosts: "ملقيناش بوستات فيها وحدات.", cap: "بنقرا لحد 40 بوست في المرة. غيّر التاريخ للباقي.", post: "بوست", tooMany: "اتجاوزت الحد", rateWait: "بنستنى شوية…", startFail: "مقدرناش نبدأ الاستيراد. جرب تاني."
+      addNew: "ضيف الصور الجديدة بس", skipHave: "سيب الوحدات اللي فيها صور", apply: "ابدأ التحميل", cancel: "إلغاء", keepOpen: "سيب الصفحة مفتوحة والشاشة منورة لحد ما يخلص.",
+      stageShrink: "تصغير وتحميل الصور", of: "من", left: "دقيقة متبقية تقريباً", done: "خلص", uploaded: "اتحملت", dup: "مكررة (موجودة)", full: "الوحدة اكتملت 15 صورة", unreadable: "مش قابلة للقراءة", failed: "فشلت", cancelled: "اتلغى",
+      seeUnits: "افتح الوحدات", seeReview: "افتح المراجعة", nothing: "مفيش صور لتحميلها.", noPosts: "ملقيناش بوستات فيها وحدات.", cap: "بنقرا لحد 40 بوست في المرة. غيّر التاريخ للباقي.", post: "بوست", tooMany: "اتجاوزت الحد", rateWait: "بنستنى شوية…", startFail: "مقدرناش نبدأ الاستيراد. جرب تاني."
     },
     en: {
       pick: "Choose the zip file first.", reading: "Reading the file…", noChat: "No chat text (.txt) inside the zip.", badZip: "That is not a readable zip.", encrypted: "The zip is password-protected.",

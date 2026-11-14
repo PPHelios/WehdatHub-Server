@@ -11,14 +11,14 @@
   var MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif" };
   var T = document.documentElement.lang === "en"
     ? { over: "{n} photo(s) not added: the limit is {max} per unit.", prep: "Preparing photos {i} of {n}…", saving: "Saving {p}%", sending: "Uploading photos…", server: "The server is saving… {s}s", checking: "Checking whether it was saved…", saved: "✅ Saved. Opening the unit…", notSaved: "⚠️ Not saved yet. Your form and photos are kept.", retry: "Try again", up: "Uploading {p}%", wait: "Waiting…", done: "✓", fail: "⚠ Failed", again: "↻ Retry", restored: "Photos you uploaded earlier were restored.", kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
-    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "برفع الصور…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", up: "برفع {p}%", wait: "مستني…", done: "✓", fail: "⚠ فشلت", again: "↻ جرب تاني", restored: "رجّعنا الصور اللي رفعتها قبل كده.", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
+    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "بحمل الصور…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", up: "بحمل {p}%", wait: "مستني…", done: "✓", fail: "⚠ فشلت", again: "↻ جرب تاني", restored: "رجّعنا الصور اللي حملتها قبل كده.", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
   var fill = function (s, o) { return s.replace(/\{(\w+)\}/g, function (_, k) { return o[k]; }); };
   var EN = document.documentElement.lang === "en";
   T.keepOn = EN ? "✓ Kept" : "✓ هتتحفظ"; T.keepOff = EN ? "Not kept" : "مش هتتحفظ";
   T.full = EN ? "{max} photos are kept already. Take one off first." : "الصور اللي هتتحفظ وصلت {max}. شيل واحدة الأول.";
   T.slow = EN ? "🐢 Slow connection: about {m} min left. Keep this page open." : "🐢 النت بطيء: باقي حوالي {m} دقيقة. سيب الصفحة مفتوحة.";
   T.slow0 = EN ? "🐢 Slow connection. Keep this page open until it finishes." : "🐢 النت بطيء. سيب الصفحة مفتوحة لحد ما يخلص.";
-  T.picked = EN ? "{n} photos picked, {k} kept. Only kept photos are uploaded, when you save." : "اخترت {n} صورة، هتتحفظ {k}. الصور اللي هتتحفظ بس هتترفع وقت الحفظ.";
+  T.picked = EN ? "{n} photos picked, {k} kept. Only kept photos are uploaded, when you save." : "اخترت {n} صورة، هتتحفظ {k}. الصور اللي هتتحفظ بس هتتحمل وقت الحفظ.";
 
   var tray = null; // { form, items: [{ file, name, small, thumb, url, key, state, pct }], dropped, over }
   // Each photo goes straight to storage as soon as it is picked (state queued > working > done); one that cannot (a type the browser
@@ -152,7 +152,7 @@
       down.type = "button"; down.className = "secondary"; down.setAttribute("data-move", "down"); down.textContent = "↓";
       var del = document.createElement("button");
       del.type = "button"; del.className = "secondary"; del.setAttribute("data-delete", String(i)); del.textContent = T.del;
-      if (!it.keep) li.className = "muted";
+      if (!it.keep || it.state === "failed") li.className = "skip";
       var kb = document.createElement("button");
       kb.type = "button"; kb.className = "secondary small"; kb.setAttribute("data-keep", String(i)); kb.textContent = it.keep ? T.keepOn : T.keepOff;
       li.appendChild(img); li.appendChild(name); li.appendChild(st); li.appendChild(kb); if (it.state === "failed") { var rt = document.createElement("button"); rt.type = "button"; rt.className = "secondary small"; rt.setAttribute("data-retry", String(i)); rt.textContent = T.again; li.appendChild(rt); } li.appendChild(up); li.appendChild(down); li.appendChild(del);

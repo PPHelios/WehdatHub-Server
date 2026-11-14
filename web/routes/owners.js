@@ -63,8 +63,7 @@ function register(web, { pool, page }) {
     const q = String(req.query.q || "").slice(0, 80);
     const onlyPrivate = req.query.private === "1" && isAgencyOwner(broker);
     const list = await Owners.listFor(pool, broker, { q, limit: PAGE, offset: n * PAGE, onlyPrivate });
-    const cap = await require("../../lib/readCaps").takeOwnerPhones(pool, broker, list.rows.filter((o) => (o.phones || []).length).length, { channel: "web", ref: "owner_list" });
-    if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).type("text/plain").send(L(lang, "وصلت للحد اليومي لعرض أرقام الملّاك. جرّب بكرة.", "You have reached today's limit for viewing owner numbers. Try again tomorrow."));
+    // The list shows only the last digits of each phone: a number counts toward the daily cap when it is opened (the owner's page).
     const pendingCount = isDataEntry(broker) || isManager(broker) || isAgencyOwner(broker) ? (await Owners.pendingFor(pool, broker)).length : 0;
     const dataEntryOn = isAgencyOwner(broker) ? await Owners.dataEntryOwnersOn(pool, broker.agency_id) : false;
     return page(req, res, {
@@ -76,7 +75,7 @@ ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/data-entr
 ${pendingCount ? html`<p><a class="pill-link" href="/app/owners/requests">📝 ${L(lang, "طلبات الأسماء", "Name requests")} (${pendingCount})</a></p>` : ""}
 ${isAgencyOwner(broker) ? html`<p><a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/owners?private=${onlyPrivate ? "" : "1"}">⭐ ${L(lang, "VIP", "VIP")}</a></p>` : ""}
 ${list.rows.length
-  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="chip" dir="ltr">${o.code || ""}</span> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.displayPhone(`+${p}`)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">⚠️ ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
+  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="chip" dir="ltr">${o.code || ""}</span> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.maskPhone(p)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">⚠️ ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
   : html`<p class="muted">${L(lang, "مفيش مُلّاك لسه.", "No owners yet.")}</p>`}
 <p class="row">${n > 0 ? html`<a href="/app/owners?page=${n - 1}&q=${encodeURIComponent(q)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${list.more ? html`<a href="/app/owners?page=${n + 1}&q=${encodeURIComponent(q)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
     });

@@ -35,6 +35,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   const stepped = mode === "new" && !error && !review && !duplicate;
   return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack" data-progress${stepped ? html` data-steps="${L(lang, "الوحدة والسعر|التسليم والدفع|المميزات|الصور والحفظ", "Unit and price|Delivery and payment|Features|Photos and save")}" data-next="${L(lang, "التالي", "Next")}" data-prev="${L(lang, "رجوع", "Back")}" data-check="/app/units/step-check"` : ""}>
   <input type="hidden" name="_csrf" value="${csrf}">
+  <input type="hidden" name="warn_gate" value="1">
   <input type="hidden" name="save_key" value="${require("crypto").randomBytes(12).toString("base64url")}">
   ${notice ? html`<p class="card notice">${notice}</p>` : ""}
   ${error ? html`<p class="card notice bad" role="alert">${error}</p>` : ""}
@@ -46,7 +47,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <div class="row">
       <button type="button" class="secondary" data-ai="unit_fill" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
       <button type="button" class="secondary" data-ai="voice_unit_add" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
-      <label class="btn secondary">📎 ${L(lang, "ارفع ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" multiple hidden data-voice-file data-cost="${Credits.costOf("voice")}"></label>
+      <label class="btn secondary">📎 ${L(lang, "حمل ملف فويس", "Upload voice file")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span><input type="file" name="voice" accept="audio/*" multiple hidden data-voice-file data-cost="${Credits.costOf("voice")}"></label>
       <span class="spinner" aria-hidden="true"></span>
     </div>
   </section>
@@ -183,7 +184,7 @@ function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = nu
   ${changes.length ? html`<div class="notice card" data-changes><strong>✏️ ${L(lang, "اللي اتغير:", "What changed:")}</strong><ul>${changes.map((c) => html`<li data-change="${c.field}">${lang === "en" ? c.en : c.ar}: <span dir="ltr">${c.from} → ${c.to}</span></li>`)}</ul></div>` : ""}
   ${duplicate ? duplicateNotice(duplicate, lang) : catalogue ? catalogueNotice(catalogue, lang) : ""}
   ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>
-  ${blockers.length ? "" : html`<label class="check ack"><input type="checkbox" data-warn-ack> ${L(lang, "راجعت التنبيهات وعايز أحفظ", "I checked the warnings and want to save")}</label><p class="muted" data-ack-hint>${L(lang, "زر الحفظ مقفول لحد ما تعلّم المربع ده.", "Save stays off until you tick this box.")}</p>`}` : ""}
+  ${blockers.length ? "" : html`<label class="check ack"><input type="checkbox" name="warn_ack" value="1" data-warn-ack> ${L(lang, "راجعت التنبيهات وعايز أحفظ", "I checked the warnings and want to save")}</label><p class="muted" data-ack-hint>${L(lang, "زر الحفظ مقفول لحد ما تعلّم المربع ده.", "Save stays off until you tick this box.")}</p>`}` : ""}
   ${factList({ ...listing, code: listing.code || "—" }, lang)}
 </section>`;
 }

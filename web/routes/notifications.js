@@ -43,6 +43,7 @@ function register(web, { pool, page }) {
       body: html`<h1>🔔 ${L(lang, "التنبيهات", "Notifications")}</h1>
 <div class="row">
   <form method="post" action="/app/notifications/read-all"><button type="submit" class="secondary">${L(lang, "✓ علّم الكل مقروء", "✓ Mark all read")}</button></form>
+  ${rows.length ? html`<form method="post" action="/app/notifications/delete-all"><button type="submit" class="secondary" data-delete-all>🗑 ${L(lang, "امسح الكل", "Delete all")}</button></form>` : ""}
   <a class="btn secondary" href="/app/settings">${L(lang, "⚙️ اختار القناة لكل تنبيه", "⚙️ Choose the channel per alert")}</a>
   ${isManager(broker) ? html`<a class="btn secondary" href="/app/notifications/log">${L(lang, "📋 سجل التنبيهات", "📋 Notification log")}</a> <a class="btn secondary" href="/app/activity-log">${L(lang, "🗂️ سجل النشاط", "🗂️ Activity log")}</a>` : ""}
 </div>
@@ -57,6 +58,7 @@ ${rows.length
     <form method="post" action="/app/leads/${refLabel(r.follow_up_ref)}/follow-up/postpone"><button type="submit" class="secondary">${L(lang, "📅 أجّل يوم", "📅 Postpone a day")}</button></form>
   </div>`
     : ""}
+  <form method="post" action="/app/notifications/${r.id}/delete"><button type="submit" class="link danger" data-delete-notification>${L(lang, "امسح", "Delete")}</button></form>
   ${r.url
     ? html`<form method="post" action="/app/notifications/${r.id}/open"><button type="submit" class="link">${L(lang, "افتح", "Open")}</button></form>`
     : !r.read_at
@@ -78,6 +80,16 @@ ${rows.length
 
   web.post("/notifications/:id/read", async (req, res) => {
     await Notifications.markRead(pool, req.session.broker, req.params.id);
+    return res.redirect(303, "/app/notifications");
+  });
+
+  web.post("/notifications/delete-all", async (req, res) => {
+    await Notifications.dismiss(pool, req.session.broker, "all");
+    return res.redirect(303, "/app/notifications");
+  });
+
+  web.post("/notifications/:id/delete", async (req, res) => {
+    await Notifications.dismiss(pool, req.session.broker, req.params.id);
     return res.redirect(303, "/app/notifications");
   });
 

@@ -21,7 +21,7 @@ function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "",
   ${selectable ? html`<input class="pick" type="checkbox" name="code" value="${l.code}" form="bulk" aria-label="${l.code}">` : ""}
   <a class="uc-main${thumb ? " has-thumb" : ""}" href="${href}">
     ${thumb ? html`<img class="uc-thumb" src="${thumb.thumb}" alt="" loading="lazy" width="96" height="72" data-full="${thumb.url}">` : ""}
-    <span class="uc-top"><b class="code" dir="ltr">${l.code}</b>${badge ? html` <span class="badge" data-status-badge>${badge}</span>` : ""}<b class="uc-price">${stripMarkdown(Describe.priceLabel(l, lang) || "")}</b></span>
+    <span class="uc-top"><b class="code" dir="ltr">${l.code}</b>${l.listing_type === "rent" || l.listing_type === "sale" ? html` <span class="badge ${l.listing_type}" data-listing-type="${l.listing_type}">${l.listing_type === "rent" ? (en ? "Rent" : "إيجار") : (en ? "Sale" : "بيع")}</span>` : ""}${badge ? html` <span class="badge" data-status-badge>${badge}</span>` : ""}<b class="uc-price">${stripMarkdown(Describe.priceLabel(l, lang) || "")}</b></span>
     <span class="uc-sub">${[Describe.typeLabel(l, lang), l.listing_type === "rent" ? (en ? "For rent" : "للإيجار") : l.listing_type === "sale" ? (en ? "For sale" : "للبيع") : "", loc].filter(Boolean).join(" · ")}</span>
     ${size ? html`<span class="uc-size">${stripMarkdown(size)}</span>` : ""}
   </a>

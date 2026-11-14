@@ -41,6 +41,8 @@ const SOURCES = [
   ["Google", "جوجل"],
   ["OLX-Dubizzle", "أوليكس-دوبيزل"],
   ["Property Finder", "بروبرتي فايندر"],
+  ["Bayut", "بيوت"],
+  ["Nawy", "نوّي"],
   ["Referral", "ترشيح"],
   ["Walk-in", "زيارة المكتب"],
   ["Call", "مكالمة"],

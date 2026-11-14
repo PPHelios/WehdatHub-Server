@@ -2,6 +2,8 @@
 // so the same visibility and role rules apply. Route order matters: /owners/requests before /owners/:id.
 "use strict";
 
+const Phone = require("../domain/phone");
+
 const Owners = require("../services/unitOwners");
 const Portfolio = require("../services/privatePortfolio");
 const Store = require("../lib/listingStore");
@@ -24,9 +26,8 @@ function register(api, { pool }) {
     const b = req.session.broker;
     const page = Math.max(0, parseInt(req.query.page, 10) || 0);
     const list = await Owners.listFor(pool, b, { q: String(req.query.q || "").slice(0, 80), limit: 50, offset: page * 50, onlyPrivate: req.query.private === "1" && isAgencyOwner(b) });
-    const cap = await ReadCaps.takeOwnerPhones(pool, b, list.rows.filter((o) => (o.phones || []).length).length, { channel: "app", ref: "owner_list" });
-    if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
-    res.json({ items: list.rows, more: list.more });
+    // Only the last digits go out in the list; the full number is counted and sent when one owner is opened.
+    res.json({ items: list.rows.map((o) => ({ ...o, phones: (o.phones || []).map(Phone.maskPhone), phones_masked: true })), more: list.more });
   });
 
   api.get("/owners/requests", gate, async (req, res) => res.json({ items: await Owners.pendingFor(pool, req.session.broker) }));

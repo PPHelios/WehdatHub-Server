@@ -360,7 +360,7 @@ async function staleReminders(pool, { now = new Date(), notify = null } = {}) {
           kind: "manager_alert",
           dedupeKey: `prices_stale:${p.id}:${cairoDay(now)}`,
           title: en ? `🏷️ ${p.name}: prices not updated for ${days} days` : `🏷️ ${p.name}: الأسعار متحدثتش من ${days} يوم`,
-          body: en ? "Upload the developer's latest sheet so brokers quote the right prices." : "ارفع آخر شيت من المطور عشان الوسطاء يقولوا السعر الصح.",
+          body: en ? "Upload the developer's latest sheet so brokers quote the right prices." : "حمل آخر شيت من المطور عشان الوسطاء يقولوا السعر الصح.",
           url: `/app/catalogue/projects/${p.id}#prices`,
           now
         });

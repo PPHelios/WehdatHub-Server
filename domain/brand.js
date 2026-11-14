@@ -4,7 +4,7 @@
 "use strict";
 
 const BRAND = Object.freeze({
-  name: "WehdatHub",
+  name: "Wehdat Hub",
   // Brand v2 (2026-10-27): azure for actions and links, copper for "very interested" and featured, charcoal text.
   colors: Object.freeze({ brand: "#1d70b8", accent: "#c45a30", ink: "#0e1521", bg: "#f4f6f9" }),
   // Under web/static/ (served at /app/static/).

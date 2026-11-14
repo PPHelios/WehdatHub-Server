@@ -95,7 +95,7 @@ function register(web, { pool }) {
     const broker = req.session.broker;
     if (!isManager(broker)) return deny(req, res, 403, L(lang, "للمديرين بس", "Managers only"));
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return deny(req, res, 429, L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    if (!gate.allowed) return deny(req, res, 429, L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
     const r = await Brochure.read(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
     if (r.error === "not_found") return deny(req, res, 404, L(lang, "مش موجود", "Not found"));
     if (r.error) return res.redirect(303, back(req, `brochure_error=${encodeURIComponent(r.error)}${r.error === "ALLOWANCE" ? `&left=${r.left}&needed=${r.needed}` : ""}`));
