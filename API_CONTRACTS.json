@@ -735,6 +735,7 @@
       "storePhotos": ["broker", "files"]
     },
     "domain/sheetImport.js": {
+      "typeIn": ["t"],
       "statusHint": ["cells"],
       "deliveryCell": ["v"],
       "COLUMNS": "Array",
@@ -2315,6 +2316,8 @@
       "ANDROID": "Object",
       "HEAD": "Object",
       "SKIP": "Object",
+      "DIVIDER": "Object",
+      "cuesOf": ["text"],
       "PHOTO_WINDOW_MS": "Number",
       "MAX_PHOTOS": "Number",
       "DEFAULT_DAYS": "Number",
@@ -2657,6 +2660,24 @@
       "PRIVACY": "Object",
       "TERMS": "Object",
       "CONTACT": "String"
+    },
+    "domain/chatListing.js": {
+      "parsePost": ["text", "places", "from"],
+      "fillFromAi": ["cells", "fields"],
+      "findCompound": ["text", "places"],
+      "findArea": ["text"],
+      "mask": ["text"],
+      "REQUIRED_CELLS": "Array"
+    },
+    "services/chatParseLog.js": {
+      "posts": ["pool", "broker", "importId", "list"],
+      "applied": ["pool", "broker", "importId", "payload", "wanted", "ms"],
+      "steps": ["pool", "broker", "list"]
+    },
+    "services/chatPlan.js": {
+      "planChat": ["pool", "broker", "posts", "params"],
+      "loadPlaces": ["pool"],
+      "MAX_POSTS": "Number"
     }
   },
   "invariant_variable_names": {

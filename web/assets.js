@@ -27,6 +27,8 @@ const FILES = {
   "chatparse.js": path.join(__dirname, "..", "domain", "chatParse.js"),
   "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
   "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
+  "chatreview.js": path.join(STATIC_DIR, "chatreview.js"),
+  "heic2any.js": require.resolve("heic2any/dist/heic2any.min.js"),
   // The add/edit unit form's photo tray (zip of one unit's photos, ticks, order).
   "unitPhotos.js": path.join(STATIC_DIR, "unitPhotos.js"),
   // Excel import: the workbook is read in the browser, tab by tab.
@@ -54,7 +56,7 @@ const FILES = {
 };
 
 // Fetched when the Map page opens, not with every install of the app.
-const LAZY = new Set(["leaflet.js", "leaflet.css", "protomaps-leaflet.js", "map.js", "pinreview.js", "compare.js"]);
+const LAZY = new Set(["heic2any.js", "leaflet.js", "leaflet.css", "protomaps-leaflet.js", "map.js", "pinreview.js", "compare.js"]);
 
 const hash = (buf) => crypto.createHash("sha256").update(buf).digest("hex").slice(0, 10);
 

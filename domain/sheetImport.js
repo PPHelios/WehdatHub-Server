@@ -362,4 +362,4 @@ function rowToDraft(input = {}) {
   return { code, status: has("status") ? status(cells.status) : null, draft, errors: [...new Set(errors)], derived: expanded.derived };
 }
 
-module.exports = { statusHint, deliveryCell, COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };
+module.exports = { typeIn, statusHint, deliveryCell, COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };

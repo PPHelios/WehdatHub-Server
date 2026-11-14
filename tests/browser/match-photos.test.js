@@ -14,7 +14,6 @@ const sharp = require("sharp");
 const JSZip = require("jszip");
 const { createHarness, closeHarness } = require("../harness/app");
 const WebAuth = require("../../lib/webAuth");
-const Imports = require("../../services/imports");
 
 process.env.PUBLIC_BASE_URL = "http://127.0.0.1:4573";
 jest.setTimeout(240000);
@@ -132,7 +131,7 @@ test("with unit codes: the zip is read in the browser, photos are placed, the tr
   await ctx.close();
 });
 
-test("with no codes: the posts and their photos become a group import for review", async () => {
+test("with no codes: the posts and their photos become an import plan for review (parser first, photos to pick)", async () => {
   const { ctx, pg, errors } = await openPage();
   await pg.setInputFiles("[data-cp-file]", path.join(dir, "export.zip"));
   await pg.selectOption("[data-cp-mode]", "posts");
@@ -141,11 +140,8 @@ test("with no codes: the posts and their photos become a group import for review
   await pg.waitForSelector("[data-cp-unit]");
   await pg.click("[data-cp-apply]");
   await pg.waitForURL(/\/app\/import\/[0-9a-f-]{36}$/);
-  const id = pg.url().split("/").pop();
-  await Imports.waitForGroupImport(id);
-  await pg.reload({ waitUntil: "networkidle" });
   const page = await pg.content();
-  expect(page).toMatch(/data-post="0"[\s\S]*data-photos="2"/);
+  expect(page).toMatch(/data-photo-pick="1"[\s\S]*name="keep_1"/);
   expect(errors).toEqual([]);
   await ctx.close();
 });
