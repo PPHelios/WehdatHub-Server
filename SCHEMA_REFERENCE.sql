@@ -562,7 +562,8 @@ CREATE TABLE IF NOT EXISTS public.projects (
   lat double precision,
   lng double precision,
   plan_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
-  global_id uuid
+  global_id uuid,
+  offers_hash text
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_sessions (
@@ -1676,6 +1677,23 @@ CREATE TABLE IF NOT EXISTS public.listings_location_backup_111 (
   place_id uuid
 );
 
+CREATE TABLE IF NOT EXISTS public.project_offers (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  area numeric,
+  floor text,
+  bedrooms smallint,
+  price numeric NOT NULL,
+  down numeric,
+  monthly numeric,
+  monthly_est numeric,
+  years smallint,
+  raw text,
+  source text DEFAULT 'notes'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1736,6 +1754,7 @@ ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_pkey PRIMARY KEY (id);
 ALTER TABLE project_contexts ADD CONSTRAINT project_contexts_pkey PRIMARY KEY (project_id);
 ALTER TABLE project_images ADD CONSTRAINT project_images_pkey PRIMARY KEY (id);
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_pkey PRIMARY KEY (id);
+ALTER TABLE project_offers ADD CONSTRAINT project_offers_pkey PRIMARY KEY (id);
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_pkey PRIMARY KEY (id);
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_pkey PRIMARY KEY (id);
 ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
@@ -2120,6 +2139,7 @@ ALTER TABLE project_images ADD CONSTRAINT project_images_agency_id_fkey FOREIGN 
 ALTER TABLE project_images ADD CONSTRAINT project_images_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE project_offers ADD CONSTRAINT project_offers_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -2288,6 +2308,9 @@ CREATE INDEX project_images_listings_idx ON public.project_images USING gin (lis
 CREATE INDEX project_images_project_idx ON public.project_images USING btree (project_id, "position");
 CREATE INDEX idx_project_materials_check ON public.project_materials USING btree (checked_at NULLS FIRST);
 CREATE INDEX idx_project_materials_project ON public.project_materials USING btree (project_id, created_at);
+CREATE INDEX project_offers_area_idx ON public.project_offers USING btree (agency_id, area);
+CREATE INDEX project_offers_price_idx ON public.project_offers USING btree (agency_id, price);
+CREATE INDEX project_offers_project_idx ON public.project_offers USING btree (agency_id, project_id);
 CREATE UNIQUE INDEX uq_project_phases_name ON public.project_phases USING btree (project_id, lower(btrim(name)));
 CREATE INDEX idx_project_plans_project ON public.project_plans USING btree (project_id, "position");
 CREATE UNIQUE INDEX uq_projects_agency_lower_name ON public.projects USING btree (agency_id, lower(btrim(name)));

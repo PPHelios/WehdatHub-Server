@@ -51,7 +51,8 @@ function parseUnits(notes) {
     const years = num((raw.match(/(\d{1,2})\s*(?:سنين|سنوات|سنه|سنة)/) || [])[1]);
     // No monthly installment written: estimate it from the rest (no interest), and keep it apart from a written one.
     const monthly_est = monthly == null && down != null && years ? Math.round((price - down) / (years * 12)) : null;
-    out.push({ area, floor, price, down, monthly, monthly_est, years, raw });
+    const bedrooms = num((raw.match(/(\d)\s*(?:غرف|غرفه|غرفة|bed(?:room)?s?|br)(?![a-z])/i) || raw.match(/(?:غرف|غرفه|غرفة)\s*(\d)(?!\d)/) || [])[1]);
+    out.push({ area, floor, bedrooms, price, down, monthly, monthly_est, years, raw });
   }
   return out;
 }

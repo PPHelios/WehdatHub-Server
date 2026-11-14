@@ -518,6 +518,11 @@
       "LOCATION_ALIASES": "Object",
       "NOTE_MAX": "Number"
     },
+    "services/projectOffers.js": {
+      "sync": ["pool", "agencyId"],
+      "projectsWithOffers": ["pool", "agencyId"],
+      "hashOf": ["notes"]
+    },
     "services/projectAnswer.js": {
       "projectResults": ["pool", "agencyId", "filters", "params"],
       "offersFor": ["pool", "agencyId", "filters", "params"],

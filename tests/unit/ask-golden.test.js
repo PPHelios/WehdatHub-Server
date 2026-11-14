@@ -59,13 +59,22 @@ test("the prompt tells the model that offers in notes are data, so it never says
 });
 
 test("results are grouped by project, paged, and one area number is a minimum", async () => {
-  const rows = [JAZEEL, ARABISK].map((p) => ({ ...p }));
-  const pool = { query: async () => ({ rows }) };
-  const r = await PA.projectResults(pool, "a", { area_min: 120 }, { perPage: 1 });
+  const { createTestDb } = require("../harness/db");
+  const db = await createTestDb();
+  const q = (sql, p) => db.pool.query(sql, p);
+  const agency = (await q("INSERT INTO agencies (name) VALUES ('Golden') RETURNING id")).rows[0].id;
+  for (const p of [JAZEEL, ARABISK]) await q("INSERT INTO projects (agency_id, name, name_en, district, city, notes) VALUES ($1,$2,$3,$4,$5,$6)", [agency, p.name, p.name_en, p.district, p.city, p.notes]);
+  const pool = db.pool;
+  const r = await PA.projectResults(pool, agency, { area_min: 120 }, { perPage: 1 });
   expect(r.total_projects).toBe(2);
   expect(r.pages).toBe(2);
   expect(r.projects).toHaveLength(1);
-  const p2 = await PA.projectResults(pool, "a", { area_min: 120 }, { perPage: 1, page: 2 });
+  const p2 = await PA.projectResults(pool, agency, { area_min: 120 }, { perPage: 1, page: 2 });
   expect(p2.projects[0].project.name_en).not.toBe(r.projects[0].project.name_en);
-  expect((await PA.projectResults(pool, "a", { area_min: 400 })).total_projects).toBe(0);
+  expect((await PA.projectResults(pool, agency, { area_min: 400 })).total_projects).toBe(0);
+  // Rows follow the notes: edit the notes and the offers change.
+  await q("UPDATE projects SET notes = $2 WHERE agency_id = $1 AND name_en = 'JAZEEL RESIDENCE'", [agency, "شقة 200 م سعرها = 5,000,000"]);
+  expect((await PA.projectResults(pool, agency, { area_min: 190 })).total_projects).toBe(1);
+  const n = (await q("SELECT count(*)::int AS n FROM project_offers WHERE agency_id = $1", [agency])).rows[0].n;
+  expect(n).toBe(2);
 });

@@ -6,6 +6,7 @@
 const { normalizeSearch } = require("../domain/searchText");
 const { normalizeDigits } = require("../lib/text");
 const ProjectNotes = require("../domain/projectNotes");
+const Offers = require("./projectOffers");
 const { fuzzyMatch } = require("../domain/projectNames");
 const MAX_OFFERS = 30; // a text message holds about this many lines; more are counted and the broker is asked to narrow the request
 
@@ -106,8 +107,8 @@ async function answer(pool, agencyId, text, lang = "ar", filters = {}) {
   const best = matchProjects(rows, words)[0] || fuzzyMatch(text, rows)[0];
   if (best) return projectReply(best, text, lang);
   // Otherwise: the offers written in the notes that fit the area, place, budget, installment or down payment asked.
-  const projects = rows.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);
-  const all = ProjectNotes.matchUnits(projects, filters);
+  const projects = await Offers.projectsWithOffers(pool, agencyId);
+  const all =ProjectNotes.matchUnits(projects, filters);
   const hits = all.slice(0, MAX_OFFERS);
   if (!hits.length) return null;
   return notesReply(hits, lang, all.length);
@@ -161,11 +162,7 @@ function clientText(hits, lang = "ar") {
  * so it stays correct for 100+ projects. Returns { total, hits, scanned }.
  */
 async function offersFor(pool, agencyId, filters = {}, { limit = 15 } = {}) {
-  const { rows } = await pool.query(
-    "SELECT name, name_en, district, city, notes, updated_at FROM projects WHERE agency_id = $1 AND archived_at IS NULL AND notes IS NOT NULL AND notes <> ''",
-    [agencyId]
-  );
-  const projects = rows.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);
+  const projects = await Offers.projectsWithOffers(pool, agencyId);
   const hits = ProjectNotes.matchUnits(projects, filters);
   return { total: hits.length, hits: hits.slice(0, limit), scanned: projects.length };
 }
