@@ -658,3 +658,17 @@ button.saving:disabled { opacity: 1; cursor: progress; color: #fff; background: 
 /* Place rules: a compound's area is filled and locked; an unknown place needs its area (highlighted like the other required fields). */
 select.locked { background: var(--soft); border-color: #BFE3CB; pointer-events: none; }
 select.need { border: 2px solid var(--brand); }
+
+/* Laptop side menu: every place the role can open, grouped. Under 1024px the bottom bar and the More page are used instead. */
+.sidemenu { display: none; }
+@media (min-width: 1024px) {
+  body.has-tabbar { padding-inline-start: 248px; }
+  .tabbar:not(.de), .tabbar.de, .tabbar.crm { display: none; }
+  .sidemenu { position: fixed; inset-inline-start: 0; inset-block: 56px 0; width: 248px; z-index: 25; display: flex; flex-direction: column; gap: 2px; padding: 16px 12px; overflow-y: auto; background: var(--card); border-inline-end: 1px solid var(--line); }
+  .sidemenu a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 14px; border-radius: 10px; color: var(--ink); text-decoration: none; font-weight: 600; }
+  .sidemenu a:hover { background: var(--soft); }
+  .sidemenu a[aria-current="page"] { background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; }
+  .sidemenu .side-add { justify-content: center; min-height: 48px; margin-block-end: 8px; background: var(--brand); color: #fff; font-weight: 700; border-radius: 12px; }
+  .sidemenu .side-add:hover { background: var(--brand); filter: brightness(0.95); }
+  .side-group { margin-block: 12px 4px; padding-inline: 14px; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+}
