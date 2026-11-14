@@ -1338,7 +1338,8 @@
           (d.items || []).forEach(function (it) {
             var o = document.createElement("option");
             o.value = it.label || it.name_en || it.name_ar;
-            o.label = it.path || "";
+            // Both names are searchable, so typing English finds an Arabic-shown place and the reverse.
+            o.label = [it.path, it.name_en, it.name_ar].filter(Boolean).join(" · ");
             list.appendChild(o);
           });
         })
