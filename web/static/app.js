@@ -1346,6 +1346,21 @@
         .catch(function () {});
     }, 200);
   });
+  // Area and sub-zone search: typing narrows the dropdown by either language or an alias (the select keeps its value).
+  var normalizeArea = function (t) {
+    return String(t || "").toLowerCase().replace(/[\u064B-\u0652\u0640]/g, "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/\s+/g, " ").trim();
+  };
+  document.addEventListener("input", function (e) {
+    var box = e.target;
+    if (!box || !box.matches || !box.matches("[data-option-filter]")) return;
+    var sel = box.form && box.form.querySelector('select[name="' + box.getAttribute("data-option-filter") + '"]');
+    if (!sel) return;
+    var q = normalizeArea(box.value);
+    Array.prototype.forEach.call(sel.options, function (opt) {
+      if (!opt.value) { opt.hidden = false; return; }
+      opt.hidden = q !== "" && normalizeArea(opt.getAttribute("data-search") || opt.textContent).indexOf(q) === -1;
+    });
+  });
   // A compound brings its own area (filled and locked); a compound or area the list does not know makes the area
   // mandatory and ticks "not in the list" so the new place goes to the approval queue with its area.
   // The list is read for the typed value itself: a change that comes before its suggestions arrived (fast typing, paste,

@@ -29,6 +29,11 @@ const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Descri
  * @param {Object} p - { values (formFromUnit), mode: "new"|"edit", code, version, images, lang, notice, error, review, duplicate (P13: the save button becomes "Save anyway") }
  */
 /** One place box: type or pick; a known place fills its area (shown as one line); an unknown one warns, then opens the add-new part. */
+/** What an area option can be found by: both names and its aliases (the search box matches them all). */
+function searchText(a) {
+  return [a.name_en, a.name_ar, ...(a.aliases || [])].filter(Boolean).join(" | ");
+}
+
 function placeBox(v, areas, lang) {
   const nameOf = (a) => a.name_en || a.name_ar;
   const byId = (id) => areas.find((a) => String(a.id) === String(id));
@@ -49,8 +54,8 @@ function placeBox(v, areas, lang) {
     <fieldset class="place-new" data-place-new${hid(!isNew)}>
       <legend>${L(lang, "كمبوند جديد", "New compound")}</legend>
       <p class="muted small">${L(lang, "بيتحفظ مع الوحدة وبيتراجع من الإدارة. الحقول اللي عليها * مطلوبة.", "It is saved with the unit and reviewed by the CRM owner. Fields with * are required.")}</p>
-      <label class="req">${L(lang, "المنطقة *", "Area *")}<select name="area_id"><option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}</select></label>
-      <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<select name="subzone_id"><option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}</select></label>
+      <label class="req">${L(lang, "المنطقة *", "Area *")}<input type="search" class="area-filter" data-option-filter="area_id" autocomplete="off" placeholder="${L(lang, "ابحث بالعربي أو الإنجليزي، مثال: القاهرة الجديدة / New Cairo", "Search in Arabic or English, e.g. القاهرة الجديدة / New Cairo")}"><select name="area_id"><option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}" data-search="${searchText(a)}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}</select></label>
+      <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<input type="search" class="area-filter" data-option-filter="subzone_id" autocomplete="off" placeholder="${L(lang, "ابحث بالعربي أو الإنجليزي، مثال: البنفسج / Al Banafseg", "Search in Arabic or English, e.g. البنفسج / Al Banafseg")}"><select name="subzone_id"><option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}" data-search="${searchText(a)}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}</select></label>
       ${input("district", L(lang, "الحي", "District"), v.district)}
       ${input("city", L(lang, "المدينة", "City"), v.city)}
       <label>${L(lang, "الاسم بالعربي (اختياري)", "Arabic name (optional)")}<input name="compound_ar" value="${v.compound_ar || ""}" placeholder="${L(lang, "مثال: هايد بارك", "Arabic spelling, if you know it")}"></label>
