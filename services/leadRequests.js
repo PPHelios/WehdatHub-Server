@@ -73,6 +73,8 @@ async function saveRequest(pool, actor, leadKey, rawFilters, { requestId = null,
     } else {
       const { rows: n } = await client.query("SELECT count(*)::int AS n FROM saved_searches WHERE agency_id = $1 AND lead_id = $2", [actor.agency_id, lead.id]);
       if (n[0].n >= MAX_REQUESTS) return { error: "too_many_requests" };
+      // A broker holds at most 30 open client requests (tied to a lead or not).
+      if ((await require("./savedSearches").alertingCount(client, { agency_id: actor.agency_id, id: owner })) >= require("./savedSearches").MAX_ALERTING) return { error: "too_many_requests_broker" };
       const { rows } = await client.query(
         `INSERT INTO saved_searches (agency_id, broker_id, lead_id, name, filters, alerts_enabled, last_run_at, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5::jsonb, true, $6, $6, $6) RETURNING id, filters, alerts_enabled, created_at`,

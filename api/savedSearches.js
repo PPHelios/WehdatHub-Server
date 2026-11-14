@@ -10,11 +10,11 @@ const PAGE = 30;
 function register(api, { pool }) {
   api.get("/saved-searches", async (req, res) => {
     const items = await Saved.list(pool, req.session.broker);
-    res.json({ items: items.map((x) => ({ id: x.id, name: x.name, total: x.total, fresh: x.fresh })), max: Saved.MAX_SAVED });
+    res.json({ items: items.map((x) => ({ id: x.id, name: x.name, alerts: Boolean(x.alerts), total: x.total, fresh: x.fresh })), max: Saved.MAX_SAVED, max_alerts: Saved.MAX_ALERTING });
   });
   api.post("/saved-searches", async (req, res) => {
-    const out = await Saved.save(pool, req.session.broker, { token: req.body?.f, name: req.body?.name });
-    if (out.error) return res.status(out.error === "limit" ? 409 : 422).json({ error: out.error });
+    const out = await Saved.save(pool, req.session.broker, { token: req.body?.f, name: req.body?.name, alerts: req.body?.alerts });
+    if (out.error) return res.status(out.error === "limit" || out.error === "limit_alerts" ? 409 : 422).json({ error: out.error });
     return res.json({ ok: true, id: out.id });
   });
   // Opens one: its units now (the first page), and marks them as seen so "new" counts from here.

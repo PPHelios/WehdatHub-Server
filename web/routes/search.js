@@ -138,6 +138,7 @@ ${filters.code || st !== "active" || isDataEntry(Vis.viewer()) ? "" : html`<p><a
     <form method="post" action="/app/searches" class="row">
     <input type="hidden" name="f" value="${token}">
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
+    <label class="check"><input type="checkbox" name="alerts" value="1" data-alerts> ${L(lang, "نبهني لما وحدة جديدة تناسب (طلب عميل، بحد أقصى 30)", "Alert me when a new unit fits (a client request, 30 at most)")}</label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
   <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { thumb: covers.get(r.id), ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
@@ -296,9 +297,10 @@ ${results}`
   /* Saved searches (per broker, agency-scoped). */
 
   web.post("/searches", async (req, res) => {
-    const out = await Saved.save(pool, req.session.broker, { token: req.body.f, name: req.body.name });
+    const out = await Saved.save(pool, req.session.broker, { token: req.body.f, name: req.body.name, alerts: req.body.alerts });
     if (out.error === "invalid") return res.status(400).send("A name and a valid search are required");
     if (out.error === "limit") return res.status(409).send(`At most ${MAX_SAVED} saved searches`);
+    if (out.error === "limit_alerts") return res.status(409).send("You have 30 open requests, the maximum. Remove an old one first.");
     return res.redirect(303, "/app/searches");
   });
 
@@ -313,7 +315,7 @@ ${results}`
 ${items.length
   ? html`<ul class="results">${items.map(
       ({ s, filters, total, fresh }) => html`<li class="card row" data-saved="${s.id}">
-  <a href="/app/searches/${s.id}"><strong>${s.name}</strong></a>
+  <a href="/app/searches/${s.id}"><strong>${s.alerts ? "🔔 " : ""}${s.name}</strong></a>
   <span class="muted">${stripStars(formatInterpretation({ filters }, lang))}</span>
   <span>${L(lang, `${total} وحدة`, `${total} unit(s)`)}</span>
   ${fresh ? html`<span class="ok" data-new="${fresh}">🆕 ${L(lang, `${fresh} جديد`, `${fresh} new`)}</span>` : ""}

@@ -790,7 +790,7 @@ CREATE TABLE IF NOT EXISTS public.lead_erasures (
 CREATE TABLE IF NOT EXISTS public.lead_matches (
   id bigint DEFAULT nextval('lead_matches_id_seq'::regclass) NOT NULL,
   agency_id uuid NOT NULL,
-  lead_id uuid NOT NULL,
+  lead_id uuid,
   search_id uuid NOT NULL,
   listing_id uuid NOT NULL,
   status text DEFAULT 'new'::text NOT NULL,
