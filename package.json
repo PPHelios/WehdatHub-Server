@@ -15,9 +15,12 @@
     "test:contracts": "jest tests/contract-guard.test.js --runInBand",
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
-    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand 'tests/web/[a-l]' && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand 'tests/web/[^a-l]' && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/router && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/crm && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/unit && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/heavy && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns tests/web tests/router tests/crm tests/unit tests/heavy tests/browser tests/e2e.test.js",
+    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB --testPathIgnorePatterns /node_modules/ tests/e2e.test.js tests/browser/ tests/heavy/",
+    "test:fast": "node --test tests/e2e.test.js && node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB tests/parity tests/contract-guard tests/visibility-guard tests/safeguards tests/api tests/unit tests/web/unit tests/web/search tests/web/data-entry",
+    "test:heavy": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/heavy",
+    "test:main-paths": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/main-paths.test.js' --testPathIgnorePatterns /node_modules/",
     "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
-    "test:ci": "npm run test:unit && npm run test:jest",
+    "test:ci": "npm run test:unit && npm run test:jest && npm run test:heavy",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
     "migrate": "node --env-file=.env scripts/migrate.js",
     "onboard": "node --env-file=.env scripts/onboard.js",
@@ -25,6 +28,9 @@
   },
   "jest": {
     "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/harness/clean-env.js"
+    ],
     "testMatch": [
       "**/tests/**/*.test.js"
     ],

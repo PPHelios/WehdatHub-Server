@@ -45,8 +45,8 @@ async function resultsBlock(pool, broker, q, { page = 1, sort = "best", drop = "
   const dropLink = (k) => base({ drop: [...dropped, k].join(",") });
   const stat = r.total_projects ? `${r.total_projects} ${L(lang, "مشروع", "projects")} · ${r.total_offers} ${L(lang, "اختيار", "options")}` : L(lang, "مفيش مشروع بالمواصفات دي", "No project matches");
   return html`<section class="stack" data-ask-results>
-  <div class="row" style="flex-wrap:wrap;gap:8px">${chips.map(([k, t]) => html`<a class="pill" data-chip="${k}" href="${dropLink(k)}">${t} ✕</a>`)}${[...dropped].length ? html`<a class="pill muted" href="${base({ drop: "" })}">${L(lang, "رجّع الفلاتر", "Reset filters")}</a>` : ""}</div>
-  <div class="row" style="justify-content:space-between;align-items:center"><strong data-results-count>${stat}</strong>
+  <div class="row">${chips.map(([k, t]) => html`<a class="pill" data-chip="${k}" href="${dropLink(k)}">${t} ✕</a>`)}${[...dropped].length ? html`<a class="pill muted" href="${base({ drop: "" })}">${L(lang, "رجّع الفلاتر", "Reset filters")}</a>` : ""}</div>
+  <div class="row between"><strong data-results-count>${stat}</strong>
     <span><a class="pill${sort === "best" ? " on" : ""}" href="${base({ sort: "best" })}">${L(lang, "الأنسب", "Best match")}</a> <a class="pill${sort === "cheap" ? " on" : ""}" href="${base({ sort: "cheap" })}">${L(lang, "الأرخص", "Cheapest")}</a></span></div>
   ${r.projects.map((g) => html`<article class="card stack" data-ask-project>
     <div><strong>${g.project.name}</strong><div class="muted small">${[g.project.district, g.project.city].filter(Boolean).join(" · ")}</div></div>

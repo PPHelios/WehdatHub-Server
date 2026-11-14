@@ -1,12 +1,29 @@
 // tests/harness/db.js — In-process Postgres (PGlite) behind a pg.Pool-compatible adapter
 "use strict";
 
+const crypto = require("crypto");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const { runMigrations } = require("../../lib/migrate");
 
 const SCHEMA_PATH = path.join(__dirname, "..", "..", "db", "schema.sql");
+const MIGRATIONS_DIR = path.join(__dirname, "..", "..", "db", "migrations");
+
+// Building the database (schema plus every migration) takes about 4 seconds, and every test file needs one. The first file
+// builds it and saves a copy; later files (and parallel workers) load that copy. The copy's name comes from the schema,
+// every migration and the PGlite version, so any change to them builds a fresh one. TEST_DB_SNAPSHOT=0 turns this off.
+function snapshotPath() {
+  const h = crypto.createHash("sha256");
+  h.update(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "node_modules", "@electric-sql", "pglite", "package.json"), "utf8")).version);
+  h.update(fs.readFileSync(SCHEMA_PATH));
+  for (const f of fs.readdirSync(MIGRATIONS_DIR).sort()) {
+    h.update(f);
+    h.update(fs.readFileSync(path.join(MIGRATIONS_DIR, f)));
+  }
+  return path.join(os.tmpdir(), `wehdathub-testdb-${h.digest("hex").slice(0, 16)}.tgz`);
+}
 
 // lib/db.js parses NUMERIC and INT8 into numbers; mirror that so tests see production types.
 const PG_COMPAT_PARSERS = {
@@ -19,18 +36,26 @@ const PG_COMPAT_PARSERS = {
  * PGlite has a single connection, so the adapter serializes transactions: while a client
  * holds an open transaction, pool.query calls wait until it commits or rolls back.
  */
-async function createTestDb({ migrate = true } = {}) {
+async function createTestDb({ migrate = true, snapshot = true } = {}) {
   // CommonJS builds: Jest cannot import() ESM without experimental VM flags.
   const { PGlite } = require("@electric-sql/pglite");
   const { pg_trgm } = require("@electric-sql/pglite/contrib/pg_trgm");
   const { pgcrypto } = require("@electric-sql/pglite/contrib/pgcrypto");
   const { uuid_ossp } = require("@electric-sql/pglite/contrib/uuid_ossp");
 
+  // snapshot: false for a test that dumps its own database (a loaded copy cannot be dumped again in PGlite 0.5).
+  const useSnapshot = migrate && snapshot && process.env.TEST_DB_SNAPSHOT !== "0";
+  const snap = useSnapshot ? snapshotPath() : null;
+  let copy = null;
+  if (snap && fs.existsSync(snap)) {
+    try { copy = new Blob([fs.readFileSync(snap)]); } catch { copy = null; }
+  }
   const db = new PGlite({
     extensions: { pg_trgm, pgcrypto, uuid_ossp },
-    parsers: PG_COMPAT_PARSERS
+    parsers: PG_COMPAT_PARSERS,
+    ...(copy ? { loadDataDir: copy } : {})
   });
-  await db.exec(fs.readFileSync(SCHEMA_PATH, "utf8"));
+  if (!copy) await db.exec(fs.readFileSync(SCHEMA_PATH, "utf8"));
 
   let txOwner = null; // client currently inside BEGIN … COMMIT/ROLLBACK
   let txDone = Promise.resolve();
@@ -104,7 +129,18 @@ async function createTestDb({ migrate = true } = {}) {
     on: () => {}
   };
 
+  // On a loaded copy every migration is already recorded, so this only confirms nothing is missing.
   if (migrate) await runMigrations(pool);
+  if (snap && !copy) {
+    try {
+      const dump = Buffer.from(await (await db.dumpDataDir("gzip")).arrayBuffer());
+      const tmp = `${snap}.${process.pid}.${Date.now()}`;
+      fs.writeFileSync(tmp, dump);
+      fs.renameSync(tmp, snap); // atomic: a parallel worker never reads half a file
+    } catch {
+      /* no copy saved: the next file builds its own */
+    }
+  }
   return { pool, db };
 }
 

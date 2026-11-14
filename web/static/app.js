@@ -865,6 +865,8 @@
       if (!inp) return;
       inp.addEventListener("input", function () {
         if (inp.selectionStart !== inp.value.length) return;
+        // "9 مليون", "9m", "250 ألف": a number with a word is left as typed (the readback shows its value); only plain digits get commas.
+        if (/[^\d.,\s٠-٩]/.test(inp.value)) return;
         var d = latin(inp.value).replace(/[^\d.]/g, "");
         if (!d) return;
         var parts = d.split(".");
@@ -1300,6 +1302,7 @@
         .then(function (d) {
           list.innerHTML = "";
           window.__placeItems = d.items || [];
+          window.__placeQ = q.toLowerCase();
           (d.items || []).forEach(function (it) {
             var o = document.createElement("option");
             o.value = it.name_en || it.name_ar;
@@ -1312,9 +1315,27 @@
   });
   // A compound brings its own area (filled and locked); a compound or area the list does not know makes the area
   // mandatory and ticks "not in the list" so the new place goes to the approval queue with its area.
+  // The list is read for the typed value itself: a change that comes before its suggestions arrived (fast typing, paste,
+  // autofill) asks for them first, so a known compound is never taken for a new one.
   document.addEventListener("change", function (e) {
     var input = e.target;
     if (!input || !input.matches || !input.matches("[data-place-suggest]")) return;
+    var typed = input.value.trim();
+    if (typed.length >= 2 && window.__placeQ !== typed.toLowerCase() && window.fetch) {
+      clearTimeout(placeTimer);
+      fetch("/app/places/suggest?q=" + encodeURIComponent(typed), { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+        .catch(function () { return { items: [] }; })
+        .then(function (d) {
+          window.__placeItems = d.items || [];
+          window.__placeQ = typed.toLowerCase();
+          if (input.value.trim() === typed) input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      return;
+    }
+    placeArea(input);
+  });
+  function placeArea(input) {
     var form = input.form;
     var areaSel = form && form.querySelector('select[name="area_id"]');
     var subSel = form && form.querySelector('select[name="subzone_id"]');
@@ -1339,5 +1360,5 @@
       areaSel.setAttribute("required", "required");
       if (isNew && !hit) isNew.checked = true;
     }
-  });
+  }
 })();
