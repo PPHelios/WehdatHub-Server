@@ -10,6 +10,7 @@ const Dash = require("./dashboards");
 const Card = require("../domain/leadCard");
 const Q = require("../domain/searchQuery");
 const SearchLink = require("../domain/searchLink");
+const Vis = require("../lib/visibility");
 
 const PAGE = 20;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -35,7 +36,7 @@ async function list(pool, actor, { tab = "pending", page = 1 } = {}) {
   const { rows } = await pool.query(
     `SELECT s.id, s.filters, s.alerts_enabled, s.created_at, s.fulfilled_at, s.lead_id, l.ref AS lead_ref, l.name AS lead_name, l.phone_e164 AS lead_phone, b.name AS broker_name
        FROM saved_searches s
-       LEFT JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
+       LEFT JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id AND ${Vis.leads("l")}
        LEFT JOIN brokers b ON b.id = s.broker_id AND b.agency_id = s.agency_id
       WHERE s.agency_id = $1${sc.sql} AND ${IS_REQUEST} AND s.fulfilled_at IS ${fulfilledTab ? "NOT NULL" : "NULL"}
       ORDER BY COALESCE(s.fulfilled_at, s.created_at) DESC, s.id
