@@ -244,8 +244,11 @@ ol[data-sortable] > li { display: flex; gap: 8px; align-items: center; padding: 
 ol[data-sortable] > li .grow { flex: 1; }
 ol[data-sortable] button { min-height: 40px; padding: 6px 12px; }
 ol.photo-order img { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; }
-ol.photo-order li.skip, ol.photo-order li.removed { opacity: 0.45; }
+ol.photo-order li.removed { opacity: 0.45; }
+/* A photo that will not be saved: only the picture and its words are dimmed; the move and delete buttons stay as they are. */
+ol.photo-order li.skip img, ol.photo-order li.skip .grow, ol.photo-order li.skip [data-photo-state] { opacity: 0.45; }
 ol.photo-order li.removed img, ol.photo-order li.skip img { filter: grayscale(1); }
+ol.photo-order li.failed img { outline: 2px dashed var(--bad); }
 ol.photo-order img.img-wait { background: var(--soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='%23888' stroke-width='3' stroke-dasharray='28 28'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 12 12' to='360 12 12' dur='0.9s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E") center / 24px no-repeat; }
 ol.photo-order img.img-bad { outline: 2px dashed var(--bad); cursor: pointer; }
 

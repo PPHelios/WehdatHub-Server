@@ -897,31 +897,62 @@
     var warns = form.querySelectorAll("[data-warning]").length;
     var ack = form.querySelector("[data-warn-ack]");
     var open = state === "ok" && (!warns || (ack && ack.checked));
-    if (!panel) open = false;
+    if (!panel || form._stale) open = false; // no review yet, or the form changed since the review: Save waits
     var hint = form.querySelector("[data-ack-hint]");
     if (hint) hint.hidden = Boolean(ack && ack.checked);
     save.disabled = !open;
     save.title = open ? "" : (state === "blocked" ? (EN ? "Fill in what is missing first" : "كمّل الناقص الأول") : (warns ? (EN ? "Tick that you checked the warnings" : "علّم إنك راجعت التنبيهات") : ""));
   }
+  window.whGateSave = gateSave;
   var unitFormEl = document.getElementById("unit-form");
   if (unitFormEl && unitFormEl.querySelector("[data-auto-review]")) {
     gateSave(unitFormEl);
+    // The warnings tick survives a reload of the review when there is no new warning; a changed form needs a new look.
+    var warnList = function (form) { return Array.prototype.map.call(form.querySelectorAll("[data-warning]"), function (w) { return w.getAttribute("data-warning"); }); };
+    document.addEventListener("htmx:beforeSwap", function (e) {
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) {
+        var a0 = unitFormEl.querySelector("[data-warn-ack]");
+        unitFormEl._ackSig = a0 && a0.checked ? warnList(unitFormEl) : null;
+      }
+    });
     document.addEventListener("htmx:afterSwap", function (e) {
-      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) gateSave(unitFormEl);
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) {
+        var a1 = unitFormEl.querySelector("[data-warn-ack]");
+        if (unitFormEl._ackSig && a1 && warnList(unitFormEl).every(function (f) { return unitFormEl._ackSig.indexOf(f) >= 0; })) a1.checked = true; // only warnings already seen: the tick stays
+        unitFormEl._ackSig = null;
+        unitFormEl._stale = false;
+        gateSave(unitFormEl);
+      }
+    });
+    // Anything that changes the form (or its photos) makes the review old: Save closes at once and the review runs again.
+    var rvTimer = null;
+    var stale = function () {
+      unitFormEl._stale = true;
+      gateSave(unitFormEl);
+      if (!unitFormEl.querySelector("[data-review]")) return; // the review has not been shown yet (earlier steps)
+      clearTimeout(rvTimer);
+      rvTimer = setTimeout(function () { runReview(unitFormEl); }, 700);
+    };
+    unitFormEl.addEventListener("photos:changed", stale);
+    unitFormEl.addEventListener("change", function (e) {
+      if (e.target && e.target.hasAttribute && (e.target.hasAttribute("data-warn-ack") || e.target.type === "file")) return;
+      if (unitFormEl.querySelector("[data-review]")) stale();
     });
     // If the review can't be loaded the server still checks everything at Save, so Save is not left locked.
-    document.addEventListener("htmx:responseError", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) { var sv = unitFormEl.querySelector("[data-save-row] button[type=submit]"); if (sv) sv.disabled = false; } });
-    document.addEventListener("htmx:sendError", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) { var sv = unitFormEl.querySelector("[data-save-row] button[type=submit]"); if (sv) sv.disabled = false; } });
+    // If the review can't be loaded, Save stays closed and the page says so, with a button to check again.
+    var reviewFailed = function (e) {
+      if (!(e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review"))) return;
+      e.target.innerHTML = '<section class="card" data-review-failed><p class="notice bad" role="alert">' + (EN ? "Couldn't check the details. Save is off until it works." : "مقدرناش نراجع البيانات. الحفظ مقفول لحد ما تنجح.") + ' <button type="button" class="secondary small" data-review-retry>' + (EN ? "Check again" : "راجع تاني") + '</button></p></section>';
+      unitFormEl._stale = false;
+      gateSave(unitFormEl);
+    };
+    document.addEventListener("htmx:responseError", reviewFailed);
+    document.addEventListener("htmx:sendError", reviewFailed);
+    unitFormEl.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-review-retry]")) runReview(unitFormEl); });
     unitFormEl.addEventListener("change", function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-warn-ack")) gateSave(unitFormEl); });
     // An edit page (not stepped) shows its review at once and keeps it current while the form is changed.
     if (!unitFormEl.hasAttribute("data-steps")) {
-      var rv = null;
       setTimeout(function () { runReview(unitFormEl); }, 0);
-      unitFormEl.addEventListener("change", function (e) {
-        if (e.target && e.target.hasAttribute && (e.target.hasAttribute("data-warn-ack") || e.target.type === "file")) return;
-        clearTimeout(rv);
-        rv = setTimeout(function () { runReview(unitFormEl); }, 700);
-      });
     }
     // The form can't be touched while a button's request runs (the automatic review is quiet).
     document.addEventListener("htmx:beforeRequest", function (e) {
@@ -974,9 +1005,10 @@
     next.appendChild(spin);
     nav.appendChild(prev); nav.appendChild(next);
     var stepErr = document.createElement("p");
-    stepErr.className = "error step-err"; stepErr.setAttribute("role", "alert"); stepErr.hidden = true;
+    stepErr.className = "notice bad card step-err"; stepErr.setAttribute("role", "alert"); stepErr.hidden = true;
     form.insertBefore(bar, form.firstChild.nextSibling);
-    form.appendChild(stepErr);
+    form.insertBefore(stepErr, bar.nextSibling); // the message sits at the top, under the step bar, where it is seen
+    var showStepErr = function () { stepErr.hidden = false; try { stepErr.scrollIntoView({ block: "center" }); } catch (x) { window.scrollTo(0, 0); } };
     form.appendChild(nav);
     var checkUrl = form.getAttribute("data-check");
     var at = 1;
@@ -1038,7 +1070,7 @@
             stepErr.appendChild(document.createTextNode(EN ? "⚠️ This looks like " : "⚠️ شكلها نفس الوحدة "));
             stepErr.appendChild(lnk);
             stepErr.appendChild(document.createTextNode(EN ? " already in your list. Tap Next again if it is a different unit." : " اللي عندك. لو دي وحدة تانية دوس التالي تاني."));
-            stepErr.hidden = false;
+            showStepErr();
             return;
           }
           // Tapping Next past the look-alike warning accepts it: the final save never asks about it again (dup_ack).
@@ -1054,9 +1086,9 @@
             if (mf && mf.closest("label")) mf.closest("label").classList.add("field-missing");
           }
           stepErr.textContent = shown.map(function (x) { return x.label; }).join(" · ");
-          stepErr.hidden = false;
+          showStepErr();
           var first = form.querySelector('[data-step="' + here + '"] [name="' + shown[0].field + '"]');
-          if (first) first.focus();
+          if (first) first.focus({ preventScroll: true }); // the message at the top stays in view
         })
         .catch(function () { busy(false); show(here + 1); });
     });

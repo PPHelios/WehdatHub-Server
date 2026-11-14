@@ -75,13 +75,14 @@ const openEdit = async () => {
   return { ctx, pg };
 };
 
-test("up to 60 photos can be picked and 15 are kept; the rest wait as not kept", async () => {
+test("up to 60 photos can be picked and the first 15 are kept; the rest are dimmed", async () => {
   const { ctx, pg } = await openEdit();
   const files = Array.from({ length: 20 }, (_, i) => ({ name: `p${i}.png`, mimeType: "image/png", buffer: PNG }));
   await pg.setInputFiles("input[data-photo-tray]", files);
   await pg.waitForSelector("[data-photo-preview] li");
   expect(await pg.locator("[data-photo-preview] li").count()).toBe(20);
-  expect(await pg.locator("[data-photo-preview] [data-keep]", { hasText: "✓" }).count()).toBe(15);
+  expect(await pg.locator("[data-photo-preview] li.skip").count()).toBe(5);
+  expect(await pg.locator("[data-photo-preview] li:nth-child(15)").getAttribute("class")).toBeFalsy();
   const note = pg.locator("[data-photo-note]");
   expect(await note.isVisible()).toBe(true);
   expect(await note.textContent()).toMatch(/20/);
@@ -89,11 +90,56 @@ test("up to 60 photos can be picked and 15 are kept; the rest wait as not kept",
   // Nothing is uploaded while picking, and the review is told how many photos wait for Save.
   expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("15");
   expect(await pg.locator('input[data-photo-tray]').evaluate((i) => i.files.length)).toBe(0);
-  // Swapping: a not-kept photo cannot be kept while 15 are kept; taking one off makes room.
-  await pg.locator("[data-photo-preview] [data-keep]", { hasText: "✓" }).first().click();
-  expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("14");
-  await pg.locator("[data-photo-preview] [data-keep]", { hasText: /Not kept|مش هتتحفظ/ }).first().click();
+  // A dimmed photo keeps working buttons (not greyed), and moving it up takes the place of one of the 15.
+  const move = pg.locator("[data-photo-preview] li:nth-child(16) [data-move=up]");
+  expect(await move.isEnabled()).toBe(true);
+  expect(await move.evaluate((b) => getComputedStyle(b.closest("li")).opacity)).toBe("1");
+  expect(await move.evaluate((b) => getComputedStyle(b).opacity)).toBe("1");
+  const moved = await pg.locator("[data-photo-preview] li:nth-child(16) .grow").textContent();
+  await move.click();
+  expect(await pg.locator("[data-photo-preview] li:nth-child(15) .grow").textContent()).toBe(moved.replace(/^16\./, "15."));
+  expect(await pg.locator("[data-photo-preview] li.skip").count()).toBe(5);
+  expect(await pg.locator("[data-photo-preview] li:nth-child(15)").getAttribute("class")).toBeFalsy();
+  expect(await pg.locator("[data-photo-preview] li:nth-child(16)").getAttribute("class")).toBe("skip");
   expect(await pg.locator('input[name="photo_pending"]').inputValue()).toBe("15");
+  await ctx.close();
+});
+
+test("Save stays off until the warnings box is ticked, and the tick survives a change that adds no new warning", async () => {
+  const { ctx, pg } = await openEdit();
+  await pg.waitForSelector("[data-review]");
+  const save = pg.locator("[data-save-row] button[type=submit]");
+  expect(await pg.locator("[data-warn-ack]").count()).toBe(1);
+  expect(await save.isDisabled()).toBe(true);
+  await pg.check("[data-warn-ack]");
+  expect(await save.isDisabled()).toBe(false);
+  // A change closes Save at once; the review runs again, the same warnings keep the tick, then Save opens.
+  await pg.fill('[name="price_value"]', "4100000");
+  await pg.locator('[name="price_value"]').blur();
+  expect(await save.isDisabled()).toBe(true);
+  await pg.waitForFunction(() => { const b = document.querySelector("[data-save-row] button[type=submit]"); return b && !b.disabled; }, null, { timeout: 15000 });
+  expect(await pg.locator("[data-warn-ack]").isChecked()).toBe(true);
+  await ctx.close();
+});
+
+test("a used code on the first Next shows a red message at the top of the form", async () => {
+  const base = "http://127.0.0.1:4572";
+  const ctx = await browser.newContext({ serviceWorkers: "block" });
+  const pg = await ctx.newPage();
+  const br = h.BROKERS.broker;
+  const token = await WebAuth.issueLoginToken(h.pool, { id: br.id, agency_id: br.agency_id });
+  await pg.goto(`${base}/app/login/confirm?t=${token}`);
+  await pg.click("form button[type=submit], form input[type=submit]");
+  await pg.waitForLoadState("networkidle");
+  await pg.goto(`${base}/app/units/new`, { waitUntil: "networkidle" });
+  await pg.fill('[name="code"]', "NH-A20");
+  await pg.click(".stepnav button:not(.secondary)");
+  await pg.waitForSelector(".step-err:not([hidden])");
+  expect(await pg.locator(".step-err").textContent()).toMatch(/NH-A20/);
+  // It sits above the first section and ends up in view, with a red background.
+  await pg.waitForFunction(() => { const r = document.querySelector(".step-err").getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; }, null, { timeout: 5000 });
+  expect(await pg.evaluate(() => document.querySelector(".step-err").compareDocumentPosition(document.querySelector("section[data-step='1']")) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+  expect(await pg.locator(".step-err").evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
   await ctx.close();
 });
 
