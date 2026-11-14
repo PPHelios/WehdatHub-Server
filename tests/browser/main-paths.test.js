@@ -59,7 +59,7 @@ const pageSays = (pg) => pg.evaluate(() => {
     .filter((n) => !n.hidden && n.textContent.trim()).map((n) => n.textContent.trim());
   const parts = [...document.querySelectorAll("#unit-form [data-step]")].filter((n) => !n.hidden);
   for (const f of parts.flatMap((p) => [...p.querySelectorAll("input, select, textarea")])) {
-    if (f.willValidate && !f.checkValidity()) out.push(`invalid ${f.name}="${f.value}": ${f.validationMessage}`);
+    if (f.willValidate && !f.checkValidity()) out.push(`invalid ${f.name}="${f.value}": ${f.validationMessage} [${f.outerHTML.slice(0, 160)}] options=${f.options ? f.options.length : "-"}`);
   }
   const nx = [...document.querySelectorAll("#unit-form button[type=button]")].find((b) => /^(Next|التالي)$/.test(b.textContent.trim()));
   if (nx && (nx.disabled || nx.classList.contains("is-busy"))) out.push("Next is busy (waiting for the step check)");
