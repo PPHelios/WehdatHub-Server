@@ -30,6 +30,7 @@
  "/import/:id/failed.xlsx": "web-only: inventory imports",
  "/import/:id/undo": "web-only: inventory imports",
  "/import/match/units": "web-only: inventory imports",
+ "/import/match/unit/:code/photos": "web-only: inventory imports",
  "/import/template.xlsx": "web-only: inventory imports",
  "/insights": "api:/insights/prices",
  "/leads": "api:/leads",
