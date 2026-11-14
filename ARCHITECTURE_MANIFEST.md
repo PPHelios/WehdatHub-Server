@@ -464,13 +464,17 @@ Units get their area (`101_units_area_backfill.js`): a unit takes its compound's
 * **Real Postgres in-process:**
   - `tests/harness/db.js` loads `db/schema.sql` into PGlite (Postgres compiled to WASM, with `pg_trgm`, `pgcrypto` and `uuid-ossp`) behind a `pg.Pool`-compatible adapter. No Docker or external database is needed.
   - NUMERIC and INT8 come back as strings, exactly like node-pg.
-  - There is one database per test file, reset with `TRUNCATE` between tests.
+  - There is one database per test file, reset with `TRUNCATE` between tests. The first file builds it (schema plus every migration) and saves a copy in the temp folder; later files and parallel workers load that copy. The copy is named by a hash of the schema, the migrations and the PGlite version, so any change builds a fresh one (`TEST_DB_SNAPSHOT=0` turns it off).
+  - `tests/harness/clean-env.js` runs before every file and removes the machine's own outside-service settings (Supabase, Gemini, Telegram, WhatsApp and so on), so a laptop with a `.env` gives the same result as CI.
 * **Known defects are executable.** Confirmed bugs are written as `test.failing(...)`, named with their remediation-plan ID (e.g. `A1`, `F2`, `D1`). The fixing change converts the test to a normal `test(...)`. After Release 1 no `test.failing` remains; the IDs live on in the test names (FEATURE_REGISTRY §11).
 * **Commands:**
-  - `npm run test:ci` runs all offline tests: `node --test` e2e plus every Jest suite.
-  - `npm run test:router` runs only the router behaviour tests.
+  - `npm run test:fast` (about 1 to 3 minutes): e2e, the guard tests, the API, unit tests, website unit add/edit and search.
+  - `npm run test:main-paths` (under a minute, needs Chromium): the main paths in a real browser, read back from the database: add a unit through every step, a look-alike unit accepted at Next is never blocked at Save, a lost answer is found by the "is it saved?" check, no connection shows Try again and saves once, edit, and search. Each failure names the step and what the page said.
+  - `npm run test:ci` (about 5 to 8 minutes): every offline test with 4 workers, plus the load tests (`test:heavy`).
+  - `npm run test:browser`: every browser test. `npm run test:router` runs only the router behaviour tests.
   - `npm test` adds the live-schema audit and the live search pipeline, which need `.env`.
-* **CI:** `.github/workflows/test.yml` runs `npm run test:ci` on Node 22 for every push and pull request. Don't merge to `main` with a red build.
+  - On a laptop: Node 24, `npm ci`, `npx playwright install chromium` once, then `npm run test:fast && npm run test:main-paths` before each push.
+* **CI:** `.github/workflows/test.yml`. Every push runs the fast job (fast tests plus main paths). The full job (`test:ci`) and the browser pass run on main, on pull requests that are not drafts, and by hand. Merge only after the full run is green on the last commit: mark the draft ready for review to start it. No automatic retries.
 
 * **Onboarding and unit caps (`domain/onboarding.js`, `services/onboarding.js`, `domain/plans.js` `units`, `services/billing.js` `unitCapacity`):** the welcome card on /app/ until closed, a "?" tip (3-4 Arabic steps) under each main screen, one-time bot hints after a broker's first unit, search and lead (`firstHint`), day 1/3/7 nudges (the `onboarding_nudges` job, first missing step, Telegram or inbox only), a "Talk to a person" footer link (`SUPPORT_WHATSAPP`/`SUPPORT_TELEGRAM`) and the owner's stuck list on /app/owner. Each plan caps available units (Free 25, Solo 300, Office 1,500, Agency 5,000; the owner edits them in the Plans and credits section of /app/owner, stored in `credit_plans.units`); sold and archived units don't count. `createListing` returns `{ limit }` at the cap and the web form, bot draft save, imports and price-sheet apply tell the broker to archive or upgrade.
 

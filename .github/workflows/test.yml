@@ -1,10 +1,12 @@
-# Runs the offline test suite (no live DB, WhatsApp or Gemini) on every pull request and on every push to main.
-# Nothing reaches main without a pull request run first; the full offline suite runs on each of them.
-# The browser pass (phone-size clicks through search, forms, imports and voice) runs in its own job and
-# runs whenever a change touches the web app or the code it uses, or when the change set cannot be read.
-# Both jobs use fake data and fake AI: no credits are spent.
+# Two levels of tests, all offline (fake data, fake AI, no live DB, WhatsApp or Gemini; no credits are spent):
+# - fast (every push, about 3 minutes): the guard tests, the API and units, unit add/edit and search on the website, and the
+#   main paths in a real browser (add a unit, a look-alike unit, a lost answer, no connection, edit, search).
+# - full (about 8 minutes): the whole offline suite with the load tests, plus the browser pass when the web app or the code it
+#   uses changed. It runs on every push to main, on a pull request that is not a draft, and by hand (Run workflow).
+#   A pull request is merged only after the full run is green on its last commit: mark the draft "Ready for review" to start it.
+# No automatic retries: a failure is fixed, never re-run until green.
 # Logs are errors-only: failing tests and the last lines are printed; passing output is kept out of the log.
-# A change that touches only docs or plan files runs neither job.
+# A change that touches only docs or plan files runs nothing.
 name: tests
 
 on:
@@ -14,9 +16,11 @@ on:
       - "docs/**"
       - "**.md"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - "docs/**"
       - "**.md"
+  workflow_dispatch:
 
 concurrency:
   group: tests-${{ github.ref }}
@@ -53,7 +57,40 @@ jobs:
             echo "browser=false" >> "$GITHUB_OUTPUT"
           fi
 
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run fast tests (errors only)
+        env:
+          NODE_OPTIONS: --max-old-space-size=3072
+        run: |
+          npm run test:fast > fast.log 2>&1 || {
+            grep -E '^(FAIL|not ok)|  ●|Error:|✕' fast.log | head -300
+            echo '--- last 120 lines ---'
+            tail -n 120 fast.log
+            exit 1
+          }
+          tail -n 5 fast.log
+      - run: npx playwright install --with-deps chromium
+      - name: Run main paths in the browser (errors only)
+        run: |
+          npm run test:main-paths > main-paths.log 2>&1 || {
+            grep -E '^(FAIL|not ok)|  ●|Error:|✕|Page says' main-paths.log | head -300
+            echo '--- last 120 lines ---'
+            tail -n 120 main-paths.log
+            exit 1
+          }
+          tail -n 5 main-paths.log
+
   test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -65,8 +102,8 @@ jobs:
       - run: npm ci
       - name: Run offline tests (errors only)
         env:
-          # The full offline suite ran out of the default Node heap (about 3.3 GB) on the first Node 24 run.
-          NODE_OPTIONS: --max-old-space-size=6144
+          # Four test workers; each gets its own heap and is restarted when it grows past 1.5 GB.
+          NODE_OPTIONS: --max-old-space-size=3072
         run: |
           npm run test:ci > test.log 2>&1 || {
             grep -E '^(FAIL|not ok)|  ●|Error:|✕' test.log | head -300
@@ -78,7 +115,7 @@ jobs:
 
   browser:
     needs: changes
-    if: needs.changes.outputs.browser == 'true'
+    if: needs.changes.outputs.browser == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

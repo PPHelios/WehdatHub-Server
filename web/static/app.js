@@ -865,6 +865,8 @@
       if (!inp) return;
       inp.addEventListener("input", function () {
         if (inp.selectionStart !== inp.value.length) return;
+        // "9 مليون", "9m", "250 ألف": a number with a word is left as typed (the readback shows its value); only plain digits get commas.
+        if (/[^\d.,\s٠-٩]/.test(inp.value)) return;
         var d = latin(inp.value).replace(/[^\d.]/g, "");
         if (!d) return;
         var parts = d.split(".");

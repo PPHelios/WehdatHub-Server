@@ -13,7 +13,7 @@ test("a backup copy restores into an empty database with the same rows and the a
   const { pg_trgm } = require("@electric-sql/pglite/contrib/pg_trgm");
   const { pgcrypto } = require("@electric-sql/pglite/contrib/pgcrypto");
   const { uuid_ossp } = require("@electric-sql/pglite/contrib/uuid_ossp");
-  const { pool, db } = await createTestDb();
+  const { pool, db } = await createTestDb({ snapshot: false });
   const agency = crypto.randomUUID();
   await pool.query("INSERT INTO agencies (id, name, slug, phone, pilot) VALUES ($1, 'Drill', 'drill', '0220000000', true)", [agency]);
   await pool.query("INSERT INTO listings (code, agency_id, title, property_type, listing_type, status, details) SELECT 'D' || g, $1, 'unit', 'apartment', 'sale', 'active', '{}'::jsonb FROM generate_series(1, 2000) g", [agency]);
