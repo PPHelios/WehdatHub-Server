@@ -108,6 +108,9 @@
   "report.js": {
     "app": "Report a problem (PR 3)"
   },
+  "requests.js": {
+    "app": "Client requests (/client-requests)"
+  },
   "search.js": {
     "app": "Search"
   },

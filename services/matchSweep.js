@@ -57,6 +57,7 @@ function quietDays(lead, now) {
 
 /** One hit's line: a new unit, or "📉 9 مليون ← 8.5 مليون" for a price drop; with N3's line when the client is quiet. */
 function hitLine(x, lang, { now = new Date(), quietLine = true } = {}) {
+  if (!x.lead) return x.drop ? `• 📉 ${x.request} ← ${x.listing.code}: ${money(x.drop.from, lang)} → ${money(x.drop.to, lang)}` : `• 🔔 ${x.request} ← ${Describe.searchResult(x.listing, lang)}`;
   const who = `${Card.refLabel(x.lead.ref)} ${Card.displayName(x.lead, lang)}`;
   const main = x.drop ? `• 📉 ${who} ← ${x.listing.code}: ${money(x.drop.from, lang)} → ${money(x.drop.to, lang)}` : `• ${who} ← ${Describe.searchResult(x.listing, lang)}`;
   const days = quietLine ? quietDays(x.lead, now) : null;
@@ -69,14 +70,17 @@ function hitLine(x, lang, { now = new Date(), quietLine = true } = {}) {
 /** One grouped alert: "🏠 3 new units for your clients" with a line per lead and unit (price drops marked 📉). */
 async function alertBroker(pool, broker, hits, { now, sweepKey }) {
   const lang = en(broker) ? "en" : "ar";
-  const leads = new Set(hits.map((x) => x.lead.id));
+  const leads = new Set(hits.map((x) => x.lead?.id || x.request));
   const lines = hits.slice(0, LINES).map((x) => hitLine(x, lang, { now, quietLine: broker.quiet_line !== false }));
   if (hits.length > LINES) lines.push(L(broker, `…و${hits.length - LINES} كمان`, `…and ${hits.length - LINES} more`));
-  const single = leads.size === 1 ? hits[0].lead : null;
+  const single = leads.size === 1 && hits[0].lead ? hits[0].lead : null;
+  const standalone = hits.every((x) => !x.lead);
   const drops = hits.filter((x) => x.drop).length;
   let title;
   if (hits.length === 1 && drops) {
     title = L(broker, `📉 سعر ${hits[0].listing.code} نزل، وتناسب ${Card.displayName(single, "ar")} (${Card.refLabel(single.ref)})`, `📉 ${hits[0].listing.code} dropped its price and fits ${Card.displayName(single, "en")} (${Card.refLabel(single.ref)})`);
+  } else if (standalone) {
+    title = L(broker, `🏠 ${hits.length} وحدة جديدة تناسب طلباتك`, `🏠 ${hits.length} new units fit your requests`);
   } else if (hits.length === 1) {
     title = L(broker, `🏠 وحدة جديدة تناسب ${Card.displayName(single, "ar")} (${Card.refLabel(single.ref)})`, `🏠 A new unit fits ${Card.displayName(single, "en")} (${Card.refLabel(single.ref)})`);
   } else if (drops === hits.length) {
@@ -89,10 +93,10 @@ async function alertBroker(pool, broker, hits, { now, sweepKey }) {
     dedupeKey: `match:${sweepKey}`,
     title,
     body: lines.join("\n"),
-    url: single ? `/app/leads/${Card.refLabel(single.ref)}#requests` : "/app/leads",
+    url: single ? `/app/leads/${Card.refLabel(single.ref)}#requests` : standalone ? "/app/searches" : "/app/leads",
     leadId: single?.id || null,
     listingId: hits.length === 1 ? hits[0].listing.id : null,
-    buttons: hits.length === 1 ? [{ id: `ld:send:${Card.refLabel(single.ref)}:${hits[0].listing.code}`, title: L(broker, "💬 ابعت للعميل", "💬 Send to client") }] : null,
+    buttons: hits.length === 1 && single ? [{ id: `ld:send:${Card.refLabel(single.ref)}:${hits[0].listing.code}`, title: L(broker, "💬 ابعت للعميل", "💬 Send to client") }] : null,
     now
   });
 }
@@ -172,6 +176,29 @@ async function sweep(pool, { now = new Date(), watermark = {}, dailyCap = DAILY_
         if (freshIds.has(f.id)) perBroker.get(to).hits.push({ lead, listing: f });
         else if (drops.has(f.id)) perBroker.get(to).hits.push({ lead, listing: f, drop: { from: drops.get(f.id), to: Number(f.price_value) } });
       }
+    }
+  }
+
+  // Client requests that are not tied to a lead: only new units alert (no price-drop memory is kept for them).
+  for (const [agencyId, ids] of byAgency) {
+    const { rows: own } = await pool.query("SELECT id, name, filters, broker_id FROM saved_searches WHERE agency_id = $1 AND alerts_enabled AND lead_id IS NULL", [agencyId]);
+    counts.requests += own.length;
+    for (const r of own) {
+      const filters = SearchLink.sanitizeFilters(r.filters);
+      const { sql, params } = Search.buildSearchQuery(agencyId, { filters }, { onlyIds: ids, limit: BATCH });
+      const { rows: fits } = await pool.query(sql, params);
+      if (!fits.length) continue;
+      const { rows: fresh } = await pool.query(
+        `INSERT INTO lead_matches (agency_id, lead_id, search_id, listing_id, status, created_at, alerted_at, alerted_price)
+         SELECT $1, NULL, $2, f.id, 'alerted', $4, $4, f.price FROM unnest($3::uuid[], $5::numeric[]) AS f(id, price)
+         ON CONFLICT (search_id, listing_id) DO NOTHING RETURNING listing_id`,
+        [agencyId, r.id, fits.map((f) => f.id), now.toISOString(), fits.map((f) => f.price_value ?? null)]
+      );
+      if (!fresh.length) continue;
+      counts.matches += fresh.length;
+      const freshIds = new Set(fresh.map((f) => f.listing_id));
+      if (!perBroker.has(r.broker_id)) perBroker.set(r.broker_id, { agencyId, hits: [] });
+      for (const f of fits) if (freshIds.has(f.id)) perBroker.get(r.broker_id).hits.push({ lead: null, request: r.name, listing: f });
     }
   }
 

@@ -52,7 +52,7 @@ function statusSwitch({ token, st, counts, lang, sl = null }) {
 }
 
 function searchBox(q, lang, { voice = false } = {}) {
-  return html`<form method="get" action="/app/search" class="searchbox" role="search" data-search-form>
+  return html`<form method="get" action="/app/search" class="searchbox float" role="search" data-search-form>
   <button type="submit" class="search-icon" aria-label="${L(lang, "بحث", "Search")}">${icon("search", 20)}</button><input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
   <button type="button" class="mic" data-ai="voice_search" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
   <span class="spin" aria-hidden="true"></span>
@@ -138,6 +138,7 @@ ${filters.code || st !== "active" || isDataEntry(Vis.viewer()) ? "" : html`<p><a
     <form method="post" action="/app/searches" class="row">
     <input type="hidden" name="f" value="${token}">
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
+    <label class="check"><input type="checkbox" name="alerts" value="1" data-alerts> ${L(lang, "نبهني لما وحدة جديدة تناسب (طلب عميل، بحد أقصى 30)", "Alert me when a new unit fits (a client request, 30 at most)")}</label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
   <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { thumb: covers.get(r.id), ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
@@ -296,9 +297,10 @@ ${results}`
   /* Saved searches (per broker, agency-scoped). */
 
   web.post("/searches", async (req, res) => {
-    const out = await Saved.save(pool, req.session.broker, { token: req.body.f, name: req.body.name });
+    const out = await Saved.save(pool, req.session.broker, { token: req.body.f, name: req.body.name, alerts: req.body.alerts });
     if (out.error === "invalid") return res.status(400).send("A name and a valid search are required");
     if (out.error === "limit") return res.status(409).send(`At most ${MAX_SAVED} saved searches`);
+    if (out.error === "limit_alerts") return res.status(409).send("You have 30 open requests, the maximum. Remove an old one first.");
     return res.redirect(303, "/app/searches");
   });
 
@@ -313,7 +315,7 @@ ${results}`
 ${items.length
   ? html`<ul class="results">${items.map(
       ({ s, filters, total, fresh }) => html`<li class="card row" data-saved="${s.id}">
-  <a href="/app/searches/${s.id}"><strong>${s.name}</strong></a>
+  <a href="/app/searches/${s.id}"><strong>${s.alerts ? "🔔 " : ""}${s.name}</strong></a>
   <span class="muted">${stripStars(formatInterpretation({ filters }, lang))}</span>
   <span>${L(lang, `${total} وحدة`, `${total} unit(s)`)}</span>
   ${fresh ? html`<span class="ok" data-new="${fresh}">🆕 ${L(lang, `${fresh} جديد`, `${fresh} new`)}</span>` : ""}

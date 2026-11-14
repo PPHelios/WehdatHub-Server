@@ -72,7 +72,7 @@ function matchesPlace(project, places) {
 }
 
 /**
- * The offers that fit a search: area about the asked size (±5% when one number is asked), price and installment and down
+ * The offers that fit a search: area at least the asked size when one number is asked (a range when two), price and installment and down
  * payment at most the budget. Filters that are not set are not applied. Rent searches are not answered from notes.
  * @param {Array<{project, units}>} projects parsed notes per project
  * @param {Object} f search filters (domain/searchQuery shape)
@@ -89,7 +89,8 @@ function matchUnits(projects, f = {}) {
   for (const { project, units } of projects) {
     if (!matchesPlace(project, places)) continue;
     for (const u of units) {
-      if (f.area_min != null && f.area_max == null && Math.abs(u.area - f.area_min) > f.area_min * 0.05) continue;
+      // One number asked ("أكتر من 120") is a minimum, the same meaning the search parser and unit search give it.
+      if (f.area_min != null && f.area_max == null && u.area < f.area_min) continue;
       if (f.area_min != null && f.area_max != null && (u.area < f.area_min || u.area > f.area_max)) continue;
       if (f.price_max != null && u.price > f.price_max) continue;
       if (f.price_min != null && u.price < f.price_min) continue;

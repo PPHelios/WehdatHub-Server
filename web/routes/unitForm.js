@@ -149,6 +149,11 @@ function register(web, { pool, page, assets }) {
       const comp = await compoundError(pool, listing, body, lang);
       if (comp) out.push({ field: "compound", label_ar: comp, label_en: comp, label: comp });
     }
+    // A compound always has an area: the list brings it; a compound or area the list does not know needs the area picked (it then waits for the CRM owner's approval).
+    if (String(listing.compound || "").trim() && (!existing || listing.compound !== existing.compound || body.compound_new === "1")) {
+      const placed = await require("../../services/compoundResolve").resolve(pool, listing).catch(() => null);
+      if (placed && !placed.area_id) out.push(item("area_id", "المنطقة مطلوبة للكمبوند ده (اختارها من القايمة، وهتتبعت للموافقة)", "Pick the area for this compound (it goes to approval)"));
+    }
     return out;
   };
   const formPage = async (req, res, opts, status = 200) => {

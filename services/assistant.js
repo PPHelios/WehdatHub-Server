@@ -191,7 +191,7 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     if (fit) blocks.push(fit);
   }
   if (scopes.followups) blocks.push(await followUpBlock(pool, broker, now));
-  if (scopes.units || named.length) blocks.push(await unitBlock(pool, broker, named.map((p) => p.id)));
+  // Ask answers from projects, clients and follow-ups only: resale units are searched on the Search page, never here.
 
   let res;
   try {
@@ -221,7 +221,7 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     channel,
     res.found,
     false,
-    [named.length ? "projects" : null, leads ? "clients" : null, scopes.followups ? "followups" : null, scopes.units || named.length ? "units" : null].filter(Boolean),
+    [named.length ? "projects" : null, leads ? "clients" : null, scopes.followups ? "followups" : null].filter(Boolean),
     now.toISOString()
   ]);
   return { answer: res.answer, found: res.found, lang, dates };
