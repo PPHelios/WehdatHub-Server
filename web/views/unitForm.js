@@ -51,6 +51,8 @@ function placeBox(v, areas, lang) {
       <p class="muted small">${L(lang, "بيتحفظ مع الوحدة وبيتراجع من الإدارة. الحقول اللي عليها * مطلوبة.", "It is saved with the unit and reviewed by the CRM owner. Fields with * are required.")}</p>
       <label class="req">${L(lang, "المنطقة *", "Area *")}<select name="area_id"><option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}</select></label>
       <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<select name="subzone_id"><option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}</select></label>
+      ${input("district", L(lang, "الحي", "District"), v.district)}
+      ${input("city", L(lang, "المدينة", "City"), v.city)}
       <label>${L(lang, "الاسم بالعربي (اختياري)", "Arabic name (optional)")}<input name="compound_ar" value="${v.compound_ar || ""}" placeholder="${L(lang, "مثال: هايد بارك", "Arabic spelling, if you know it")}"></label>
       <label>${L(lang, "لينك جوجل ماب (اختياري)", "Google Maps link (optional)")}<input name="compound_pin" dir="ltr" value="${v.compound_pin || ""}" placeholder="https://www.google.com/maps/…"></label>
       <input type="hidden" name="compound_new" value="1"${isNew ? "" : raw(" disabled")}>
@@ -90,8 +92,6 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${v.market === "primary" ? select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]]) : ""}
     ${select("property_type", L(lang, "النوع *", "Type *"), v.property_type, [["", "—"], ...Rules.PROPERTY_TYPES.map((t) => [t, pick(Describe.TYPE_LABELS[t], lang)])])}
     ${placeBox(v, areas, lang)}
-    ${input("district", L(lang, "الحي", "District"), v.district)}
-    ${input("city", L(lang, "المدينة", "City"), v.city)}
     ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}
     ${select("currency", L(lang, "العملة", "Currency"), v.currency, [["", "EGP"], ["USD", "USD"], ["EUR", "EUR"]])}
     ${select("rent_period", L(lang, "الإيجار", "Rent period"), v.rent_period, [["", "—"], ["monthly", L(lang, "شهري", "Monthly")], ["yearly", L(lang, "سنوي", "Yearly")]])}
