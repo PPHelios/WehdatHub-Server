@@ -40,3 +40,12 @@ test("the Arabic name and link are kept on the pending name, once", async () => 
     await db.pool.end();
   }
 });
+
+test("suggestions match Arabic or English but show the reader's language", () => {
+  const { suggest } = require("../../domain/areas");
+  const lists = { places: [{ id: "p1", name_en: "Hyde Park", name_ar: "هايد بارك", aliases: [], area_id: areas[0].id, subzone_id: areas[1].id }], areas: areas.map((a) => ({ ...a, name_ar: a.id === areas[0].id ? "القاهرة الجديدة" : "التجمع الخامس", aliases: [] })) };
+  const en = suggest("هايد", lists, 5, "en")[0];
+  const ar = suggest("hyde", lists, 5, "ar")[0];
+  expect(en).toMatchObject({ label: "Hyde Park", path: "New Cairo › 5th Settlement" });
+  expect(ar).toMatchObject({ label: "هايد بارك", path: "القاهرة الجديدة › التجمع الخامس" });
+});

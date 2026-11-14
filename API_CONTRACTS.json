@@ -2619,7 +2619,7 @@
       "placement": ["areas", "id"],
       "checkLocation": ["loc", "params"],
       "cleanArea": ["input"],
-      "suggest": ["text", "params", "limit"]
+      "suggest": ["text", "params", "limit", "lang"]
     },
     "services/areas.js": {
       "approvedAreas": ["db"],
@@ -2647,7 +2647,7 @@
       "rejectArea": ["pool", "id", "reason"]
     },
     "services/placeSuggest.js": {
-      "suggest": ["pool", "text", "limit"],
+      "suggest": ["pool", "text", "limit", "lang"],
       "listing": ["pool", "since"],
       "resetCache": []
     },

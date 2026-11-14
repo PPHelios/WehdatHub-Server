@@ -1337,8 +1337,8 @@
           window.__placeQ = q.toLowerCase();
           (d.items || []).forEach(function (it) {
             var o = document.createElement("option");
-            o.value = it.name_en || it.name_ar;
-            o.label = [it.name_ar && it.name_en ? it.name_ar : "", it.path].filter(Boolean).join(" · ");
+            o.value = it.label || it.name_en || it.name_ar;
+            o.label = it.path || "";
             list.appendChild(o);
           });
         })
@@ -1412,8 +1412,8 @@
     did.innerHTML = "";
     items.forEach(function (it) {
       var btn = document.createElement("button");
-      btn.type = "button"; btn.className = "btn ghost"; btn.setAttribute("data-place-pick", it.name_en || it.name_ar);
-      btn.textContent = (it.name_en || it.name_ar) + (it.path ? " · " + it.path : "");
+      btn.type = "button"; btn.className = "btn ghost"; btn.setAttribute("data-place-pick", it.label || it.name_en || it.name_ar);
+      btn.textContent = (it.label || it.name_en || it.name_ar) + (it.path ? " · " + it.path : "");
       did.appendChild(btn);
     });
     b.warn.hidden = false;

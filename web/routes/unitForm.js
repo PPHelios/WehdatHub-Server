@@ -172,7 +172,7 @@ function register(web, { pool, page, assets }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, areas, extraValues: newPlace(req.body), ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.flatMap((p) => [p.name_en, p.name_ar]).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
+        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, areas, extraValues: newPlace(req.body), ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.map((p) => (lang === "en" ? p.name_en || p.name_ar : p.name_ar || p.name_en)).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
       },
       status
     );
