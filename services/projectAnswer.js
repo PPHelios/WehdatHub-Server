@@ -170,4 +170,24 @@ async function offersFor(pool, agencyId, filters = {}, { limit = 15 } = {}) {
   return { total: hits.length, hits: hits.slice(0, limit), scanned: projects.length };
 }
 
-module.exports = { offersFor, clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
+/**
+ * Ask's result list: the offers that fit, grouped by project (every project once, its fitting offers inside), paged.
+ * sort: "best" (most fitting offers first) | "cheap" (lowest price first). → { projects, total_projects, total_offers, page, pages }
+ */
+async function projectResults(pool, agencyId, filters = {}, { page = 1, perPage = 10, sort = "best" } = {}) {
+  const { hits } = await offersFor(pool, agencyId, filters, { limit: 100000 });
+  const byProject = new Map();
+  for (const h of hits) {
+    const key = h.project.name;
+    if (!byProject.has(key)) byProject.set(key, { project: h.project, offers: [] });
+    byProject.get(key).offers.push(h.unit);
+  }
+  const groups = [...byProject.values()];
+  for (const g of groups) g.offers.sort((a, b) => a.price - b.price);
+  groups.sort(sort === "cheap" ? (a, b) => a.offers[0].price - b.offers[0].price : (a, b) => b.offers.length - a.offers.length || a.offers[0].price - b.offers[0].price);
+  const pages = Math.max(1, Math.ceil(groups.length / perPage));
+  const at = Math.min(Math.max(1, Number(page) || 1), pages);
+  return { projects: groups.slice((at - 1) * perPage, at * perPage), total_projects: groups.length, total_offers: hits.length, page: at, pages };
+}
+
+module.exports = { projectResults, offersFor, clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
