@@ -905,18 +905,18 @@
   var unitFormEl = document.getElementById("unit-form");
   if (unitFormEl && unitFormEl.querySelector("[data-auto-review]")) {
     gateSave(unitFormEl);
-    // The warnings tick survives a reload of the review when the warnings are the same; a changed form needs a new look.
-    var warnSig = function (form) { return Array.prototype.map.call(form.querySelectorAll("[data-warning]"), function (w) { return w.getAttribute("data-warning"); }).sort().join(","); };
+    // The warnings tick survives a reload of the review when there is no new warning; a changed form needs a new look.
+    var warnList = function (form) { return Array.prototype.map.call(form.querySelectorAll("[data-warning]"), function (w) { return w.getAttribute("data-warning"); }); };
     document.addEventListener("htmx:beforeSwap", function (e) {
       if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) {
         var a0 = unitFormEl.querySelector("[data-warn-ack]");
-        unitFormEl._ackSig = a0 && a0.checked ? warnSig(unitFormEl) : null;
+        unitFormEl._ackSig = a0 && a0.checked ? warnList(unitFormEl) : null;
       }
     });
     document.addEventListener("htmx:afterSwap", function (e) {
       if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) {
         var a1 = unitFormEl.querySelector("[data-warn-ack]");
-        if (unitFormEl._ackSig && a1 && warnSig(unitFormEl) === unitFormEl._ackSig) a1.checked = true;
+        if (unitFormEl._ackSig && a1 && warnList(unitFormEl).every(function (f) { return unitFormEl._ackSig.indexOf(f) >= 0; })) a1.checked = true; // only warnings already seen: the tick stays
         unitFormEl._ackSig = null;
         unitFormEl._stale = false;
         gateSave(unitFormEl);
@@ -1006,7 +1006,7 @@
     stepErr.className = "notice bad card step-err"; stepErr.setAttribute("role", "alert"); stepErr.hidden = true;
     form.insertBefore(bar, form.firstChild.nextSibling);
     form.insertBefore(stepErr, bar.nextSibling); // the message sits at the top, under the step bar, where it is seen
-    var showStepErr = function () { stepErr.hidden = false; try { stepErr.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (x) { window.scrollTo(0, 0); } };
+    var showStepErr = function () { stepErr.hidden = false; try { stepErr.scrollIntoView({ block: "center" }); } catch (x) { window.scrollTo(0, 0); } };
     form.appendChild(nav);
     var checkUrl = form.getAttribute("data-check");
     var at = 1;
@@ -1086,7 +1086,7 @@
           stepErr.textContent = shown.map(function (x) { return x.label; }).join(" · ");
           showStepErr();
           var first = form.querySelector('[data-step="' + here + '"] [name="' + shown[0].field + '"]');
-          if (first) first.focus();
+          if (first) first.focus({ preventScroll: true }); // the message at the top stays in view
         })
         .catch(function () { busy(false); show(here + 1); });
     });

@@ -105,7 +105,7 @@ test("up to 60 photos can be picked and the first 15 are kept; the rest are dimm
   await ctx.close();
 });
 
-test("Save stays off until the warnings box is ticked, and the tick survives a change that keeps the same warnings", async () => {
+test("Save stays off until the warnings box is ticked, and the tick survives a change that adds no new warning", async () => {
   const { ctx, pg } = await openEdit();
   await pg.waitForSelector("[data-review]");
   const save = pg.locator("[data-save-row] button[type=submit]");
