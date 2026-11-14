@@ -1292,6 +1292,7 @@
     },
     "lib/placeNames.js": {
       "noteUnknown": ["pool", "name", "params"],
+      "addDetails": ["pool", "name", "params"],
       "widenSearchTerms": ["pool", "terms"],
       "resetCache": [],
       "approved": ["pool"]

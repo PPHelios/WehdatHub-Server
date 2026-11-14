@@ -1320,7 +1320,8 @@ CREATE TABLE IF NOT EXISTS public.place_names (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   decided_at timestamp with time zone,
   place_id uuid,
-  reject_reason text
+  reject_reason text,
+  pin_link text
 );
 
 CREATE TABLE IF NOT EXISTS public.import_rows (
@@ -1520,7 +1521,11 @@ CREATE TABLE IF NOT EXISTS public.map_places (
   approved boolean DEFAULT false NOT NULL,
   pin_checked_at timestamp with time zone,
   area_id uuid,
-  subzone_id uuid
+  subzone_id uuid,
+  google_place_id text,
+  project_info_en text,
+  project_info_ar text,
+  project_info_source text
 );
 
 CREATE TABLE IF NOT EXISTS public.global_projects (
@@ -1561,7 +1566,11 @@ CREATE TABLE IF NOT EXISTS public.areas (
   source text DEFAULT 'manual'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  reject_reason text
+  reject_reason text,
+  place_type text,
+  governorate text,
+  disambiguation_note text,
+  google_place_id text
 );
 
 CREATE TABLE IF NOT EXISTS public.place_proposals (
@@ -1614,6 +1623,57 @@ CREATE TABLE IF NOT EXISTS public.log_daily_summary (
   ms_sum bigint DEFAULT 0 NOT NULL,
   ms_avg integer,
   ms_max integer
+);
+
+CREATE TABLE IF NOT EXISTS public.areas_backup_111 (
+  id uuid,
+  parent_id uuid,
+  name_key text,
+  name_en text,
+  name_ar text,
+  aliases text[],
+  lat double precision,
+  lng double precision,
+  status text,
+  source text,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone,
+  reject_reason text,
+  place_type text,
+  governorate text,
+  disambiguation_note text,
+  google_place_id text
+);
+
+CREATE TABLE IF NOT EXISTS public.map_places_backup_111 (
+  id uuid,
+  name_key text,
+  name_en text,
+  name_ar text,
+  developer text,
+  district text,
+  lat double precision,
+  lng double precision,
+  aliases text[],
+  verified boolean,
+  source text,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone,
+  approved boolean,
+  pin_checked_at timestamp with time zone,
+  area_id uuid,
+  subzone_id uuid,
+  google_place_id text,
+  project_info_en text,
+  project_info_ar text,
+  project_info_source text
+);
+
+CREATE TABLE IF NOT EXISTS public.listings_location_backup_111 (
+  id uuid,
+  area_id uuid,
+  subzone_id uuid,
+  place_id uuid
 );
 
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
@@ -1741,6 +1801,7 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((w
 ALTER TABLE areas ADD CONSTRAINT areas_check CHECK (((name_en IS NOT NULL) OR (name_ar IS NOT NULL)));
 ALTER TABLE areas ADD CONSTRAINT areas_lat_check CHECK (((lat IS NULL) OR ((lat >= (21)::double precision) AND (lat <= (32)::double precision))));
 ALTER TABLE areas ADD CONSTRAINT areas_lng_check CHECK (((lng IS NULL) OR ((lng >= (24)::double precision) AND (lng <= (37)::double precision))));
+ALTER TABLE areas ADD CONSTRAINT areas_place_type_check CHECK (((place_type IS NULL) OR (place_type = ANY (ARRAY['city_or_district'::text, 'sub_area_or_sector'::text, 'neighborhood_or_zone'::text, 'road_or_corridor'::text]))));
 ALTER TABLE areas ADD CONSTRAINT areas_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text, 'broker'::text])));
 ALTER TABLE areas ADD CONSTRAINT areas_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'telegram'::text, 'whatsapp'::text])));

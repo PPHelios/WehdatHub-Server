@@ -696,3 +696,11 @@ main:has(.searchbox.float) { padding-block-end: 112px; }
   main { padding-block-start: 16px; }
   .card { padding: 20px; }
 }
+/* Place box: one line for a known place; warning and add-new part only when needed */
+.place { grid-column: 1 / -1; display: grid; gap: 8px; }
+.place-line { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--soft); }
+.place-warn { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--brand); display: grid; gap: 8px; }
+.place-warn p { margin: 0; }
+.place-warn .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.place-new { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line, #ddd); border-radius: 12px; }
+.place [hidden] { display: none !important; }
