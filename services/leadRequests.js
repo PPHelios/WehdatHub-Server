@@ -71,7 +71,7 @@ async function saveRequest(pool, actor, leadKey, rawFilters, { requestId = null,
         found.ids
       ]);
     } else {
-      const { rows: n } = await client.query("SELECT count(*)::int AS n FROM saved_searches WHERE agency_id = $1 AND lead_id = $2", [actor.agency_id, lead.id]);
+      const { rows: n } = await client.query("SELECT count(*)::int AS n FROM saved_searches WHERE agency_id = $1 AND lead_id = $2 AND fulfilled_at IS NULL", [actor.agency_id, lead.id]);
       if (n[0].n >= MAX_REQUESTS) return { error: "too_many_requests" };
       // A broker holds at most 30 open client requests (tied to a lead or not).
       if ((await require("./savedSearches").alertingCount(client, { agency_id: actor.agency_id, id: owner })) >= require("./savedSearches").MAX_ALERTING) return { error: "too_many_requests_broker" };
@@ -149,6 +149,10 @@ async function sendToClient(pool, actor, leadKey, listing, { lang = "ar", now = 
   const { url } = await ShareLinks.createShareLink(pool, actor, listing, { channel: "whatsapp", lang: clientLang, leadId: lead.id, source: "lead", recipient: { phone: Phone.normalizePhone(lead.phone_e164), leadId: lead.id } });
   const text = `${T.formatClientListingText(listing, actor, clientLang)}\n\n🔗 ${clientLang === "en" ? "Photos and details" : "الصور والتفاصيل"}: ${url}`;
   const wa = Phone.waMeUrl(lead.phone_e164, text);
+  await pool.query(
+    "UPDATE saved_searches SET fulfilled_at = now(), alerts_enabled = false WHERE agency_id = $1 AND fulfilled_at IS NULL AND id IN (SELECT search_id FROM lead_matches WHERE agency_id = $1 AND lead_id = $2 AND listing_id = $3)",
+    [actor.agency_id, lead.id, listing.id]
+  );
   await pool.query("UPDATE lead_matches SET status = 'sent_to_client' WHERE agency_id = $1 AND lead_id = $2 AND listing_id = $3", [actor.agency_id, lead.id, listing.id]);
   const ev = await Leads.logMatchSent(pool, actor, lead.id, listing, { now });
   return { ok: true, url: wa, lead: ev.lead || lead };

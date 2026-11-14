@@ -596,6 +596,8 @@
       "loadAssets": []
     },
     "web/html.js": {
+      "sideMenu": ["broker", "tab", "lang", "params"],
+      "tabsFor": ["broker"],
       "SafeHtml": [],
       "html": ["strings", "values"],
       "raw": ["text"],
@@ -2660,6 +2662,16 @@
       "PRIVACY": "Object",
       "TERMS": "Object",
       "CONTACT": "String"
+    },
+    "services/clientRequests.js": {
+      "PAGE": "Number",
+      "list": ["pool", "actor", "params"],
+      "add": ["pool", "actor", "params"],
+      "remove": ["pool", "actor", "id"],
+      "fulfil": ["pool", "actor", "id"]
+    },
+    "web/routes/requests.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

@@ -77,6 +77,7 @@
  "/plan": "api:/plan",
  "/portal-enquiries": "api:/portal-enquiries",
  "/report": "api:/report",
+ "/requests": "api:/client-requests",
  "/search": "api:/search",
  "/searches": "api:/saved-searches",
  "/searches/:id": "api:/saved-searches/:id",

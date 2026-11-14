@@ -9,7 +9,7 @@ const Q = require("../domain/searchQuery");
 const MAX_SAVED = 50;
 const MAX_ALERTING = 30; // open client requests (alerting searches, tied to a lead or not) per broker
 const UUID = /^[0-9a-f-]{36}$/;
-const mine = "agency_id = $1 AND broker_id = $2 AND lead_id IS NULL";
+const mine = "agency_id = $1 AND broker_id = $2 AND lead_id IS NULL AND fulfilled_at IS NULL";
 
 /** { ok, id } | { error: 'invalid' | 'limit' }. `token` is the filters token a search gives (domain/searchLink.js). */
 async function save(pool, broker, { token, name, alerts = false }) {

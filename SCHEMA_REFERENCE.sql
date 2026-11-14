@@ -645,7 +645,8 @@ CREATE TABLE IF NOT EXISTS public.saved_searches (
   last_run_at timestamp with time zone,
   lead_id uuid,
   alerts_enabled boolean DEFAULT false NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  fulfilled_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.web_imports (

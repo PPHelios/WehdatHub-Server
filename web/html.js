@@ -115,6 +115,7 @@ const NAV = [
   { key: "map", href: "/app/map", ar: "الخريطة", en: "Map", icon: "pin", group: "work" },
   { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
+  { key: "requests", href: "/app/requests", ar: "طلبات العملاء", en: "Client requests", icon: "star", group: "work" },
   { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", barBroker: true },
   { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
   { key: "links", href: "/app/links", ar: "الروابط المفتوحة", en: "Opened links", icon: "pin", group: "work" },
