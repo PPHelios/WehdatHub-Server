@@ -681,3 +681,15 @@ select.need { border: 2px solid var(--brand); }
 .searchbox.float { position: fixed; z-index: 28; inset-inline: 0; margin-inline: auto; width: min(720px, calc(100% - 24px)); inset-block-end: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom, 0px)); padding-block: 4px; border: 1px solid var(--line); border-radius: 30px; box-shadow: 0 4px 16px rgba(14, 21, 33, 0.14); }
 main:has(.searchbox.float) { padding-block-end: 112px; }
 @media (min-width: 1024px) { .searchbox.float { inset-block-end: 16px; inset-inline-start: 248px; } }
+
+/* Tablet and laptop: lists become cards side by side, forms use the width. */
+@media (min-width: 720px) {
+  ol.results, ul.results { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  [data-ask-results] { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+  [data-ask-results] > :not([data-ask-project]) { grid-column: 1 / -1; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+@media (min-width: 1024px) {
+  main { padding-block-start: 16px; }
+  .card { padding: 20px; }
+}
