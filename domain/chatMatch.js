@@ -91,7 +91,7 @@
     const knownNorms = new Map((codes || []).map((c) => [normCode(c), c]));
     const windowMs = Math.max(1, Number(windowMin) || 10) * 60 * 1000;
     const messages = P.parseWithAttachments(text).filter(P.notOlder(P.sinceMs(since)));
-    const stats = { messages: messages.length, photos: 0, skippedMedia: 0, omittedMedia: 0, duplicates: 0, truncated: 0 };
+    const stats = { messages: messages.length, dividers: 0, photos: 0, skippedMedia: 0, omittedMedia: 0, duplicates: 0, truncated: 0 };
     for (const line of String(text || "").split(/\r?\n/)) {
       const body = line.replace(/^.*?\s-\s[^:]{1,80}:\s?/, "").replace(/^\[[^\]]*\]\s*[^:]{1,80}:\s?/, "").trim();
       if (OMITTED.test(body)) stats.omittedMedia++;
@@ -102,6 +102,11 @@
     const items = [];
     for (const m of messages) {
       const t = P.atMs(m.at);
+      if (m.divider) {
+        stats.dividers++;
+        items.push({ kind: "D", m, t, sender: m.sender });
+        continue;
+      }
       const hasText = Boolean(m.text && m.text.trim());
       let anchor = null;
       if (hasText && MEDIA_LINE.test(m.text.trim())) {
@@ -134,10 +139,21 @@
     for (const seq of sequences.values()) {
       let burst = null;
       let prev = null;
+      let hardStart = "edge"; // a boundary is a divider (always hard) or the chat's edge (hard unless the order was forced)
       for (const it of seq) {
-        const gap = prev && prev.t !== null && it.t !== null ? Math.abs(it.t - prev.t) : 0;
+        if (it.kind === "D") {
+          if (burst) burst.hardEnd = "divider";
+          burst = null;
+          hardStart = "divider";
+          prev = it;
+          continue;
+        }
+        const gap = prev && prev.kind !== "D" && prev.t !== null && it.t !== null ? Math.abs(it.t - prev.t) : 0;
         if (!burst || gap > windowMs) {
           burst = [];
+          burst.hardStart = hardStart;
+          burst.hardEnd = null;
+          hardStart = null;
           bursts.push(burst);
         }
         const last = burst[burst.length - 1];
@@ -145,6 +161,7 @@
         else burst.push(it.kind === "P" ? { kind: "P", files: it.files.slice(), m: it.m, sender: it.sender } : it);
         prev = it;
       }
+      if (burst && !burst.hardEnd) burst.hardEnd = "edge"; // the end of the chat
     }
 
     // Which comes first, from the bursts that show it: starts with photos and ends with a description, or the opposite.
@@ -171,23 +188,38 @@
     const candidateOf = (a) => (a.post ? { post: a.m.i } : { codes: a.codes });
 
     for (const b of bursts) {
+      const anchors = b.filter((e) => e.kind === "A");
       b.forEach((e, k) => {
         if (e.kind !== "P") return;
         const prevA = k > 0 && b[k - 1].kind === "A" ? b[k - 1] : null;
         const nextA = k < b.length - 1 && b[k + 1].kind === "A" ? b[k + 1] : null;
         if (!prevA && !nextA) return toTray(e, "orphan", []);
         let target = null;
-        if (prevA && nextA) {
-          if (rule === "photos_first") target = nextA;
-          else if (rule === "text_first") target = prevA;
+        let how = "clear";
+        const hard = (side) => side === "divider" || (side === "edge" && !forced);
+        if (anchors.length === 1 && ((nextA && hard(b.hardStart) && k === 0) || (prevA && hard(b.hardEnd) && k === b.length - 1))) {
+          // One description between hard boundaries: its photos are its own, whatever the habit of the chat.
+          target = anchors[0];
+          how = "hard";
+        } else if (prevA && nextA) {
+          const up = P.cuesOf(nextA.m.text).up;
+          const down = P.cuesOf(prevA.m.text).down;
+          if (down && !up) { target = prevA; how = "cue"; }
+          else if (up && !down) { target = nextA; how = "cue"; }
+          else if (rule === "photos_first") { target = nextA; how = "pattern"; }
+          else if (rule === "text_first") { target = prevA; how = "pattern"; }
           else return toTray(e, "ambiguous", [candidateOf(prevA), candidateOf(nextA)]);
         } else {
           const only = prevA || nextA;
+          const cue = P.cuesOf(only.m.text);
+          const cued = (only === prevA && cue.down) || (only === nextA && cue.up);
           const against = (rule === "photos_first" && !nextA) || (rule === "text_first" && !prevA);
-          if (against && rule !== "unknown") return toTray(e, "against_pattern", [candidateOf(only)]);
+          if (against && rule !== "unknown" && !cued) return toTray(e, "against_pattern", [candidateOf(only)]);
           target = only;
+          if (cued) how = "cue";
         }
         if (!refOf(target)) return toTray(e, "multi_code", [candidateOf(target)]);
+        if (how === "pattern") target.verify = true;
         return addTo(target, e);
       });
     }
@@ -205,8 +237,9 @@
           continue;
         }
         const code = a.codes[0];
-        const u = units.get(code) || { code, files: [], messages: 0 };
+        const u = units.get(code) || { code, files: [], messages: 0, verify: false };
         u.messages++;
+        if (a.verify) u.verify = true;
         for (const f of withFiles(a)) if (!u.files.some((x) => x.name === f.name)) u.files.push(f);
         units.set(code, u);
       }
@@ -233,7 +266,7 @@
       const used = new Set(result.units.map((u) => u.code));
       result.noPhotos = (codes || []).filter((c) => !used.has(c) || !result.units.find((u) => u.code === c).files.length);
     } else {
-      const posts = byAnchor.map((a) => ({ i: a.m.i, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, P.MAX_PHOTOS) }));
+      const posts = byAnchor.map((a) => ({ i: a.m.i, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, P.MAX_PHOTOS), over: Math.max(0, withFiles(a).length - P.MAX_PHOTOS), verify: Boolean(a.verify) }));
       stats.truncated = Math.max(0, posts.length - MAX_POSTS);
       result.posts = posts.slice(0, MAX_POSTS);
     }

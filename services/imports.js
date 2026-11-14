@@ -21,6 +21,8 @@ const { normalizeCode } = require("../domain/searchQuery");
 const { normalizeSearch } = require("../domain/searchText");
 const Supabase = require("../lib/supabase");
 const PhotoHash = require("./photoHash");
+const ParseLog = require("./chatParseLog");
+const { MAX_PHOTOS } = require("../lib/images");
 const Vis = require("../lib/visibility");
 
 const MONEY = ["price_value", "down_payment_value", "remaining_amount", "installment_value"];
@@ -66,6 +68,7 @@ function describeChanges(listing, patch, lang = "ar") {
   return out;
 }
 
+const stripLine = (t) => String(t || "").replace(/^``\s*·\s*/, "");
 const same = (a, b) => Boolean(a) && Boolean(b) && normalizeSearch(a) === normalizeSearch(b);
 
 /**
@@ -197,7 +200,7 @@ async function forgetPrefs(pool, agencyId) {
  * @param {Object} sheet - lib/sheets.js readInventorySheet output
  * @returns {Promise<{ items, counts }>}
  */
-async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
+async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {}) {
   let remembered = null;
   if (sheet.tabs) {
     // Earlier choices are only offered on the review page (pre-selected), never applied without a tap.
@@ -259,12 +262,27 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
         items.push({ ...base, code: existing.code, kind: "forbidden", reasons: [lang === "en" ? "Another broker's unit" : "وحدة وسيط تاني"] });
         continue;
       }
+      const asNew = source === "chat" ? Rules.evaluate(composeRow(null, JSON.parse(JSON.stringify(p.draft)), lang), { lang }) : null;
       const ev = Rules.evaluate(composeRow(existing, dropEchoes(existing, p.draft), lang), { lang });
       if (!ev.ok) {
         items.push({ ...base, code: existing.code, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)), needs: needsOf(ev.blockers) });
         continue;
       }
       const patch = Edits.diffPatch(existing, ev.listing);
+      // A code written in a chat post that belongs to a different unit of the agency: the person chooses (merge or a new code).
+      if (asNew?.ok && !Dup.sameUnit(asNew.listing, existing)) {
+        items.push({
+          ...base,
+          code: existing.code,
+          kind: "review",
+          code_taken: true,
+          fields: asNew.listing,
+          warnings: asNew.warnings.map((w) => Rules.warningLine(w, lang)),
+          existing_line: stripLine(Describe.compactLine({ ...existing }, lang)),
+          merge: { listing_id: existing.id, version: existing.version, code: existing.code, patch, before: Object.fromEntries(Object.keys(patch).map((k) => [k, existing[k] === undefined ? null : existing[k]])), changes: describeChanges(existing, patch, lang) }
+        });
+        continue;
+      }
       if (p.status && p.status !== existing.status) patch.status = p.status;
       const before = Object.fromEntries(Object.keys(patch).map((k) => [k, existing[k] === undefined ? null : existing[k]]));
       const changes = describeChanges(existing, patch, lang);
@@ -291,7 +309,26 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
       // A likely duplicate: an active unit in the agency, or an earlier row of this sheet (never a block, only a warning).
       const dup = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
       if (dup) warnings.push(NOTE.dupDb(dup, lang));
-      else {
+      if (dup && source === "chat") {
+        const ex = await Store.findByCode(pool, broker.agency_id, dup);
+        const evMerge = ex && Authz.canEdit(broker, ex) ? Rules.evaluate(composeRow(ex, dropEchoes(ex, JSON.parse(JSON.stringify(p.draft))), lang), { lang }) : null;
+        if (evMerge?.ok) {
+          const patchM = Edits.diffPatch(ex, evMerge.listing);
+          const item = {
+            ...base,
+            kind: "review",
+            dup_code: ex.code,
+            fields: ev.listing,
+            warnings,
+            existing_line: stripLine(Describe.compactLine({ ...ex }, lang)),
+            merge: { listing_id: ex.id, version: ex.version, code: ex.code, patch: patchM, before: Object.fromEntries(Object.keys(patchM).map((k) => [k, ex[k] === undefined ? null : ex[k]])), changes: describeChanges(ex, patchM, lang) }
+          };
+          sheetNew.push(item);
+          items.push(item);
+          continue;
+        }
+      }
+      if (!dup) {
         const twin = sheetNew.find((o) => Dup.sameUnit(ev.listing, o.fields));
         if (twin) warnings.push(NOTE.dupRow(twin.row, lang));
       }
@@ -367,35 +404,100 @@ async function patchOne(pool, broker, code, patch, expectedVersion) {
  * Applies the selected rows of an Excel plan. Each row is its own transaction.
  * @returns {Promise<{ created, updated, conflicts, failed } | null>} null when the plan cannot be applied
  */
-async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
+async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolutions = {}, photoChoices = {} } = {}) {
   const imp = await claim(pool, broker, id, "excel");
   if (!imp) return null;
+  const started = Date.now();
   const wanted = new Set(rows.map(Number));
-  const result = { created: [], updated: [], conflicts: [], failed: [], undo: { made: [], changed: [] } };
+  const result = { created: [], updated: [], conflicts: [], failed: [], undo: { made: [], changed: [], photos: [] } };
+  const photoMap = imp.payload.photos || {};
+  const used = new Set();
+  const withPhotos = async (item, listing) => {
+    if (!listing) return;
+    const list = photoMap[String(item.row)] || [];
+    try {
+      const urls = await attachChatPhotos(pool, broker, listing, list, photoChoices[item.row] || {}, result);
+      urls.forEach((u) => used.add(u));
+      result.photos = (result.photos || 0) + urls.length;
+    } catch (err) {
+      result.failed.push(`${listing.code} (photos)`);
+      console.warn("Chat import photos failed:", err.message);
+    }
+  };
+  const merge = async (item) => {
+    const res = await patchOne(pool, broker, item.merge?.code || item.code, item.merge?.patch || item.patch, item.merge?.version ?? item.version);
+    if (res.outcome === "updated") {
+      result.updated.push(res.listing.code);
+      result.undo.changed.push({ code: res.listing.code, before: item.merge?.before || item.before || {}, version: res.listing.version });
+      await withPhotos(item, res.listing);
+    } else (res.outcome === "conflict" ? result.conflicts : result.failed).push(item.merge?.code || item.code);
+  };
+  const insert = async (item, code) => {
+    const res = await insertOne(pool, broker, item.fields, code, lang, `import:${id}`);
+    if (res.listing) {
+      result.created.push(res.listing.code);
+      result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
+      await withPhotos(item, res.listing);
+      return true;
+    }
+    if (res.limit) {
+      result.limit = res.limit;
+      return "limit";
+    }
+    if (res.owner_required || res.owner_name_required) result.failed.push(item.code || `row ${item.row}`);
+    else result.conflicts.push(res.code);
+    return false;
+  };
   for (const item of imp.payload.items) {
     if (!wanted.has(item.row)) continue;
     if (item.kind === "new") {
-      const res = await insertOne(pool, broker, item.fields, item.code, lang, `import:${id}`);
-      if (res.listing) {
-        result.created.push(res.listing.code);
-        result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
-      }
-      else if (res.limit) {
-        result.limit = res.limit;
-        break;
-      } else if (res.owner_required || res.owner_name_required) result.failed.push(item.code || `row ${item.row}`);
-      else result.conflicts.push(res.code);
+      if ((await insert(item, item.code)) === "limit") break;
     } else if (item.kind === "changed") {
-      const res = await patchOne(pool, broker, item.code, item.patch, item.version);
-      if (res.outcome === "updated") {
-        result.updated.push(item.code);
-        result.undo.changed.push({ code: item.code, before: item.before || {}, version: res.listing.version });
+      await merge(item);
+    } else if (item.kind === "review") {
+      const pick = resolutions[item.row] || {};
+      if (pick.mode === "merge" && item.merge) await merge(item);
+      else {
+        // A new unit: the code typed in the review, else the message's own code when it is free, else a generated one.
+        const typed = pick.code ? normalizeCode(pick.code) : null;
+        const code = typed || (item.code_taken ? null : item.code || null);
+        if ((await insert(item, code)) === "limit") break;
       }
-      else (res.outcome === "conflict" ? result.conflicts : result.failed).push(item.code);
     }
   }
+  const unused = Object.values(photoMap).flat().map((x) => x?.url).filter((u) => u && !used.has(u));
+  if (unused.length) await Supabase.deleteStorageFiles(unused).catch(() => {});
   await pool.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
+  if (imp.payload.source === "chat") ParseLog.applied(pool, broker, id, imp.payload, wanted, Date.now() - started);
   return result;
+}
+
+/**
+ * Photos of a chat post onto a unit. choice.keep: indexes of the uploaded photos to keep (default all), choice.drop: ids
+ * of the unit's existing photos to remove. The unit never goes over 15 photos; a picture the unit already has is skipped.
+ * What was added and removed is written to result.undo so the import can be undone.
+ */
+async function attachChatPhotos(pool, broker, listing, photos, choice, result) {
+  const dropIds = Array.isArray(choice.drop) ? choice.drop : [];
+  if (!photos.length && !dropIds.length) return [];
+  const { rows: have } = await pool.query("SELECT id, url, position, role, phash::text AS phash FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position, id", [listing.id, broker.agency_id]);
+  const dropped = have.filter((h) => dropIds.includes(h.id));
+  const left = have.filter((h) => !dropIds.includes(h.id));
+  const keep = Array.isArray(choice.keep) ? choice.keep : photos.map((_, i) => i);
+  const chosen = [];
+  for (const i of keep) {
+    const ph = photos[Number(i)];
+    if (!ph?.url || left.length + chosen.length >= MAX_PHOTOS) continue;
+    const dup = ph.hash && [...left.map((h) => h.phash), ...chosen.map((c) => c.hash)].some((x) => x && PhotoHash.distance(x, ph.hash) <= PhotoHash.MAX_DISTANCE);
+    if (!dup) chosen.push(ph);
+  }
+  if (dropped.length) await Store.removePhotos(pool, listing, dropped.map((d) => d.id));
+  if (chosen.length) {
+    await Store.addPhotos(pool, listing, chosen.map((c) => c.url));
+    await PhotoHash.saveHashes(pool, broker.agency_id, new Map(chosen.map((c) => [c.url, c.hash])));
+  }
+  result.undo.photos.push({ id: listing.id, code: listing.code, added: chosen.map((c) => c.url), dropped: dropped.map((d) => ({ url: d.url, position: d.position, role: d.role, phash: d.phash })) });
+  return chosen.map((c) => c.url);
 }
 
 /* Undo: only the agency's last applied Excel import. Units it added are archived (never deleted); units it changed get the
@@ -461,6 +563,17 @@ async function undoExcel(pool, broker, id) {
     if (res.outcome === "updated") out.restored.push(c.code);
     else out.skipped.push(c.code);
   }
+  // Photos the import added are taken off again; photos it removed from a merged unit are put back.
+  for (const ph of imp.result?.undo?.photos || []) {
+    try {
+      if (ph.added?.length) await pool.query("DELETE FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND url = ANY($3::text[])", [ph.id, broker.agency_id, ph.added]);
+      for (const d of ph.dropped || []) {
+        await pool.query("INSERT INTO listing_images (listing_id, agency_id, position, url, role, phash) VALUES ($1, $2, $3, $4, $5, $6::bit(64))", [ph.id, broker.agency_id, d.position, d.url, d.role || null, d.phash || null]);
+      }
+    } catch (err) {
+      out.skipped.push(`${ph.code} (photos)`);
+    }
+  }
   await pool.query("UPDATE web_imports SET result = jsonb_set(result, '{undone}', $2::jsonb) WHERE id = $1", [id, JSON.stringify({ at: new Date().toISOString(), by: broker.id, archived: out.archived, restored: out.restored, skipped: out.skipped })]);
   return out;
 }
@@ -496,7 +609,7 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
   // A type word the app did not know, fixed by hand in the review, is learned for the next upload.
   const newType = SheetImport.propertyType(target.cells.property_type);
   if (typeKey(oldType) && !SheetImport.propertyType(oldType) && newType) await savePrefs(pool, broker.agency_id, { types: { [typeKey(oldType)]: newType } });
-  const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang })).items;
+  const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang, source: imp.payload.source || null })).items;
   if (item.code && ["new", "changed"].includes(item.kind) && items.some((i) => i.row !== item.row && i.code === item.code && ["new", "changed"].includes(i.kind))) {
     Object.assign(item, { kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
   }
@@ -611,7 +724,7 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
   if (!touched) return { touched: 0 };
   if (action === "price_pick") await savePrefs(pool, broker.agency_id, { price_pick: value });
   if (action === "type_map") await savePrefs(pool, broker.agency_id, { types: { [typeKey(from)]: value } });
-  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang });
+  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang, source: imp.payload.source || null });
   await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, rows, defaults })]);
   return { touched };
 }

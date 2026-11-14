@@ -17,10 +17,17 @@ const IOS = /^\[(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(
 const ANDROID = /^(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}),?\s+(\d{1,2}:\d{2}(?:\s*[APap]\.?[Mm]\.?|\s*[صم])?)\s+-\s+([^:]{1,80}?):\s?([\s\S]*)$/;
 const HEAD = /^\[?\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4},?\s+\d{1,2}:\d{2}/;
 // A photo in an export with media: "IMG-20261024-WA0001.jpg (file attached)" (Android, Arabic "(ملف مرفق)") or
-// "<attached: 00000012-PHOTO-2026-10-24-10-15-32.jpg>" (iOS, Arabic "<مرفق: …>"). HEIC isn't readable here: skipped.
-const ATTACHED = /^(?:<(?:attached|مرفق)\s*:\s*([^>]+?\.(?:jpe?g|png|webp))\s*>|([^\s<>]+?\.(?:jpe?g|png|webp))\s*\((?:file attached|ملف مرفق)\))\s*$/i;
+// "<attached: 00000012-PHOTO-2026-10-24-10-15-32.jpg>" (iOS, Arabic "<مرفق: …>"). HEIC/HEIF are read too (the browser converts them to JPEG before upload).
+const ATTACHED = /^(?:<(?:attached|مرفق)\s*:\s*([^>]+?\.(?:jpe?g|png|webp|heic|heif))\s*>|([^\s<>]+?\.(?:jpe?g|png|webp|heic|heif))\s*\((?:file attached|ملف مرفق)\))\s*$/i;
 const PHOTO_WINDOW_MS = 10 * 60 * 1000;
 const MAX_PHOTOS = 15;
+// A line of only separator marks (---, ***, ➖➖➖, 🔻🔻🔻, ===): a guaranteed boundary between two units.
+const DIVIDER = /^(?:[-\u2013\u2014_=*~#\u2022\u00b7\u2550\u2500\u2501\u25ac\u2796\u{1F53B}\u{1F53A}\u{1F538}\u{1F539}\u25aa\u25ab\u25fe\u25fd\u27b0\u3030]\uFE0F?\s*){3,}$/u;
+// "photos above/below" written by the broker: arrows or words (Arabic, English).
+const CUE_UP = /(?:\u2b06|\u261d|\u{1F446})\uFE0F?|(?:\u0635\u0648\u0631\u0647?\u0629?|\u0627\u0644\u0635\u0648\u0631|photos?|pics?)\s*(?:\u0641\u0648\u0642|above)/iu;
+const CUE_DOWN = /(?:\u2b07|\u{1F447})\uFE0F?|(?:\u0635\u0648\u0631\u0647?\u0629?|\u0627\u0644\u0635\u0648\u0631|photos?|pics?)\s*(?:\u062a\u062d\u062a|below)/iu;
+/** Direction cues in a description: { up: its photos are above it, down: its photos are below it }. */
+const cuesOf = (text) => ({ up: CUE_UP.test(String(text || "")), down: CUE_DOWN.test(String(text || "")) });
 const SKIP = /^(<media omitted>|<الوسائط محذوفة>|image omitted|video omitted|sticker omitted|this message was deleted|تم حذف هذه الرسالة|null)$/i;
 
 /** "24/10/2026 10:15:32 PM" (day first, as Egyptian phones write it) → a comparable number of ms, or null. */
@@ -61,15 +68,25 @@ function parseWithAttachments(text) {
     if (m) {
       const first = m[4].trim();
       const file = first.match(ATTACHED);
-      out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: file ? "" : first, files: file ? [(file[1] || file[2]).trim()] : [] });
+      if (DIVIDER.test(first)) out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: "", files: [], divider: true });
+      else out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: file ? "" : first, files: file ? [(file[1] || file[2]).trim()] : [] });
     } else if (HEAD.test(line.trim())) {
       out.push({ sender: null, at: null, text: "", files: [], system: true });
     } else if (out.length && line.trim()) {
-      const last = out[out.length - 1];
+      let last = out[out.length - 1];
+      if (DIVIDER.test(line.trim())) {
+        // A separator line inside a message (a forward's own divider): a boundary, then the rest is a new part of that message.
+        if (!last.divider) out.push({ sender: last.sender, at: last.at, text: "", files: [], divider: true });
+        continue;
+      }
+      if (last.divider) {
+        out.push({ sender: last.sender, at: last.at, text: line.trim(), files: [] });
+        continue;
+      }
       last.text = last.text ? `${last.text}\n${line.trim()}` : line.trim();
     }
   }
-  return out.filter((m) => !m.system && (m.files.length || (m.text && !SKIP.test(m.text.trim())))).map((m, i) => ({ ...m, i }));
+  return out.filter((m) => !m.system && (m.divider || m.files.length || (m.text && !SKIP.test(m.text.trim())))).map((m, i) => ({ ...m, i }));
 }
 
 const PRICE = /(\d[\d.,]*\s*(?:مليون|ألف|الف|million|k\b|m\b|ج|جنيه|egp))|(?:السعر|سعر|price|مقدم|المقدم|down payment|اجمالي|إجمالي)/i;
@@ -84,5 +101,5 @@ function looksLikeListing(text) {
 }
 
 
-return { BIDI, latin, IOS, ANDROID, HEAD, SKIP, PHOTO_WINDOW_MS, MAX_PHOTOS, DEFAULT_DAYS, atMs, sinceMs, defaultSince, notOlder, parseWithAttachments, looksLikeListing };
+return { BIDI, latin, IOS, ANDROID, HEAD, SKIP, DIVIDER, cuesOf, PHOTO_WINDOW_MS, MAX_PHOTOS, DEFAULT_DAYS, atMs, sinceMs, defaultSince, notOlder, parseWithAttachments, looksLikeListing };
 });
