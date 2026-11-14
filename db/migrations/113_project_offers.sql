@@ -21,3 +21,4 @@ CREATE INDEX IF NOT EXISTS project_offers_project_idx ON project_offers (agency_
 CREATE INDEX IF NOT EXISTS project_offers_area_idx ON project_offers (agency_id, area);
 CREATE INDEX IF NOT EXISTS project_offers_price_idx ON project_offers (agency_id, price);
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS offers_hash text;
+ALTER TABLE project_offers ENABLE ROW LEVEL SECURITY;
