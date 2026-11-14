@@ -676,3 +676,8 @@ select.need { border: 2px solid var(--brand); }
 /* Sale / Rent badge on every unit row (search, units, map list): an inline pill, not the bell's red counter. */
 .uc-top .badge, .map-units .badge, .results .badge { position: static; display: inline-block; min-width: 0; padding: 0 10px; line-height: 22px; font-size: 0.78rem; background: var(--brand-soft); color: var(--brand-ink); }
 .badge.rent { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* The search box floats at the bottom of the Search page, like in the app: always in reach, above the bottom bar. */
+.searchbox.float { position: fixed; z-index: 28; inset-inline: 0; margin-inline: auto; width: min(720px, calc(100% - 24px)); inset-block-end: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom, 0px)); padding-block: 4px; border: 1px solid var(--line); border-radius: 30px; box-shadow: 0 4px 16px rgba(14, 21, 33, 0.14); }
+main:has(.searchbox.float) { padding-block-end: 112px; }
+@media (min-width: 1024px) { .searchbox.float { inset-block-end: 16px; inset-inline-start: 248px; } }

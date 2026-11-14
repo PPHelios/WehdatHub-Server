@@ -52,7 +52,7 @@ function statusSwitch({ token, st, counts, lang, sl = null }) {
 }
 
 function searchBox(q, lang, { voice = false } = {}) {
-  return html`<form method="get" action="/app/search" class="searchbox" role="search" data-search-form>
+  return html`<form method="get" action="/app/search" class="searchbox float" role="search" data-search-form>
   <button type="submit" class="search-icon" aria-label="${L(lang, "بحث", "Search")}">${icon("search", 20)}</button><input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
   <button type="button" class="mic" data-ai="voice_search" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
   <span class="spin" aria-hidden="true"></span>
