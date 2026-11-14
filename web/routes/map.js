@@ -109,8 +109,9 @@ function drawerBody(lang, units, place) {
   if (!units.length) return html`<p class="muted">${words(lang).none}</p>`;
   return html`<ul class="map-units">${units.map((u) => {
     const price = Describe.money(u.price_value, lang) || u.price_display || "—";
-    const facts = [Describe.typeLabel(u, lang), u.bedrooms != null ? `${u.bedrooms} ${L(lang, "غرف", "bd")}` : "", u.area_value ? `${Math.round(u.area_value)} m²` : "", u.listing_type === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")].filter(Boolean).join(" · ");
-    return html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}"><strong dir="ltr">${u.code}</strong> <span>${facts}</span><span class="map-price">${price}</span></a></li>`;
+    const facts = [Describe.typeLabel(u, lang), u.bedrooms != null ? `${u.bedrooms} ${L(lang, "غرف", "bd")}` : "", u.area_value ? `${Math.round(u.area_value)} m²` : ""].filter(Boolean).join(" · ");
+    const kind = u.listing_type === "rent" ? "rent" : "sale";
+    return html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}"><strong dir="ltr">${u.code}</strong> <span class="badge ${kind}" data-listing-type="${kind}">${kind === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")}</span> <span>${facts}</span><span class="map-price">${price}</span></a></li>`;
   })}</ul>${place ? "" : ""}`;
 }
 

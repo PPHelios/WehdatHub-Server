@@ -62,7 +62,7 @@ test("the queue shows a reported search once with Teach word, Re-check and Dismi
 test("the owner page has one search review link", async () => {
   const owner = await signIn(h, "admin");
   const text = (await owner.agent.get("/app/owner?lang=en")).text;
-  expect(text.match(/href="\/app\/owner\/searches"/g) || []).toHaveLength(1);
+  expect(text.replace(/<nav class="sidemenu"[\s\S]*?<\/nav>/, "").match(/href="\/app\/owner\/searches"/g) || []).toHaveLength(1);
 });
 
 test("private-data grants last 60 days", () => {

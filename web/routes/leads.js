@@ -627,7 +627,8 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
         not_undoable: L(lang, "ده مينفعش يتلغي.", "This can't be undone."),
         not_found: L(lang, "مش موجود.", "Not found."),
         request_empty: L(lang, "اختار فلتر واحد على الأقل (النوع، المكان أو السعر).", "Choose at least one filter (type, place or price)."),
-        too_many_requests: L(lang, `الحد الأقصى ${LeadRequests.MAX_REQUESTS} طلبات للعميل؛ امسح واحد الأول.`, `At most ${LeadRequests.MAX_REQUESTS} requests per client; remove one first.`)
+        too_many_requests: L(lang, `الحد الأقصى ${LeadRequests.MAX_REQUESTS} طلبات للعميل؛ امسح واحد الأول.`, `At most ${LeadRequests.MAX_REQUESTS} requests per client; remove one first.`),
+        too_many_requests_broker: L(lang, "وصلت للحد الأقصى: 30 طلب مفتوح. امسح طلب قديم الأول.", "You have 30 open requests, the maximum. Remove an old one first.")
       }[r.error] || r.error;
       return leadPage(req, res, fresh, { status: 422, notice: `⚠️ ${why}` });
     });

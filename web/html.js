@@ -74,6 +74,7 @@ ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread, tab }) : ""}
 <main id="main">${broker ? pageBar({ nav, lang, tab, path, crm }) : ""}${body}</main>
 ${broker ? footer(broker, lang) : ""}
 ${broker ? (crm ? crmTabBar(tab, lang) : tabBar(broker, tab, lang)) : ""}
+${broker ? sideMenu(broker, tab, lang, { crm }) : ""}
 <div class="toast" data-toast-box role="status" aria-live="polite" hidden></div>
 </body>
 </html>`;
@@ -114,7 +115,8 @@ const NAV = [
   { key: "map", href: "/app/map", ar: "الخريطة", en: "Map", icon: "pin", group: "work" },
   { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
-  { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", who: "manager" },
+  { key: "requests", href: "/app/requests", ar: "طلبات العملاء", en: "Client requests", icon: "star", group: "work" },
+  { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", barBroker: true },
   { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
   { key: "links", href: "/app/links", ar: "الروابط المفتوحة", en: "Opened links", icon: "pin", group: "work" },
   { key: "access", href: "/app/access-requests", ar: "طلبات البيانات الخاصة", en: "Private data requests", icon: "pin", group: "agency", who: "manager" },
@@ -157,7 +159,9 @@ function navFor(broker) {
   const Dash = require("../services/dashboards");
   if (require("../lib/authz").isCrmOwner(broker)) return NAV.filter((n) => CRM_NAV.has(n.key));
   if (require("../lib/authz").isDataEntry(broker)) return NAV.filter((n) => DATA_ENTRY_NAV.has(n.key));
-  return NAV.filter((n) => !n.who || (n.who === "manager" ? Dash.isManager(broker) : Dash.isOwner(broker)));
+  // What the bottom bar already shows is not repeated in More (a broker has Units on the bar; managers and team leads find it here).
+  const onBar = new Set(tabsFor(broker).map((t) => t.href));
+  return NAV.filter((n) => !n.who || (n.who === "manager" ? Dash.isManager(broker) : Dash.isOwner(broker))).filter((n) => !n.barBroker || !onBar.has(n.href));
 }
 
 // The bottom bar: five places. Brokers: Today · Search · + · Leads · Units; managers swap Units for Team.
@@ -191,12 +195,44 @@ function tabBar(broker, tab, lang) {
   const manager = require("../services/dashboards").isManager(broker);
   const { icon } = require("./icons");
   const dataEntry = require("../lib/authz").isDataEntry(broker);
-  const tabs = dataEntry ? DATA_ENTRY_BAR : TABS.filter((t) => (t.broker ? !manager : t.manager ? manager : true));
+  const tabs = tabsFor(broker);
   return html`<nav class="tabbar${dataEntry ? " de" : ""}" aria-label="${en ? "Main" : "القائمة الرئيسية"}">${tabs.map((t) =>
     t.fab
       ? html`<a class="fab" href="${t.href}" aria-label="${en ? t.en : t.ar}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon, 28)}</a>`
       : html`<a href="${t.href}" data-tab="${t.key}"${t.key === tab ? raw(' aria-current="page"') : ""}>${icon(t.icon)}<span>${en ? t.en : t.ar}</span></a>`
   )}</nav>`;
+}
+
+
+/** The bottom-bar places this role sees (the same roles as the app's tabs): team leads get Team instead of Units. */
+function tabsFor(broker) {
+  const Authz = require("../lib/authz");
+  if (Authz.isDataEntry(broker)) return DATA_ENTRY_BAR;
+  const manager = require("../services/dashboards").isManager(broker);
+  const lead = Authz.isTeamLead(broker);
+  return TABS.filter((t) => (t.key === "units" ? !manager && !lead : t.key === "team" ? manager || lead : true));
+}
+
+/**
+ * The laptop side menu: every place this role can open (its bottom-bar places, then the More pages), the same links the
+ * More page lists, so the side menu and the phone never disagree. Hidden under 1024px (the bottom bar is used there).
+ */
+function sideMenu(broker, tab, lang, { crm = false } = {}) {
+  const en = lang === "en";
+  const { icon } = require("./icons");
+  const bar = crm ? CRM_BAR : tabsFor(broker);
+  const shown = new Set(bar.map((t) => t.href));
+  const more = navFor(broker).filter((n) => !shown.has(n.href) && !n.desktopHidden);
+  const GROUPS = [["work", "الشغل", "Work"], ["agency", "الشركة", "Agency"], ["account", "حسابي", "Account"]];
+  const link = (n, current) => html`<a href="${n.href}"${current ? raw(' aria-current="page"') : ""}>${icon(n.icon, 20)}<span>${en ? n.en : n.ar}</span></a>`;
+  return html`<nav class="sidemenu" aria-label="${en ? "Menu" : "القائمة"}">
+  ${crm ? "" : html`<a class="side-add" href="${broker && require("../lib/authz").isDataEntry(broker) ? "/app/units/new" : "/app/add"}">${icon("plus", 20)}<span>${en ? "Add" : "إضافة"}</span></a>`}
+  ${bar.filter((t) => !t.fab).map((t) => link(t, t.key === tab))}
+  ${GROUPS.map(([g, ar, e]) => {
+    const items = more.filter((n) => n.group === g);
+    return items.length ? html`<div class="side-group">${en ? e : ar}</div>${items.map((n) => link(n, false))}` : "";
+  })}
+</nav>`;
 }
 
 // The CRM owner's own bottom bar: Home · Tracking · Board · Alerts · Settings.
@@ -268,4 +304,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, navFor, TABS, tabOf, HTMX_CONFIG };
+module.exports = { sideMenu, tabsFor, SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, navFor, TABS, tabOf, HTMX_CONFIG };

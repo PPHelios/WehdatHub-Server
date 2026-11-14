@@ -90,3 +90,24 @@ test("a refused app request leaves a Failures row tagged app, and app errors are
   const ev = await h.query("SELECT source, message FROM error_events WHERE source = 'app' ORDER BY id DESC LIMIT 1");
   expect(ev[0].message).toMatch(/boom in Lead screen/);
 });
+
+test("review of a new unit refuses a code that is already used (new_unit flag), as the website does at Next", async () => {
+  const made = await post("/units").field("fields", JSON.stringify({ ...FIELDS, code: "ZZ-CODE-1", force: "1" }));
+  expect(made.status).toBe(201);
+  const r = await post("/units/review").send({ fields: { ...FIELDS, code: "ZZ-CODE-1" }, photoCount: 0, new_unit: true });
+  expect(r.body.ok).toBe(false);
+  expect(r.body.blockers.some((b) => b.field === "code")).toBe(true);
+  const free = await post("/units/review").send({ fields: { ...FIELDS, code: "ZZ-CODE-2" }, photoCount: 0, new_unit: true });
+  expect(free.body.blockers.some((b) => b.field === "code")).toBe(false);
+});
+
+test("review: an unknown compound needs its area (blocker area_id); picking one clears it and the answer carries the place", async () => {
+  const unknown = await post("/units/review").send({ fields: { ...FIELDS, district: "", city: "", compound: "Brand New Heights 88", compound_new: true }, photoCount: 0 });
+  expect(unknown.body.blockers.some((b) => b.field === "area_id")).toBe(true);
+  const area = (await h.query("SELECT id FROM areas WHERE status = 'approved' AND parent_id IS NULL LIMIT 1"))[0];
+  if (area) {
+    const ok = await post("/units/review").send({ fields: { ...FIELDS, district: "", city: "", compound: "Brand New Heights 88", compound_new: true, area_id: area.id }, photoCount: 0 });
+    expect(ok.body.blockers.some((b) => b.field === "area_id")).toBe(false);
+    expect(ok.body.place.area_id).toBe(area.id);
+  }
+});

@@ -14,6 +14,8 @@ const Requests = require("../../services/leadRequests");
 const Sweep = require("../../services/matchSweep");
 const Search = require("../../services/search");
 const Store = require("../../lib/listingStore");
+const Saved = require("../../services/savedSearches");
+const SearchLink = require("../../domain/searchLink");
 
 jest.setTimeout(90000);
 
@@ -166,4 +168,23 @@ test("N3: a client quiet for 60 days gets the line in the alert; each user can s
   await h.insertListing({ code: "HP-Q3", compound: "Hyde Park", price_value: 8e6, area_value: 150 });
   await run();
   expect((await alerts()).pop().body).not.toMatch(/مكلمتوش/);
+});
+
+test("a client request that is not tied to a lead alerts once per new unit, and a broker holds at most 30", async () => {
+  const broker = await row("broker");
+  await h.insertListing({ code: "OLD-1", compound: "Hyde Park", price_value: 8e6, area_value: 150 });
+  const token = SearchLink.encodeFilters ? SearchLink.encodeFilters(HP) : null;
+  const out = await Saved.save(h.pool, broker, { token, name: "Hyde Park under 9M", alerts: true });
+  expect(out.ok).toBe(true);
+  // What already fits does not alert.
+  expect((await run()).alerts).toBe(0);
+  await h.insertListing({ code: "NEW-1", compound: "Hyde Park", price_value: 8.4e6, area_value: 160 });
+  const c = await run();
+  expect(c.alerts).toBe(1);
+  const got = await alerts();
+  expect(got[0].body).toContain("Hyde Park under 9M");
+  expect(await run()).toMatchObject({ matches: 0, alerts: 0 });
+  // The cap: 30 alerting requests per broker.
+  for (let i = 1; i < 30; i++) expect((await Saved.save(h.pool, broker, { token, name: `r${i}`, alerts: true })).ok).toBe(true);
+  expect((await Saved.save(h.pool, broker, { token, name: "one too many", alerts: true })).error).toBe("limit_alerts");
 });

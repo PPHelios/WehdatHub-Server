@@ -162,3 +162,30 @@ test("edit: check_only answers ok without saving; a stale version is refused bef
   expect(stale.status).toBe(409);
   expect(stale.text).toContain('id="unit-form"');
 });
+
+test("a compound the list does not know needs its area at Next; a compound the list knows brings its own", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  const check = async (extra) => {
+    let r = agent.post("/app/units/step-check").field("_csrf", csrf);
+    for (const [k, v] of Object.entries({ ...FIELDS, ...extra })) r = r.field(k, v);
+    return (await r).body.blockers.map((b) => b.field);
+  };
+  expect(await check({ compound: "Brand New Heights 77", compound_new: "1" })).toContain("area_id");
+  const area = (await h.query("SELECT id FROM areas WHERE status = 'approved' AND parent_id IS NULL LIMIT 1"))[0];
+  if (area) expect(await check({ compound: "Brand New Heights 77", compound_new: "1", area_id: area.id })).not.toContain("area_id");
+});
+
+test("nothing dropped: the add form keeps the paste box, fill from text, voice record, voice file upload and every field", async () => {
+  const { agent } = await signIn(h, "broker");
+  const page = (await agent.get("/app/units/new?lang=en")).text;
+  for (const marker of ['name="describe"', 'data-ai="unit_fill"', 'data-ai="voice_unit_add"', 'type="file" name="voice', 'name="photos"']) expect(page).toContain(marker);
+  for (const field of ["code", "listing_type", "property_type", "compound", "area_id", "subzone_id", "district", "city", "price_value", "currency", "area_value", "bedrooms", "bathrooms", "finishing", "owner_name", "owner_phone"]) {
+    expect(page).toContain(`name="${field}"`);
+  }
+  // Edit shares the same form: the same fields are there.
+  const code = (await h.query("SELECT code FROM listings LIMIT 1"))[0]?.code;
+  if (code) {
+    const edit = (await agent.get(`/app/units/${encodeURIComponent(code)}/edit?lang=en`)).text;
+    for (const field of ["listing_type", "property_type", "compound", "price_value", "area_value", "bedrooms"]) expect(edit).toContain(`name="${field}"`);
+  }
+});

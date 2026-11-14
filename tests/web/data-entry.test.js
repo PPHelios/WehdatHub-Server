@@ -48,7 +48,7 @@ test("data entry sees only its own places: no Today or Leads tab, the plus adds 
   expect(page).not.toContain('data-tab="leads"');
   expect(page).toContain('class="fab" href="/app/units/new"');
   const more = (await agent.get("/app/more")).text;
-  const moreList = more.replace(/<nav class="tabbar[\s\S]*?<\/nav>/, "");
+  const moreList = more.replace(/<nav class="tabbar[\s\S]*?<\/nav>/, "").replace(/<nav class="sidemenu[\s\S]*?<\/nav>/, "");
   expect(moreList).not.toContain('href="/app/units"');
   expect(moreList).not.toContain('href="/app/owners"');
   expect(more).not.toContain('href="/app/deals"');
@@ -97,4 +97,17 @@ test("a VIP owner is fully hidden from data entry: no list entry, no profile pag
   expect(edit.status).toBeGreaterThanOrEqual(400);
   const [row] = await h.query("SELECT name FROM unit_owners WHERE id = $1", [vip]);
   expect(row.name).toBe("Locked VIP");
+});
+
+test("the laptop side menu lists the role's own places: data entry has no Leads or Deals, a broker has no Team, a team lead gets Team instead of Units", async () => {
+  const Html = require("../../web/html");
+  const side = (role) => String(Html.sideMenu({ role, agency_id: "a" }, "home", "en"));
+  expect(side("data_entry")).not.toContain('href="/app/leads"');
+  expect(side("data_entry")).not.toContain('href="/app/deals"');
+  expect(side("data_entry")).toContain('href="/app/units"');
+  expect(side("broker")).not.toContain('href="/app/team"');
+  expect(side("broker")).toContain('href="/app/units"');
+  expect(side("team_lead")).toContain('href="/app/team"');
+  expect(side("manager")).toContain('href="/app/dashboard"');
+  expect(side("broker")).not.toContain('href="/app/dashboard"');
 });

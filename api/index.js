@@ -95,6 +95,7 @@ function mountApi(app, { pool }) {
   require("./settings").register(priv, { pool });
   require("./leases").register(priv, { pool });
   require("./savedSearches").register(priv, { pool });
+  require("./requests").register(priv, { pool });
   require("./capabilities").register(priv, { pool });
   require("./owners").register(priv, { pool });
   require("./access").register(priv, { pool });
@@ -108,6 +109,7 @@ function mountApi(app, { pool }) {
   require("./devices").register(priv, { pool });
   require("./clientError").register(priv, { pool });
   require("./notificationSettings").register(priv, { pool });
+  require("./notifications").register(priv, { pool });
   api.use(priv);
 
   api.use((_req, res) => res.status(404).json({ error: "not_found" }));

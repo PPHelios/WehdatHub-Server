@@ -391,6 +391,8 @@
       "removeLogo": ["pool", "broker"]
     },
     "services/savedSearches.js": {
+      "MAX_ALERTING": "Number",
+      "alertingCount": ["pool", "broker"],
       "MAX_SAVED": "Number",
       "save": ["pool", "broker", "params"],
       "list": ["pool", "broker"],
@@ -517,6 +519,7 @@
       "NOTE_MAX": "Number"
     },
     "services/projectAnswer.js": {
+      "projectResults": ["pool", "agencyId", "filters", "params"],
       "offersFor": ["pool", "agencyId", "filters", "params"],
       "clientText": ["hits", "lang"],
       "answer": ["pool", "agencyId", "text", "lang", "filters"],
@@ -593,6 +596,8 @@
       "loadAssets": []
     },
     "web/html.js": {
+      "sideMenu": ["broker", "tab", "lang", "params"],
+      "tabsFor": ["broker"],
       "SafeHtml": [],
       "html": ["strings", "values"],
       "raw": ["text"],
@@ -2678,6 +2683,16 @@
       "planChat": ["pool", "broker", "posts", "params"],
       "loadPlaces": ["pool"],
       "MAX_POSTS": "Number"
+    },
+    "services/clientRequests.js": {
+      "PAGE": "Number",
+      "list": ["pool", "actor", "params"],
+      "add": ["pool", "actor", "params"],
+      "remove": ["pool", "actor", "id"],
+      "fulfil": ["pool", "actor", "id"]
+    },
+    "web/routes/requests.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

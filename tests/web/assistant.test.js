@@ -197,3 +197,27 @@ describe("answer formatting", () => {
     expect(p).not.toMatch(/mention the date of its data block/);
   });
 });
+
+test("website: grouped results by project with chips, sort and pages; 'more than 120' is a minimum", async () => {
+  const { admin } = await seed();
+  fakeModel();
+  const notes = (a, p) => `شقة ${a} م² بسعر ${p} مقدم 10% قسط 8 سنين`;
+  for (let i = 1; i <= 12; i++) {
+    await Catalogue.saveProject(h.pool, admin, { name: `Obour P${i}`, city: "العبور", notes: i === 1 ? "شقة 110 م² بسعر 2,900,000 مقدم 10%" : notes(130 + i, 3000000 + i * 1000) });
+  }
+  const { agent, csrf } = await signIn(h, "admin");
+  const q = "شقة في العبور مساحة أكتر من 120م";
+  const page = await agent.post("/app/ask").type("form").send({ _csrf: csrf, q });
+  expect(page.status).toBe(200);
+  expect(page.text).toContain("data-ask-results");
+  expect(page.text).toContain('data-chip="area"');
+  expect(page.text).not.toContain("Obour P1<"); // 110 m² is under the asked minimum
+  expect((page.text.match(/data-ask-project/g) || []).length).toBe(10);
+  const p2 = await agent.get("/app/ask/results").query({ q, page: 2 });
+  expect(p2.status).toBe(200);
+  expect((p2.text.match(/data-ask-project/g) || []).length).toBe(1);
+  // Removing the area chip brings the 110 m² offer back.
+  const noArea = await agent.get("/app/ask/results").query({ q, drop: "area", sort: "cheap" });
+  expect(noArea.text).not.toContain('data-chip="area"');
+  expect(noArea.text).toContain("Obour P1");
+});

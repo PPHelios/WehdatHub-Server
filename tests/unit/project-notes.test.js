@@ -28,9 +28,13 @@ describe("offers in project notes", () => {
     expect(PN.matchesPlace(JAZEEL, [])).toBe(true);
   });
 
-  test("apartment 110 m in Obour finds the 110 m offer", () => {
+  test("one area number is a minimum: 110 m or more in Obour finds the 110 m offer and the bigger ones", () => {
     const hits = PN.matchUnits([{ project: JAZEEL, units: PN.parseUnits(NOTES) }], { area_min: 110, area_max: null, locations: ["obour"] });
-    expect(hits.map((h) => h.unit.area)).toEqual([110]);
+    expect(hits.map((h) => h.unit.area)).toEqual([110, 153, 146]);
+    const exact = PN.matchUnits([{ project: JAZEEL, units: PN.parseUnits(NOTES) }], { area_min: 110, area_max: 110, locations: ["obour"] });
+    expect(exact.map((h) => h.unit.area)).toEqual([110]);
+    const more = PN.matchUnits([{ project: JAZEEL, units: PN.parseUnits(NOTES) }], { area_min: 120, area_max: null, locations: ["obour"] });
+    expect(more.map((h) => h.unit.area)).toEqual([153, 146]);
   });
 
   test("a budget is a price ceiling and an installment cap is checked against the monthly amount", () => {

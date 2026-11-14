@@ -645,7 +645,8 @@ CREATE TABLE IF NOT EXISTS public.saved_searches (
   last_run_at timestamp with time zone,
   lead_id uuid,
   alerts_enabled boolean DEFAULT false NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  fulfilled_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.web_imports (
@@ -790,7 +791,7 @@ CREATE TABLE IF NOT EXISTS public.lead_erasures (
 CREATE TABLE IF NOT EXISTS public.lead_matches (
   id bigint DEFAULT nextval('lead_matches_id_seq'::regclass) NOT NULL,
   agency_id uuid NOT NULL,
-  lead_id uuid NOT NULL,
+  lead_id uuid,
   search_id uuid NOT NULL,
   listing_id uuid NOT NULL,
   status text DEFAULT 'new'::text NOT NULL,

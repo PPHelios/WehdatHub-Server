@@ -30,6 +30,7 @@ function leadView(l) {
     phones: l.phones || [],
     kind: l.kind,
     stage: l.stage,
+    lang: l.lang === "en" || l.lang === "ar" ? l.lang : null,
     lostReason: l.lost_reason || null,
     source: l.source || null,
     notes: l.notes || null,
@@ -162,6 +163,18 @@ function register(api, { pool }) {
     if (r.error) return res.status(r.error === "not_found" ? 404 : r.error === "confirm" ? 422 : 403).json({ error: r.error });
     return res.json({ ok: true });
   });
+  // The client's message language ("ar" | "en" | null = the broker's), same rights as editing the lead.
+  api.post("/leads/:ref/lang", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const r = await Leads.setLang(pool, req.session.broker, lead.id, req.body?.lang, { version: req.body?.version ?? null });
+    if (r.error === "forbidden") return res.status(403).json({ error: "forbidden" });
+    if (r.error) return res.status(404).json({ error: "not_found" });
+    if (r.conflict) return res.status(409).json({ error: "conflict", lead: leadView(r.lead) });
+    return res.json({ lead: leadView(r.lead) });
+  });
+
   // The next message to the client, drafted from the lead's record; and "send to client": a share link with the unit, WhatsApp-ready.
   api.post("/leads/:ref/draft", async (req, res) => {
     if (!(await writeGate(req, res))) return;
