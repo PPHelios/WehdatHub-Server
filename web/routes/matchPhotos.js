@@ -19,6 +19,9 @@ const { normalizeImageBuffer, MAX_PHOTOS } = require("../../lib/images");
 const PhotoHash = require("../../services/photoHash");
 const Imports = require("../../services/imports");
 const Chat = require("../../domain/chatExport");
+const AiBlock = require("../../lib/aiBlock");
+const ChatPlan = require("../../services/chatPlan");
+const ChatLog = require("../../services/chatParseLog");
 const Session = require("../session");
 const { uploads } = require("../uploads");
 
@@ -26,7 +29,7 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const ONE_PHOTO = [{ name: "photo", maxCount: 1, accept: /^image\// }];
 // The browser shrinks every photo to about 1600 px before sending, so 8 MB is already generous.
 const uploadPhoto = uploads(ONE_PHOTO, { maxMb: 8 });
-for (const re of [/^\/import\/match\/unit\/[^/]+\/photo$/, /^\/import\/match\/[0-9a-f-]{36}\/photo\/\d+$/]) Session.allowMultipart(re);
+for (const re of [/^\/import\/match\/unit\/[^/]+\/photo$/, /^\/import\/match\/[0-9a-f-]{36}\/photo\/\d+$/, /^\/import\/match\/p\/[0-9a-f-]{36}\/photo\/\d+$/]) Session.allowMultipart(re);
 
 // Hundreds of photos a run: its own bucket (the generic upload limit is 30 per 10 minutes).
 const PHOTO_LIMIT = { limit: 3000, windowSec: 3600 };
@@ -148,6 +151,90 @@ function register(web, { pool }) {
       return res.json({ full: true });
     }
     return res.json({ ok: true, ...(twin >= 0 ? { twin: true } : {}), ...(same ? { same_as: same } : {}) });
+  });
+  // ---- The chat import plan: posts read by the parser (AI only where it is missing something), planned like Excel. ----
+
+  web.post("/import/match/plan", managersOnly, express.json({ limit: "1mb" }), async (req, res) => {
+    const { broker } = req.session;
+    const lang = langOf(req);
+    const t0 = Date.now();
+    const hit = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
+    if (!hit.allowed) return res.status(429).json({ error: "rate", retry_after: hit.retryAfterSec });
+    const sent = Array.isArray(req.body?.posts) ? req.body.posts : [];
+    const posts = sent
+      .slice(0, ChatPlan.MAX_POSTS)
+      .map((p) => ({ sender: String(p?.sender || "").slice(0, 80) || null, at: String(p?.at || "").slice(0, 40) || null, text: String(p?.text || "").slice(0, 4000) }))
+      .filter((p) => p.text.trim().length >= 10);
+    if (!posts.length) return res.status(422).json({ error: "no_posts" });
+    try {
+      const out = await ChatPlan.planChat(pool, broker, posts, { AI, ctx: { pool, broker, agency: req.session.agency, lang }, lang, filename: String(req.body?.filename || "").slice(0, 120) || null });
+      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, ai: out.ai, ai_blocked: out.aiBlocked, counts: out.counts } });
+      return res.json({ id: out.id, posts: out.posts, ai: out.ai, ...(out.aiBlocked ? { ai_blocked: out.aiBlocked, message: AiBlock.text(out.aiBlocked, lang) } : {}) });
+    } catch (err) {
+      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", status: "error", error_code: "chat_plan_failed", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, message: String(err.message || "").slice(0, 120) } });
+      return res.status(500).json({ error: "plan_failed", message: lang === "en" ? "Could not read the posts. Try again." : "مقدرناش نقرا البوستات. جرب تاني." });
+    }
+  });
+
+  // One photo onto row n of that plan (it goes on the unit when the row is applied; the review lets the person pick).
+  web.post("/import/match/p/:id/photo/:row", managersOnly, gate, uploadPhoto, async (req, res) => {
+    const { broker } = req.session;
+    const file = (req.files?.photo || [])[0];
+    const row = Number(req.params.row);
+    if (!file || !Number.isInteger(row) || row < 1) return res.status(400).json({ error: "no_photo" });
+    const imp = await Imports.loadImport(pool, broker, req.params.id);
+    const have = imp?.payload?.photos?.[String(row)] || [];
+    if (!imp || imp.kind !== "excel" || imp.payload?.source !== "chat" || imp.status !== "ready" || !(imp.payload.rows || []).some((r) => r.rowNumber === row)) return res.status(404).json({ missing: true });
+    if (have.length >= MAX_PHOTOS) return res.json({ full: true });
+    let jpeg;
+    try {
+      jpeg = await normalizeImageBuffer(file.buffer);
+    } catch {
+      return res.status(422).json({ error: "unreadable" });
+    }
+    const hash = await PhotoHash.hashImage(jpeg);
+    if (hash && have.some((o) => o.hash && PhotoHash.distance(o.hash, hash) <= PhotoHash.MAX_DISTANCE)) return res.json({ dup: true });
+    const url = await Supabase.uploadListingImage(broker.agency_id, `listings/${broker.agency_id}/imports/${imp.id}/${row}_${crypto.randomBytes(4).toString("hex")}.jpg`, jpeg);
+    if (!url) return res.status(502).json({ error: "storage" });
+    const same = hash ? (await PhotoHash.sameAs(pool, broker.agency_id, [hash])).get(hash) : null;
+    const photo = { url, hash, ...(same ? { same_as: same } : {}) };
+    const { rowCount } = await pool.query(
+      `UPDATE web_imports SET payload = jsonb_set(payload, ARRAY['photos', $2::text], COALESCE(payload #> ARRAY['photos', $2::text], '[]'::jsonb) || $3::jsonb, true)
+        WHERE id = $1 AND agency_id = $4 AND broker_id = $5 AND status = 'ready'
+          AND jsonb_array_length(COALESCE(payload #> ARRAY['photos', $2::text], '[]'::jsonb)) < $6`,
+      [imp.id, String(row), JSON.stringify([photo]), broker.agency_id, broker.id, MAX_PHOTOS]
+    );
+    if (!rowCount) {
+      Supabase.deleteStorageFiles([url]).catch(Swallow.logged(pool, "matchPhotos.cleanup"));
+      return res.json({ full: true });
+    }
+    return res.json({ ok: true, ...(same ? { same_as: same } : {}) });
+  });
+
+  // A unit's photos (to choose which to keep when more than 15 would be there), and removing some of them.
+  web.get("/import/match/unit/:code/photos", managersOnly, async (req, res) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, String(req.params.code || "").slice(0, 80));
+    if (!listing || !Authz.canEdit(broker, listing)) return res.status(404).json({ missing: true });
+    const { rows } = await pool.query("SELECT id, url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND url <> '' ORDER BY position, id", [listing.id, broker.agency_id]);
+    res.set("Cache-Control", "no-store");
+    return res.json({ photos: rows });
+  });
+
+  web.post("/import/match/unit/:code/photos/remove", managersOnly, express.json({ limit: "20kb" }), async (req, res) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, String(req.params.code || "").slice(0, 80));
+    if (!listing || !Authz.canEdit(broker, listing)) return res.status(404).json({ missing: true });
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter((x) => /^[0-9a-f-]{36}$/.test(String(x))).slice(0, 15);
+    const urls = await Store.removePhotos(pool, listing, ids);
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: "chat_import_step", metadata: { step: "remove_photos", count: urls.length } });
+    return res.json({ removed: urls.length });
+  });
+
+  // Steps timed and checked in the browser (read, match, shrink, upload): saved with their time and error.
+  web.post("/import/match/log", managersOnly, express.json({ limit: "20kb" }), async (req, res) => {
+    await ChatLog.steps(pool, req.session.broker, Array.isArray(req.body?.steps) ? req.body.steps : []);
+    return res.json({ ok: true });
   });
 }
 
