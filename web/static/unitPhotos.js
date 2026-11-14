@@ -14,7 +14,7 @@
     : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "بحمل الصور…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", up: "بحمل {p}%", wait: "مستني…", done: "✓", fail: "⚠ فشلت", again: "↻ جرب تاني", restored: "رجّعنا الصور اللي حملتها قبل كده.", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
   var fill = function (s, o) { return s.replace(/\{(\w+)\}/g, function (_, k) { return o[k]; }); };
   var EN = document.documentElement.lang === "en";
-  T.keepOn = EN ? "✓ Kept" : "✓ هتتحفظ"; T.keepOff = EN ? "Not kept" : "مش هتتحفظ";
+  T.keepOn = EN ? "✓ Kept" : "✓ هتتحفظ"; T.keepOff = EN ? "Not saved (after photo 15)" : "مش هتتحفظ (بعد صورة 15)";
   T.full = EN ? "{max} photos are kept already. Take one off first." : "الصور اللي هتتحفظ وصلت {max}. شيل واحدة الأول.";
   T.slow = EN ? "🐢 Slow connection: about {m} min left. Keep this page open." : "🐢 النت بطيء: باقي حوالي {m} دقيقة. سيب الصفحة مفتوحة.";
   T.slow0 = EN ? "🐢 Slow connection. Keep this page open until it finishes." : "🐢 النت بطيء. سيب الصفحة مفتوحة لحد ما يخلص.";
@@ -128,7 +128,20 @@
     if (st) st.textContent = stateText(it);
   }
 
+  // The first photos (up to the limit, less those already on the unit) are the ones saved; the rest only wait. The order
+  // decides it, so moving a photo up (drag or arrows) takes the place of one of the first 15 and pushes the last one out.
+  function applyKeep() {
+    var cap = Math.max(0, MAX - existing()), n = 0;
+    tray.items.forEach(function (it) {
+      var on = n < cap;
+      if (on) n++;
+      if (on && !it.keep) { it.keep = true; if (!it.key && it.state !== "failed" && it.state !== "local") it.state = "queued"; }
+      else if (!on && it.keep) { it.keep = false; if (it.state === "queued") it.state = "idle"; }
+    });
+  }
+
   function render() {
+    applyKeep();
     var list = tray.form.querySelector("[data-photo-preview]");
     var hint = tray.form.querySelector("[data-photo-preview-hint]");
     list.innerHTML = "";
@@ -152,15 +165,15 @@
       down.type = "button"; down.className = "secondary"; down.setAttribute("data-move", "down"); down.textContent = "↓";
       var del = document.createElement("button");
       del.type = "button"; del.className = "secondary"; del.setAttribute("data-delete", String(i)); del.textContent = T.del;
-      if (!it.keep || it.state === "failed") li.className = "skip";
-      var kb = document.createElement("button");
-      kb.type = "button"; kb.className = "secondary small"; kb.setAttribute("data-keep", String(i)); kb.textContent = it.keep ? T.keepOn : T.keepOff;
-      li.appendChild(img); li.appendChild(name); li.appendChild(st); li.appendChild(kb); if (it.state === "failed") { var rt = document.createElement("button"); rt.type = "button"; rt.className = "secondary small"; rt.setAttribute("data-retry", String(i)); rt.textContent = T.again; li.appendChild(rt); } li.appendChild(up); li.appendChild(down); li.appendChild(del);
+      li.className = !it.keep ? "skip" : it.state === "failed" ? "failed" : "";
+      li.appendChild(img); li.appendChild(name); li.appendChild(st); if (it.state === "failed") { var rt = document.createElement("button"); rt.type = "button"; rt.className = "secondary small"; rt.setAttribute("data-retry", String(i)); rt.textContent = T.again; li.appendChild(rt); } li.appendChild(up); li.appendChild(down); li.appendChild(del);
       list.appendChild(li);
     });
     list.hidden = !tray.items.length;
     if (hint) hint.hidden = tray.items.length < 2;
     sync();
+    // The review (and Save) must look at the photos as they are now.
+    tray.form.dispatchEvent(new CustomEvent("photos:changed"));
   }
 
   // Every photo that is going to be saved is reduced in the browser first, to what the server used to do: longest side
@@ -393,20 +406,6 @@
         render();
       });
       list.addEventListener("click", function (e) {
-        var kb = e.target.closest && e.target.closest("[data-keep]");
-        if (kb) {
-          var ki = Number(kb.getAttribute("data-keep")), kit = tray.items[ki];
-          if (!kit) return;
-          if (kit.keep) kit.keep = false;
-          else {
-            if (room() <= 0) { note(fill(T.full, { max: MAX }), true); return; }
-            kit.keep = true;
-            if (!kit.key && kit.state !== "failed") kit.state = "queued";
-          }
-          tray.live = true;
-          render();
-          return;
-        }
         var rb = e.target.closest && e.target.closest("[data-retry]");
         if (rb) {
           var ri = Number(rb.getAttribute("data-retry"));
@@ -473,7 +472,7 @@
     var lock = function (on) {
       Array.prototype.forEach.call(buttons, function (b) { b.disabled = on; });
       try { form.inert = on; } catch (x) { /* older browsers: the buttons are locked */ }
-      if (on) form.setAttribute("aria-busy", "true"); else form.removeAttribute("aria-busy");
+      if (on) form.setAttribute("aria-busy", "true"); else { form.removeAttribute("aria-busy"); if (window.whGateSave) window.whGateSave(form); } // Save opens only as the page's own check says (warnings tick)
     };
     var timers = [];
     var clearTimers = function () { timers.forEach(function (t) { clearTimeout(t); clearInterval(t); }); timers = []; };
@@ -540,7 +539,11 @@
       var newBanner = fresh.querySelector(":scope > .notice.bad");
       if (newBanner) form.insertBefore(document.importNode(newBanner, true), form.firstChild.nextSibling);
       var nr = fresh.querySelector("[data-auto-review]"), orv = form.querySelector("[data-auto-review]");
+      var ticked = form.querySelector("[data-warn-ack]");
+      ticked = Boolean(ticked && ticked.checked);
       if (nr && orv) orv.innerHTML = nr.innerHTML;
+      var again2 = form.querySelector("[data-warn-ack]");
+      if (ticked && again2) again2.checked = true; // the same form was refused for another reason: the tick stays
       var ns = fresh.querySelector("[data-save-row]"), os = form.querySelector("[data-save-row]");
       if (ns && os) os.innerHTML = ns.innerHTML;
       // Show every step, then let the page's own check decide whether Save is open (the warnings tick).
