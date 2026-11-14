@@ -3,6 +3,9 @@
 // routes/telegramIngress.js.
 "use strict";
 
+// `node server.js` reads .env. The tests require this file instead of running it, so they keep their own environment.
+if (require.main === module) require("dotenv").config();
+
 const express = require("express");
 const Credits = require("./services/credits");
 const crypto = require("crypto");

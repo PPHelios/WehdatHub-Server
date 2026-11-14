@@ -406,6 +406,7 @@
       setFormBusy(form, false);
       label.textContent = msg;
       for (var k = 0; k < controls.length; k++) controls[k].disabled = false;
+      if (form.id === "unit-form" && window.whGateSave) window.whGateSave(form); // Save opens only when the review and its warnings tick allow it, not just because the lock ended
     };
     var xhr = new XMLHttpRequest();
     xhr.open("POST", (form.getAttribute("action") || location.href), true);
@@ -436,6 +437,7 @@
           var ns = nf.querySelector("[data-save-row]"), os = form.querySelector("[data-save-row]");
           if (ns && os) os.innerHTML = ns.innerHTML;
           for (var j = 0; j < controls.length; j++) controls[j].disabled = false;
+          if (window.whGateSave) window.whGateSave(form);
           setFormBusy(form, false);
           form.dispatchEvent(new CustomEvent("stepgoto", { detail: 99 }));
           gateSave(form);
@@ -675,6 +677,8 @@
   function unlock() {
     var busy = document.querySelectorAll("button.busy, button[data-locked]");
     for (var i = 0; i < busy.length; i++) { busy[i].disabled = false; busy[i].classList.remove("busy"); busy[i].removeAttribute("data-locked"); }
+    var uf = document.getElementById("unit-form");
+    if (uf && window.whGateSave) window.whGateSave(uf); // the unit form's Save is re-decided by its gate, not reopened by the timer
   }
   document.addEventListener("submit", function (e) {
     var form = e.target;
@@ -904,19 +908,21 @@
     save.title = open ? "" : (state === "blocked" ? (EN ? "Fill in what is missing first" : "كمّل الناقص الأول") : (warns ? (EN ? "Tick that you checked the warnings" : "علّم إنك راجعت التنبيهات") : ""));
   }
   window.whGateSave = gateSave;
-  var unitFormEl = document.getElementById("unit-form");
-  if (unitFormEl && unitFormEl.querySelector("[data-auto-review]")) {
+  // Set up once per form element: a form that htmx swaps in (fill from text, voice) is a new element and needs its own.
+  function wireUnitReview(unitFormEl) {
+    if (!unitFormEl || unitFormEl._reviewWired || !unitFormEl.querySelector("[data-auto-review]")) return;
+    unitFormEl._reviewWired = true;
     gateSave(unitFormEl);
     // The warnings tick survives a reload of the review when there is no new warning; a changed form needs a new look.
     var warnList = function (form) { return Array.prototype.map.call(form.querySelectorAll("[data-warning]"), function (w) { return w.getAttribute("data-warning"); }); };
     document.addEventListener("htmx:beforeSwap", function (e) {
-      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) {
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review") && unitFormEl.contains(e.target)) {
         var a0 = unitFormEl.querySelector("[data-warn-ack]");
         unitFormEl._ackSig = a0 && a0.checked ? warnList(unitFormEl) : null;
       }
     });
     document.addEventListener("htmx:afterSwap", function (e) {
-      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review")) {
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review") && unitFormEl.contains(e.target)) {
         var a1 = unitFormEl.querySelector("[data-warn-ack]");
         if (unitFormEl._ackSig && a1 && warnList(unitFormEl).every(function (f) { return unitFormEl._ackSig.indexOf(f) >= 0; })) a1.checked = true; // only warnings already seen: the tick stays
         unitFormEl._ackSig = null;
@@ -941,7 +947,7 @@
     // If the review can't be loaded the server still checks everything at Save, so Save is not left locked.
     // If the review can't be loaded, Save stays closed and the page says so, with a button to check again.
     var reviewFailed = function (e) {
-      if (!(e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review"))) return;
+      if (!(e.target && e.target.hasAttribute && e.target.hasAttribute("data-auto-review") && unitFormEl.contains(e.target))) return;
       e.target.innerHTML = '<section class="card" data-review-failed><p class="notice bad" role="alert">' + (EN ? "Couldn't check the details. Save is off until it works." : "مقدرناش نراجع البيانات. الحفظ مقفول لحد ما تنجح.") + ' <button type="button" class="secondary small" data-review-retry>' + (EN ? "Check again" : "راجع تاني") + '</button></p></section>';
       unitFormEl._stale = false;
       gateSave(unitFormEl);
@@ -979,6 +985,11 @@
     unitFormEl.addEventListener("click", function (e) { var li = e.target.closest && e.target.closest("[data-blocker]"); if (li) jump(li); });
     unitFormEl.addEventListener("keydown", function (e) { if (e.key !== "Enter" && e.key !== " ") return; var li = e.target.closest && e.target.closest("[data-blocker]"); if (li) { e.preventDefault(); jump(li); } });
   }
+  wireUnitReview(document.getElementById("unit-form"));
+  document.addEventListener("htmx:load", function (e) {
+    var t = e.target;
+    wireUnitReview(t && t.id === "unit-form" ? t : t && t.querySelector && t.querySelector("#unit-form"));
+  });
   // Stepped forms (<form data-steps="A|B|C">): one step at a time with a progress bar, Back and Next. Next checks only
   // the fields of the step on screen. Without this script every step simply shows.
   function stepForm(form) {
@@ -1346,20 +1357,82 @@
         .catch(function () {});
     }, 200);
   });
-  // Area and sub-zone search: typing narrows the dropdown by either language or an alias (the select keeps its value).
+  // Area and sub-zone boxes work like the compound box: a native suggestion list (datalist) that the browser filters as
+  // you type. Its entries are the names and aliases of the areas (sub-zones: only those of the chosen area), and a name
+  // or alias picks its area. The hidden select keeps the id the form sends.
   var normalizeArea = function (t) {
     return String(t || "").toLowerCase().replace(/[\u064B-\u0652\u0640]/g, "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/\s+/g, " ").trim();
   };
+  var areaBoxOf = function (box) {
+    var sel = box.form && box.form.querySelector('select[name="' + box.getAttribute("data-area-input") + '"]');
+    var list = document.getElementById(box.getAttribute("list") || "");
+    return sel && list ? { sel: sel, list: list } : null;
+  };
+  var setAreaValue = function (sel, value) {
+    // Only a real change is written: even an unchanged write to a form control while typing makes Chrome stop
+    // refreshing the suggestion list under the box.
+    if (sel.value === value) return;
+    sel.value = value;
+    // Setting the value from code fires no change event, but the review and the Save check listen for one.
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  var areaTerms = function (opt) {
+    return (opt.getAttribute("data-search") || "").split(" | ").concat(opt.textContent).map(function (t) { return t.trim(); }).filter(Boolean);
+  };
+  var areaIdFor = function (box) {
+    var c = areaBoxOf(box);
+    var typed = normalizeArea(box.value);
+    if (!c || !typed) return "";
+    var hit = Array.prototype.filter.call(c.sel.options, function (opt) {
+      return opt.value && areaTerms(opt).some(function (t) { return normalizeArea(t) === typed; });
+    })[0];
+    return hit ? hit.value : "";
+  };
+  // The suggestion list: every name and alias of the areas; for a sub-zone, only the chosen area's sub-zones.
+  var fillAreaList = function (box) {
+    var c = areaBoxOf(box);
+    if (!c) return;
+    var areaSel = box.form.querySelector('select[name="area_id"]');
+    var under = c.sel.name === "subzone_id" && areaSel && areaSel.value ? areaSel.value : null;
+    var seen = {};
+    c.list.innerHTML = "";
+    Array.prototype.forEach.call(c.sel.options, function (opt) {
+      if (!opt.value || (under !== null && opt.getAttribute("data-parent") !== under)) return;
+      areaTerms(opt).forEach(function (term) {
+        if (seen[normalizeArea(term)]) return;
+        seen[normalizeArea(term)] = true;
+        var o = document.createElement("option");
+        o.value = term;
+        c.list.appendChild(o);
+      });
+    });
+  };
   document.addEventListener("input", function (e) {
     var box = e.target;
-    if (!box || !box.matches || !box.matches("[data-option-filter]")) return;
-    var sel = box.form && box.form.querySelector('select[name="' + box.getAttribute("data-option-filter") + '"]');
-    if (!sel) return;
-    var q = normalizeArea(box.value);
-    Array.prototype.forEach.call(sel.options, function (opt) {
-      if (!opt.value) { opt.hidden = false; return; }
-      opt.hidden = q !== "" && normalizeArea(opt.getAttribute("data-search") || opt.textContent).indexOf(q) === -1;
-    });
+    if (!box || !box.matches || !box.matches("[data-area-input]")) return;
+    var c = areaBoxOf(box);
+    if (!c) return;
+    var id = areaIdFor(box);
+    setAreaValue(c.sel, id);
+    box.setCustomValidity(!normalizeArea(box.value) || id ? "" : box.getAttribute("data-msg-pick") || "");
+  });
+  document.addEventListener("focusin", function (e) {
+    if (e.target && e.target.matches && e.target.matches("[data-area-input]")) fillAreaList(e.target);
+  });
+  // Changing the area refills the sub-zone list and drops a sub-zone that belongs to another area.
+  document.addEventListener("change", function (e) {
+    var areaSel = e.target;
+    if (!areaSel || areaSel.name !== "area_id" || !areaSel.form) return;
+    var subSel = areaSel.form.querySelector('select[name="subzone_id"]');
+    var subBox = areaSel.form.querySelector('input[data-area-input="subzone_id"]');
+    if (!subSel || !subBox) return;
+    fillAreaList(subBox);
+    var opt = subSel.selectedOptions[0];
+    if (subSel.value && areaSel.value && opt && opt.getAttribute("data-parent") !== areaSel.value) {
+      subBox.value = "";
+      subBox.setCustomValidity("");
+      setAreaValue(subSel, "");
+    }
   });
   // A compound brings its own area (filled and locked); a compound or area the list does not know makes the area
   // mandatory and ticks "not in the list" so the new place goes to the approval queue with its area.
@@ -1391,12 +1464,22 @@
     if (!form || !box) return null;
     return {
       box: box, areaSel: form.querySelector('select[name="area_id"]'), subSel: form.querySelector('select[name="subzone_id"]'),
+      areaInput: form.querySelector('input[data-area-input="area_id"]'),
       isNew: form.querySelector('input[name="compound_new"]'), panel: box.querySelector("[data-place-new]"),
       warn: box.querySelector("[data-place-warn]"), sum: box.querySelector("[data-place-summary]"), input: input
     };
   }
   function optText(sel) { return sel && sel.value && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : ""; }
+  // A value set from code (a known compound fills its area) also shows in the visible box next to the select.
+  function areaSync(sel) {
+    var box = sel && sel.form && sel.form.querySelector('input[data-area-input="' + sel.name + '"]');
+    if (!box) return;
+    box.value = optText(sel);
+    box.setCustomValidity("");
+  }
   function placeShowSummary(b) {
+    areaSync(b.areaSel);
+    areaSync(b.subSel);
     var t = [optText(b.areaSel), optText(b.subSel)].filter(Boolean).join(" › ");
     b.sum.querySelector("[data-place-path]").textContent = t;
     b.sum.hidden = !t;
@@ -1404,7 +1487,7 @@
   function placeOpenNew(b, open) {
     b.panel.hidden = !open;
     b.isNew.disabled = !open;
-    if (open) { b.warn.hidden = true; b.sum.hidden = true; b.areaSel.setAttribute("required", "required"); } else { b.areaSel.removeAttribute("required"); }
+    if (open) { b.warn.hidden = true; b.sum.hidden = true; b.areaInput.setAttribute("required", "required"); } else { b.areaInput.removeAttribute("required"); }
   }
   function placeArea(input) {
     var b = placeBits(input);

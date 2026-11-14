@@ -34,6 +34,12 @@ function searchText(a) {
   return [a.name_en, a.name_ar, ...(a.aliases || [])].filter(Boolean).join(" | ");
 }
 
+/** An area or sub-zone: one searchable box with suggestions, like the compound box. The hidden select keeps the id the form sends. */
+function areaBox(lang, { name, label, placeholder, selectedId, rows, selectInner }) {
+  const chosen = rows.find((r) => String(r.id) === String(selectedId));
+  return html`<label${req(label)}>${label}<input type="text" list="${name}-list" autocomplete="off" data-area-input="${name}" data-msg-pick="${L(lang, "اختار من القايمة.", "Pick one from the suggestions.")}" value="${chosen ? chosen.text : ""}" placeholder="${placeholder}"><select name="${name}" hidden>${selectInner}</select><datalist id="${name}-list"></datalist></label>`;
+}
+
 function placeBox(v, areas, lang) {
   const nameOf = (a) => a.name_en || a.name_ar;
   const byId = (id) => areas.find((a) => String(a.id) === String(id));
@@ -41,6 +47,9 @@ function placeBox(v, areas, lang) {
   const isNew = v.compound_new === "1";
   const hid = (on) => (on ? raw(" hidden") : "");
   const tops = areas.filter((a) => !a.parent_id);
+  const rowOf = (a) => ({ id: a.id, text: nameOf(a), search: searchText(a) });
+  const areaRows = tops.map(rowOf);
+  const subRows = areas.filter((a) => a.parent_id).map(rowOf);
   return html`<div class="place" data-place
     data-msg-warn="${L(lang, "«%s» مش في القائمة. اختار اللي قريب منه، أو ضيفه كجديد.", "“%s” is not in the list. Pick a close match, or add it as new.")}"
     data-msg-did="${L(lang, "قصدك:", "Did you mean:")}">
@@ -54,8 +63,16 @@ function placeBox(v, areas, lang) {
     <fieldset class="place-new" data-place-new${hid(!isNew)}>
       <legend>${L(lang, "كمبوند جديد", "New compound")}</legend>
       <p class="muted small">${L(lang, "بيتحفظ مع الوحدة وبيتراجع من الإدارة. الحقول اللي عليها * مطلوبة.", "It is saved with the unit and reviewed by the CRM owner. Fields with * are required.")}</p>
-      <label class="req">${L(lang, "المنطقة *", "Area *")}<input type="search" class="area-filter" data-option-filter="area_id" autocomplete="off" placeholder="${L(lang, "ابحث بالعربي أو الإنجليزي، مثال: القاهرة الجديدة / New Cairo", "Search in Arabic or English, e.g. القاهرة الجديدة / New Cairo")}"><select name="area_id"><option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}" data-search="${searchText(a)}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}</select></label>
-      <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<input type="search" class="area-filter" data-option-filter="subzone_id" autocomplete="off" placeholder="${L(lang, "ابحث بالعربي أو الإنجليزي، مثال: البنفسج / Al Banafseg", "Search in Arabic or English, e.g. البنفسج / Al Banafseg")}"><select name="subzone_id"><option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}" data-search="${searchText(a)}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}</select></label>
+      ${areaBox(lang, {
+        name: "area_id", label: L(lang, "المنطقة *", "Area *"), selectedId: v.area_id, rows: areaRows,
+        placeholder: L(lang, "ابحث بالعربي أو الإنجليزي، مثال: القاهرة الجديدة", "Search in Arabic or English, e.g. New Cairo"),
+        selectInner: html`<option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}" data-search="${searchText(a)}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}`
+      })}
+      ${areaBox(lang, {
+        name: "subzone_id", label: L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)"), selectedId: v.subzone_id, rows: subRows,
+        placeholder: L(lang, "ابحث بالعربي أو الإنجليزي، مثال: البنفسج", "Search in Arabic or English, e.g. Al Banafseg"),
+        selectInner: html`<option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}" data-parent="${t.id}" data-search="${searchText(a)}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}`
+      })}
       ${input("district", L(lang, "الحي", "District"), v.district)}
       ${input("city", L(lang, "المدينة", "City"), v.city)}
       <label>${L(lang, "الاسم بالعربي (اختياري)", "Arabic name (optional)")}<input name="compound_ar" value="${v.compound_ar || ""}" placeholder="${L(lang, "مثال: هايد بارك", "Arabic spelling, if you know it")}"></label>
@@ -190,7 +207,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <label class="check" data-photo-manual-box><input type="checkbox" name="photo_manual" value="on" data-photo-manual> ${L(lang, "رتّبتها بنفسي: من غير ترتيب بالذكاء الاصطناعي (بيوفر رصيد الذكاء الاصطناعي)", "I ordered them myself: no AI ordering (saves AI credits)")}</label>
   </section>
 
-  <div id="review" data-step="4" data-auto-review hx-post="/app/units/review" hx-trigger="review-run" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="this" hx-swap="innerHTML">${review || ""}</div>
+  <div id="review" data-step="4" data-auto-review hx-post="/app/units/review" hx-trigger="review-run" hx-sync="this:replace" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="this" hx-swap="innerHTML">${review || ""}</div>
   <div class="row" data-step="4" data-save-row>
     ${duplicate
       ? html`<button type="submit" name="force" value="1">✅ ${L(lang, "احفظ برضه", "Save anyway")}</button>`

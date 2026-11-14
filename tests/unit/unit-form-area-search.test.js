@@ -12,7 +12,9 @@ test("area and sub-zone options carry both names and aliases, and each box has a
   const html = String(unitForm({ lang: "en", csrf: "x", areas, values: {}, extraValues: { feature: [], features: [], compound_new: "1" }, mode: "new" }));
   expect(html).toContain('data-search="New Cairo | القاهرة الجديدة | التجمع"');
   expect(html).toContain('data-search="Al Banafseg | حي البنفسج | El Banafseg"');
-  expect(html).toContain('data-option-filter="area_id"');
-  expect(html).toContain('data-option-filter="subzone_id"');
+  expect(html).toContain('data-area-input="area_id"');
+  expect(html).toContain('data-area-input="subzone_id"');
   expect(html).toContain("e.g. New Cairo");
+  expect(html).toContain("e.g. Al Banafseg");
+  expect(html).not.toMatch(/placeholder="[^"]*[؀-ۿ]/); // an English page has no Arabic letters in a placeholder
 });
