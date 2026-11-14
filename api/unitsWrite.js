@@ -193,6 +193,11 @@ function register(api, { pool }) {
       const r = await require("../services/compoundResolve").resolve(pool, ev.listing);
       if (r.compound_state === "needs_fix") blockers.push({ field: "compound", label: L10n(lang, "الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\".", "This compound is not on the list. Pick it, or mark it as new.") });
     }
+    // A new unit (the app sends new_unit: true) whose typed code is already taken is refused at the first check, as on the website.
+    if ((req.body?.new_unit === true || req.body?.new_unit === "1") && String(fields.code || "").trim()) {
+      const taken = await Store.findByCode(pool, broker.agency_id, String(fields.code).trim());
+      if (taken) blockers.push({ field: "code", label: L10n(lang, `الكود ${taken.code} مستخدم لوحدة تانية. افتحها أو اكتب كود تاني.`, `The code ${taken.code} is used by another unit. Open it or type another code.`) });
+    }
     const ok = blockers.length === 0;
     const duplicate = ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
     return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing) });

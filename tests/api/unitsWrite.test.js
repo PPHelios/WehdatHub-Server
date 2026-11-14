@@ -90,3 +90,13 @@ test("a refused app request leaves a Failures row tagged app, and app errors are
   const ev = await h.query("SELECT source, message FROM error_events WHERE source = 'app' ORDER BY id DESC LIMIT 1");
   expect(ev[0].message).toMatch(/boom in Lead screen/);
 });
+
+test("review of a new unit refuses a code that is already used (new_unit flag), as the website does at Next", async () => {
+  const made = await post("/units").field("fields", JSON.stringify({ ...FIELDS, code: "ZZ-CODE-1", force: "1" }));
+  expect(made.status).toBe(201);
+  const r = await post("/units/review").send({ fields: { ...FIELDS, code: "ZZ-CODE-1" }, photoCount: 0, new_unit: true });
+  expect(r.body.ok).toBe(false);
+  expect(r.body.blockers.some((b) => b.field === "code")).toBe(true);
+  const free = await post("/units/review").send({ fields: { ...FIELDS, code: "ZZ-CODE-2" }, photoCount: 0, new_unit: true });
+  expect(free.body.blockers.some((b) => b.field === "code")).toBe(false);
+});
