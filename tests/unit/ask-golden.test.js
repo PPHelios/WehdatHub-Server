@@ -78,3 +78,15 @@ test("results are grouped by project, paged, and one area number is a minimum", 
   const n = (await q("SELECT count(*)::int AS n FROM project_offers WHERE agency_id = $1", [agency])).rows[0].n;
   expect(n).toBe(2);
 });
+
+test("size words and the sizes-not-recorded reply", () => {
+  const Q = require("../../domain/searchQuery");
+  const f = (t) => Q.fallbackParse(t).filters;
+  expect(f("شقه في العبور اكبر من ١٢٠م")).toMatchObject({ area_min: 120, place_terms: ["العبور"] });
+  expect(f("apartment in obour more than 120 m")).toMatchObject({ area_min: 120, price_min: null });
+  expect(f("شقة في العبور اصغر من 150 متر")).toMatchObject({ area_min: null, area_max: 150 });
+  expect(areas({ area_max: 120, locations: ["obour"] })).toEqual(["JAZEEL RESIDENCE:110"]);
+  const bare = { project: { name: "كابيتال", name_en: "Capital", district: "Obour", city: "Cairo" }, units: [{ area: null, price: 3000000 }] };
+  const msg = PA.__sizesNotRecorded([bare], { area_min: 120, locations: ["obour"] }, "ar");
+  expect(msg).toContain("مش متسجل مساحات");
+});

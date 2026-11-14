@@ -110,8 +110,19 @@ async function answer(pool, agencyId, text, lang = "ar", filters = {}) {
   const projects = await Offers.projectsWithOffers(pool, agencyId);
   const all =ProjectNotes.matchUnits(projects, filters);
   const hits = all.slice(0, MAX_OFFERS);
-  if (!hits.length) return null;
+  if (!hits.length) return sizesNotRecorded(projects, filters, lang);
   return notesReply(hits, lang, all.length);
+}
+
+/** No offer fits a size or bedroom request, but projects in the place asked have offers without sizes: say so, and name them. */
+function sizesNotRecorded(projects, f, lang = "ar") {
+  if (f.area_min == null && f.area_max == null) return null;
+  const places = [...(f.locations || []), ...(f.place_terms || [])].map((p) => normalizeSearch(p)).filter(Boolean);
+  if (!places.length) return null;
+  const names = projects.filter(({ project, units }) => ProjectNotes.matchesPlace(project, places) && units.some((u) => u.area == null)).map(({ project }) => (project.name_en ? `${project.name} (${project.name_en})` : project.name));
+  if (!names.length) return null;
+  const list = names.slice(0, 5).join(lang === "en" ? ", " : "، ");
+  return lang === "en" ? `Not in our data. We have ${list} there, but its unit sizes are not recorded.` : `مش موجود في بياناتنا. عندنا ${list} بس مش متسجل مساحات الشقق فيه.`;
 }
 
 /** The reply for offers taken from notes: one line each, with the newest update date of the projects shown. */
@@ -169,7 +180,7 @@ async function offersFor(pool, agencyId, filters = {}, { limit = 15 } = {}) {
 
 /**
  * Ask's result list: the offers that fit, grouped by project (every project once, its fitting offers inside), paged.
- * sort: "best" (most fitting offers first) | "cheap" (lowest price first). → { projects, total_projects, total_offers, page, pages }
+ * sort: "best" (most fitting offers first) | "cheap" / "pricey" (price, low or high first) | "small" / "big" (area, small or large first). → { projects, total_projects, total_offers, page, pages }
  */
 async function projectResults(pool, agencyId, filters = {}, { page = 1, perPage = 10, sort = "best" } = {}) {
   const { hits } = await offersFor(pool, agencyId, filters, { limit: 100000 });
@@ -180,11 +191,18 @@ async function projectResults(pool, agencyId, filters = {}, { page = 1, perPage 
     byProject.get(key).offers.push(h.unit);
   }
   const groups = [...byProject.values()];
-  for (const g of groups) g.offers.sort((a, b) => a.price - b.price);
-  groups.sort(sort === "cheap" ? (a, b) => a.offers[0].price - b.offers[0].price : (a, b) => b.offers.length - a.offers.length || a.offers[0].price - b.offers[0].price);
+  const area = (o) => (o.area == null ? 0 : o.area);
+  const order = {
+    cheap: [(a, b) => a.price - b.price, (a, b) => a.offers[0].price - b.offers[0].price],
+    pricey: [(a, b) => b.price - a.price, (a, b) => b.offers[0].price - a.offers[0].price],
+    small: [(a, b) => area(a) - area(b), (a, b) => area(a.offers[0]) - area(b.offers[0])],
+    big: [(a, b) => area(b) - area(a), (a, b) => area(b.offers[0]) - area(a.offers[0])]
+  }[sort];
+  for (const g of groups) g.offers.sort(order ? order[0] : (a, b) => a.price - b.price);
+  groups.sort(order ? order[1] : (a, b) => b.offers.length - a.offers.length || a.offers[0].price - b.offers[0].price);
   const pages = Math.max(1, Math.ceil(groups.length / perPage));
   const at = Math.min(Math.max(1, Number(page) || 1), pages);
   return { projects: groups.slice((at - 1) * perPage, at * perPage), total_projects: groups.length, total_offers: hits.length, page: at, pages };
 }
 
-module.exports = { projectResults, offersFor, clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
+module.exports = { __sizesNotRecorded: sizesNotRecorded, projectResults, offersFor, clientText, answer, nameWords, requestNumbers, matchProjects, noteLines, projectReply, notesReply };
