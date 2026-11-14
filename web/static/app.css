@@ -672,3 +672,7 @@ select.need { border: 2px solid var(--brand); }
   .sidemenu .side-add:hover { background: var(--brand); filter: brightness(0.95); }
   .side-group { margin-block: 12px 4px; padding-inline: 14px; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
 }
+
+/* Sale / Rent badge on every unit row (search, units, map list): an inline pill, not the bell's red counter. */
+.uc-top .badge, .map-units .badge, .results .badge { position: static; display: inline-block; min-width: 0; padding: 0 10px; line-height: 22px; font-size: 0.78rem; background: var(--brand-soft); color: var(--brand-ink); }
+.badge.rent { background: var(--accent-soft); color: var(--accent-ink); }
