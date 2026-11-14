@@ -13,7 +13,8 @@ let h;
 beforeEach(async () => {
   h = await createHarness();
   // The compounds these cards use are on the approved list (a compound outside it asks first).
-  await h.query("INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved) VALUES ('mivida', 'Mivida', 'ميفيدا', 30.0058, 31.5377, true)");
+  // (The reviewed location import, migration 111, may already hold it, so this is an upsert.)
+  await h.query("INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved) VALUES ('mivida', 'Mivida', 'ميفيدا', 30.0058, 31.5377, true) ON CONFLICT (name_key) DO UPDATE SET name_en = EXCLUDED.name_en, name_ar = EXCLUDED.name_ar, lat = EXCLUDED.lat, lng = EXCLUDED.lng, approved = true");
 });
 afterAll(closeHarness);
 
