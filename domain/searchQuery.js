@@ -639,7 +639,7 @@ function fallbackParse(text) {
   } else {
     // "m" / "م" alone is metres only from 30 up; "20m" / "20 م" is twenty million (a unit is never 20 m2).
     // "bigger than 120 m" / "smaller than 150 m" (اكبر من / اصغر من) are the area's own words, not place words.
-    c = consume(hay, / (?:اصغر|اقل) من (\d{2,4}) (?:متر|m2|sqm|meter|meters) /);
+    c = consume(hay, /(?<!مش )(?:اصغر|اقل) من (\d{2,4}) (?:متر|m2|sqm|meter|meters) /);
     if (c.m) {
       f.area_max = Number(c.m[1]);
       hay = c.hay;
