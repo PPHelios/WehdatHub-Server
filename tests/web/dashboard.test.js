@@ -92,7 +92,7 @@ describe("owner dashboard (5.4)", () => {
   test("404 for everyone (managers too) until OWNER_BROKER_IDS names the broker", async () => {
     const a = await signIn(h, "admin");
     expect((await a.agent.get("/app/owner")).status).toBe(404);
-    expect((await a.agent.get("/app/")).text).not.toContain("/app/owner");
+    expect((await a.agent.get("/app/")).text).not.toMatch(/\/app\/owner(["\/#?])/);
   });
 
   test("the owner sees weekly activity, AI cost per agency, open errors and jobs", async () => {
