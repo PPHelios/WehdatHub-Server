@@ -813,3 +813,14 @@ label:has(> [data-area-list]) { position: relative; }
 .acc-body { padding: 4px 16px 16px; }
 .acc-body > .card { margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }
 .acc-body > .card > h2:first-child { display: none; }
+
+/* The unit page's facts, owner, project and market lines as one tidy card. */
+.unit-card ul.facts { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; }
+.unit-card ul.facts li { padding: 10px 2px; border-bottom: 1px solid var(--line); line-height: 1.5; }
+.unit-card ul.facts li:last-child { border-bottom: 0; }
+.unit-card ul.facts li:first-child { font-size: 1.15rem; font-weight: 700; }
+.unit-card ul.facts li:nth-child(2) { font-size: 1.1rem; font-weight: 700; color: var(--brand-ink); }
+.unit-card > p, .unit-card > details[data-price-history] { margin: 8px 0; padding: 10px 14px; border-radius: var(--radius-btn); background: var(--soft); }
+.unit-card > p a { font-weight: 600; }
+.unit-card > details[data-price-history] > summary { cursor: pointer; font-weight: 600; }
+.unit-card > details:not([data-price-history]):not(.more-menu) { margin: 8px 0; padding: 10px 14px; border-radius: var(--radius-btn); background: var(--soft); }

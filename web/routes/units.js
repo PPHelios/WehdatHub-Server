@@ -572,7 +572,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     return page(req, res, {
       title: listing.code,
       nav: "units",
-      body: html`<article class="card" data-code="${listing.code}">
+      body: html`<article class="card unit-card" data-code="${listing.code}">
   ${req.query.saved ? html`<div class="notice card ok" data-saved>✅ ${L(lang, "تم الحفظ", "Saved")} <a class="btn secondary" href="/app/units/new">➕ ${L(lang, "ضيف وحدة تانية", "Add another unit")}</a></div>` : ""}
   <div class="unit-head"><h1 dir="ltr">${listing.code}</h1><span class="unit-pill">${status}</span>${conf ? html`<span class="muted">${conf[0]}</span>` : ""}${listing.is_private ? html`<span class="unit-pill">⭐ VIP</span>` : ""}</div>
   ${carousel(images.map((i) => i.url), lang)}
