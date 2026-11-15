@@ -134,12 +134,11 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
     return page(req, res, {
       title: owner.name || L(lang, "مالك", "Owner"),
       nav: "units",
-      body: html`<article class="card stack" data-owner-profile="${owner.id}">
+      body: html`<article class="card stack owner-card" data-owner-profile="${owner.id}">
   ${req.query.saved ? html`<p class="notice ok">✅ ${L(lang, "اتحفظ", "Saved")}</p>` : ""}
-  <h1>👤 ${owner.name || L(lang, "بدون اسم", "No name")} <span class="chip" dir="ltr">${owner.code || ""}</span></h1>
+  <div class="unit-head"><h1>👤 ${owner.name || L(lang, "بدون اسم", "No name")}</h1><span class="unit-pill" dir="ltr">${owner.code || ""}</span>${owner.is_private ? html`<span class="unit-pill">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</div>
   ${req.query.requested ? html`<p class="notice ok">📝 ${L(lang, "طلب تعديل الاسم اتبعت للموافقة", "Name change sent for approval")}</p>` : ""}
-  <p dir="ltr">${(owner.phones || []).map((p) => html`<a href="${Phone.telUrl(`+${p}`)}">${Phone.displayPhone(`+${p}`)}</a> `)}</p>
-  ${owner.is_private ? html`<p class="badge">⭐ ${L(lang, "VIP", "VIP")}</p>` : ""}
+  <div class="contact-chips">${(owner.phones || []).map((p) => html`<a class="btn secondary phone" href="${Phone.telUrl(`+${p}`)}" dir="ltr">📞 ${Phone.displayPhone(`+${p}`)}</a>`)}</div>
   ${owner.flag ? html`<p class="card notice warn">⚠️ ${owner.flag}</p>` : ""}
   ${owner.notes ? html`<p>${owner.notes}</p>` : ""}
   ${lead && !isDataEntry(broker) ? html`<p data-owner-lead>🔗 ${L(lang, "هو كمان عميل", "Also a lead")}: <a href="/app/leads/L-${String(lead.ref).padStart(4, "0")}">L-${String(lead.ref).padStart(4, "0")}</a></p>` : ""}
@@ -151,7 +150,7 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
     ${owner.units.map((u) => html`<label class="row"><input type="checkbox" name="units" value="${u.code}" checked> ${u.code}${u.is_private ? " 🔒" : ""}</label>`)}
     <button type="submit" class="secondary">${L(lang, "⭐ خليه VIP", "Make VIP")}</button></form>` : ""}
   ${owner.canEdit
-    ? html`<details><summary>${L(lang, "تعديل", "Edit")}</summary>
+    ? html`<details class="acc"><summary>${L(lang, "تعديل", "Edit")}</summary><div class="acc-body">
   <form method="post" action="/app/owners/${owner.id}" class="stack" data-owner-edit><input type="hidden" name="_csrf" value="${req.session.csrf}">
     <label>${L(lang, "الاسم", "Name")}<input name="name" maxlength="120" value="${owner.name || ""}"></label>
     <label>${L(lang, "الموبايل", "Phone")}<input name="phone" dir="ltr" inputmode="tel" value="${(owner.phones || [])[0] || ""}"></label>
@@ -160,11 +159,12 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
     <label>${L(lang, "ملاحظات (تفاصيل أطول)", "Notes (longer details)")}<textarea name="notes" rows="3" maxlength="2000">${owner.notes || ""}</textarea></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form>
-  ${manager ? html`<form method="post" action="/app/owners/${owner.id}/delete" data-confirm="${L(lang, "متأكد؟ الوحدات هتفضل من غير مالك.", "Sure? The units stay, without an owner.")}"><input type="hidden" name="_csrf" value="${req.session.csrf}"><button type="submit" class="secondary">🗑️ ${L(lang, "امسح", "Delete")}</button></form>` : ""}</details>`
+  ${manager ? html`<form method="post" action="/app/owners/${owner.id}/delete" data-confirm="${L(lang, "متأكد؟ الوحدات هتفضل من غير مالك.", "Sure? The units stay, without an owner.")}"><input type="hidden" name="_csrf" value="${req.session.csrf}"><button type="submit" class="secondary">🗑️ ${L(lang, "امسح", "Delete")}</button></form>` : ""}</div></details>`
     : ""}
-  <h2>${L(lang, "السجل", "History")}</h2>
+  <details class="acc"><summary>${L(lang, "السجل", "History")}</summary><div class="acc-body">
   ${handledBy.length ? html`<p data-owner-handled>🤝 ${L(lang, "اتعامل معاه", "Handled by")}: ${handledBy.join(" · ")}</p>` : ""}
   <ul data-owner-history>${events.map((e) => html`<li>${stamp(e.created_at, lang)} ${eventLine(e, lang)}${e.broker_name ? ` · ${e.broker_name}` : ""}</li>`)}</ul>
+  </div></details>
 </article>`
     });
   });
