@@ -864,3 +864,16 @@ label:has(> [data-area-list]) { position: relative; }
 .map-units a.has-thumb { grid-template-columns: 72px auto 1fr auto; }
 .map-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; background: var(--soft); }
 @media (max-width: 420px) { .map-units a.has-thumb { grid-template-columns: 72px 1fr; } .map-units a.has-thumb > :not(.map-thumb) { grid-column: 2; } }
+
+/* Carousel: smaller, arrows that follow the reading direction, and a thumbnail row. */
+.car { max-width: 720px; background: transparent; overflow: visible; }
+.car-track { border-radius: var(--radius); }
+.car-slide img { aspect-ratio: 16 / 10; max-height: 420px; }
+.car-btn { width: 34px; height: 34px; }
+.car-btn svg { width: 18px; height: 18px; }
+[dir="rtl"] .car-btn svg { scale: -1 1; }
+.car-thumbs { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.car-thumbs a { flex: none; border-radius: 8px; overflow: hidden; outline-offset: 2px; opacity: 0.75; }
+.car-thumbs a:hover, .car-thumbs a:focus-visible, .car:has(.car-slide:target) .car-thumbs a { transition: opacity 0.15s; }
+.car-thumbs a:hover, .car-thumbs a:focus-visible { opacity: 1; }
+.car-thumbs img { display: block; width: 64px; height: 48px; object-fit: cover; }
