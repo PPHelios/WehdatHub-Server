@@ -13,7 +13,7 @@ function register(web, { pool }) {
   // The unit box: places, then features, for what is typed.
   web.get("/places/box", async (req, res) => {
     res.set("Cache-Control", "no-store");
-    return res.json({ items: await Suggest.box(pool, req.query.q, langOf(req)) });
+    return res.json({ items: await Suggest.box(pool, req.query.q, langOf(req), { areasOnly: req.query.scope === "areas" }) });
   });
   // A pasted message → the place and features it names (no AI, no credits).
   web.post("/places/box/resolve", async (req, res) => {

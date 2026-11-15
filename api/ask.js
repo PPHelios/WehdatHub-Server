@@ -3,8 +3,9 @@
 "use strict";
 
 const Assistant = require("../services/assistant");
-const ProjectAnswer = require("../services/projectAnswer");
-const Q = require("../domain/searchQuery");
+const ProjectSearch = require("../services/projectSearch");
+const AnswerLine = require("../domain/projectAnswerLine");
+const AI = require("../lib/ai");
 const AiBlock = require("../lib/aiBlock");
 const RateLimit = require("../lib/rateLimit");
 const { isAgencyOwner } = require("../lib/authz");
@@ -17,45 +18,48 @@ function register(api, { pool }) {
     if (!question) return res.status(400).json({ error: "empty" });
     const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
     if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
-    const out = await Assistant.ask(pool, broker, question, { channel: "web" });
+    // The AI answers first; the line written from the results by code is the second opinion (kept for the comparison) and, with the AI off or
+    // out of credit, the answer itself (source: "local").
+    const data = await ProjectSearch.fromQuery(pool, broker, { q: question }, { AI }).catch(() => null);
+    const out = await Assistant.ask(pool, broker, question, { channel: "web", results: data });
+    const local = data ? AnswerLine.line(data, lang) : "";
     if (out.error === "empty") return res.status(400).json({ error: "empty" });
-    if (out.error === "ai") return res.status(503).json({ error: "ai_unavailable" });
-    if (out.error) return res.status(402).json({ error: "ai_blocked", message: AiBlock.text(out.error, lang, { owner: isAgencyOwner(broker) }) });
-    return res.json({ answer: out.answer, found: Boolean(out.found), lang: out.lang, dataDates: Assistant.datesLine(out.dates || [], out.lang) || null });
+    if (out.error || !out.question_id) {
+      if (data && data.total_projects) {
+        await Assistant.noteAnswers(pool, broker, { question, local, source: "local", logId: data.log_id, found: true, channel: "web" });
+        return res.json({ answer: local, found: true, lang, dataDates: null, source: "local", log_id: data.log_id });
+      }
+      if (!out.error) return res.json({ answer: out.answer, found: Boolean(out.found), lang: out.lang, dataDates: Assistant.datesLine(out.dates || [], out.lang) || null, source: "local", log_id: data ? data.log_id : null });
+      if (out.error === "ai") return res.status(503).json({ error: "ai_unavailable" });
+      return res.status(402).json({ error: "ai_blocked", message: AiBlock.text(out.error, lang, { owner: isAgencyOwner(broker) }) });
+    }
+    await Assistant.noteAnswers(pool, broker, { questionId: out.question_id, ai: out.answer, local, source: "ai", logId: data && data.log_id, channel: "web" });
+    return res.json({ answer: out.answer, found: Boolean(out.found), lang: out.lang, dataDates: Assistant.datesLine(out.dates || [], out.lang) || null, source: "ai", log_id: data ? data.log_id : null });
   });
 
-  // The grouped results for a question: projects with their fitting offers, the filters read from the question (each can
-  // be dropped with ?drop=area,place,price,down,inst), sort best|cheap, 10 projects a page. Same list as the website's.
-  const DROPS = { place: ["locations", "places", "place_terms"], area: ["area_min", "area_max"], price: ["price_min", "price_max"], down: ["max_down_payment"], inst: ["max_installment"] };
+  // "Wrong results?" and what the broker did next (changed a filter or sort, removed a chip, turned a page, opened or sent a project): the app posts these
+  // with the log_id of the results. POST /ask/report { log_id, note } | POST /ask/action { log_id, action: filter|sort|chip_drop|page|open|send, detail }.
+  const SearchLog = require("../services/searchLog");
+  api.post("/ask/report", async (req, res) => {
+    const b = req.body || {};
+    const r = await SearchLog.report(pool, req.session.broker, String(b.log_id || ""), b.note);
+    if (r.ok) await SearchLog.action(pool, req.session.broker, String(b.log_id), "report");
+    return r.ok ? res.json({ ok: true }) : res.status(r.error === "again" ? 409 : 404).json({ error: r.error });
+  });
+  api.post("/ask/action", async (req, res) => {
+    const b = req.body || {};
+    const r = await SearchLog.action(pool, req.session.broker, String(b.log_id || ""), String(b.action || ""), b.detail);
+    return r.ok ? res.status(204).end() : res.status(404).json({ error: "not_found" });
+  });
+
+  // The grouped results for a question (services/projectSearch.js): every project once, with the offers that fit or its free text. The question's
+  // filters become chips (drop one with ?drop=place,area,price,down,inst,beds,features); pmin pmax amin amax dmax imax bed are explicit filters over
+  // them; sort = best|cheap|pricey|small|big|down; page and per (10, at most 25). The website's Ask page shows the same list.
   api.get("/ask/results", async (req, res) => {
-    const { broker } = req.session;
     const q = String(req.query.q || "").trim().slice(0, 500);
     if (!q) return res.status(400).json({ error: "empty" });
-    const f = Q.fallbackParse(q).filters;
-    const dropped = String(req.query.drop || "").split(",").filter((k) => DROPS[k]);
-    for (const k of dropped) for (const key of DROPS[k]) f[key] = Array.isArray(f[key]) ? [] : null;
-    const chips = Object.entries(DROPS)
-      .filter(([k]) => !dropped.includes(k))
-      .map(([k, keys]) => [k, Object.fromEntries(keys.map((key) => [key, f[key]]).filter(([, v]) => (Array.isArray(v) ? v.length : v != null)))])
-      .filter(([, v]) => Object.keys(v).length)
-      .map(([key, value]) => ({ key, value }));
-    const r = await ProjectAnswer.projectResults(pool, broker.agency_id, f, { page: Number(req.query.page) || 1, perPage: 10, sort: req.query.sort === "cheap" ? "cheap" : "best" });
-    const lang = broker.preferred_lang === "en" ? "en" : "ar";
-    return res.json({
-      chips,
-      dropped,
-      total_projects: r.total_projects,
-      total_offers: r.total_offers,
-      page: r.page,
-      pages: r.pages,
-      projects: r.projects.map((g) => ({
-        name: g.project.name,
-        name_en: g.project.name_en || null,
-        place: [g.project.district, g.project.city].filter(Boolean).join(" · "),
-        offers: g.offers.map((u) => ({ area: u.area ?? null, floor: u.floor ?? null, price: u.price ?? null, down: u.down ?? null, monthly: u.monthly ?? u.monthly_est ?? null })),
-        client_text: ProjectAnswer.clientText(g.offers.slice(0, 5).map((unit) => ({ project: g.project, unit })), lang)
-      }))
-    });
+    const data = await ProjectSearch.fromQuery(pool, req.session.broker, req.query, { AI });
+    return res.json({ ...data, answer_line: AnswerLine.line(data, req.session.broker.preferred_lang === "en" ? "en" : "ar") });
   });
 }
 

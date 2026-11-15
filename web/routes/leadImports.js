@@ -71,7 +71,7 @@ ${error ? html`<p class="card notice bad" role="alert">⚠️ ${error}</p>` : ""
     <label class="check"><input type="checkbox" name="confirm" value="1" required> ${L(lang, "أأكد إن كل العملاء في الملف ده ليهم الأساس ده (طلبوا التواصل، أو وافقوا، أو عملاء حاليين).", "I confirm every client in this file has this basis (they asked to be contacted, consented, or are existing clients).")}</label>
   </fieldset>
   ${manager
-    ? html`<label class="check"><input type="checkbox" name="round_robin" value="1"> ${L(lang, "وزّع العملاء الجداد اللي مالهمش وسيط في الملف على الوسطاء بالدور", "Share new clients with no broker in the file among the brokers, in turn")}</label>`
+    ? html`<label class="check"><input type="checkbox" name="round_robin" value="1"> ${L(lang, "وزّع العملاء الجداد اللي مالهمش بروكر في الملف على البروكرز بالدور", "Share new clients with no broker in the file among the brokers, in turn")}</label>`
     : ""}
   <button type="submit">${L(lang, "راجع الملف", "Review the file")}</button>
 </form>`;

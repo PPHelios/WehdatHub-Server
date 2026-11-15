@@ -147,16 +147,16 @@ ${manager
   ? tabs("usage_tab", [
       [L(lang, "أنا", "Me"), mineCard],
       [L(lang, "الفريق", "Team"), html`<section class="card">
-  <h2>${L(lang, "كل الوسطاء", "Every broker")}</h2>
-  <table><thead><tr><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "الشهر", "Month")}</th></tr></thead>
+  <h2>${L(lang, "كل البروكرز", "Every broker")}</h2>
+  <table><thead><tr><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "الشهر", "Month")}</th></tr></thead>
   <tbody>${agency.brokers.map((b) => html`<tr data-broker="${b.id}"><td>${b.name}</td><td>${b.today}</td><td>${b.n}</td></tr>`)}</tbody></table>
   <p class="muted">${L(lang, `روابط الدخول (مش محسوبة من الرصيد): ${agency.login}`, `Sign-in links (not counted in the credits): ${agency.login}`)}</p>
 </section>`],
       [L(lang, "الإعدادات", "Settings"), html`${fxCard}<form method="post" action="/app/usage/agency" class="card stack">
-  <h2>${L(lang, "رصيد الشركة وحدود الوسطاء", "Agency credits and broker caps")}</h2>
+  <h2>${L(lang, "رصيد الشركة وحدود البروكرز", "Agency credits and broker caps")}</h2>
   <label>${L(lang, "الرصيد الشهري (رسايل)", "Monthly credits (messages)")} <input type="number" name="monthly" min="0" max="100000" value="${state.limit}"></label>
-  <label>${L(lang, "حد يومي لكل وسيط (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
-  <label>${L(lang, "حد أسبوعي لكل وسيط (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
+  <label>${L(lang, "حد يومي لكل بروكر (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
+  <label>${L(lang, "حد أسبوعي لكل بروكر (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
   <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
   <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>

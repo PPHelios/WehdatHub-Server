@@ -244,7 +244,7 @@ ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="sta
   <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
   <select name="source" aria-label="${L(lang, "المصدر", "Source")}"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
-    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
+    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل البروكرز", "All brokers")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
     : ""}
   </div>
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
@@ -253,7 +253,7 @@ ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="sta
 ${pipe ? html`<nav class="special-cards" aria-label="${L(lang, "استفسارات مميزة", "Highlights")}">${isAgencyOwner(broker) ? html`<a class="scard vip${tab === "private" ? " on" : ""}" href="${qs({ tab: "private", page: "" })}"${tab === "private" ? html` aria-current="page"` : ""}><span>⭐ ${L(lang, "VIP", "VIP")}</span><b>${pipe.vip}</b></a>` : ""}${manager ? html`<a class="scard portal${tab === "portal" ? " on" : ""}" href="${qs({ tab: "portal", page: "" })}"${tab === "portal" ? html` aria-current="page"` : ""}><span>📩 ${L(lang, "استفسارات البوابات (لسه محدش أخدها)", "Portal enquiries (not taken yet)")}</span><b>${pipe.portal}</b></a>` : ""}</nav>` : ""}
 <ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.filter((t) => t !== "private" && t !== "portal").map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
 ${pipe && pipe.overdue.length
-  ? html`<details class="card notice warn"><summary>${L(lang, "متابعات متأخرة لكل وسيط", "Overdue follow-ups per broker")}: ${pipe.overdue.reduce((a, o) => a + Number(o.n), 0)}</summary><ul class="rows">${pipe.overdue.map(
+  ? html`<details class="card notice warn"><summary>${L(lang, "متابعات متأخرة لكل بروكر", "Overdue follow-ups per broker")}: ${pipe.overdue.reduce((a, o) => a + Number(o.n), 0)}</summary><ul class="rows">${pipe.overdue.map(
       (o) => html`<li data-overdue-broker="${o.broker_id || "none"}"><a class="listrow" href="${qs({ tab: "overdue", broker: o.broker_id || "none" })}">${o.name || L(lang, "مش متسلم", "Unassigned")}<b>${o.n}</b></a></li>`
     )}</ul></details>`
   : ""}
@@ -364,8 +364,8 @@ ${tab === "portal" ? portalHtml : rows.length
       phone_invalid: L(lang, "رقم مش مظبوط.", "A phone number isn't valid."),
       too_many_phones: L(lang, "3 أرقام بالكتير.", "At most 3 numbers."),
       lawful_basis: L(lang, "اختار الأساس القانوني.", "Choose the lawful basis."),
-      assignee: L(lang, "الوسيط مش موجود.", "Unknown broker."),
-      assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
+      assignee: L(lang, "البروكر مش موجود.", "Unknown broker."),
+      assignee_away: L(lang, "البروكر ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
       kind: L(lang, "النوع مش معروف.", "Unknown type.")
     }[r.error] || r.error;
     return formPage(req, res, { values, error: `⚠️ ${why}` }, 422);
@@ -401,7 +401,7 @@ ${tab === "portal" ? portalHtml : rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
-<form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة الوسيط", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة الوسيط", "Now: the broker's language")}</span>`}</form>
+<form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة البروكر", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة البروكر", "Now: the broker's language")}</span>`}</form>
 ${flagBox(lead, broker, await Leads.openRequestsOn(pool, broker, lead.id), lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليه VIP", "Make VIP")}</button>${lead.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
@@ -478,7 +478,7 @@ ${tl ? V.timelineList(tl.rows, lang, { more: tl.more, lead }) : ""}
   </div>
   <div class="tab-panel" data-tab="lt-more">
 ${manager
-  ? html`<section class="card" id="assign"><h2>🧑‍💼 ${L(lang, "تسليم لوسيط", "Assign")}</h2>
+  ? html`<section class="card" id="assign"><h2>🧑‍💼 ${L(lang, "تسليم لبروكر", "Assign")}</h2>
   <form method="post" action="${path}/assign" class="row">${hidden}
     <select name="broker"><option value="">${L(lang, "مش متسلم لحد", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === lead.assigned_broker_id ? html` selected` : ""}>${b.name}</option>`)}</select>
     <button type="submit">${L(lang, "تسليم", "Assign")}</button>
@@ -618,9 +618,9 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
         flag_empty: L(lang, "اكتب محتاج إيه من المدير.", "Write what you need from the manager."),
         already_flagged: L(lang, "العميل ده مبلّغ عنه فعلاً.", "This lead is already flagged."),
         no_open_follow_up: L(lang, "مفيش متابعة مفتوحة.", "No open follow-up."),
-        assignee: L(lang, "الوسيط مش موجود.", "Unknown broker."),
-      assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
-        assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
+        assignee: L(lang, "البروكر مش موجود.", "Unknown broker."),
+      assignee_away: L(lang, "البروكر ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
+        assignee_away: L(lang, "البروكر ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
         undo_expired: L(lang, "التراجع متاح 10 دقايق بس.", "Undo is only available for 10 minutes."),
         undo_blocked: L(lang, "مش ممكن التراجع: العميل اتعدل بعدها.", "Can't undo: the lead changed since."),
         already_undone: L(lang, "اتلغى قبل كده.", "Already undone."),

@@ -62,7 +62,7 @@ const head = (n, title, hint = "") => html`<header class="uf-head"><h2><span cla
  * form's own fields (compound, area_id, subzone_id, feature, features_other and the new-compound fields) up to date, so the
  * save, the review and every check stay the same. `place`: the chip the server shows ({label, path, zones, known}) or null.
  */
-function unitBox(v, areas, lang, place) {
+function unitBox(v, areas, lang, place, opts = {}) {
   const nameOf = (a) => (lang === "en" ? a.name_en || a.name_ar : a.name_ar || a.name_en);
   const isNew = v.compound_new === "1";
   const hid = (on) => (on ? raw(" hidden") : "");
@@ -72,12 +72,12 @@ function unitBox(v, areas, lang, place) {
   const placeState = !place ? "" : isNew ? "new" : place.known ? "known" : "check";
   const others = String(v.features_other || "").split(/[,،\n]/).map((s) => s.trim()).filter(Boolean);
   const context = place && place.known ? [place.path, ...(place.zones || [])].filter(Boolean) : [];
-  return html`<div class="ubox" data-ubox data-field-wrap
+  return html`<div class="ubox" data-ubox data-field-wrap${opts.noNew ? raw(" data-no-new") : ""}${opts.areasOnly ? raw(" data-areas-only") : ""}
     data-msg-new="${L(lang, "جديد", "new")}" data-msg-check="${L(lang, "مش في القائمة: اختار من الاقتراحات أو اطلبه كجديد.", "Not on the list: pick a suggestion or request it as new.")}"
     data-msg-places="${L(lang, "الأماكن", "Places")}" data-msg-features="${L(lang, "المميزات", "Features")}"
-    data-msg-request="${L(lang, "اطلب مكان جديد: «%s»", "Request a new place: “%s”")}" data-msg-other="${L(lang, "ضيف «%s» كميزة تانية", "Add “%s” as another feature")}"
+    data-msg-request="${opts.areasOnly ? L(lang, "اطلب منطقة فرعية جديدة: «%s»", "Request a new sub-area: “%s”") : L(lang, "اطلب مكان جديد: «%s»", "Request a new place: “%s”")}" data-msg-other="${L(lang, "ضيف «%s» كميزة تانية", "Add “%s” as another feature")}"
     data-msg-swap="${L(lang, "اتغير المكان: %s", "Place changed to %s")}" data-msg-remove="${L(lang, "شيل %s", "Remove %s")}" data-msg-other-tag="${L(lang, "مش في القائمة", "not in the list")}">
-    <span class="ubox-label" id="ubox-label">${L(lang, "المكان والمميزات *", "Place and features *")}</span>
+    <span class="ubox-label" id="ubox-label">${opts.label || L(lang, "المكان والمميزات *", "Place and features *")}</span>
     <div class="ubox-field" data-ubox-field role="group" aria-labelledby="ubox-label">
       <input type="text" class="ubox-input" data-ubox-input autocomplete="off" enterkeyhint="done" aria-autocomplete="list" aria-controls="ubox-list" aria-labelledby="ubox-label"
         placeholder="${L(lang, "اكتب كمبوند، منطقة، أو ميزة… (مثال: ميفيدا، بحري، روف)", "Type a compound, an area or a feature… (e.g. Mivida, north facing, roof)")}">
@@ -95,8 +95,8 @@ function unitBox(v, areas, lang, place) {
     <input type="hidden" name="district" value="${v.district}">
     <input type="hidden" name="city" value="${v.city}">
     <fieldset class="ubox-new" data-ubox-new${hid(!isNew)}>
-      <legend>${L(lang, "طلب كمبوند جديد", "Request a new compound")}</legend>
-      <p class="muted small">${L(lang, "بيتحفظ مع الوحدة ويتراجع من الإدارة. المنطقة مطلوبة.", "It is saved with the unit and reviewed by the CRM owner. The area is required.")}</p>
+      <legend>${opts.areasOnly ? L(lang, "طلب منطقة فرعية جديدة", "Request a new sub-area") : L(lang, "طلب كمبوند جديد", "Request a new compound")}</legend>
+      <p class="muted small">${opts.areasOnly ? L(lang, "المشروع بيتسجل تحت المنطقة اللي هتختارها دلوقتي، والمنطقة الفرعية دي بتفضل ليك لحد ما مالك النظام يوافق عليها. المنطقة مطلوبة، والمحافظة بتظهر منها.", "The project is filed under the area you pick now, and this sub-area stays yours until the CRM owner approves it. The area is required; the governorate follows from it.") : L(lang, "بيتحفظ مع الوحدة ويتراجع من الإدارة. المنطقة مطلوبة.", "It is saved with the unit and reviewed by the CRM owner. The area is required.")}</p>
       <label>${L(lang, "الاسم *", "Name *")}<input data-ubox-new-name value="${isNew ? v.compound : ""}" autocomplete="off"></label>
       ${areaBox(lang, {
         name: "area_id", label: L(lang, "المنطقة *", "Area *"), selectedId: v.area_id, rows: tops.map(rowOf),
@@ -212,9 +212,9 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("owner_phone", L(lang, "تليفون المالك *", "Owner phone *"), v.owner_phone, { type: "tel", dir: "ltr" })}
     <label class="check"><input type="checkbox" name="owner_name_from_phone" value="1"${chk(v.owner_name_from_phone)}>${L(lang, "مفيش اسم: استخدم التليفون كاسم", "No name: use the phone as the name")}</label>
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
-    <details class="more"${[v.commission, v.co_broker, v.unit_no, v.address, v.pin].some(Boolean) ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر (عمولة، وسيط، عنوان، لوكيشن)", "More details (commission, co-broker, address, location)")}</summary><div class="grid">
+    <details class="more"${[v.commission, v.co_broker, v.unit_no, v.address, v.pin].some(Boolean) ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر (عمولة، بروكر، عنوان، لوكيشن)", "More details (commission, co-broker, address, location)")}</summary><div class="grid">
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
-    ${input("co_broker", L(lang, "وسيط مشارك", "Co-broker"), v.co_broker)}
+    ${input("co_broker", L(lang, "بروكر مشارك", "Co-broker"), v.co_broker)}
     ${input("unit_no", L(lang, "رقم الوحدة", "Unit no."), v.unit_no, { dir: "ltr" })}
     ${input("address", L(lang, "العنوان (للشركة بس)", "Address (agency only)"), v.address)}
     ${input("pin", L(lang, "لينك جوجل ماب أو الإحداثيات", "Google Maps link or coordinates"), v.pin, { dir: "ltr" })}
@@ -274,4 +274,4 @@ function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = nu
 </section>`;
 }
 
-module.exports = { unitForm, reviewPanel };
+module.exports = { unitForm, reviewPanel, unitBox, input, select, head, req, ICON, searchText };

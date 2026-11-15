@@ -134,7 +134,27 @@ async function developerByName(db, actor, name) {
   const { rows } = await db.query("SELECT * FROM developers WHERE agency_id = $1 AND lower(btrim(name)) = lower($2)", [actor.agency_id, n]);
   if (rows[0]) return rows[0];
   const r = await saveDeveloper(db, actor, { name: n });
-  return r.developer || null;
+  if (!r.developer) return null;
+  // A name the global directory has is linked to it (only the name is shared; the agency's row stays its own).
+  const { rows: g } = await db.query("SELECT id FROM global_developers WHERE lower(btrim(name)) = lower($1)", [n]);
+  if (g[0]) await db.query("UPDATE developers SET global_id = $2 WHERE id = $1", [r.developer.id, g[0].id]);
+  return r.developer;
+}
+
+/** The agency's own developer row for a global developer: the one already linked or named the same, else a new private row. */
+async function developerFromGlobal(db, actor, globalId) {
+  if (!isId(globalId)) return null;
+  const { rows: g } = await db.query("SELECT * FROM global_developers WHERE id = $1", [globalId]);
+  if (!g[0]) return null;
+  const { rows } = await db.query("SELECT * FROM developers WHERE agency_id = $1 AND (global_id = $2 OR lower(btrim(name)) = lower($3)) ORDER BY (global_id = $2) DESC NULLS LAST LIMIT 1", [actor.agency_id, g[0].id, g[0].name]);
+  if (rows[0]) {
+    if (!rows[0].global_id) await db.query("UPDATE developers SET global_id = $2 WHERE id = $1", [rows[0].id, g[0].id]);
+    return rows[0];
+  }
+  const r = await saveDeveloper(db, actor, { name: g[0].name, name_en: g[0].name_en });
+  if (!r.developer) return null;
+  await db.query("UPDATE developers SET global_id = $2 WHERE id = $1", [r.developer.id, g[0].id]);
+  return r.developer;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -142,22 +162,28 @@ async function developerByName(db, actor, name) {
 /* ---------------------------------------------------------------------- */
 
 /** One page of projects with a name search (also matches the developer's name): { items, total, page, pages }. 20 per page. */
-async function listProjectsPage(db, actor, { q = "", page = 1, archived = false } = {}) {
+async function listProjectsPage(db, actor, { q = "", page = 1, archived = false, place = null, features = [], developer = null, bedrooms = null, maxPrice = null } = {}) {
   const PER = 20;
   const term = String(q || "").trim().slice(0, 80);
   const pattern = term ? `%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
   const p = Math.max(1, Math.floor(Number(page) || 1));
+  // The place, features, developer, bedrooms and price boxes of the search (services/projectRows.js filters).
+  const extra = require("./projectRows").filters({ place, features, developer, bedrooms, maxPrice }, 6);
   const { rows } = await db.query(
     `SELECT p.id, p.name, p.name_en, p.status, p.district, p.city, p.delivery_year, p.delivery_quarter, p.prices_updated_at,
             p.archived_at, p.developer_id, d.name AS developer_name_ar, d.name_en AS developer_name_en,
+            p.price_from, p.area_acres, p.down_pct_min, p.years_max, p.discount_pct, p.bedroom_options, p.property_types, p.feature_keys, p.delivery_raw, p.governorate, p.updated_at,
+            (SELECT url FROM project_images i WHERE i.project_id = p.id AND i.role = 'shared' ORDER BY i.position, i.created_at LIMIT 1) AS cover_url,
             (SELECT count(*)::int FROM listings l WHERE ${Vis.units("l")} AND l.project_id = p.id AND l.status = 'active') AS units,
             (SELECT count(*)::int FROM project_plans pl WHERE pl.project_id = p.id) AS plans,
+            (SELECT count(*)::int FROM project_offers o WHERE o.project_id = p.id) AS offers,
             count(*) OVER()::int AS total
      FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
      WHERE p.agency_id = $1 AND (p.archived_at IS NOT NULL) = $2
-       AND ($3::text IS NULL OR p.name ILIKE $3 OR p.name_en ILIKE $3 OR d.name ILIKE $3)
+       AND ($3::text IS NULL OR p.name ILIKE $3 OR p.name_en ILIKE $3 OR d.name ILIKE $3 OR p.search_text ILIKE $3)
+       ${extra.where.map((w) => `AND ${w}`).join(" ")}
      ORDER BY lower(p.name) LIMIT $4 OFFSET $5`,
-    [actor.agency_id, Boolean(archived), pattern, PER, (p - 1) * PER]
+    [actor.agency_id, Boolean(archived), pattern, PER, (p - 1) * PER, ...extra.params]
   );
   const total = rows[0]?.total ?? 0;
   return { items: rows, total, page: p, pages: Math.max(1, Math.ceil(total / PER)) };
@@ -211,6 +237,10 @@ async function resolveDeveloper(db, actor, input) {
     const d = await getDeveloper(db, actor, input.developer_id);
     return d ? { developer: d } : { error: "invalid", field: "developer_id" };
   }
+  if (isId(input.developer_global_id)) {
+    const d = await developerFromGlobal(db, actor, input.developer_global_id);
+    return d ? { developer: d } : { error: "invalid", field: "developer_id" };
+  }
   if (text(input.developer_name, 120)) return { developer: await developerByName(db, actor, input.developer_name) };
   return { developer: null };
 }
@@ -232,6 +262,20 @@ async function saveProject(db, actor, input = {}) {
     const { rows } = await db.query("UPDATE projects SET lat = $3, lng = $4 WHERE id = $1 AND agency_id = $2 RETURNING *", [row.id, actor.agency_id, pin?.lat ?? null, pin?.lng ?? null]);
     return rows[0] || row;
   };
+  // The rows part (place, features, numbers, the pasted message): checked first, saved after the project row exists.
+  const ProjectRows = require("./projectRows");
+  const rowsGiven = ["paste_text", "area_id", "compound", "feature", "features_other", "price_from", "area_acres", "down_pct_min", "years_max", "discount_pct", "delivery_raw", "bedrooms", "property_types"].some((k) => input[k] !== undefined);
+  if (rowsGiven) {
+    const c = ProjectRows.columns(input);
+    if (c.error) return c;
+  }
+  const withRows = async (r) => {
+    if (!rowsGiven || !r.project) return r;
+    const a = await ProjectRows.apply(db, actor, r.project.id, input);
+    if (a.error) return a;
+    const { rows } = await db.query("SELECT * FROM projects WHERE id = $1", [r.project.id]);
+    return { ...r, project: rows[0] || r.project };
+  };
   const devName = dev.developer ? dev.developer.name : null;
   const params = [f.name, f.name_en, f.status, f.district, f.city, f.delivery_year, f.delivery_quarter, f.maintenance_pct, f.notes, dev.developer?.id || null, devName];
   try {
@@ -245,14 +289,14 @@ async function saveProject(db, actor, input = {}) {
       );
       if (!rows[0]) return { error: "not_found" };
       await syncUnits(db, rows[0].id);
-      return { ok: true, project: await savePin(rows[0]) };
+      return withRows({ ok: true, project: await savePin(rows[0]) });
     }
     const { rows } = await db.query(
       `INSERT INTO projects (agency_id, name, name_en, status, district, city, delivery_year, delivery_quarter, maintenance_pct, notes, developer_id, developer_name)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [actor.agency_id, ...params]
     );
-    return { ok: true, project: await savePin(rows[0]) };
+    return withRows({ ok: true, project: await savePin(rows[0]) });
   } catch (e) {
     if (e.code === "23505") return { error: "duplicate", field: "name" };
     throw e;
@@ -302,7 +346,7 @@ async function projectRow(db, actor, id) {
 async function getProject(db, actor, id) {
   const project = await projectRow(db, actor, id);
   if (!project) return null;
-  const [developer, phases, plans, materials, units] = await Promise.all([
+  const [developer, phases, plans, materials, units, facts] = await Promise.all([
     project.developer_id ? getDeveloper(db, actor, project.developer_id) : null,
     db.query("SELECT * FROM project_phases WHERE project_id = $1 ORDER BY created_at", [id]).then((r) => r.rows),
     db.query("SELECT * FROM project_plans WHERE project_id = $1 ORDER BY position, created_at", [id]).then((r) => r.rows),
@@ -313,9 +357,10 @@ async function getProject(db, actor, id) {
          FROM listings WHERE ${Vis.units("listings")} AND project_id = $1 AND agency_id = $2 ORDER BY status, code LIMIT 200`,
         [id, actor.agency_id]
       )
-      .then((r) => r.rows)
+      .then((r) => r.rows),
+    db.query("SELECT key, label_ar, label_en, value FROM project_facts WHERE project_id = $1 ORDER BY created_at", [id]).then((r) => r.rows)
   ]);
-  return { project, developer, phases, plans, materials, units };
+  return { project, developer, phases, plans, materials, units, facts };
 }
 
 async function savePhase(db, actor, projectId, input = {}) {

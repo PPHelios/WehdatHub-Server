@@ -116,15 +116,16 @@ async function underAiFirstCap(pool) {
  * `aiError` says why. A read the broker asked for ("Search with AI") or one the quick reader is unsure of is charged as before.
  * @returns {Promise<{ parsed, source: "parser"|"ai"|"fallback", modelUsed, usage, ms, local, ai, reasons, disagree, aiError }>}
  */
-async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true } = {}) {
+async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowed = true, neverCharge = false } = {}) {
   const t0 = Date.now();
   if (ctx.pool) await Vocab.ensureLoaded(ctx.pool);
   const local = Q.enforceSaleForPayment(Q.fallbackParse(text), text);
   const reasons = local.meta?.reasons || [];
   // The agency owner's switch for AI help in search (a switched-off search never reaches the AI or spends a credit).
   if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
-  const charged = forceAi || Boolean(local.meta?.unsure);
-  const free = !charged && aiAllowed && local.intent !== "other" && aiFirst() && (await underAiFirstCap(ctx.pool));
+  // neverCharge: the caller's own action pays (Ask's answer), so this read is free for the agency whatever the quick reader thought.
+  const charged = !neverCharge && (forceAi || Boolean(local.meta?.unsure));
+  const free = (neverCharge || !charged) && aiAllowed && (neverCharge || local.intent !== "other") && (neverCharge || aiFirst()) && (await underAiFirstCap(ctx.pool));
   if (!aiAllowed || (!charged && !free)) {
     return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, disagree: [] };
   }

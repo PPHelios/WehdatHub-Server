@@ -101,7 +101,7 @@ async function tellBrokers(pool, byBroker, build, prefix, field, now) {
         const msg = build(m, leads);
         const title = `${msg.title} · ${L(m, `بدل ${broker.name} (إجازة)`, `for ${broker.name} (away)`)}`;
         // The body names the broker too: the manager reads whose lead this is.
-        msg.body = `${L(m, "الوسيط", "Broker")}: ${broker.name}\n${msg.body}`;
+        msg.body = `${L(m, "البروكر", "Broker")}: ${broker.name}\n${msg.body}`;
         await Notifications.notifyBroker(pool, m, { kind: "follow_up", dedupeKey: `${dedupe(prefix, leads, field)}:${broker.id}`, ...msg, title, buttons: null, now });
       }
       told++;

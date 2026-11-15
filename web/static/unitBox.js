@@ -94,7 +94,7 @@
       compound.value = it.kind === "compound" ? (it.label || it.name_ar || it.name_en) : "";
       setSelect(areaSel, it.area_id || "");
       setSelect(subSel, it.subzone_id || "");
-      setContext([it.path].concat(it.zones || []));
+      setContext([it.path].concat(it.zones || []).concat(it.governorate ? [it.governorate] : []));
       warn.hidden = true;
       if (old) announce(msg("swap", it.label));
       changed();
@@ -178,7 +178,7 @@
       places.forEach(function (it) { add(it, it.label || it.name_ar || it.name_en, [it.path].concat(it.zones || []).filter(Boolean).join(" · ")); });
       if (feats.length) group(msg("features"));
       feats.forEach(function (it) { add(it, it.label, ""); });
-      add({ kind: "request", text: q }, msg("request", q), "", "ubox-act");
+      if (!box.hasAttribute("data-no-new")) add({ kind: "request", text: q }, msg("request", q), "", "ubox-act");
       add({ kind: "other", text: q }, msg("other", q), "", "ubox-act");
       list.hidden = false;
       mark(0);
@@ -195,7 +195,7 @@
     }
     function ask(q) {
       asked = q;
-      fetch("/app/places/box?q=" + encodeURIComponent(q), { credentials: "same-origin", headers: { Accept: "application/json" } })
+      fetch("/app/places/box?q=" + encodeURIComponent(q) + (box.hasAttribute("data-areas-only") ? "&scope=areas" : ""), { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then(function (r) { return r.ok ? r.json() : { items: [] }; })
         .catch(function () { return { items: [] }; })
         .then(function (d) { if (asked === q && input.value.trim() === q) render(q, d.items || []); });
@@ -224,6 +224,9 @@
         if (Number(src.value) > 0) addFeature(p[1], src.getAttribute("data-feature-label"));
       });
     });
+
+    // Other scripts on the page (the project form's reader) set the box's chips through these.
+    box.uboxApi = { pickPlace: pickPlace, addFeature: addFeature, hasPlace: function () { return Boolean(placeChip()); } };
 
     input.addEventListener("input", function () {
       var q = input.value.trim();
@@ -289,7 +292,7 @@
     }
   }
 
-  init(document.getElementById("unit-form"));
+  init(document.getElementById("unit-form") || document.getElementById("project-form"));
   // The form comes back whole after "fill from the message" (htmx swap): wire the new box.
   document.addEventListener("htmx:load", function (e) {
     var t = e.target;

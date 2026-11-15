@@ -34,13 +34,17 @@ async function store(actor, project, data, mime) {
  * Uploads photos or one PDF (pages picked) into the gallery, sorted by AI when reading is on.
  * @returns {Promise<{ ok, added, shared, layouts, matched, unsure, hidden, ai } | { error, left?, needed? }>}
  */
-async function upload(pool, actor, projectId, { files = [], pages = "" } = {}, { now = new Date() } = {}) {
+async function upload(pool, actor, projectId, { files = [], pages = "", sort = false } = {}, { now = new Date() } = {}) {
   if (!isManager(actor)) return { error: "forbidden" };
   const project = await projectOf(pool, actor, projectId);
   if (!project) return { error: "not_found" };
   if (!files.length) return { error: "NO_FILE" };
-  const ai = (await PriceReading.settingOf(pool, actor.agency_id)).enabled;
-  if (!ai && files.some((f) => f.mimetype === "application/pdf")) return { error: "OFF" }; // a PDF needs AI to know what each page is
+  // AI sorting is a choice made at upload (it spends pages from the month's allowance): without it every photo is shared with all units.
+  const enabled = (await PriceReading.settingOf(pool, actor.agency_id)).enabled;
+  const hasPdf = files.some((f) => f.mimetype === "application/pdf");
+  if (!enabled && hasPdf) return { error: "OFF" }; // a PDF needs AI to know what each page is
+  if (enabled && hasPdf && !sort) return { error: "SORT_PDF" };
+  const ai = enabled && Boolean(sort);
   const got = await PriceReading.pagesOf(files, pages, { version: G.VERSION, maxPages: G.MAX_FILES });
   if (got.error) return got;
   let results = new Map();

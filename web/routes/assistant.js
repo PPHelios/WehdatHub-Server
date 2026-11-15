@@ -6,8 +6,11 @@
 "use strict";
 
 const Assistant = require("../../services/assistant");
-const ProjectAnswer = require("../../services/projectAnswer");
-const Q = require("../../domain/searchQuery");
+const ProjectSearch = require("../../services/projectSearch");
+const AnswerLine = require("../../domain/projectAnswerLine");
+const Credits = require("../../services/credits");
+const AI = require("../../lib/ai");
+const { resultsView } = require("../views/projectResults");
 const A = require("../../domain/assistant");
 const { isManager, isAgencyOwner } = require("../../lib/authz");
 const AiBlock = require("../../lib/aiBlock");
@@ -24,38 +27,12 @@ const ERRORS = {
   ai: ["المساعد مش متاح دلوقتي، جرب كمان شوية.", "The assistant is not available right now; try again shortly."]
 };
 
-const money = (n) => (n == null ? "-" : Number(n).toLocaleString("en-US"));
-const PER_PAGE = 10;
-const CHIPS = {
-  place: { keys: ["locations", "places", "place_terms"], text: (f, lang) => [...(f.place_terms || []), ...(f.locations || [])].filter(Boolean).join("، ") && `${L(lang, "المكان", "Place")}: ${[...(f.place_terms || []), ...(f.locations || [])].join("، ")}` },
-  area: { keys: ["area_min", "area_max"], text: (f, lang) => (f.area_min != null || f.area_max != null) && `${L(lang, "المساحة", "Area")}: ${f.area_min != null && f.area_max != null ? `${f.area_min}-${f.area_max}` : f.area_min != null ? `${L(lang, "أكتر من", "at least")} ${f.area_min}` : `${L(lang, "لحد", "up to")} ${f.area_max}`}` },
-  price: { keys: ["price_min", "price_max"], text: (f, lang) => (f.price_min != null || f.price_max != null) && `${L(lang, "السعر", "Price")}: ${f.price_min != null ? money(f.price_min) : ""}${f.price_min != null && f.price_max != null ? " - " : ""}${f.price_max != null ? `${L(lang, "لحد", "up to")} ${money(f.price_max)}` : ""}` },
-  down: { keys: ["max_down_payment"], text: (f, lang) => f.max_down_payment != null && `${L(lang, "المقدم لحد", "Down up to")} ${money(f.max_down_payment)}` },
-  inst: { keys: ["max_installment"], text: (f, lang) => f.max_installment != null && `${L(lang, "القسط لحد", "Installment up to")} ${money(f.max_installment)}` }
-};
-
-/** Grouped results for a question: chips (each removable), sort, project cards with their fitting offers, pages. */
-async function resultsBlock(pool, broker, q, { page = 1, sort = "best", drop = "" } = {}, lang) {
-  const f = Q.fallbackParse(q).filters;
-  const dropped = new Set(String(drop).split(",").filter((k) => CHIPS[k]));
-  for (const k of dropped) for (const key of CHIPS[k].keys) f[key] = Array.isArray(f[key]) ? [] : null;
-  const chips = Object.entries(CHIPS).filter(([k]) => !dropped.has(k)).map(([k, c]) => [k, c.text(f, lang)]).filter(([, t]) => t);
-  const r = await ProjectAnswer.projectResults(pool, broker.agency_id, f, { page, perPage: PER_PAGE, sort: sort === "cheap" ? "cheap" : "best" });
-  const base = (extra) => `/app/ask/results?${new URLSearchParams({ q, sort, drop: [...dropped].join(","), page: "1", ...extra }).toString()}`;
-  const dropLink = (k) => base({ drop: [...dropped, k].join(",") });
-  const stat = r.total_projects ? `${r.total_projects} ${L(lang, "مشروع", "projects")} · ${r.total_offers} ${L(lang, "اختيار", "options")}` : L(lang, "مفيش مشروع بالمواصفات دي", "No project matches");
-  return html`<section class="stack" data-ask-results>
-  <div class="row">${chips.map(([k, t]) => html`<a class="pill" data-chip="${k}" href="${dropLink(k)}">${t} ✕</a>`)}${[...dropped].length ? html`<a class="pill muted" href="${base({ drop: "" })}">${L(lang, "رجّع الفلاتر", "Reset filters")}</a>` : ""}</div>
-  <div class="row between"><strong data-results-count>${stat}</strong>
-    <span><a class="pill${sort === "best" ? " on" : ""}" href="${base({ sort: "best" })}">${L(lang, "الأنسب", "Best match")}</a> <a class="pill${sort === "cheap" ? " on" : ""}" href="${base({ sort: "cheap" })}">${L(lang, "الأرخص", "Cheapest")}</a></span></div>
-  ${r.projects.map((g) => html`<article class="card stack" data-ask-project>
-    <div><strong>${g.project.name}</strong><div class="muted small">${[g.project.district, g.project.city].filter(Boolean).join(" · ")}</div></div>
-    <ul>${g.offers.slice(0, 3).map((u) => html`<li>${u.area != null ? `${u.area} m²` : L(lang, "المساحة مش مكتوبة", "size not written")}${u.floor ? ` · ${L(lang, "الدور", "floor")} ${u.floor}` : ""} · <strong>${money(u.price)}</strong>${u.down != null ? ` · ${L(lang, "مقدم", "down")} ${money(u.down)}` : ""}${(u.monthly ?? u.monthly_est) != null ? ` · ${L(lang, "قسط", "monthly")} ${money(u.monthly ?? u.monthly_est)}` : ""}</li>`)}</ul>
-    ${g.offers.length > 3 ? html`<p class="muted small">+ ${g.offers.length - 3} ${L(lang, "اختيارات تانية", "more options")}</p>` : ""}
-    <div class="row"><a class="btn" href="https://wa.me/?text=${encodeURIComponent(ProjectAnswer.clientText(g.offers.slice(0, 5).map((unit) => ({ project: g.project, unit })), lang))}" target="_blank" rel="noopener noreferrer">📤 ${L(lang, "ابعت للعميل", "Send to client")}</a></div>
-  </article>`)}
-  ${r.pages > 1 ? html`<nav class="row" aria-label="${L(lang, "الصفحات", "Pages")}">${Array.from({ length: r.pages }, (_, i) => html`<a class="pill${i + 1 === r.page ? " on" : ""}" href="${base({ page: String(i + 1) })}">${i + 1}</a>`)}</nav>` : ""}
-</section>`;
+/** Grouped results for a question (services/projectSearch.js; the app asks GET /api/ask/results for the same list). */
+async function resultsBlock(pool, broker, query, lang, assets) {
+  const r = await ProjectSearch.fromQuery(pool, broker, query, { AI });
+  const explicit = {};
+  for (const k of ["pmin", "pmax", "amin", "amax", "dmax", "imax", "bed", "units"]) if (query[k] !== undefined && query[k] !== "") explicit[k] = String(query[k]);
+  return { data: r, view: resultsView(lang, r, { q: String(query.q || "").trim().slice(0, 500), sort: r.sort, drop: String(query.drop || ""), explicit, base: "/app/ask/results", trackSrc: assets ? assets.url("askTrack.js") : null }) };
 }
 
 function answerCard(out, question, lang) {
@@ -65,12 +42,13 @@ function answerCard(out, question, lang) {
   return html`<section class="card ${out.found ? "notice ok" : ""}" data-assistant-answer data-found="${out.found ? "yes" : "no"}">
   <p class="muted">❓ ${question}</p>
   <p class="pre" data-answer-text>${out.answer}</p>
+  ${out.source === "local" ? html`<p class="muted small" data-answer-local>${L(lang, "الرد ده متكتب من بيانات الشركة مباشرة (المساعد الذكي مش متاح دلوقتي).", "This answer is written straight from the agency's data (the AI is not available right now).")}</p>` : ""}
   ${dates ? html`<p class="muted" data-answer-dates>${dates}</p>` : ""}
   ${forClient ? html`<p><a class="btn" href="https://wa.me/?text=${encodeURIComponent(out.answer)}" target="_blank" rel="noopener noreferrer" data-send-whatsapp>📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}
 </section>`;
 }
 
-function register(web, { pool, page }) {
+function register(web, { pool, page, assets }) {
   const show = async (req, res, { question = "", out = null, error = null, saved = null, results = null } = {}, status = 200) => {
     const lang = langOf(req);
     const broker = req.session.broker;
@@ -86,7 +64,7 @@ ${error ? html`<p class="notice bad card" data-assistant-error="${error}">${["qu
 <form method="post" action="/app/ask" class="card stack" data-search-form>
   <label>${L(lang, "سؤالك", "Your question")}
   <textarea name="q" rows="3" maxlength="${A.MAX_QUESTION}" required placeholder="${L(lang, "مثلا: امتى استلام بادية؟ مين من عملائي عايز 3 أوض في زايد؟ ورايا إيه النهارده؟", "e.g. When is Badya's delivery? Which of my clients want 3 bedrooms in Zayed? What's due today?")}">${question}</textarea></label>
-  <button type="submit" data-ai="ask" data-no-tg-main>${L(lang, "اسأل", "Ask")}<span class="spin" aria-hidden="true"></span></button>
+  <button type="submit" data-ai="ask" data-no-tg-main>${L(lang, "اسأل", "Ask")} <span class="btn-cost">(${L(lang, `${Credits.costOf("assistant")} رصيد`, `${Credits.costOf("assistant")} credits`)})</span><span class="spin" aria-hidden="true"></span></button>
 </form>
 ${out ? answerCard(out, question, lang) : ""}
 ${results || ""}
@@ -114,6 +92,21 @@ ${missed
 
   web.get("/ask", (req, res) => show(req, res));
 
+  // "Wrong results?" on the grouped list: the same report as unit search's "Wrong search" (both readings are in the log row; the owner reviews it).
+  web.post("/ask/report", async (req, res) => {
+    const SearchLog = require("../../services/searchLog");
+    const r = await SearchLog.report(pool, req.session.broker, String(req.body.sl || ""), req.body.note);
+    if (r.ok) await SearchLog.action(pool, req.session.broker, String(req.body.sl), "report");
+    const back = String(req.get("Referer") || "");
+    const m = back.match(/^https?:\/\/[^/]+(\/app\/ask.*)$/);
+    return res.redirect(303, m ? m[1] : "/app/ask");
+  });
+  // What the broker did after the results (a click on a sort, a chip, a page, a project): sent by script (navigator.sendBeacon), nothing else waits on it.
+  web.post("/ask/action", async (req, res) => {
+    const r = await require("../../services/searchLog").action(pool, req.session.broker, String(req.body.sl || ""), String(req.body.action || ""), req.body.detail);
+    return res.status(r.ok ? 204 : 404).end();
+  });
+
   web.post("/ask/info", async (req, res) => {
     const lang = langOf(req);
     const r = await Assistant.addInfo(pool, req.session.broker, { questionId: req.body.question, project: req.body.project, unit: req.body.unit, text: req.body.text });
@@ -125,18 +118,30 @@ ${missed
   web.post("/ask", async (req, res) => {
     const question = String(req.body.q || "").trim().slice(0, A.MAX_QUESTION);
     if (!question) return show(req, res, { error: "empty" }, 400);
-    const out = await Assistant.ask(pool, req.session.broker, question, { channel: "web" });
-    if (out.error) return show(req, res, { question, error: out.error }, out.error === "empty" ? 400 : 200);
-    const results = await resultsBlock(pool, req.session.broker, question, {}, langOf(req)).catch(() => null);
-    return show(req, res, { question, out, results });
+    const broker = req.session.broker;
+    const lang = langOf(req);
+    // The AI answers first and code writes the same kind of line from the results second; both are kept for the comparison. With the AI off or out of
+    // credit the line written from the results is the answer.
+    // The results are read first (once, logged) and given to Ask, so the answer and the list never disagree.
+    const block = await resultsBlock(pool, broker, { q: question }, lang, assets).catch(() => null);
+    const out = await Assistant.ask(pool, broker, question, { channel: "web", results: block ? block.data : null });
+    const local = block ? AnswerLine.line(block.data, lang) : "";
+    // No question_id = the AI did not answer (the older code-only answers have none): the line written from the results stands in.
+    if (out.error || !out.question_id) {
+      if (out.error === "empty" || !block || !block.data.total_projects) return out.error ? show(req, res, { question, error: out.error }, out.error === "empty" ? 400 : 200) : show(req, res, { question, out, results: block && block.view });
+      await Assistant.noteAnswers(pool, broker, { question, local, source: "local", logId: block.data.log_id, found: true });
+      return show(req, res, { question, out: { answer: local, found: true, lang, dates: [], source: "local" }, results: block.view });
+    }
+    await Assistant.noteAnswers(pool, broker, { questionId: out.question_id, ai: out.answer, local, source: "ai", logId: block && block.data.log_id });
+    return show(req, res, { question, out, results: block && block.view });
   });
 
   // The grouped results alone: pages, sort and removable filter chips (links, so no script is needed).
   web.get("/ask/results", async (req, res) => {
     const question = String(req.query.q || "").trim().slice(0, A.MAX_QUESTION);
     if (!question) return show(req, res, { error: "empty" }, 400);
-    const results = await resultsBlock(pool, req.session.broker, question, { page: Number(req.query.page) || 1, sort: String(req.query.sort || "best"), drop: String(req.query.drop || "") }, langOf(req));
-    return show(req, res, { question, results });
+    const block = await resultsBlock(pool, req.session.broker, { ...req.query, q: question }, langOf(req), assets);
+    return show(req, res, { question, results: block.view });
   });
 }
 

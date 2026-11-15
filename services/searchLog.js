@@ -85,4 +85,18 @@ async function mine(pool, broker, logId) {
   return rows[0] || null;
 }
 
-module.exports = { cleanText, record, report, mine, isId };
+const ACTIONS = ["filter", "sort", "chip_drop", "page", "open", "send", "report"];
+
+/** What the broker did after a search of theirs (a filter or sort changed, a chip removed, a page turned, a project opened or sent). Never throws. */
+async function action(pool, broker, logId, kind, detail = "") {
+  try {
+    if (!ACTIONS.includes(kind) || !isId(logId) || !(await mine(pool, broker, logId))) return { error: "not_found" };
+    await require("../lib/viewGuard").runWritable(() => pool.query("INSERT INTO search_actions (agency_id, broker_id, search_log_id, action, detail) VALUES ($1, $2, $3, $4, $5)", [broker.agency_id, broker.id, logId, kind, String(detail || "").slice(0, 120) || null]));
+    return { ok: true };
+  } catch (err) {
+    console.warn("Search action log failed:", err.message);
+    return { error: "failed" };
+  }
+}
+
+module.exports = { cleanText, record, report, mine, action, ACTIONS, isId };

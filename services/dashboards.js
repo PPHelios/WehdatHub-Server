@@ -198,7 +198,8 @@ function weekStart(at) {
 async function ownerDashboard(pool, broker, { weeks = 8, now = new Date(), config = getConfig() } = {}) {
   if (!isOwner(broker, config)) return null;
   const first = new Date(weekStart(now).getTime() - (weeks - 1) * 7 * DAY);
-  const bucket = (col) => `date_trunc('week', (${col}) AT TIME ZONE 'Africa/Cairo')`;
+  // The week as text ("2026-11-09"): a timestamp without a zone would be read in the server's own time zone and miss the week it belongs to.
+  const bucket = (col) => `to_char(date_trunc('week', (${col}) AT TIME ZONE 'Africa/Cairo'), 'YYYY-MM-DD')`;
   const weekly = async (sql) => (await pool.query(sql, [first.toISOString()])).rows;
   const activity = await weekly(
     `SELECT ${bucket("created_at")} AS week, count(DISTINCT agency_id)::int AS agencies, count(DISTINCT broker_id)::int AS brokers

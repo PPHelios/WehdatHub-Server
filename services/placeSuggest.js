@@ -19,7 +19,8 @@ async function lists(pool) {
   if (Date.now() - cache.at < CACHE_MS) return cache;
   const [places, areas, zones] = await Promise.all([
     pool.query("SELECT id, name_en, name_ar, aliases, area_id, subzone_id, lat, lng FROM map_places WHERE approved"),
-    Areas.approvedAreas(pool),
+    // The governorate comes with the areas (an attribute of the top area, shown with a place).
+    pool.query("SELECT id, parent_id, name_key, name_en, name_ar, aliases, lat, lng, status, governorate FROM areas WHERE status = 'approved' ORDER BY name_en NULLS LAST, name_ar").then((r) => r.rows),
     pool.query("SELECT place_id, area_id FROM place_zones").then((r) => r.rows).catch(() => [])
   ]);
   // The version changes only when an approved place, an area, a zone or the feature dictionary changes, so the phone can keep its copy until then.
@@ -36,10 +37,11 @@ function withZones(item, { zones, areas }, lang) {
 }
 
 /** The unit box's list for what is typed: places first, then features (domain/unitBox.js). */
-async function box(pool, text, lang = "ar") {
+async function box(pool, text, lang = "ar", { areasOnly = false } = {}) {
   const l = await lists(pool);
   const q = String(text || "").slice(0, 80);
-  const places = A.suggest(q, l, 6, lang).map((it) => withZones(it, l, lang));
+  // A project is filed under an area or sub-area, never under a compound: with areasOnly the compounds are left out.
+  const places = A.suggest(q, areasOnly ? { ...l, places: [] } : l, 6, lang).map((it) => withZones(it, l, lang));
   return [...places, ...UnitBox.suggestFeatures(q, lang, 6)];
 }
 

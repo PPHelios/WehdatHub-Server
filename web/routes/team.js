@@ -31,13 +31,13 @@ const ERRORS = {
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
   role: ["الدور مش مظبوط.", "The role isn't valid."],
   phone_taken: ["الرقم ده مسجل مع شركة تانية.", "This number is registered with another agency."],
-  not_found: ["الوسيط مش موجود.", "Broker not found."],
-  inactive: ["الوسيط موقوف؛ رجّعه الأول.", "The broker is deactivated; bring them back first."],
+  not_found: ["البروكر مش موجود.", "Broker not found."],
+  inactive: ["البروكر موقوف؛ رجّعه الأول.", "The broker is deactivated; bring them back first."],
   self: ["مينفعش توقف نفسك.", "You can't deactivate yourself."],
   no_bot: ["بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME)."],
   rate: ["دعوات كتير النهارده؛ جرب بكرة.", "Too many invites today; try tomorrow."],
   seats: ["مقاعد الباقة كلها مستخدمة؛ رقّي الباقة من صفحة الباقة.", "Every seat on your plan is taken; upgrade from the Plan page."],
-  linked: ["الوسيط مربوط بتيليجرام بالفعل.", "This broker is already on Telegram."],
+  linked: ["البروكر مربوط بتيليجرام بالفعل.", "This broker is already on Telegram."],
   rank: ["الأدمن والمالك يتداروا من الأدمن أو المالك بس.", "Only an admin or owner can manage an admin or owner."],
   forbidden: ["للمديرين بس.", "Managers only."],
   audit: ["مقدرناش نسجّل العملية فمنفذتش. جرّب تاني بعد شوية.", "Could not record this action, so it was not done. Try again shortly."],
@@ -57,7 +57,7 @@ function linkCard(broker, url, agencyName, lang) {
   return html`<section class="card notice ok" data-start-link>
   <h2>📨 ${L(lang, `لينك تيليجرام لـ ${broker.name}`, `Telegram link for ${broker.name}`)}</h2>
   <p class="row" dir="ltr"><input readonly value="${url}" id="start-link" aria-label="${L(lang, "لينك البداية", "Start link")}"> <button type="button" class="secondary" data-copy="#start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>
-  <p class="muted">${L(lang, "يشتغل مرة واحدة لمدة ٧ أيام. ابعته للوسيط؛ أول ما يدوس عليه حسابه على تيليجرام يتربط.", "Works once, for 7 days. Send it to the broker; tapping it links their Telegram account.")}</p>
+  <p class="muted">${L(lang, "يشتغل مرة واحدة لمدة ٧ أيام. ابعته للبروكر؛ أول ما يدوس عليه حسابه على تيليجرام يتربط.", "Works once, for 7 days. Send it to the broker; tapping it links their Telegram account.")}</p>
   ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener noreferrer">📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}
 </section>`;
 }
@@ -76,7 +76,7 @@ const hourOptions = (from, to, selected) => Array.from({ length: to - from + 1 }
 function rulesCard(rules, lang) {
   return html`<form method="post" action="/app/team/rules" class="card stack" data-lead-rules>
   <h2>⏱️ ${L(lang, "قاعدة الرد على العملاء", "Lead response rule")}</h2>
-  <p class="muted">${L(lang, "لو الوسيط مكلّمش عميل جديد اتسلمله في خلال الدقايق دي (بتتحسب في ساعات الشغل بس)، العميل بيتحول للوسيط اللي بعده والمديرين بيعرفوا.", "If a broker doesn't contact a new lead given to them within these minutes (counted in working hours only), the lead moves to the next broker and the managers are told.")}</p>
+  <p class="muted">${L(lang, "لو البروكر مكلّمش عميل جديد اتسلمله في خلال الدقايق دي (بتتحسب في ساعات الشغل بس)، العميل بيتحول للبروكر اللي بعده والمديرين بيعرفوا.", "If a broker doesn't contact a new lead given to them within these minutes (counted in working hours only), the lead moves to the next broker and the managers are told.")}</p>
   <label class="row"><input type="checkbox" name="enabled" value="on"${rules.enabled ? html` checked` : ""}> ${L(lang, "شغّال", "On")}</label>
   <label>${L(lang, "دقايق الانتظار", "Waiting minutes")} <input name="wait_minutes" type="number" min="${Rules.MIN_WAIT}" max="${Rules.MAX_WAIT}" value="${rules.wait_minutes}" required></label>
   <div class="row">
@@ -87,7 +87,7 @@ function rulesCard(rules, lang) {
     <div class="row">${DAYS.map((d, i) => html`<label><input type="checkbox" name="days" value="${i}"${rules.days.includes(i) ? html` checked` : ""}> ${d[lang === "en" ? 1 : 0]}</label>`)}</div>
   </fieldset>
   <label>${L(lang, "أقصى عدد تحويلات للعميل", "Most moves per lead")} <input name="max_jumps" type="number" min="1" max="${Rules.MAX_JUMPS}" value="${rules.max_jumps}"></label>
-  <p class="muted">${L(lang, "العميل اللي بتسجله لنفسك مش بيتحول. الوسيط اللي في إجازة مش بياخد عملاء جداد.", "A lead you add for yourself never moves. A broker who is away gets no new leads.")}</p>
+  <p class="muted">${L(lang, "العميل اللي بتسجله لنفسك مش بيتحول. البروكر اللي في إجازة مش بياخد عملاء جداد.", "A lead you add for yourself never moves. A broker who is away gets no new leads.")}</p>
   <button type="submit">${L(lang, "احفظ", "Save")}</button>
 </form>`;
 }
@@ -95,7 +95,7 @@ function rulesCard(rules, lang) {
 function routingCard({ routing, brokers }, lang) {
   return html`<form method="post" action="/app/team/routing" class="card stack" data-lead-routing>
   <h2>🔁 ${L(lang, "مين ياخد العملاء الجداد", "Who gets new leads")}</h2>
-  <label class="row"><input type="checkbox" name="round_robin" value="on"${routing.round_robin ? html` checked` : ""}> ${L(lang, "توزيع بالدور على الوسطاء", "Round robin between brokers")}</label>
+  <label class="row"><input type="checkbox" name="round_robin" value="on"${routing.round_robin ? html` checked` : ""}> ${L(lang, "توزيع بالدور على البروكرز", "Round robin between brokers")}</label>
   <p class="muted">${L(lang, "لو مقفول، العملاء اللي جايين من الإعلانات والفورمز بيفضلوا مع المديرين يوزعوهم بإيدهم، ومفيش تحويل تلقائي.", "When off, leads from ads and forms stay with the managers to hand out themselves, and nothing moves on its own.")}</p>
   <p class="muted">${L(lang, "اسحب الأسماء (أو استخدم الأسهم) لترتيب الدور: الأول ياخد العميل الجاي، وبعده اللي تحته. اللي في إجازة بيتعدّى.", "Drag the names (or use the arrows) to set the order: the first gets the next lead, then the one below. Anyone away is skipped.")}</p>
   <ol data-sortable>${brokers.map(

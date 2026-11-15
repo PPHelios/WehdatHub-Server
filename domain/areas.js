@@ -129,7 +129,8 @@ function suggest(text, { places = [], areas = [] }, limit = 8, lang = "en") {
     if (best) {
       // What to store when this suggestion is picked: a compound brings its own area; an area or sub-zone is the area itself.
       const at = kind === "compound" ? { area_id: row.area_id || null, subzone_id: row.subzone_id || null } : placement(areas, row.id);
-      out.push({ kind, id: row.id, label: nm(row), name_en: row.name_en || null, name_ar: row.name_ar || null, path: pathOf(row), via: best.via, ...at, score: best.score });
+      const gov = (kind === "compound" ? chain(areas, row.area_id)[0] : chain(areas, row.id)[0])?.governorate;
+      out.push({ kind, id: row.id, label: nm(row), name_en: row.name_en || null, name_ar: row.name_ar || null, path: pathOf(row), via: best.via, ...at, ...(gov ? { governorate: gov } : {}), score: best.score });
     }
   }
   return out

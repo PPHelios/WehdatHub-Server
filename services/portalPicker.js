@@ -69,14 +69,14 @@ async function handleInput(pool, broker, message, { reply, lang }) {
       return true;
     }
     await saveSession(pool, broker.id, { enquiryId: s.enquiryId, step: "broker", phone: e164 });
-    await reply(broker, en ? "👤 Send the broker's name or mobile number, or type *skip*." : "👤 ابعت اسم الوسيط أو رقم موبايله، أو اكتب *تخطي*.");
+    await reply(broker, en ? "👤 Send the broker's name or mobile number, or type *skip*." : "👤 ابعت اسم البروكر أو رقم موبايله، أو اكتب *تخطي*.");
     return true;
   }
 
   // step "broker"
   const target = await findBroker(pool, broker.agency_id, text);
   if (!target) {
-    await reply(broker, en ? "No single active broker matches that. Send the name or number again, or type *skip*." : "مفيش وسيط نشط مطابق للاسم أو الرقم ده. ابعته تاني، أو اكتب *تخطي*.");
+    await reply(broker, en ? "No single active broker matches that. Send the name or number again, or type *skip*." : "مفيش بروكر نشط مطابق للاسم أو الرقم ده. ابعته تاني، أو اكتب *تخطي*.");
     return true;
   }
   const res = await PortalEnquiries.assign(pool, broker, s.enquiryId, { phone: s.phone, brokerId: target.id });

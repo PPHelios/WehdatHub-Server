@@ -15,6 +15,17 @@ const Signup = require("../services/signup");
 const Dash = require("../services/dashboards");
 const Period = require("../lib/period");
 const { isManager, isAgencyOwner } = require("../lib/authz");
+const Gallery = require("../services/projectGallery");
+const G = require("../domain/gallery");
+const Storage = require("../lib/supabase");
+const RateLimit = require("../lib/rateLimit");
+const { uploads } = require("../web/uploads");
+
+// A project's photos: up to ${G.MAX_FILES} at a time. New-project photos are images only; the gallery upload also takes a PDF (sorted by AI).
+const PHOTOS = { name: "doc", maxCount: G.MAX_FILES, accept: /^image\/(jpeg|png|webp)$/ };
+const GALLERY_DOC = { name: "doc", maxCount: G.MAX_FILES, accept: /^(application\/pdf|image\/(jpeg|png|webp))$/ };
+const uploadPhotos = uploads([PHOTOS], { maxMb: 25 });
+const uploadGallery = uploads([GALLERY_DOC], { maxMb: 25 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = { forbidden: 403, not_found: 404, duplicate: 409 };
@@ -29,14 +40,66 @@ function register(api, { pool }) {
   api.get("/catalogue", async (req, res) => {
     const actor = req.session.broker;
     const archived = req.query.archived === "1";
-    const [projects, developers] = await Promise.all([Catalogue.listProjectsPage(pool, actor, { q: req.query.q, page: req.query.page, archived }), Catalogue.listDevelopersPage(pool, actor, { q: req.query.dq, page: req.query.dp })]);
+    // The same filters as the website's catalogue search: place (an area or sub-area id), features, developer, bedrooms, price up to.
+    const features = [].concat(req.query.f || []);
+    const [projects, developers] = await Promise.all([
+      Catalogue.listProjectsPage(pool, actor, { q: req.query.q, page: req.query.page, archived, place: req.query.pl, features, developer: req.query.dev, bedrooms: req.query.bed, maxPrice: req.query.max }),
+      Catalogue.listDevelopersPage(pool, actor, { q: req.query.dq, page: req.query.dp })
+    ]);
     res.json({ projects, developers, canEdit: isManager(actor) });
   });
 
+  // The search box (places, features, developers, projects), the developer list of the project form, and the message reader: the website's twins.
+  const ProjectPaste = require("../services/projectPaste");
+  const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
+  api.get("/catalogue/search-box", async (req, res) => res.json({ items: await ProjectPaste.searchBox(pool, req.session.broker, req.query.q, langOf(req)) }));
+  api.get("/catalogue/developers/suggest", managers, async (req, res) => res.json({ items: await ProjectPaste.developerBox(pool, req.session.broker, req.query.q) }));
+  api.post("/catalogue/projects/read", managers, async (req, res) => res.json(await ProjectPaste.read(pool, req.session.broker, String((req.body || {}).text || ""), langOf(req))));
+
   api.get("/catalogue/projects/:id", async (req, res) => {
-    const data = UUID.test(req.params.id) ? await Catalogue.getProject(pool, req.session.broker, req.params.id) : null;
-    return data ? res.json({ ...data, canEdit: isManager(req.session.broker) }) : res.status(404).json({ error: "not_found" });
+    const actor = req.session.broker;
+    const data = UUID.test(req.params.id) ? await Catalogue.getProject(pool, actor, req.params.id) : null;
+    if (!data) return res.status(404).json({ error: "not_found" });
+    // The project's photos: shared first, then layouts (hidden ones only for managers); the first shared photo is the cover.
+    const gal = await Gallery.list(pool, actor, req.params.id);
+    const order = { shared: 0, layout: 1, hidden: 2 };
+    const images = (gal ? gal.images : [])
+      .filter((i) => isManager(actor) || i.role !== "hidden")
+      .sort((a, b) => order[a.role] - order[b.role] || a.position - b.position)
+      .map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), role: i.role, kind: i.kind, mime: i.mime, match_status: i.match_status || null, listing_ids: i.listing_ids || [] }));
+    const cover = images.find((i) => i.role === "shared" && String(i.mime).startsWith("image/"));
+    return res.json({ ...data, images, cover_url: cover ? cover.url : null, canEdit: isManager(actor) });
   });
+
+  // Photos of a new or existing project (the website's upload twin): images only, up to 10, no AI: every photo is shared with all units.
+  // The AI sort is the separate, explicit gallery call below.
+  const uploadGate = async (req, res) => {
+    const gate = await RateLimit.hit(pool, `upload:broker:${req.session.broker.id}`, RateLimit.LIMITS.uploadBroker);
+    if (gate.allowed) return true;
+    res.status(429).set("Retry-After", String(gate.retryAfterSec || 30)).json({ error: "rate_limited" });
+    return false;
+  };
+  const galleryAnswer = (res, r) => {
+    if (r.error === "forbidden") return res.status(403).json({ error: "forbidden" });
+    if (r.error === "not_found") return res.status(404).json({ error: "not_found" });
+    if (r.error) return res.status(r.error === "ALLOWANCE" ? 402 : 422).json({ error: r.error, left: r.left, needed: r.needed });
+    return res.json(r);
+  };
+  api.post("/catalogue/projects/:id/photos", managers, uploadPhotos, async (req, res) => {
+    if (!(await uploadGate(req, res))) return;
+    return galleryAnswer(res, await Gallery.upload(pool, req.session.broker, req.params.id, { files: (req.files && req.files.doc) || [], sort: false }));
+  });
+  // "Sort with AI" (explicit, uses pages from the month's allowance; sort=1 is required for a PDF). Answers carry { error: ALLOWANCE, left, needed } like the website.
+  api.post("/catalogue/projects/:id/gallery", managers, uploadGallery, async (req, res) => {
+    if (!(await uploadGate(req, res))) return;
+    const body = req.body || {};
+    return galleryAnswer(res, await Gallery.upload(pool, req.session.broker, req.params.id, { files: (req.files && req.files.doc) || [], pages: body.pages, sort: body.sort === "1" || body.sort === "true" }));
+  });
+  api.post("/catalogue/projects/:id/gallery/:imageId", managers, async (req, res) => {
+    const b = req.body || {};
+    return galleryAnswer(res, await Gallery.update(pool, req.session.broker, req.params.id, req.params.imageId, { role: b.role, listingIds: Array.isArray(b.units) ? b.units : b.units_sent ? [].concat(b.unit || []) : undefined }));
+  });
+  api.post("/catalogue/projects/:id/gallery/:imageId/delete", managers, async (req, res) => galleryAnswer(res, await Gallery.remove(pool, req.session.broker, req.params.id, req.params.imageId)));
 
   api.post("/catalogue/projects/:id/archive", managers, async (req, res) => {
     const r = await Catalogue.archiveProject(pool, req.session.broker, req.params.id, req.body?.archived === true || req.body?.archived === "1");

@@ -15,7 +15,7 @@ const NOTICES = {
   linked: ["✅ الاستفسار اتربط بالوحدة.", "✅ The enquiry is linked to the unit."],
   assigned: ["✅ اتحول لعميل.", "✅ Now a lead."],
   colleague: ["✅ الرقم ده لعميل عند زميل: اتسجل الاستفسار عنده ومفيش تفاصيل ظاهرة.", "✅ The phone belongs to a colleague's lead: the enquiry was noted there, no details shown."],
-  merged: ["✅ الرقم كان لعميل موجود: اتضاف للعميل، والوسيط بتاعه لسه معاه.", "✅ The phone was already a lead: merged into it, and its broker stays."],
+  merged: ["✅ الرقم كان لعميل موجود: اتضاف للعميل، والبروكر بتاعه لسه معاه.", "✅ The phone was already a lead: merged into it, and its broker stays."],
   error: ["❌ حصلت مشكلة. اتأكد من البيانات وحاول تاني.", "❌ Something went wrong. Check the details and try again."]
 };
 const ERRORS = {
@@ -26,8 +26,8 @@ const ERRORS = {
   already_linked: ["رقم الإعلان ده متربط بوحدة تانية.", "That listing number is already linked to another unit."],
   unit_changed: ["الوحدة اتعدلت وإنت بتربط. جرب تاني.", "The unit changed while you were linking. Try again."],
   no_listing_number: ["الرابط ده مفيهوش رقم إعلان.", "This link has no listing number."],
-  assignee: ["الوسيط ده مش متاح دلوقتي.", "That broker isn't available."],
-  assignee_away: ["الوسيط ده في إجازة.", "That broker is away."]
+  assignee: ["البروكر ده مش متاح دلوقتي.", "That broker isn't available."],
+  assignee_away: ["البروكر ده في إجازة.", "That broker is away."]
 };
 
 const when = (d, lang) => (d ? new Date(d).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" }) : "");
@@ -43,8 +43,8 @@ function enquiryRow(e, brokers, lang) {
       ? html`<span>${e.lead_ref ? e.lead_ref : ""} ${e.assignee_name || ""}${e.merged ? html` <span class="muted">(${L(lang, "اتضاف لعميل موجود", "merged into a lead")})</span>` : ""}</span>`
       : html`<form method="post" action="/app/portal-enquiries/${e.id}/assign" class="stack">
           <input name="phone" dir="ltr" inputmode="tel" placeholder="+20 1xx xxx xxxx" required aria-label="${L(lang, "الرقم", "Phone")}">
-          <select name="broker_id" required aria-label="${L(lang, "الوسيط", "Broker")}">
-            <option value="">${L(lang, "اختار وسيط", "Choose a broker")}</option>
+          <select name="broker_id" required aria-label="${L(lang, "البروكر", "Broker")}">
+            <option value="">${L(lang, "اختار بروكر", "Choose a broker")}</option>
             ${brokers.map((b) => html`<option value="${b.id}">${b.name}</option>`)}
           </select>
           <button type="submit">${L(lang, "أضف وحوّل", "Add and assign")}</button>
@@ -57,10 +57,10 @@ function enquiryRow(e, brokers, lang) {
 /** The tab's content (inside the Leads page): the intro, the owner's mute and the table. */
 function enquiriesPanel({ rows, brokers, lang, owner, alertsOn, notice }) {
   return html`${notice || ""}
-<p class="muted">${L(lang, "استفسارات Bayut وDubizzle وNawy. الاسم والرابط بس. لما تضيف الرقم وتحوّل للوسيط، الاستفسار بيبقى عميل.", "Enquiries from Bayut, Dubizzle and Nawy: name and link only. Add the phone and assign a broker, and it becomes a lead.")}</p>
+<p class="muted">${L(lang, "استفسارات Bayut وDubizzle وNawy. الاسم والرابط بس. لما تضيف الرقم وتحوّل للبروكر، الاستفسار بيبقى عميل.", "Enquiries from Bayut, Dubizzle and Nawy: name and link only. Add the phone and assign a broker, and it becomes a lead.")}</p>
 ${owner ? html`<form method="post" action="/app/portal-enquiries/alerts" class="card stack"><label><input type="checkbox" name="on" value="1" ${alertsOn ? "checked" : ""}> ${L(lang, "تنبيهات الاستفسارات ليا (إنت المالك بس)", "Enquiry alerts for me (the owner only)")}</label><button type="submit">${L(lang, "حفظ", "Save")}</button></form>` : ""}
 ${rows.length
-  ? html`<div class="scroll card"><table><thead><tr><th>${L(lang, "التاريخ", "Date")}</th><th>${L(lang, "البوابة", "Portal")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "الرابط", "Link")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "الرقم والوسيط", "Phone and broker")}</th></tr></thead>
+  ? html`<div class="scroll card"><table><thead><tr><th>${L(lang, "التاريخ", "Date")}</th><th>${L(lang, "البوابة", "Portal")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "الرابط", "Link")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "الرقم والبروكر", "Phone and broker")}</th></tr></thead>
     <tbody>${rows.map((e) => enquiryRow(e, brokers, lang))}</tbody></table></div>`
   : html`<p class="card muted">${L(lang, "مفيش استفسارات لسه.", "No enquiries yet.")}</p>`}`;
 }

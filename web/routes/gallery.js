@@ -26,6 +26,7 @@ const ERRORS = {
   pages_required: ["اكتب أرقام الصفحات (مثلاً 1-6).", "Enter the page numbers (e.g. 1-6)."],
   pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
   too_many_pages: [`${G.MAX_FILES} بالكتير في المرة.`, `At most ${G.MAX_FILES} at a time.`],
+  SORT_PDF: ["ملف PDF لازم يتفرز بالذكاء الاصطناعي. علّم «افرز بالذكاء الاصطناعي».", "A PDF has to be sorted by AI. Tick \"Sort with AI\"."],
   ALLOWANCE: ["رصيد الشهر مش كفاية.", "This month's credits aren't enough."]
 };
 const KIND = { render: ["منظور", "Render"], amenity: ["خدمات", "Amenity"], master_plan: ["المخطط العام", "Master plan"], layout: ["مخطط وحدة", "Layout"], other: ["تاني", "Other"] };
@@ -79,9 +80,10 @@ function gallerySection(lang, manager, data, { reading = null, query = {} } = {}
     ? html`<form method="post" action="${base}" enctype="multipart/form-data" class="stack" data-gallery-upload>
     <label>${L(lang, `حمل صور (لحد ${G.MAX_FILES}) أو PDF`, `Upload photos (up to ${G.MAX_FILES}) or a PDF`)} <input type="file" name="doc" accept="image/jpeg,image/png,image/webp,application/pdf" multiple required></label>
     <label>${L(lang, "الصفحات (للـ PDF)", "Pages (for a PDF)")} <input name="pages" dir="ltr" placeholder="1-6" maxlength="40"></label>
-    <p class="muted">${reading?.enabled
-      ? L(lang, `الذكاء الاصطناعي بيفرز كل صورة (منظور، خدمات، مخطط عام، مخطط وحدة) ويربط المخططات بالوحدات حسب النوع والمساحة. من صفحات الشهر (فاضل ${reading.left}).`, `AI sorts each photo (render, amenity, master plan, unit layout) and attaches layouts to units by type and area. From this month's pages (${reading.left} left).`)
-      : L(lang, "قراءة الملفات مقفولة: الصور بتتضاف «لكل الوحدات» وتقدر تغيّر دور كل صورة.", "Document reading is off: photos are added for all units and you can change each one's role.")}</p>
+    ${reading?.enabled
+      ? html`<label class="check"><input type="checkbox" name="sort" value="1" data-gallery-sort> ${L(lang, "افرز بالذكاء الاصطناعي", "Sort with AI")}</label>
+    <p class="muted">${L(lang, `بيبص على كل صورة أو صفحة ويحدد هي منظور أو خدمات أو مخطط عام أو مخطط وحدة. المخطط بيتقرا (النوع والمساحة والغرف) ويتربط بالوحدات المناسبة تلقائي، والصور المش مهمة بتتخفي. بيفيد لو رفعت بروشور PDF أو صور كتير مخلوطة. بيخصم من صفحات الشهر (فاضل ${reading.left}). من غيره كل الصور بتتضاف «لكل الوحدات» وتقدر تغيّر دور كل صورة بإيدك.`, `Looks at each photo or page and decides: render, amenity, master plan or unit layout. A layout is read (type, area, bedrooms) and attached to the matching units by itself, and unhelpful pages are hidden. Useful for a PDF brochure or many mixed images. It uses this month's pages (${reading.left} left). Without it every photo is added for all units and you can change each one's role by hand.`)}</p>`
+      : html`<p class="muted">${L(lang, "قراءة الملفات مقفولة: الصور بتتضاف «لكل الوحدات» وتقدر تغيّر دور كل صورة.", "Document reading is off: photos are added for all units and you can change each one's role.")}</p>`}
     <button type="submit" class="secondary">${L(lang, "تحميل", "Upload")}</button>
   </form>`
     : ""}
@@ -104,7 +106,7 @@ function register(web, { pool }) {
     if (!isManager(broker)) return deny(req, res, 403, L(lang, "للمديرين بس", "Managers only"));
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
     if (!gate.allowed) return deny(req, res, 429, L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
-    const r = await Gallery.upload(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
+    const r = await Gallery.upload(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages, sort: req.body.sort === "1" });
     if (r.error === "not_found") return deny(req, res, 404, L(lang, "مش موجود", "Not found"));
     if (r.error) return res.redirect(303, back(req, `gallery_error=${encodeURIComponent(r.error)}`));
     return res.redirect(303, back(req, `gallery_added=${r.added}&shared=${r.shared}&matched=${r.matched}&unsure=${r.unsure}`));

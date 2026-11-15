@@ -19,7 +19,7 @@ function register(api, { pool }) {
   // The unit box (docs/plans/unified-unit-box.md), the same as the website's:
   // GET /places/box?q=… → { items: [place suggestions…, { kind: "feature", key, label }…] }
   api.get("/places/box", async (req, res) => {
-    return res.json({ items: await Suggest.box(pool, req.query.q, req.query.lang === "en" ? "en" : "ar") });
+    return res.json({ items: await Suggest.box(pool, req.query.q, req.query.lang === "en" ? "en" : "ar", { areasOnly: req.query.scope === "areas" }) });
   });
   // POST /places/box/resolve { text } → { place, features: [{ key, label }] }: what a pasted message names, no AI.
   api.post("/places/box/resolve", async (req, res) => {

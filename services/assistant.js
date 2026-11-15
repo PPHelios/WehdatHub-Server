@@ -170,7 +170,7 @@ async function unitBlock(pool, broker, projectIds) {
  * @returns {Promise<{ answer, found, lang, dates } | { error }>}
  *   dates: [{ project, prices, brochure, plans }] for the projects the answer could use (shown under the answer).
  */
-async function ask(pool, broker, question, { channel = "web", now = new Date() } = {}) {
+async function ask(pool, broker, question, { channel = "web", now = new Date(), results = null } = {}) {
   const q = String(question || "").trim().slice(0, A.MAX_QUESTION);
   if (!q) return { error: "empty" };
   const lang = A.langOf(q);
@@ -182,6 +182,24 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
   if (offers.total) {
     blocks.push({ title: `Offers written in project notes, ${offers.total} fit (agency data; check before quoting)`, as_of: cairoDay(now), text: offers.hits.map(({ project: p, unit: u }) => `- ${p.name}${p.name_en ? ` (${p.name_en})` : ""}, ${[p.district, p.city].filter(Boolean).join(" ")}: ${u.raw} [notes updated ${cairoDay(new Date(p.updated_at || now))}]`).join("\n") });
     for (const { project: p } of offers.hits) if (!dates.some((d) => d.project === p.name)) dates.push({ project: p.name, prices: null, brochure: null, plans: null, notes: cairoDay(new Date(p.updated_at || now)) });
+  }
+  // The projects that fit the question by their details (place, bedrooms, price from, down payment, offers): the same grouped search the results list
+  // shows (services/projectSearch.js; the caller passes it so the question is read and logged once). The model answers from them, and a "not found" can
+  // never contradict a list that has projects.
+  const found = results && results.total_projects ? results : null;
+  const resultsLine = found ? require("../domain/projectAnswerLine").line(found, lang) : null;
+  if (found) {
+    const money = (n) => (n == null ? "" : Number(n).toLocaleString("en-US"));
+    blocks.push({
+      title: `Projects in the catalogue that fit the question (${found.total_projects} in all; first ${found.projects.length}; details as recorded, check before quoting)`,
+      as_of: cairoDay(now),
+      text: "(The broker also sees a card for each of these projects right under your answer, so do NOT list or describe them one by one. Answer in one or two short sentences: how many fit, the price range, and what stands out. Say plainly when some have no unit details.)\n" + found.projects.map((p) => {
+        const bits = [p.name_en || p.name, [p.developer, p.place, p.governorate].filter(Boolean).join(", ") || null, p.price_from != null ? `from ${money(p.price_from)} EGP` : null,
+          ...p.facts.map((f) => `${f.label}: ${f.value}`), p.delivery ? `delivery ${p.delivery}` : null,
+          p.offers.length ? `units: ${p.offers.map((o) => [o.type, o.area != null ? `${o.area} m²` : null, o.bedrooms != null ? `${o.bedrooms} bed` : null, `${money(o.price)} EGP`, o.down != null ? `down ${money(o.down)}` : null].filter(Boolean).join(" ")).join("; ")}` : "no unit details recorded"];
+        return `- ${bits.filter(Boolean).join(" · ")}`;
+      }).join("\n")
+    });
   }
   const leads = await leadBlock(pool, broker, q, scopes);
   if (leads) blocks.push(leads);
@@ -204,16 +222,19 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     res = A.parseAnswer(r.text, lang);
     // The model said "not found" but the agency's own offers fit: the code's answer is shown, so the reply never contradicts the data.
     if (!res.found && offerReply) res = { answer: offerReply, found: true };
+    else if (!res.found && resultsLine) res = { answer: resultsLine, found: true };
   } catch (err) {
     // The AI is off or out of credit: matching offers or a named project are still answered by code from the data.
     if (offerReply) return { answer: offerReply, found: true, lang, dates };
+    if (resultsLine) return { answer: resultsLine, found: true, lang, dates };
     const plain = named.length ? await ProjectAnswer.answer(pool, broker.agency_id, q, lang, {}).catch(() => null) : null;
     if (plain) return { answer: plain, found: true, lang, dates: [] };
     return { error: AiBlock.kindOf(err) };
   }
 
   // Viewing another agency writes nothing: the question is not recorded there.
-  if (!ViewGuard.active()) await pool.query("INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", [
+  let questionId = null;
+  if (!ViewGuard.active()) questionId = (await pool.query("INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id", [
     broker.agency_id,
     broker.id,
     q,
@@ -222,8 +243,29 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     false,
     [named.length ? "projects" : null, leads ? "clients" : null, scopes.followups ? "followups" : null].filter(Boolean),
     now.toISOString()
-  ]);
-  return { answer: res.answer, found: res.found, lang, dates };
+  ])).rows[0].id;
+  return { answer: res.answer, found: res.found, lang, dates, question_id: questionId };
+}
+
+/**
+ * Keeps the two answer lines of a question for the later comparison: the AI's (when it answered) and the one written by code from the results.
+ * With an AI answer the question row exists already (question_id); without one the row is made here, found = the results had projects.
+ * source: "ai" | "local" = which line the broker saw. Never throws.
+ */
+async function noteAnswers(pool, broker, { questionId = null, question = "", ai = null, local = "", source = "ai", logId = null, found = false, channel = "web" } = {}) {
+  try {
+    if (ViewGuard.active()) return;
+    if (questionId) {
+      await pool.query("UPDATE assistant_questions SET local_answer = $2, ai_answer = $3, answer_source = $4, search_log_id = $5 WHERE id = $1 AND agency_id = $6", [questionId, local || null, ai || null, source, logId, broker.agency_id]);
+      return;
+    }
+    await pool.query(
+      "INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at, local_answer, ai_answer, answer_source, search_log_id) VALUES ($1, $2, $3, $4, $5, false, '{projects}', now(), $6, $7, $8, $9)",
+      [broker.agency_id, broker.id, String(question).slice(0, 500), channel, Boolean(found), local || null, ai || null, source, logId]
+    );
+  } catch (err) {
+    console.warn("Ask answer log failed:", err.message);
+  }
 }
 
 /** The data dates under an answer, one line. */
@@ -286,4 +328,4 @@ async function addInfo(pool, manager, { questionId = null, project = null, unit 
   return { ok: true, target };
 }
 
-module.exports = { addInfo, ask, datesLine, unanswered };
+module.exports = { addInfo, ask, noteAnswers, datesLine, unanswered };

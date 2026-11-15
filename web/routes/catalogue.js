@@ -24,10 +24,22 @@ const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 const { uploads } = require("../uploads");
 const Session = require("../session");
+const Suggest = require("../../services/placeSuggest");
+const ProjectPaste = require("../../services/projectPaste");
+const ProjectSearch = require("../../services/projectSearch");
+const ProjectRows = require("../../services/projectRows");
+const Features = require("../../domain/features");
+const Storage = require("../../lib/supabase");
+const { projectForm } = require("../views/projectForm");
+const { listPage } = require("../views/catalogueList");
+const { carousel } = require("../views/carousel");
 
 // F20: brochures, layouts and plan files kept in storage (PDF or photo).
 const FILE = { name: "file", maxCount: 1, accept: /^(application\/pdf|image\/(jpeg|png|webp))$/ };
 const uploadFile = uploads([FILE], { maxMb: Catalogue.MAX_FILE_MB });
+// A new project may come with photos (the carousel), a brochure file and a link.
+const PHOTOS = { name: "doc", maxCount: 10, accept: /^image\/(jpeg|png|webp)$/ };
+const uploadNew = uploads([FILE, PHOTOS], { maxMb: Catalogue.MAX_FILE_MB });
 const PLANS_DOC = { name: "doc", maxCount: PR.MAX_PAGES, accept: /^(application\/pdf|image\/(jpeg|png|webp|heic|heif)|text\/(csv|plain|comma-separated-values)|application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel|csv|octet-stream|zip))$/ };
 const uploadPlansDoc = uploads([PLANS_DOC], { maxMb: 25 });
 for (const re of [/^\/catalogue\/projects$/, /^\/catalogue\/projects\/[^/]+\/materials\/upload$/, /^\/catalogue\/projects\/[^/]+\/plans\/read$/]) Session.allowMultipart(re);
@@ -123,6 +135,14 @@ const FIELD = {
   delivery_quarter: ["الربع من 1 لـ 4.", "The quarter is 1 to 4."],
   maintenance_pct: ["الصيانة نسبة من 0 لـ 30.", "Maintenance is a % from 0 to 30."],
   developer_id: ["المطور ده مش موجود.", "That developer was not found."],
+  place: ["اختار المكان (كمبوند أو منطقة).", "Pick the place (a compound or an area)."],
+  price_from: ["السعر لازم يكون رقم.", "The price must be a number."],
+  area_acres: ["المساحة (فدان) لازم تكون رقم.", "The size (feddan) must be a number."],
+  down_pct_min: ["المقدم نسبة من 0 لـ 100.", "The down payment is a % from 0 to 100."],
+  years_max: ["السنين من 0 لـ 20.", "Years are 0 to 20."],
+  bedrooms: ["عدد الغرف من 1 لـ 9.", "Bedrooms are 1 to 9."],
+  property_types: ["نوع وحدة مش معروف.", "An unknown unit type."],
+  pin: ["لينك اللوكيشن مش مظبوط.", "The location link looks wrong."],
   contact_phone: ["رقم التليفون مش مظبوط.", "The phone number looks wrong."],
   phase_name: ["اكتب اسم المرحلة (ومايتكررش).", "Type the phase name (not used already)."],
   phase_status: ["اختار حالة المرحلة.", "Pick the phase status."],
@@ -162,84 +182,23 @@ function statusSelect(name, value, lang) {
   return html`<select name="${name}">${Catalogue.STATUSES.map((s) => html`<option value="${s}"${sel(value === s)}>${label2(STATUS, s, lang)}</option>`)}</select>`;
 }
 
-function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects") {
-  return html`<form method="post" action="${action}" class="card stack" data-project-form${p.id ? "" : html` enctype="multipart/form-data"`}>
-  <label>${L(lang, "اسم المشروع *", "Project name *")} <input name="name" required maxlength="120" value="${p.name || ""}"></label>
-  <label>${L(lang, "الاسم بالإنجليزي", "Name in English")} <input name="name_en" maxlength="120" dir="ltr" value="${p.name_en || ""}"></label>
-  <label>${L(lang, "المطور", "Developer")} <select name="developer_id"><option value="">—</option>${developers.map((d) => html`<option value="${d.id}"${sel(p.developer_id === d.id)}>${d.name}</option>`)}</select></label>
-  <label>${L(lang, "أو مطور جديد", "Or a new developer")} <input name="developer_name" maxlength="120"></label>
-  <label>${L(lang, "الحالة", "Status")} ${statusSelect("status", p.status || "selling", lang)}</label>
-  <div class="row">
-    <label>${L(lang, "المنطقة", "District")} <input name="district" maxlength="80" value="${p.district || ""}"></label>
-    <label>${L(lang, "المدينة", "City")} <input name="city" maxlength="80" value="${p.city || ""}"></label>
-  </div>
-  <label>🔒 ${L(lang, "لوكيشن المشروع (للشركة بس): لينك جوجل ماب", "Project location (agency only): Google Maps link")} <input name="pin" dir="ltr" autocomplete="off" value="${p.lat != null ? `${p.lat}, ${p.lng}` : ""}"></label>
-  <div class="row">
-    <label>${L(lang, "سنة الاستلام", "Delivery year")} <input name="delivery_year" inputmode="numeric" dir="ltr" size="5" value="${val(p.delivery_year)}"></label>
-    <label>${L(lang, "الربع (1-4)", "Quarter (1-4)")} <input name="delivery_quarter" inputmode="numeric" dir="ltr" size="2" value="${val(p.delivery_quarter)}"></label>
-    <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_pct" inputmode="decimal" dir="ltr" size="4" value="${val(p.maintenance_pct)}"></label>
-  </div>
-  <label>${L(lang, "ملاحظات المشروع (الوسطاء بيشوفوها والمساعد بيجاوب منها، متكتبش العمولة هنا)", "Project notes (brokers see them and Ask answers from them; never put commission here)")} <textarea name="notes" maxlength="1000" rows="2">${p.notes || ""}</textarea></label>
-  ${p.id ? "" : html`<fieldset data-new-materials><legend>📁 ${L(lang, "الملفات واللينكات (اختياري)", "Materials (optional)")}</legend>
-    <label>${L(lang, "بروشور أو ملف (PDF أو صورة، لحد 25 ميجا)", "Brochure or file (PDF or photo, up to 25 MB)")} <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
-    <label>${L(lang, "أو لينك (Drive، موقع المطور...)", "Or a link (Drive, developer site...)")} <input name="material_url" type="url" dir="ltr" placeholder="https://"></label>
-    <label><input type="checkbox" name="material_client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
-  </fieldset>`}
-  <button type="submit">${p.id ? L(lang, "حفظ المشروع", "Save project") : L(lang, "إضافة المشروع", "Add project")}</button>
-</form>`;
-}
-
 function developerForm(lang, d = {}, action = "/app/catalogue/developers") {
   return html`<form method="post" action="${action}" class="card stack" data-developer-form>
   <label>${L(lang, "اسم المطور *", "Developer name *")} <input name="name" required maxlength="120" value="${d.name || ""}"></label>
-  <label>${L(lang, "الاسم بالإنجليزي", "Name in English")} <input name="name_en" maxlength="120" dir="ltr" value="${d.name_en || ""}"></label>
+  <label>${L(lang, "الاسم بالإنجليزي (اختياري)", "Name in English (optional)")} <input name="name_en" maxlength="120" dir="ltr" value="${d.name_en || ""}"></label>
   <p class="muted">🔒 ${L(lang, "بيانات التواصل للمديرين بس، وعمرها ما بتظهر للعميل.", "The contact is for managers only and never shown to clients.")}</p>
-  <label>${L(lang, "مسؤول المبيعات", "Sales contact")} <input name="contact_name" maxlength="120" value="${d.contact_name || ""}"></label>
-  <label>${L(lang, "تليفونه", "Phone")} <input name="contact_phone" maxlength="30" dir="ltr" inputmode="tel" value="${d.contact_phone || ""}"></label>
+  <label>${L(lang, "مسؤول المبيعات (اختياري)", "Sales contact (optional)")} <input name="contact_name" maxlength="120" value="${d.contact_name || ""}"></label>
+  <label>${L(lang, "تليفونه (اختياري)", "Phone (optional)")} <input name="contact_phone" maxlength="30" dir="ltr" inputmode="tel" value="${d.contact_phone || ""}"></label>
   <fieldset><legend>${L(lang, "معلومات عامة (اختياري، كلها نص حر)", "General information (optional, free text)")}</legend>
     <label>${L(lang, "عن الشركة", "About the company")} <textarea name="about" maxlength="2000" rows="2">${d.about || ""}</textarea></label>
     <label>${L(lang, "مشروعات سابقة (سطر لكل مشروع)", "Previous projects (one per line)")} <textarea name="past_projects" maxlength="2000" rows="3">${d.past_projects || ""}</textarea></label>
     <label>${L(lang, "سجل التسليم والسمعة", "Delivery record and reputation")} <textarea name="delivery_record" maxlength="2000" rows="2">${d.delivery_record || ""}</textarea></label>
     <label>${L(lang, "أنظمة السداد المعتادة", "Usual payment terms")} <textarea name="usual_payment_terms" maxlength="2000" rows="2">${d.usual_payment_terms || ""}</textarea></label>
-    <label>${L(lang, "تحذيرات للوسطاء", "Warnings for brokers")} <textarea name="warnings" maxlength="2000" rows="2">${d.warnings || ""}</textarea></label>
+    <label>${L(lang, "تحذيرات للبروكرز", "Warnings for brokers")} <textarea name="warnings" maxlength="2000" rows="2">${d.warnings || ""}</textarea></label>
   </fieldset>
   <label>${L(lang, "ملاحظات داخلية للمديرين (المساعد مش بيقراها)", "Internal notes, managers only (Ask does not read them)")} <textarea name="notes" maxlength="1000" rows="2">${d.notes || ""}</textarea></label>
   <button type="submit">${d.id ? L(lang, "حفظ المطور", "Save developer") : L(lang, "إضافة المطور", "Add developer")}</button>
 </form>`;
-}
-
-function listPage(lang, manager, { projects, allProjects = [], projPage, developers, devPage, pq = "", dq = "", archived, notice }) {
-  return html`<h1>🏗️ ${L(lang, "كتالوج المطورين", "Developer catalogue")}</h1>
-${notice || ""}
-<nav class="row">${manager ? html`<a class="btn secondary" href="/app/library">📚 ${L(lang, "مكتبة المشاريع", "Project library")}</a><a class="btn" href="/app/catalogue/updates" data-quick-updates>⚡ ${L(lang, "تحديث سريع", "Quick update")}</a>` : ""}<a class="btn secondary" href="/app/catalogue${archived ? "" : "?archived=1"}">${archived ? L(lang, "المشاريع الحالية", "Current projects") : L(lang, "المشاريع المؤرشفة", "Archived projects")}</a></nav>
-<section class="card">
-  <h2>${archived ? L(lang, "مؤرشفة", "Archived") : L(lang, "المشاريع", "Projects")}</h2>
-  <form method="get" action="/app/catalogue" class="row" role="search">
-    <label>${L(lang, "ابحث باسم المشروع أو المطور", "Search by project or developer name")} <input name="pq" list="project-names" value="${pq}" autocomplete="off"></label>
-    <datalist id="project-names">${allProjects.map((pr) => html`<option value="${pr.name}"></option>`)}</datalist>
-    ${archived ? html`<input type="hidden" name="archived" value="1">` : ""}
-    <button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button>
-  </form>
-  ${projects.length
-    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "المشروع", "Project")}</th><th>${L(lang, "المطور", "Developer")}</th><th>${L(lang, "الحالة", "Status")}</th><th>${L(lang, "الاستلام", "Delivery")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "أنظمة سداد", "Plans")}</th></tr></thead>
-      <tbody>${projects.map((p) => html`<tr data-project="${p.id}"><td><a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a></td><td>${devName(p, lang)}</td><td>${label2(STATUS, p.status, lang)}</td><td dir="ltr">${deliveryText(p, lang)}</td><td>${p.units}</td><td>${p.plans}</td></tr>`)}</tbody></table></div>`
-    : html`<p class="muted">${pq ? L(lang, "مفيش مشروع بالاسم ده.", "No project matches that name.") : L(lang, "لسه مفيش مشاريع.", "No projects yet.")}</p>`}
-  ${projPage && projPage.pages > 1 ? html`<nav class="row" aria-label="${L(lang, "صفحات المشاريع", "Project pages")}">${projPage.page > 1 ? html`<a href="/app/catalogue?pq=${encodeURIComponent(pq)}&pp=${projPage.page - 1}${archived ? "&archived=1" : ""}">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${projPage.page} / ${projPage.pages}</span>${projPage.page < projPage.pages ? html`<a href="/app/catalogue?pq=${encodeURIComponent(pq)}&pp=${projPage.page + 1}${archived ? "&archived=1" : ""}">${L(lang, "التالي", "Next")}</a>` : ""}</nav>` : ""}
-</section>
-${manager && !archived ? html`<details class="card"><summary>➕ ${L(lang, "مشروع جديد", "New project")}</summary>${projectForm(lang, developers)}</details>` : ""}
-<section class="card">
-  <h2>${L(lang, "المطورين", "Developers")}</h2>
-  <form method="get" action="/app/catalogue" class="row" role="search">
-    <label>${L(lang, "ابحث باسم المطور", "Search by developer name")} <input name="dq" list="developer-names" value="${dq}" autocomplete="off"></label>
-    <datalist id="developer-names">${developers.map((d) => html`<option value="${d.name}"></option>`)}</datalist>
-    <button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button>
-  </form>
-  ${devPage.items.length
-    ? html`<ul>${devPage.items.map((d) => html`<li data-developer="${d.id}">${manager ? html`<a href="/app/catalogue/developers/${d.id}">${d.name}</a>` : d.name}${d.name_en ? ` · ${d.name_en}` : ""} · ${d.projects} ${L(lang, "مشروع", "projects")}</li>`)}</ul>
-      <nav class="row" aria-label="${L(lang, "صفحات المطورين", "Developer pages")}">${devPage.page > 1 ? html`<a href="/app/catalogue?dq=${encodeURIComponent(dq)}&dp=${devPage.page - 1}">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${devPage.page} / ${devPage.pages}</span>${devPage.page < devPage.pages ? html`<a href="/app/catalogue?dq=${encodeURIComponent(dq)}&dp=${devPage.page + 1}">${L(lang, "التالي", "Next")}</a>` : ""}</nav>`
-    : html`<p class="muted">${dq ? L(lang, "مفيش مطور بالاسم ده.", "No developer matches that name.") : L(lang, "لسه مفيش مطورين.", "No developers yet.")}</p>`}
-</section>
-${manager ? html`<details class="card"><summary>➕ ${L(lang, "مطور جديد", "New developer")}</summary>${developerForm(lang)}</details>` : ""}`;
 }
 
 function planLine(pl, lang) {
@@ -321,27 +280,42 @@ function clarifyCard(lang, base, notes) {
 </section>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null, gallery = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null, gallery = null, photos = [], askContext = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
-  const overviewTab = html`<section class="card stack" id="details" data-project-status="${p.status}">
+  const facts = [
+    p.price_from > 0 && [L(lang, "السعر يبدأ من", "Price from"), Commission.money(p.price_from, lang)],
+    p.area_acres && [L(lang, "المساحة", "Size"), `${Number(p.area_acres)} ${L(lang, "فدان", "feddan")}`],
+    p.bedroom_options?.length && [L(lang, "الغرف", "Bedrooms"), p.bedroom_options.join(" · ")],
+    p.down_pct_min && [L(lang, "أقل مقدم", "Lowest down payment"), `${Number(p.down_pct_min)}%`],
+    p.years_max && [L(lang, "أطول تقسيط", "Longest term"), `${Number(p.years_max)} ${L(lang, "سنين", "years")}`],
+    p.discount_pct && [L(lang, "خصم", "Discount"), `${Number(p.discount_pct)}%`],
+    p.delivery_raw && [L(lang, "الاستلام (زي ما اتكتب)", "Delivery (as written)"), p.delivery_raw],
+    ...(data.facts || []).map((f) => [lang === "en" ? f.label_en : f.label_ar, f.value])
+  ].filter(Boolean);
+  const overviewTab = html`${photos.length ? carousel(photos, lang) : ""}<section class="card stack proj-head" id="details" data-project-status="${p.status}">
   <p>${label2(STATUS, p.status, lang)} · ${L(lang, "الاستلام", "Delivery")}: <span dir="ltr">${deliveryText(p, lang)}</span> · ${L(lang, "الصيانة", "Maintenance")}: ${pctText(p.maintenance_pct)}${p.archived_at ? html` · <strong>${L(lang, "مؤرشف", "Archived")}</strong>` : ""}</p>
+  ${facts.length ? html`<dl class="pj-dl" data-project-facts>${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ""}
+  ${(p.feature_keys || []).length ? html`<p class="row">${p.feature_keys.map((k) => html`<span class="chip chip-feature">${Features.featureLabel(k, lang)}</span>`)}</p>` : ""}
   ${[p.district, p.city].filter(Boolean).length ? html`<p>📍 ${[p.district, p.city].filter(Boolean).join("، ")}</p>` : ""}
-  <p>🏢 ${d ? d.name : "—"}${manager && d?.contact_name ? ` · ${d.contact_name}` : ""}${manager && d?.contact_phone ? html` · <a href="tel:${d.contact_phone}" dir="ltr" data-developer-contact>${d.contact_phone}</a>` : ""}</p>
+  ${d ? html`<p>🏢 ${d.name}${manager && d?.contact_name ? ` · ${d.contact_name}` : ""}${manager && d?.contact_phone ? html` · <a href="tel:${d.contact_phone}" dir="ltr" data-developer-contact>${d.contact_phone}</a>` : ""}</p>` : ""}
   ${manager && d?.notes ? html`<p class="muted">🔒 ${d.notes} <span>(${L(lang, "ملاحظات المطور: مش بتتقرا في السؤال", "developer notes: not used by Ask")})</span></p>` : ""}
 </section>
-${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل المشروع", "Edit project")}</summary>${projectForm(lang, developers, p, base)}
-  <form method="post" action="${base}/archive"><input type="hidden" name="archived" value="${p.archived_at ? "0" : "1"}"><button type="submit" class="secondary">${p.archived_at ? L(lang, "رجّعه من الأرشيف", "Restore") : L(lang, "أرشفة المشروع", "Archive project")}</button></form></details>` : ""}
+${manager ? html`<div class="row proj-actions"><a class="btn" href="${base}/edit" data-edit-project>${L(lang, "تعديل المشروع", "Edit project")}</a>
+  <form method="post" action="${base}/archive" class="inline"><input type="hidden" name="archived" value="${p.archived_at ? "0" : "1"}"><button type="submit" class="secondary">${p.archived_at ? L(lang, "رجّعه من الأرشيف", "Restore") : L(lang, "أرشفة المشروع", "Archive project")}</button></form></div>` : ""}
 
 <h2 id="assistant-knows">🤖 ${L(lang, "اللي المساعد (اسأل) عارفه", "What the assistant (Ask) knows")}</h2>
-<p class="muted">${L(lang, "الوسطاء بيشوفوا كل ده، والمساعد بيجاوب منه. مفيش هنا حاجة سرية: العمولة لوحدها تحت وللمديرين بس.", "Brokers see all of this and Ask answers from it. Nothing secret goes here: commission terms are kept apart below, managers only.")}</p>
+<p class="muted">${L(lang, "البروكرز بيشوفوا كل ده، والمساعد بيجاوب منه. مفيش هنا حاجة سرية: العمولة لوحدها تحت وللمديرين بس.", "Brokers see all of this and Ask answers from it. Nothing secret goes here: commission terms are kept apart below, managers only.")}</p>
+${askContext ? html`<section class="card stack" id="ask-context" data-ask-context><h3>${L(lang, "اللي المساعد بيقراه عن المشروع ده", "What Ask reads about this project")}</h3>
+  <ul class="ask-lines">${askContext.summary.split("\n").filter(Boolean).map((line) => html`<li>${line}</li>`)}</ul>
+  <p class="muted small">${L(lang, "ده متكتب أوتوماتيك من تفاصيل المشروع (الأرقام والوحدات والمميزات والتفاصيل التانية) والملاحظات تحت. غيّر التفاصيل من «تعديل المشروع» والمساعد هيتحدّث لوحده.", "Written automatically from the project's details (numbers, units, features, other facts) and the notes below. Change the details with Edit project and Ask updates itself.")}${askContext.built_at ? ` ${L(lang, "آخر تحديث", "Updated")}: ${new Date(askContext.built_at).toISOString().slice(0, 10)}` : ""}</p></section>` : ""}
 ${p.notes ? html`<section class="card" id="project-notes" data-project-notes><h3>📝 ${L(lang, "ملاحظات المشروع", "Project notes")}</h3><p>${p.notes}</p></section>` : ""}
 ${manager ? clarifyCard(lang, base, p.notes) : ""}
-${highlights || ""}
-${prices || ""}
+${highlights ? html`<details class="proj-fold"><summary>✨ ${L(lang, "نقاط مميزة وقراءة البروشور", "Highlights and brochure")}</summary>${highlights}</details>` : ""}
+${prices ? html`<details class="proj-fold" id="prices-fold"><summary>🏷️ ${L(lang, "الأسعار وزيادات الأسعار", "Prices and price increases")}</summary>${prices}</details>` : ""}
 
-<section class="card" id="phases">
+<details class="proj-fold" id="phases-fold"><summary>${L(lang, "المراحل", "Phases")}${phases.length ? ` (${phases.length})` : ""}</summary><section class="card" id="phases">
   <h2>${L(lang, "المراحل", "Phases")}</h2>
   ${phases.length ? html`<ul>${phases.map((ph) => html`<li data-phase="${ph.id}">${ph.name} · ${label2(STATUS, ph.status, lang)} · <span dir="ltr">${deliveryText(ph, lang)}</span>${manager ? html` <form method="post" action="${base}/phases/${ph.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش مراحل (المشروع كله مرحلة واحدة).", "No phases (the whole project is one).")}</p>`}
   ${manager ? html`<form method="post" action="${base}/phases" class="row" data-phase-form>
@@ -350,9 +324,9 @@ ${prices || ""}
     <input name="delivery_year" inputmode="numeric" dir="ltr" size="5" placeholder="${L(lang, "سنة الاستلام", "Delivery year")}" aria-label="${L(lang, "سنة الاستلام", "Delivery year")}">
     <input name="delivery_quarter" inputmode="numeric" dir="ltr" size="2" placeholder="Q" aria-label="${L(lang, "الربع", "Quarter")}">
     <button type="submit" class="secondary">${L(lang, "إضافة مرحلة", "Add phase")}</button></form>` : ""}
-</section>
+</section></details>
 
-<p class="row"><a class="btn secondary" href="${base}/present" data-present-link>${L(lang, "عرض للعميل", "Client presentation")}</a> <a class="btn secondary" href="${base}/calculator" data-calc-link>${L(lang, "حاسبة الأنظمة", "Payment calculator")}</a></p>
+<p class="row"><a class="btn" href="${base}/present" data-present-link>${L(lang, "عرض للعميل", "Client presentation")}</a> <a class="btn secondary" href="${base}/calculator" data-calc-link>${L(lang, "حاسبة الأنظمة", "Payment calculator")}</a></p>
 `;
   const plansTab = html`<section class="card" id="plans">
   <h2>💳 ${L(lang, "أنظمة السداد", "Payment plans")}</h2>
@@ -397,7 +371,7 @@ ${gallery || ""}
   </form>` : ""}
 </section>
 ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة (للمديرين بس)", "Commission (managers only)")}</h2>
-<p class="muted">${L(lang, "سري: مش بيظهر للوسطاء ولا للعملاء ولا للمساعد.", "Secret: never shown to brokers, clients or Ask.")}</p>${commissionTerms}` : ""}
+<p class="muted">${L(lang, "سري: مش بيظهر للبروكرز ولا للعملاء ولا للمساعد.", "Secret: never shown to brokers, clients or Ask.")}</p>${commissionTerms}` : ""}
 
 `;
   const unitsTab = html`<section class="card" id="units">
@@ -420,7 +394,12 @@ ${notice || ""}
 ${tabs("proj-tabs", phaseTabs)}`;
 }
 
-function register(web, { pool, page }) {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const nameIn = (r, lang) => (r ? (lang === "en" ? r.name_en || r.name_ar : r.name_ar || r.name_en) : "");
+/** A new-project form posts paste_text always; the place is required there (the service itself only needs a name). */
+const needsPlace = (b) => b.paste_text !== undefined && !String(b.area_id || "").trim() && !String(b.compound || "").trim();
+
+function register(web, { pool, page, assets }) {
   const forbidden = (req, res) => res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
   const notFound = (req, res) => res.status(404).type("text/plain").send(L(langOf(req), "مش موجود", "Not found"));
   const title = (lang) => L(lang, "كتالوج المطورين", "Developer catalogue");
@@ -437,13 +416,55 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const actor = req.session.broker;
     const archived = req.query.archived === "1";
-    const [projPage, allProjects, developers, devPage] = await Promise.all([
-      Catalogue.listProjectsPage(pool, actor, { q: req.query.pq, page: req.query.pp, archived }),
-      Catalogue.listProjects(pool, actor, { archived }),
-      Catalogue.listDevelopers(pool, actor),
-      Catalogue.listDevelopersPage(pool, actor, { q: req.query.dq, page: req.query.dp })
+    const q = req.query;
+    const state = {
+      pq: String(q.pq || "").slice(0, 80),
+      pl: UUID.test(q.pl) ? q.pl : "",
+      f: [].concat(q.f || []).filter((k) => Features.isFeatureKey(k)),
+      dev: UUID.test(q.dev) ? q.dev : "",
+      bed: /^[1-9]$/.test(q.bed) ? q.bed : "",
+      max: String(q.max || "").slice(0, 15),
+      archived
+    };
+    const [projPage, devPage, dev, lists] = await Promise.all([
+      ProjectSearch.browse(pool, actor, { q: state.pq, page: q.pp, archived, place: state.pl, features: state.f, developer: state.dev, bedrooms: state.bed, maxPrice: state.max }),
+      Catalogue.listDevelopersPage(pool, actor, { page: q.dp }),
+      state.dev ? Catalogue.getDeveloper(pool, actor, state.dev) : null,
+      state.pl ? Suggest.lists(pool) : null
     ]);
-    return page(req, res, { title: title(lang), nav: "catalogue", body: listPage(lang, isManager(actor), { projects: projPage.items, allProjects, projPage, developers, devPage, pq: req.query.pq || "", dq: req.query.dq || "", archived, notice: notice || savedNotice(req) }) }, status);
+    const placeRow = lists && (lists.places.find((x) => x.id === state.pl) || lists.areas.find((x) => x.id === state.pl));
+    const labels = { place: nameIn(placeRow, lang), developer: dev ? dev.name : "" };
+    const manager = isManager(actor);
+    const body = html`${listPage(lang, { projects: projPage.projects, projPage, devPage, state, labels, notice: notice || savedNotice(req), manager, developerForm: manager ? developerForm(lang) : "" })}<script src="${assets.url("catalogueSearch.js")}"></script>`;
+    return page(req, res, { title: title(lang), nav: "catalogue", body }, status);
+  };
+
+  // The add/edit project form: the unit box for the place and features, a message reader, the developer list. Shown for a GET (a new
+  // project, or one to edit) and again, with what was typed, after a refused save.
+  const showForm = async (req, res, { project = null, notice = null, status = 200 } = {}) => {
+    const lang = langOf(req);
+    const actor = req.session.broker;
+    if (!isManager(actor)) return forbidden(req, res);
+    const l = await Suggest.lists(pool);
+    const b = req.method === "POST" ? req.body : null;
+    const placeRow = project && l.places.find((x) => x.id === project.place_id);
+    const v = b
+      ? { ...b, bedroom_options: [].concat(b.bedrooms || []).map(Number), property_types: [].concat(b.property_types || []), feature_keys: [].concat(b.feature || []), features_other: String(b.features_other || "").split(/[,،]/).map((x) => x.trim()).filter(Boolean) }
+      : { ...project, compound: nameIn(placeRow, lang) };
+    const place = await Suggest.placeChip(pool, { compound: v.compound, area_id: v.area_id, subzone_id: v.subzone_id }, lang);
+    const dev = b
+      ? (UUID.test(b.developer_id) ? { id: b.developer_id, name: (await Catalogue.getDeveloper(pool, actor, b.developer_id))?.name || b.developer_name } : b.developer_name || b.developer_global_id ? { name: b.developer_name || (await pool.query("SELECT name FROM global_developers WHERE id::text = $1", [b.developer_global_id])).rows[0]?.name || "", global_id: b.developer_global_id || undefined } : null)
+      : project && project.developer_id ? { id: project.developer_id, name: project.developer_name } : null;
+    const edit = Boolean(project);
+    const base = edit ? `/app/catalogue/projects/${project.id}` : "/app/catalogue";
+    const form = projectForm({ values: v, mode: edit ? "edit" : "new", action: edit ? base : "/app/catalogue/projects", lang, areas: l.areas, place, developer: dev, error: notice, cancelHref: base, sourceText: v.paste_text ?? (project ? project.source_text || "" : "") });
+    const body = html`<p><a href="${base}">‹ ${edit ? project.name : L(lang, "الكتالوج", "Catalogue")}</a></p><div class="uf-top"><h1>${edit ? L(lang, "تعديل المشروع", "Edit project") : L(lang, "مشروع جديد", "New project")}</h1></div>${form}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("projectForm.js")}"></script>`;
+    return page(req, res, { title: edit ? project.name : L(lang, "مشروع جديد", "New project"), nav: "catalogue", body }, status);
+  };
+  const showNew = (req, res, notice = null, status = 200) => showForm(req, res, { notice, status });
+  const showEdit = async (req, res, notice = null, status = 200) => {
+    const data = await Catalogue.getProject(pool, req.session.broker, req.params.id);
+    return data ? showForm(req, res, { project: data.project, notice, status }) : notFound(req, res);
   };
 
   const showProject = async (req, res, notice = null, status = 200) => {
@@ -465,8 +486,12 @@ function register(web, { pool, page }) {
     const highlights = highlightsSection(lang, manager, data.project, { reading, query: req.query });
     const plansRead = manager ? plansReadSection(lang, data.project, reading, req.query) : null;
     // F23: the project's photo gallery.
-    const gallery = gallerySection(lang, manager, await Gallery.list(pool, actor, data.project.id), { reading, query: req.query });
-    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights, plansRead, gallery }) }, status);
+    const galleryData = await Gallery.list(pool, actor, data.project.id);
+    const gallery = gallerySection(lang, manager, galleryData, { reading, query: req.query });
+    const photos = (galleryData?.images || []).filter((i) => i.role === "shared" && String(i.mime || "").startsWith("image/")).map((i) => Storage.photoUrl(i.url));
+    // What Ask reads about this project (the stored context: details, offers, facts, notes), shown as it is.
+    const askContext = await require("../../services/projectContext").contextFor(pool, actor.agency_id, data.project.id).catch(() => null);
+    return page(req, res, { title: data.project.name, nav: "catalogue", body: html`<div class="proj-page">${projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights, plansRead, gallery, photos, askContext })}</div>` }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */
@@ -481,10 +506,29 @@ function register(web, { pool, page }) {
   const actorOf = (req) => req.session.broker;
 
   web.get("/catalogue", (req, res) => showList(req, res));
+  // JSON for the page's scripts: the search box (places, features, developers, projects) and the form's developer list.
+  web.get("/catalogue/search-box", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    return res.json({ items: await ProjectPaste.searchBox(pool, actorOf(req), req.query.q, langOf(req)) });
+  });
+  web.get("/catalogue/developers/suggest", async (req, res) => {
+    if (!isManager(actorOf(req))) return forbidden(req, res);
+    res.set("Cache-Control", "no-store");
+    return res.json({ items: await ProjectPaste.developerBox(pool, actorOf(req), req.query.q) });
+  });
+  // A pasted launch message → what the form shows (free, no AI, nothing saved).
+  web.post("/catalogue/projects/read", async (req, res) => {
+    if (!isManager(actorOf(req))) return forbidden(req, res);
+    res.set("Cache-Control", "no-store");
+    return res.json(await ProjectPaste.read(pool, actorOf(req), String((req.body || {}).text || ""), langOf(req)));
+  });
+  web.get("/catalogue/projects/new", (req, res) => showForm(req, res));
+  web.get("/catalogue/projects/:id/edit", (req, res) => showEdit(req, res));
   web.post("/catalogue/developers", write((req) => Catalogue.saveDeveloper(pool, actorOf(req), req.body), { show: showList, done: () => "/app/catalogue?saved=1" }));
-  // F20: a new project may come with a file and/or a link for its materials.
-  web.post("/catalogue/projects", uploadFile, write(async (req) => {
+  // A new project may come with photos (the carousel), a brochure file and/or a link for its materials.
+  web.post("/catalogue/projects", uploadNew, write(async (req) => {
     const actor = actorOf(req);
+    if (needsPlace(req.body)) return { error: "invalid", field: "place" };
     const r = await Catalogue.saveProject(pool, actor, req.body);
     if (r.error) return r;
     const visible = req.body.material_client_visible;
@@ -493,8 +537,10 @@ function register(web, { pool, page }) {
     const linkR = String(req.body.material_url || "").trim()
       ? await Catalogue.saveMaterial(pool, actor, r.project.id, { label: L(langOf(req), "لينك", "Link"), kind: "other", url: req.body.material_url, client_visible: visible })
       : { ok: true };
-    return { ...r, materialFailed: Boolean(fileR.error || linkR.error) };
-  }, { show: showList, done: (_req, r) => `/app/catalogue/projects/${r.project.id}?saved=${r.materialFailed ? "material_bad" : "1"}` }));
+    const photos = req.files?.doc || [];
+    const photoR = photos.length ? await Gallery.upload(pool, actor, r.project.id, { files: photos }) : { ok: true };
+    return { ...r, materialFailed: Boolean(fileR.error || linkR.error || photoR.error) };
+  }, { show: showNew, done: (_req, r) => `/app/catalogue/projects/${r.project.id}?saved=${r.materialFailed ? "material_bad" : "1"}` }));
 
   const showDeveloper = async (req, res, notice = null, status = 200) => {
     const lang = langOf(req);
@@ -645,7 +691,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     return page(req, res, { title: `${L(lang, "حاسبة", "Calculator")} · ${data.project.name}`, nav: "catalogue", body });
   });
   web.get("/catalogue/projects/:id", (req, res) => showProject(req, res));
-  web.post("/catalogue/projects/:id", write((req) => Catalogue.saveProject(pool, actorOf(req), { ...req.body, id: req.params.id }), { show: showProject, done: (req) => projectUrl(req) }));
+  web.post("/catalogue/projects/:id", write((req) => (needsPlace(req.body) ? { error: "invalid", field: "place" } : Catalogue.saveProject(pool, actorOf(req), { ...req.body, id: req.params.id })), { show: showEdit, done: (req) => projectUrl(req) }));
   web.post("/catalogue/projects/:id/clarify", write((req) => Catalogue.addClarification(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#clarify` }));
   web.post("/catalogue/projects/:id/archive", write((req) => Catalogue.archiveProject(pool, actorOf(req), req.params.id, req.body.archived === "1"), { show: showProject, done: (req) => projectUrl(req) }));
   web.post("/catalogue/projects/:id/phases", write((req) => Catalogue.savePhase(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));

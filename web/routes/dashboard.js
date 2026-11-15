@@ -135,7 +135,7 @@ ${d.sources && d.sources.length
     <div><dt>${L(lang, "عملاء مفتوحين", "Open leads")}</dt><dd>${b.open}</dd></div>
   </dl></details></li>`
       )}</ol>
-  <p class="muted small">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = الوسيط من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
+  <p class="muted small">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = البروكر من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
     : html`<p class="muted">${L(lang, "مفيش نشاط في الفترة دي.", "No activity in this period.")}</p>`}
 </section>`;
 }
@@ -256,13 +256,13 @@ function intakeSection(rows, lang) {
   const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
   return html`<section class="card" id="lead-intake">
   <h2>📨 ${L(lang, "استقبال العملاء الأوتوماتيك (Make / فورم)", "Automatic lead intake (Make / forms)")}</h2>
-  <p class="muted">${L(lang, "لكل شركة لينك سري. في Make: سيناريو Facebook Lead Ads ← HTTP POST على اللينك ده (JSON). العميل بياخد المصدر، وبيروح للوسيط اللي عليه الدور، والوسيط بيوصله تنبيه. اللينك بيظهر مرة واحدة بس.", "One secret URL per source. In Make: a Facebook Lead Ads scenario → HTTP POST (JSON) to this URL. Leads get the source and go to the next broker in turn, who is alerted. The URL is shown once only.")}
+  <p class="muted">${L(lang, "لكل شركة لينك سري. في Make: سيناريو Facebook Lead Ads ← HTTP POST على اللينك ده (JSON). العميل بياخد المصدر، وبيروح للبروكر اللي عليه الدور، والبروكر بيوصله تنبيه. اللينك بيظهر مرة واحدة بس.", "One secret URL per source. In Make: a Facebook Lead Ads scenario → HTTP POST (JSON) to this URL. Leads get the source and go to the next broker in turn, who is alerted. The URL is shown once only.")}
 </p>
   <details><summary>${L(lang, "خطوات ربط شركة (Make + إعلانات فيسبوك)", "Agency setup steps (Make + Facebook lead ads)")}</summary><ol>
     <li>${L(lang, "الشركة تضيف حسابك على فيسبوك لصفحتها بصلاحية العملاء (Leads)، ولو «Leads Access Manager» مقفول تسمح لـ Make.", "The agency adds your Facebook account to its Page with leads access; if Leads Access Manager is restricted, it also allows Make.")}</li>
     <li>${L(lang, "اعمل لينك جديد هنا للشركة وانسخه.", "Make a new URL here for the agency and copy it.")}</li>
     <li>${L(lang, "في Make: انسخ سيناريو القالب (docs/make-lead-ads.md)، اختار صفحة الشركة والفورم، وحط اللينك في موديول HTTP.", "In Make: clone the template scenario (docs/make-lead-ads.md), pick the agency's Page and form, and paste the URL into the HTTP module.")}</li>
-    <li>${L(lang, "دوس 🧪 تجربة هنا، وبعدها ابعت عميل تجربة من أداة Meta Lead Ads Testing Tool واتأكد إنه ظهر عند وسيط.", "Press 🧪 Test here, then send a test lead from Meta's Lead Ads Testing Tool and check it reaches a broker.")}</li>
+    <li>${L(lang, "دوس 🧪 تجربة هنا، وبعدها ابعت عميل تجربة من أداة Meta Lead Ads Testing Tool واتأكد إنه ظهر عند بروكر.", "Press 🧪 Test here, then send a test lead from Meta's Lead Ads Testing Tool and check it reaches a broker.")}</li>
     <li>${L(lang, "شغّل السيناريو (Immediately). خطة Make المجانية فيها سيناريوهين شغالين بس.", "Turn the scenario on (Immediately). Make's free plan runs 2 active scenarios only.")}</li>
   </ol></details>
   <div class="scroll"><table>
@@ -318,10 +318,10 @@ const STUCK = {
 function stuckSection(stuck, lang) {
   const day = (t) => (t ? new Date(t).toISOString().slice(0, 10) : "—");
   return html`<section class="card" id="stuck">
-  <h2>🧭 ${L(lang, `وسطاء محتاجين مساعدة (${stuck.length})`, `Brokers who need a hand (${stuck.length})`)}</h2>
+  <h2>🧭 ${L(lang, `بروكرز محتاجين مساعدة (${stuck.length})`, `Brokers who need a hand (${stuck.length})`)}</h2>
   ${stuck.length
     ? html`<div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "انضم", "Joined")}</th><th>${L(lang, "آخر نشاط", "Last active")}</th><th>${L(lang, "واقف عند", "Stuck at")}</th><th></th></tr></thead>
+  <thead><tr><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "انضم", "Joined")}</th><th>${L(lang, "آخر نشاط", "Last active")}</th><th>${L(lang, "واقف عند", "Stuck at")}</th><th></th></tr></thead>
   <tbody>${stuck.map(
     (b) => html`<tr data-stuck="${b.id}"><td>${b.name} <span class="muted">(${b.role})</span></td><td>${b.agency_name}</td><td dir="ltr">${day(b.created_at)}</td><td dir="ltr">${day(b.last_active_at)}</td>
     <td>${b.reasons.map((r) => (STUCK[r] || [r, r])[lang === "en" ? 1 : 0]).join(" · ")}</td>
@@ -482,7 +482,7 @@ function healthSections(d, lang, usd) {
   return html`<section class="card">
   <h2>${L(lang, "كل أسبوع", "Weekly")}</h2>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الأسبوع", "Week")}</th><th>${L(lang, "شركات نشطة", "Active agencies")}</th><th>${L(lang, "وسطاء نشطين", "Active brokers")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "أخطاء", "Errors")}</th><th>${L(lang, "بلاغات", "Bug reports")}</th></tr></thead>
+  <thead><tr><th>${L(lang, "الأسبوع", "Week")}</th><th>${L(lang, "شركات نشطة", "Active agencies")}</th><th>${L(lang, "بروكرز نشطين", "Active brokers")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "أخطاء", "Errors")}</th><th>${L(lang, "بلاغات", "Bug reports")}</th></tr></thead>
   <tbody>${d.weeks.map(
     (w) => html`<tr data-week="${w.week}"><td dir="ltr">${w.week}</td><td>${w.agencies}</td><td>${w.brokers}</td><td>${w.units}</td><td>${w.leads}</td><td>${w.deals}</td><td>${w.errors}</td><td>${w.reports}</td></tr>`
   )}</tbody></table></div>
@@ -491,7 +491,7 @@ function healthSections(d, lang, usd) {
 <section class="card">
   <h2>${L(lang, "الذكاء الاصطناعي لكل شركة (آخر 30 يوم)", "AI per agency (last 30 days)")}</h2>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "وسطاء", "Brokers")}</th><th>Telegram</th><th>${L(lang, "طلبات AI", "AI calls")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "التكلفة", "Cost")}</th></tr></thead>
+  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "بروكرز", "Brokers")}</th><th>Telegram</th><th>${L(lang, "طلبات AI", "AI calls")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "التكلفة", "Cost")}</th></tr></thead>
   <tbody>${d.agencies.map(
     (a) => html`<tr data-agency="${a.id}"><td><a href="/app/owner/agencies/${a.id}/ai-log" title="${L(lang, "سجل الذكاء الاصطناعي", "AI log")}">${a.name}</a></td><td>${a.brokers ?? 0}</td><td>${a.telegram ?? 0}</td><td>${a.calls}</td><td>${a.failed}</td><td dir="ltr">${usd(a.usd)}</td></tr>`
   )}</tbody>

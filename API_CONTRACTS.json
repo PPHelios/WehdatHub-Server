@@ -1,5 +1,60 @@
 {
   "libraries": {
+    "web/views/projectCard.js": {
+      "projectCard": ["lang", "g", "params"],
+      "STATUS": "Object"
+    },
+    "domain/projectAnswerLine.js": {
+      "line": ["r", "lang"]
+    },
+    "services/projectSearch.js": {
+      "search": ["pool", "agencyId", "filters", "params"],
+      "browse": ["pool", "actor", "opts"],
+      "fromQuery": ["pool", "broker", "query", "params"],
+      "mergeExplicit": ["f", "explicit"],
+      "SORTS": "Array",
+      "EXPLICIT": "Object",
+      "DROPS": "Object"
+    },
+    "web/views/projectResults.js": {
+      "resultsView": ["lang", "r", "state"],
+      "pageWindow": ["page", "pages"]
+    },
+    "domain/placeGraph.js": {
+      "placeIds": ["pick", "params"]
+    },
+    "domain/projectPaste.js": {
+      "read": ["input"]
+    },
+    "services/projectPaste.js": {
+      "read": ["pool", "actor", "text", "lang"],
+      "formInput": ["text", "r"],
+      "searchBox": ["pool", "actor", "q", "lang"],
+      "developerBox": ["pool", "actor", "q"]
+    },
+    "services/projectRows.js": {
+      "apply": ["pool", "actor", "projectId", "input"],
+      "rebuild": ["pool", "agencyId"],
+      "promotePending": ["pool"],
+      "filters": ["params", "startAt"],
+      "searchText": ["pool", "projectId"],
+      "placeOf": ["pool", "params"],
+      "columns": ["input"],
+      "replaceRows": ["pool", "actor", "projectId", "text"],
+      "number": ["v", "max"]
+    },
+    "web/views/carousel.js": {
+      "carousel": ["srcs", "lang"]
+    },
+    "web/views/catalogueList.js": {
+      "listPage": ["lang", "d"],
+      "STATUS": "Object",
+      "money": ["n", "lang"]
+    },
+    "web/views/projectForm.js": {
+      "projectForm": ["params"],
+      "STATUS": "Object"
+    },
     "lib/logRollup.js": {
       "rollUp": ["pool", "params"],
       "cutoff": ["now"],
@@ -506,7 +561,8 @@
     "domain/projectNames.js": {
       "skeleton": ["word"],
       "keyedWords": ["text"],
-      "fuzzyMatch": ["text", "projects"]
+      "fuzzyMatch": ["text", "projects"],
+      "sameName": ["a", "b"]
     },
     "domain/projectClarify.js": {
       "findIssues": ["notes"],
@@ -516,6 +572,7 @@
     "domain/projectNotes.js": {
       "parseUnits": ["notes"],
       "matchUnits": ["projects", "f"],
+      "unitFits": ["u", "f"],
       "matchesPlace": ["project", "places"],
       "LOCATION_ALIASES": "Object",
       "NOTE_MAX": "Number"
@@ -740,7 +797,14 @@
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],
-      "reviewPanel": ["evaluation", "lang", "params"]
+      "reviewPanel": ["evaluation", "lang", "params"],
+      "unitBox": ["v", "areas", "lang", "place", "opts"],
+      "input": ["name", "label", "value", "params"],
+      "select": ["name", "label", "value", "options", "params"],
+      "head": ["n", "title", "hint"],
+      "req": ["label"],
+      "ICON": "Object",
+      "searchText": ["a"]
     },
     "web/routes/unitForm.js": {
       "register": ["web", "params"],
@@ -2049,6 +2113,7 @@
     "services/assistant.js": {
       "addInfo": ["pool", "manager", "params"],
       "ask": ["pool", "broker", "question", "params"],
+      "noteAnswers": ["pool", "broker", "params"],
       "datesLine": ["dates", "lang"],
       "unanswered": ["pool", "manager", "params"]
     },
@@ -2455,6 +2520,8 @@
       "record": ["pool", "params"],
       "report": ["pool", "broker", "logId", "note"],
       "mine": ["pool", "broker", "logId"],
+      "action": ["pool", "broker", "logId", "kind", "detail"],
+      "ACTIONS": "Array",
       "isId": ["v"]
     },
     "lib/testRole.js": {
@@ -2593,7 +2660,7 @@
     },
     "web/routes/map.js": {
       "register": ["web", "params"],
-      "drawerBody": ["lang", "units", "place"],
+      "drawerBody": ["lang", "units", "place", "covers"],
       "words": ["lang"],
       "MapRules": "Object"
     },
@@ -2661,10 +2728,11 @@
     "services/placeSuggest.js": {
       "suggest": ["pool", "text", "limit", "lang"],
       "listing": ["pool", "since"],
-      "box": ["pool", "text", "lang"],
+      "box": ["pool", "text", "lang", "params"],
       "boxResolve": ["pool", "text", "lang"],
       "placeChip": ["pool", "params", "lang"],
-      "resetCache": []
+      "resetCache": [],
+      "lists": ["pool"]
     },
     "services/areaSearch.js": {
       "scope": ["pool", "terms"],

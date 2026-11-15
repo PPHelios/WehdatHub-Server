@@ -30,7 +30,7 @@ describe("Forwarded portal enquiry replies (routes/dispatch.js)", () => {
 
   test("the manager's next texts add the phone and broker, and the enquiry becomes a lead", async () => {
     await h.text("manager", enquiry("503956663"));
-    expect(textOf(await h.text("manager", "+201012345678"))).toMatch(/Broker|وسيط/);
+    expect(textOf(await h.text("manager", "+201012345678"))).toMatch(/Broker|بروكر/);
     const done = await h.text("manager", "Broker One");
     expect(textOf(done)).toMatch(/Broker One/);
     expect(textOf(done)).not.toMatch(FALLBACK_AR);

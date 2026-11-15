@@ -10,14 +10,17 @@ async function load(db, agencyId, projectId) {
   const { rows } = await db.query("SELECT * FROM projects WHERE id = $1 AND agency_id = $2", [projectId, agencyId]);
   const project = rows[0];
   if (!project) return null;
-  const [dev, phases, plans, units, materials, sheet] = await Promise.all([
+  const [dev, phases, plans, units, materials, sheet, offers, facts] = await Promise.all([
     project.developer_id ? db.query("SELECT name, about, past_projects, delivery_record, usual_payment_terms, warnings, updated_at FROM developers WHERE id = $1", [project.developer_id]) : { rows: [] },
     db.query("SELECT name, status, delivery_year, delivery_quarter, created_at FROM project_phases WHERE project_id = $1 ORDER BY created_at", [project.id]),
     db.query("SELECT name, down_payment_pct, years, frequency, discount_pct, maintenance_pct, updated_at FROM project_plans WHERE project_id = $1 ORDER BY position, created_at", [project.id]),
     db.query("SELECT property_type, price_value, area_value, bedrooms, status, details, updated_at FROM listings WHERE " + Vis.units("listings") + " AND project_id = $1 AND agency_id = $2", [project.id, agencyId]),
     db.query("SELECT label, kind, url, client_visible, check_status, storage_path, created_at FROM project_materials WHERE project_id = $1 ORDER BY created_at", [project.id]),
     // F22: the price list file the current prices came from.
-    db.query("SELECT file_name, source, applied_at FROM price_sheets WHERE project_id = $1 AND status = 'applied' ORDER BY applied_at DESC NULLS LAST LIMIT 1", [project.id])
+    db.query("SELECT file_name, source, applied_at FROM price_sheets WHERE project_id = $1 AND status = 'applied' ORDER BY applied_at DESC NULLS LAST LIMIT 1", [project.id]),
+    // The details read from the developer's message (migration 117): unit offers and other facts.
+    db.query("SELECT property_type, area, floor, bedrooms, price, down, monthly, monthly_est, years, discount_pct, source, created_at FROM project_offers WHERE project_id = $1 ORDER BY price LIMIT 60", [project.id]),
+    db.query("SELECT key, label_en, value, created_at FROM project_facts WHERE project_id = $1 ORDER BY created_at", [project.id])
   ]);
   const key = (rs, f) => `${rs.length}:${rs.reduce((m, r) => (r[f] && new Date(r[f]).getTime() > m ? new Date(r[f]).getTime() : m), 0)}`;
   return {
@@ -28,6 +31,10 @@ async function load(db, agencyId, projectId) {
     units: units.rows,
     materials: materials.rows.map((m) => ({ ...m, url: require("../lib/supabase").photoUrl(m.url) })),
     priceSheet: sheet.rows[0] || null,
+    offers: offers.rows,
+    projectFacts: facts.rows,
+    offersKey: `${offers.rows.length}:${offers.rows.map((o) => `${o.price}${o.area}${o.down}`).join(",")}`,
+    factsKey: `${facts.rows.length}:${facts.rows.map((x) => x.value).join("|")}`,
     unitsKey: key(units.rows, "updated_at"),
     developerKey: dev.rows[0] ? `${dev.rows[0].updated_at ? new Date(dev.rows[0].updated_at).getTime() : 0}` : "0",
     plansKey: key(plans.rows, "updated_at"),

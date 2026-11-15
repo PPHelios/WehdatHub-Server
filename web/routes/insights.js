@@ -15,7 +15,7 @@ function table(rows, lang, kind) {
   return html`<section class="card" data-kind="${kind}"><h2>${title}</h2>
   ${list.length
     ? html`<div class="scroll"><table>
-    <thead><tr><th>${L(lang, "المكان", "Place")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "المتوسط (الوسيط)", "Median")}</th><th>${L(lang, "من", "From")}</th><th>${L(lang, "لحد", "To")}</th></tr></thead>
+    <thead><tr><th>${L(lang, "المكان", "Place")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "المتوسط (البروكر)", "Median")}</th><th>${L(lang, "من", "From")}</th><th>${L(lang, "لحد", "To")}</th></tr></thead>
     <tbody>${list.map((r) => html`<tr data-place="${r.place}"><td>${r.place}</td><td>${r.units}</td><td><strong>${num(r.median)}</strong></td><td>${num(r.low)}</td><td>${num(r.high)}</td></tr>`)}</tbody>
   </table></div>`
     : html`<p class="muted">${L(lang, `مفيش مكان فيه ${Insights.MIN_UNITS} وحدات أو أكتر لسه.`, `No place has ${Insights.MIN_UNITS} or more units yet.`)}</p>`}
@@ -30,7 +30,7 @@ function register(web, { pool, page }) {
       title: L(lang, "أسعار المتر", "Prices per m²"),
       nav: "units",
       body: html`<h1>📊 ${L(lang, "أسعار المتر", "Prices per m²")}</h1>
-<p class="muted">${L(lang, `من الوحدات المتاحة عندك بس، لكل كمبوند أو منطقة فيها ${Insights.MIN_UNITS} وحدات أو أكتر. الوسيط = نص الوحدات أغلى ونصها أرخص، فوحدة سعرها غريب مبتبوظش الرقم.`, `From your own available units only, for each compound or area with ${Insights.MIN_UNITS} or more units. Median = half the units cost more and half less, so one odd price doesn't skew it.`)}</p>
+<p class="muted">${L(lang, `من الوحدات المتاحة عندك بس، لكل كمبوند أو منطقة فيها ${Insights.MIN_UNITS} وحدات أو أكتر. البروكر = نص الوحدات أغلى ونصها أرخص، فوحدة سعرها غريب مبتبوظش الرقم.`, `From your own available units only, for each compound or area with ${Insights.MIN_UNITS} or more units. Median = half the units cost more and half less, so one odd price doesn't skew it.`)}</p>
 ${table(rows, lang, "sale")}
 ${table(rows, lang, "rent")}`
     });

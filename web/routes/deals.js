@@ -33,12 +33,12 @@ const ERRORS = {
   commission_pct: ["نسبة العمولة لازم تبقى بين 0 و 100.", "The commission % must be between 0 and 100."],
   commission_amount: ["مبلغ العمولة غلط.", "The commission amount is wrong."],
   commission_over_price: ["العمولة أكبر من السعر.", "The commission is more than the price."],
-  external_over_total: ["نصيب الوسيط الخارجي أكبر من العمولة.", "The external share is more than the commission."],
-  external_pct: ["نسبة الوسيط الخارجي غلط.", "The external % is wrong."],
+  external_over_total: ["نصيب البروكر الخارجي أكبر من العمولة.", "The external share is more than the commission."],
+  external_pct: ["نسبة البروكر الخارجي غلط.", "The external % is wrong."],
   split_pct: ["نسبة الزميل لازم تبقى بين 0 و 100.", "The colleague's % must be between 0 and 100."],
   split_total: ["التقسيم لازم يسيب نصيب للي قفل الصفقة.", "The split must leave a share for the closing broker."],
   split_duplicate: ["الزميل متكرر.", "The colleague is listed twice."],
-  broker_not_found: ["الوسيط مش موجود.", "Broker not found."],
+  broker_not_found: ["البروكر مش موجود.", "Broker not found."],
   status: ["حالة غير معروفة.", "Unknown status."],
   not_found: ["مش موجود.", "Not found."]
 };
@@ -123,7 +123,7 @@ ${notice ? html`<div class="card notice bad" role="alert">⚠️ ${notice}</div>
   <label>${L(lang, "النوع", "Type")}<select name="deal_type"><option value="">${L(lang, "زي الوحدة", "As the unit")}</option><option value="sale"${v.deal_type === "sale" ? html` selected` : ""}>${L(lang, "بيع", "Sale")}</option><option value="rent"${v.deal_type === "rent" ? html` selected` : ""}>${L(lang, "إيجار", "Rent")}</option></select></label>
   <label>${L(lang, "السعر (فاضي = سعر الوحدة)", "Price (empty = the unit's price)")}<input name="price" inputmode="decimal" value="${v.price || ""}" placeholder="${L(lang, "8.5 مليون", "8.5M")}"></label>
   <label>${L(lang, "العمولة: نسبة أو مبلغ", "Commission: a % or an amount")}<input name="commission" required value="${v.commission || ""}" placeholder="2% / 170000"></label>
-  <fieldset><legend>${L(lang, "وسيط خارجي (اختياري)", "External co-broker (optional)")}</legend>
+  <fieldset><legend>${L(lang, "بروكر خارجي (اختياري)", "External co-broker (optional)")}</legend>
     <label>${L(lang, "نصيبه: نسبة من العمولة أو مبلغ", "Their share: a % of the commission or an amount")}<input name="external" value="${v.external || ""}" placeholder="10% / 20000"></label>
     <label>${L(lang, "اسمه", "Name")}<input name="external_name" maxlength="120" value="${v.external_name || ""}"></label>
   </fieldset>
@@ -199,7 +199,7 @@ ${manager
   <form method="post" action="/app/deals/${Deals.refLabel(deal.ref)}" class="stack">${hidden}
     <label>${L(lang, "السعر", "Price")}<input name="price" value="${Number(deal.price)}"></label>
     <label>${L(lang, "العمولة: نسبة أو مبلغ", "Commission: a % or an amount")}<input name="commission" value="${deal.commission_mode === "pct" ? `${Number(deal.commission_pct)}%` : Number(deal.commission_total)}"></label>
-    <label>${L(lang, "وسيط خارجي: نسبة أو مبلغ", "External: a % or an amount")}<input name="external" value="${Number(deal.external_share) || ""}"></label>
+    <label>${L(lang, "بروكر خارجي: نسبة أو مبلغ", "External: a % or an amount")}<input name="external" value="${Number(deal.external_share) || ""}"></label>
     <button type="submit">${L(lang, "صحح", "Correct")}</button>
   </form></section>`
   : ""}`

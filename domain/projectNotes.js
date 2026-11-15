@@ -78,6 +78,22 @@ function matchesPlace(project, places) {
  * @param {Array<{project, units}>} projects parsed notes per project
  * @param {Object} f search filters (domain/searchQuery shape)
  */
+/** Does one offer fit the offer-level filters (area, bedrooms, price, installment, down payment)? Filters not set are not applied. */
+function unitFits(u, f = {}) {
+  // One number asked ("أكتر من 120") is a minimum, the same meaning the search parser and unit search give it.
+  if (f.area_min != null && f.area_max == null && u.area < f.area_min) return false;
+  if (f.area_min != null && f.area_max != null && (u.area < f.area_min || u.area > f.area_max)) return false;
+  if (f.area_min == null && f.area_max != null && (u.area == null || u.area > f.area_max)) return false;
+  if (f.area_min != null && u.area == null) return false;
+  if (f.bedrooms_min != null && (u.bedrooms == null || u.bedrooms < f.bedrooms_min)) return false;
+  if (f.bedrooms_max != null && f.bedrooms_min != null && f.bedrooms_max !== f.bedrooms_min && u.bedrooms > f.bedrooms_max) return false;
+  if (f.price_max != null && u.price > f.price_max) return false;
+  if (f.price_min != null && u.price < f.price_min) return false;
+  if (f.max_installment != null && ((u.monthly ?? u.monthly_est) == null || (u.monthly ?? u.monthly_est) > f.max_installment)) return false;
+  if (f.max_down_payment != null && (u.down == null || u.down > f.max_down_payment)) return false;
+  return true;
+}
+
 function matchUnits(projects, f = {}) {
   if (f.listing_type === "rent") return [];
   const places = [...(f.locations || []), ...(f.places || []).map((p) => p.key), ...(f.place_terms || [])]
@@ -90,21 +106,10 @@ function matchUnits(projects, f = {}) {
   for (const { project, units } of projects) {
     if (!matchesPlace(project, places)) continue;
     for (const u of units) {
-      // One number asked ("أكتر من 120") is a minimum, the same meaning the search parser and unit search give it.
-      if (f.area_min != null && f.area_max == null && u.area < f.area_min) continue;
-      if (f.area_min != null && f.area_max != null && (u.area < f.area_min || u.area > f.area_max)) continue;
-      if (f.area_min == null && f.area_max != null && (u.area == null || u.area > f.area_max)) continue;
-      if (f.area_min != null && u.area == null) continue;
-      if (f.bedrooms_min != null && (u.bedrooms == null || u.bedrooms < f.bedrooms_min)) continue;
-      if (f.bedrooms_max != null && f.bedrooms_min != null && f.bedrooms_max !== f.bedrooms_min && u.bedrooms > f.bedrooms_max) continue;
-      if (f.price_max != null && u.price > f.price_max) continue;
-      if (f.price_min != null && u.price < f.price_min) continue;
-      if (f.max_installment != null && ((u.monthly ?? u.monthly_est) == null || (u.monthly ?? u.monthly_est) > f.max_installment)) continue;
-      if (f.max_down_payment != null && (u.down == null || u.down > f.max_down_payment)) continue;
-      hits.push({ project, unit: u });
+      if (unitFits(u, f)) hits.push({ project, unit: u });
     }
   }
   return hits.sort((a, b) => a.unit.price - b.unit.price);
 }
 
-module.exports = { parseUnits, matchUnits, matchesPlace, LOCATION_ALIASES, NOTE_MAX };
+module.exports = { parseUnits, matchUnits, unitFits, matchesPlace, LOCATION_ALIASES, NOTE_MAX };

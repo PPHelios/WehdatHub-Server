@@ -295,7 +295,7 @@ function internalLines(l, lang = "ar") {
     d.owner_phone && `📞 ${en ? "Owner phone" : "تليفون المالك"}: ${d.owner_phone}`,
     d.owner_lead && `🔗 ${en ? "Owner is client" : "المالك عميل"} ${d.owner_lead}`,
     d.commission && `💼 ${en ? "Commission" : "العمولة"}: ${d.commission}`,
-    d.co_broker && `🤝 ${en ? "Co-broker" : "وسيط مشارك"}: ${d.co_broker}`,
+    d.co_broker && `🤝 ${en ? "Co-broker" : "بروكر مشارك"}: ${d.co_broker}`,
     d.unit_no && `🔢 ${en ? "Unit no." : "رقم الوحدة"}: ${d.unit_no}`,
     d.address && `🏠 ${en ? "Address (private: only you and managers see it)" : "العنوان (خاص: بس انت والمديرين بتشوفوه)"}: ${d.address}`,
     l.lat != null && l.lng != null && `📍 https://maps.google.com/?q=${l.lat},${l.lng}`,

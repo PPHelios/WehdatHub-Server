@@ -34,7 +34,7 @@ function filtersForm({ f, lang, brokers, teamLeads, manager }) {
       ${sel("channel", f.channel, Object.keys(CHANNEL_LABEL).map((k) => [k, L(lang, ...CHANNEL_LABEL[k])]), L(lang, "القناة", "Channel"))}
       ${sel("source", f.source, [["all", L(lang, "كل المصادر", "All sources")], ...Object.keys(SOURCE_LABEL).map((k) => [k, L(lang, ...SOURCE_LABEL[k])])], L(lang, "المصدر", "Source"))}
       ${manager ? sel("team", f.team || "", [["", L(lang, "كل الفرق", "All teams")], ...teamLeads.map((t) => [t.id, t.name])], L(lang, "الفريق", "Team")) : ""}
-      ${manager ? sel("broker", f.broker || "", [["", L(lang, "كل الوسطاء", "All brokers")], ...brokers.map((b) => [b.id, b.name])], L(lang, "البروكر", "Broker")) : ""}
+      ${manager ? sel("broker", f.broker || "", [["", L(lang, "كل البروكرز", "All brokers")], ...brokers.map((b) => [b.id, b.name])], L(lang, "البروكر", "Broker")) : ""}
     </div>
     <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/links">${L(lang, "مسح", "Clear")}</a></div>
   </details>

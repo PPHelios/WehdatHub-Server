@@ -259,7 +259,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
     const existing = code ? byCode.get(code) : null;
     if (existing) {
       if (!Authz.canEdit(broker, existing)) {
-        items.push({ ...base, code: existing.code, kind: "forbidden", reasons: [lang === "en" ? "Another broker's unit" : "وحدة وسيط تاني"] });
+        items.push({ ...base, code: existing.code, kind: "forbidden", reasons: [lang === "en" ? "Another broker's unit" : "وحدة بروكر تاني"] });
         continue;
       }
       const asNew = source === "chat" ? Rules.evaluate(composeRow(null, JSON.parse(JSON.stringify(p.draft)), lang), { lang }) : null;

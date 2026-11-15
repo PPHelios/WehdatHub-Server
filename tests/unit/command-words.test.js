@@ -43,6 +43,7 @@ describe("F15 the owner's words", () => {
       expect(helpText("ar")).toContain(`*${w}*`);
       expect(helpText("en")).toContain(`*${w}*`);
     }
-    expect(require("fs").readFileSync(require("path").join(__dirname, "../../docs/commands.md"), "utf8")).toBe(`${markdown()}\n`);
+    // A Windows checkout may hold the file with CRLF line ends; the text is the same.
+    expect(require("fs").readFileSync(require("path").join(__dirname, "../../docs/commands.md"), "utf8").replace(/\r\n/g, "\n")).toBe(`${markdown()}\n`);
   });
 });

@@ -24,7 +24,17 @@ async function figures(pool, from, to) {
     [from, to]
   );
   const rep = await pool.query("SELECT count(*)::int AS n FROM search_reports WHERE created_at >= $1 AND created_at < $2", [from, to]);
-  return { ...rows[0], reports: rep.rows[0].n };
+  // Project searches (Ask results): how many, with no result, where the AI's and the parser's readings differ, parser only; and what brokers did next.
+  const ask = await pool.query(
+    `SELECT count(*)::int AS ask, count(*) FILTER (WHERE s.total = 0)::int AS ask_zero,
+            count(*) FILTER (WHERE s.source = 'ai' AND cardinality(s.disagree) > 0)::int AS ask_differ,
+            count(*) FILTER (WHERE s.source <> 'ai')::int AS ask_parser,
+            (SELECT count(*)::int FROM search_actions a JOIN search_log x ON x.id = a.search_log_id WHERE x.channel = 'ask' AND a.action IN ('open', 'send') AND a.created_at >= $1 AND a.created_at < $2) AS ask_used,
+            (SELECT count(*)::int FROM search_actions a JOIN search_log x ON x.id = a.search_log_id WHERE x.channel = 'ask' AND a.action IN ('filter', 'sort', 'chip_drop') AND a.created_at >= $1 AND a.created_at < $2) AS ask_refined
+       FROM search_log s WHERE s.channel = 'ask' AND s.created_at >= $1 AND s.created_at < $2`,
+    [from, to]
+  );
+  return { ...rows[0], reports: rep.rows[0].n, ...ask.rows[0] };
 }
 
 /** The period's figures, the one before it, when the nightly check last ran, and what waits for the owner. */

@@ -14,7 +14,7 @@ const RESPOND = { limit: 10, windowSec: 3600 };
 const STATUS = {
   proposed: ["⏳ مستني تأكيدك", "⏳ Waiting for your confirmation"],
   confirmed: ["✅ اتأكدت", "✅ Confirmed"],
-  reschedule: ["🔁 طلبت ميعاد تاني؛ الوسيط هيكلمك", "🔁 You asked for another time; the broker will contact you"]
+  reschedule: ["🔁 طلبت ميعاد تاني؛ البروكر هيكلمك", "🔁 You asked for another time; the broker will contact you"]
 };
 
 function langFor(req, v) {
@@ -37,7 +37,7 @@ function viewingPage(v, token, lang, { notice = null } = {}) {
   <div class="row">
     <a class="btn secondary" href="/app/v/${token}/calendar.ics">📆 ${L(lang, "أضف للتقويم", "Add to calendar")}</a>
     <a class="btn secondary" href="${Viewings.googleCalendarUrl(entry)}" target="_blank" rel="noopener">Google Calendar</a>
-    ${call ? html`<a class="btn secondary" href="tel:+${call}">📞 ${L(lang, "كلّم الوسيط", "Call the broker")}</a>` : ""}
+    ${call ? html`<a class="btn secondary" href="tel:+${call}">📞 ${L(lang, "كلّم البروكر", "Call the broker")}</a>` : ""}
   </div>
 </section>
 ${v.status === "confirmed"
@@ -50,13 +50,13 @@ ${v.status === "confirmed"
   <h2>🔁 ${L(lang, "الميعاد مش مناسب؟", "That time doesn't suit you?")}</h2>
   <input type="hidden" name="action" value="reschedule">
   <label>${L(lang, "اقترح ميعاد (بتوقيت القاهرة)", "Suggest a time (Cairo time)")} <input type="datetime-local" name="at" value="${Stages.toCairoLocal(new Date())}"></label>
-  <label>${L(lang, "أو اكتب للوسيط", "Or write to the broker")} <input name="note" maxlength="300"></label>
-  <button type="submit" class="secondary">${L(lang, "ابعت للوسيط", "Send to the broker")}</button>
+  <label>${L(lang, "أو اكتب للبروكر", "Or write to the broker")} <input name="note" maxlength="300"></label>
+  <button type="submit" class="secondary">${L(lang, "ابعت للبروكر", "Send to the broker")}</button>
 </form>`;
 }
 
 function gonePage(lang) {
-  return html`<div class="card"><h1>⌛ ${L(lang, "اللينك ده مبقاش شغال", "This link no longer works")}</h1><p>${L(lang, "الميعاد اتغير أو عدّى. كلّم الوسيط بتاعك.", "The viewing was changed or has passed. Please contact your broker.")}</p></div>`;
+  return html`<div class="card"><h1>⌛ ${L(lang, "اللينك ده مبقاش شغال", "This link no longer works")}</h1><p>${L(lang, "الميعاد اتغير أو عدّى. كلّم البروكر بتاعك.", "The viewing was changed or has passed. Please contact your broker.")}</p></div>`;
 }
 
 function register(web, { pool, page }) {
@@ -70,7 +70,7 @@ function register(web, { pool, page }) {
     const v = await Viewings.byToken(pool, req.params.token);
     const lang = v ? langFor(req, v) : req.lang;
     if (!v || !Viewings.isLive(v)) return page(req, res, { title: title(lang), lang, body: gonePage(lang) }, v ? 410 : 404);
-    const notice = req.query.sent === "1" ? html`<p class="notice ok" role="status">${L(lang, "✅ وصل للوسيط. شكراً!", "✅ The broker has it. Thank you!")}</p>` : null;
+    const notice = req.query.sent === "1" ? html`<p class="notice ok" role="status">${L(lang, "✅ وصل للبروكر. شكراً!", "✅ The broker has it. Thank you!")}</p>` : null;
     return show(req, res, v, req.params.token, lang, { notice });
   });
 

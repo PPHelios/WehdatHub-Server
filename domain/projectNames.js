@@ -51,4 +51,11 @@ function fuzzyMatch(text, projects) {
     .map((x) => x.p);
 }
 
-module.exports = { skeleton, keyedWords, fuzzyMatch };
+/** Two names are the same project when their distinctive words have the same keys ("Jazeel Residence" and "جزيل ريزدنس" do not share a script, so they are not). */
+function sameName(a, b) {
+  const x = new Set(distinctive(a));
+  const y = new Set(distinctive(b));
+  return x.size > 0 && x.size === y.size && [...x].every((k) => y.has(k));
+}
+
+module.exports = { skeleton, keyedWords, fuzzyMatch, sameName };

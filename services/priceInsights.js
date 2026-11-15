@@ -89,7 +89,7 @@ function noteLine(m, listing, lang = "ar") {
   const month = listing.listing_type === "rent" ? (en ? " a month" : " في الشهر") : "";
   return en
     ? `📊 ${n(m.perM2)} EGP per m²${month} · ${diff} the median of ${m.units} ${like ? `${like} ` : ""}units in ${m.place} (${n(m.median)})`
-    : `📊 ${n(m.perM2)} ج.م للمتر${month} · ${diff} وسيط ${m.units} وحدة${like ? ` (${like})` : ""} في ${m.place} (${n(m.median)})`;
+    : `📊 ${n(m.perM2)} ج.م للمتر${month} · ${diff} بروكر ${m.units} وحدة${like ? ` (${like})` : ""} في ${m.place} (${n(m.median)})`;
 }
 
 module.exports = { MIN_UNITS, byPlace, forUnit, extrasOf, likeLabel, noteLine };

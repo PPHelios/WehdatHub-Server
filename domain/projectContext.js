@@ -7,15 +7,17 @@
 
 const crypto = require("crypto");
 const Describe = require("./describe");
+const Features = require("./features");
 
 const MAX_FACTS = 80;
+const fmt = (n) => Number(n).toLocaleString("en-US");
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
 const stamp = (d) => (d ? new Date(d).toISOString() : "-");
 const typeLabel = (t) => (Describe.TYPE_LABELS?.[t] ? Describe.TYPE_LABELS[t][1] : t || "unit");
 
 /** The key that changes when anything the context is built from changes. */
-function sourceKey({ project, unitsKey = "", plansKey = "", phasesKey = "", materialsKey = "", priceSheet = null, developerKey = "0" }) {
-  const parts = [developerKey, stamp(project.updated_at), stamp(project.prices_updated_at), stamp(project.highlights_at), stamp(project.brochure?.read_at), unitsKey, plansKey, phasesKey, materialsKey, stamp(priceSheet?.applied_at), stamp(project.plans_draft?.applied?.applied_at)];
+function sourceKey({ project, unitsKey = "", plansKey = "", phasesKey = "", materialsKey = "", priceSheet = null, developerKey = "0", offersKey = "", factsKey = "" }) {
+  const parts = [developerKey, offersKey, factsKey, stamp(project.updated_at), stamp(project.prices_updated_at), stamp(project.highlights_at), stamp(project.brochure?.read_at), unitsKey, plansKey, phasesKey, materialsKey, stamp(priceSheet?.applied_at), stamp(project.plans_draft?.applied?.applied_at)];
   return crypto.createHash("sha1").update(parts.join("|")).digest("hex");
 }
 
@@ -67,7 +69,7 @@ function developerProfile(d) {
   return Object.values(parts).some(Boolean) ? parts : null;
 }
 
-function build({ project: p, developer = null, phases = [], plans = [], units = [], materials = [], priceSheet = null }) {
+function build({ project: p, developer = null, phases = [], plans = [], units = [], materials = [], priceSheet = null, offers = [], projectFacts = [] }) {
   const delivery = p.delivery_year ? `${p.delivery_quarter ? `Q${p.delivery_quarter} ` : ""}${p.delivery_year}` : p.delivery_raw || null;
   const ranges = priceRanges(units);
   const facts = {
@@ -75,7 +77,18 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
     name_en: p.name_en || null,
     developer: developer?.name || p.developer_name || null,
     developer_profile: developerProfile(developer),
-    location: [p.district, p.city].filter(Boolean).join(", ") || null,
+    location: [p.district, p.city, p.governorate].filter(Boolean).join(", ") || null,
+    // What the developer's message and the project form gave (migration 117); a value the message did not state is absent.
+    size_feddan: p.area_acres != null ? Number(p.area_acres) : null,
+    price_from: p.price_from != null ? Number(p.price_from) : null,
+    down_pct_min: p.down_pct_min != null ? Number(p.down_pct_min) : null,
+    years_max: p.years_max != null ? Number(p.years_max) : null,
+    discount_pct: p.discount_pct != null ? Number(p.discount_pct) : null,
+    bedrooms: (p.bedroom_options || []).map(Number),
+    unit_types: (p.property_types || []).map((t) => typeLabel(t)),
+    features: (p.feature_keys || []).concat(p.features_other || []),
+    other_facts: projectFacts.map((x) => ({ label: x.label_en, value: x.value, as_of: day(x.created_at) })),
+    offers: offers.slice(0, 30).map((o) => ({ type: o.property_type ? typeLabel(o.property_type) : null, area: o.area != null ? Number(o.area) : null, floor: o.floor || null, bedrooms: o.bedrooms != null ? Number(o.bedrooms) : null, price: Number(o.price), down: o.down != null ? Number(o.down) : null, monthly: o.monthly != null ? Number(o.monthly) : o.monthly_est != null ? Number(o.monthly_est) : null, monthly_estimated: o.monthly == null && o.monthly_est != null, years: o.years != null ? Number(o.years) : null, discount_pct: o.discount_pct != null ? Number(o.discount_pct) : null, as_of: day(o.created_at) })),
     status: p.status || null,
     delivery,
     maintenance_pct: p.maintenance_pct !== null && p.maintenance_pct !== undefined ? Number(p.maintenance_pct) : null,
@@ -99,6 +112,14 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
   const lines = [
     `${facts.name}${facts.name_en && facts.name_en !== facts.name ? ` (${facts.name_en})` : ""}${facts.developer ? ` by ${facts.developer}` : ""}${facts.location ? `, ${facts.location}` : ""}.`,
     facts.status ? `Status: ${facts.status}.` : null,
+    facts.size_feddan != null ? `Size: ${facts.size_feddan} feddan.` : null,
+    facts.price_from != null ? `Prices start from ${fmt(facts.price_from)} EGP (as written by the developer).` : null,
+    facts.bedrooms.length ? `Bedrooms: ${facts.bedrooms.join(", ")}.` : null,
+    facts.unit_types.length ? `Unit types: ${facts.unit_types.join(", ")}.` : null,
+    facts.features.length ? `Features: ${facts.features.map((k) => Features.featureLabel(k, "en") || k).join(", ")}.` : null,
+    facts.down_pct_min != null || facts.years_max != null ? `Payment as written: ${facts.down_pct_min != null ? `down payment from ${facts.down_pct_min}%` : ""}${facts.years_max != null ? `${facts.down_pct_min != null ? ", " : ""}up to ${facts.years_max} years` : ""}${facts.discount_pct != null ? `, ${facts.discount_pct}% discount` : ""}.` : null,
+    facts.other_facts.length ? `Other details: ${facts.other_facts.map((x) => `${x.label}: ${x.value}`).join("; ")}.` : null,
+    facts.offers.length ? `Unit offers (read from the developer's message; check before quoting): ${facts.offers.map((o) => [o.type, o.area != null ? `${o.area} m²` : null, o.floor ? `floor ${o.floor}` : null, `${fmt(o.price)} EGP`, o.down != null ? `down ${fmt(o.down)}` : null, o.monthly != null ? `${fmt(o.monthly)}/month${o.monthly_estimated ? " (estimated)" : ""}${o.years ? ` over ${o.years} years` : ""}` : null].filter(Boolean).join(", ")).join(" | ")}.` : null,
     facts.delivery ? `Delivery: ${facts.delivery}.` : null,
     facts.maintenance_pct !== null ? `Maintenance: ${facts.maintenance_pct}%.` : null,
     facts.phases.length ? `Phases: ${facts.phases.map((x) => `${x.name}${x.delivery ? ` (delivery ${x.delivery})` : ""}`).join("; ")}.` : null,
@@ -107,7 +128,7 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
       ? `Prices${facts.prices.as_of ? ` (price sheet of ${facts.prices.as_of})` : ""}: ${ranges
           .map((r) => `${typeLabel(r.type)} ${r.min === r.max ? r.min : `${r.min} to ${r.max}`} EGP${r.area_min ? `, ${r.area_min}${r.area_max && r.area_max !== r.area_min ? `-${r.area_max}` : ""} m²` : ""}${r.bedrooms.length ? `, ${r.bedrooms.join("/")} bedrooms` : ""} (${r.units} available)`)
           .join("; ")}.`
-      : "No prices recorded.",
+      : facts.price_from != null || facts.offers.length ? null : "No prices recorded.",
     facts.highlights.length ? `Highlights: ${facts.highlights.join("; ")}.` : null,
     facts.agency_notes ? `Agency notes: ${facts.agency_notes}` : null,
     facts.materials.length ? `Client materials: ${facts.materials.map((m) => m.label).join(", ")}.` : null,

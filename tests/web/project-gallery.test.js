@@ -53,7 +53,7 @@ test("AI sorts the photos; layouts attach to units; unsure waits; the client pag
     if (name.includes("typeX")) return { kind: "layout", unit_type: "apartment", label: "Type X" };
     return { kind: "other" };
   });
-  const r = await Gallery.upload(h.pool, admin, project.id, { files: [img("render"), img("typeA"), img("typeX"), img("logo")] });
+  const r = await Gallery.upload(h.pool, admin, project.id, { files: [img("render"), img("typeA"), img("typeX"), img("logo")], sort: true });
   expect(r).toMatchObject({ ok: true, added: 4, shared: 1, layouts: 2, matched: 1, unsure: 1, hidden: 1, ai: true });
   const imgs = await h.query("SELECT * FROM project_images WHERE project_id = $1 ORDER BY position", [project.id]);
   expect(imgs.map((i) => [i.role, i.match_status])).toEqual([["shared", null], ["layout", "matched"], ["layout", "unsure"], ["hidden", null]]);

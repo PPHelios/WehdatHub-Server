@@ -171,7 +171,11 @@ async function approveArea(pool, id, input = {}) {
       "UPDATE areas SET parent_id = $2, name_key = $3, name_en = $4, name_ar = $5, aliases = $6, lat = $7, lng = $8, status = 'approved', updated_at = now() WHERE id = $1 AND status = 'pending'",
       [id, v.parent_id, v.name_key, v.name_en, v.name_ar, v.aliases, v.lat, v.lng]
     );
-    if (rowCount) require("./placeSuggest").resetCache();
+    if (rowCount) {
+      require("./placeSuggest").resetCache();
+      // Projects that asked for this sub-area move under it.
+      await require("./projectRows").promotePending(pool).catch(() => {});
+    }
     return rowCount ? { ok: true, name: v.name_en || v.name_ar } : { error: "not_pending" };
   } catch (e) {
     if (e.code === "23505") return { error: "duplicate" };
@@ -222,6 +226,7 @@ async function afterChange(pool) {
   MapPlaces.clearCache();
   require("../lib/placeNames").resetCache();
   await MapPlaces.recheck(pool, { apply: true }).catch(() => {});
+  await require("./projectRows").promotePending(pool).catch(() => {});
 }
 
 /** Tells each broker who proposed this item that it was rejected, and why (Telegram first, then push or the inbox). */

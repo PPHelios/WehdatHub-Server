@@ -33,6 +33,11 @@ const FILES = {
   "unitPhotos.js": path.join(STATIC_DIR, "unitPhotos.js"),
   // The add/edit unit form's one box: place and feature chips (docs/plans/unified-unit-box.md).
   "unitBox.js": path.join(STATIC_DIR, "unitBox.js"),
+  // The developer catalogue: the project form's message reader and developer list, and the search box with chips.
+  "projectForm.js": path.join(STATIC_DIR, "projectForm.js"),
+  "catalogueSearch.js": path.join(STATIC_DIR, "catalogueSearch.js"),
+  // Ask's project results: what the broker does next is reported to the search log.
+  "askTrack.js": path.join(STATIC_DIR, "askTrack.js"),
   // The same form: which fields show for a sale or a rental and for each unit type.
   // Photo carousel of the unit page and the client link; also opens a closed section a link points into.
   "carousel.js": path.join(STATIC_DIR, "carousel.js"),

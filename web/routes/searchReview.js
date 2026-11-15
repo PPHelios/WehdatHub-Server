@@ -118,6 +118,14 @@ ${card("بدون نتايج", "Zero results", pct(n.zero, n.searches), `${n.zero
 ${card("بلاغات «بحث غلط»", "\"Wrong search\" reports", n.reports, Period.change(n.reports, b.reports))}
 ${card("ملاحظات فحص الليل", "Nightly problems", pct(n.flagged, n.searches), `${n.flagged} · ${Period.change(n.flagged, b.flagged)}`)}
 </div>
+<h3>${L(lang, "بحث المشاريع (اسأل)", "Project searches (Ask)")}</h3>
+<div class="grid" data-ask-summary>
+${card("بحث مشاريع", "Project searches", n.ask, Period.change(n.ask, b.ask))}
+${card("بدون نتايج", "Zero results", pct(n.ask_zero, n.ask), String(n.ask_zero))}
+${card("الذكاء والمحلل مختلفين", "AI and parser differ", pct(n.ask_differ, n.ask), String(n.ask_differ))}
+${card("المحلل بس", "Parser only", pct(n.ask_parser, n.ask), String(n.ask_parser))}
+${card("فتح أو بعت مشروع", "Opened or sent a project", n.ask_used, String(n.ask_refined) + " " + L(lang, "تعديل فلتر", "refinements"))}
+</div>
 <nav class="seg" data-queue>${tab("queue", "الطابور", "Queue", sum.open.reports + sum.open.audit)}${tab("vocab", "الكلمات", "Vocabulary", sum.open.words)}${tab("cases", "حالات الاختبار", "Test cases", 0)}</nav>${noteBox}
 ${view === "vocab" ? "" : html`<form method="get" action="${PATH}" class="row" data-filters>
 <input type="hidden" name="period" value="${p.key}"><input type="hidden" name="view" value="${view}">
