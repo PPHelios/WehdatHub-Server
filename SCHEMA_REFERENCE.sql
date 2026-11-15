@@ -1694,6 +1694,64 @@ CREATE TABLE IF NOT EXISTS public.project_offers (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.place_zones (
+  place_id uuid NOT NULL,
+  area_id uuid NOT NULL,
+  source text DEFAULT 'manual'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.areas_backup_115 (
+  id uuid,
+  parent_id uuid,
+  name_key text,
+  name_en text,
+  name_ar text,
+  aliases text[],
+  lat double precision,
+  lng double precision,
+  status text,
+  source text,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone,
+  reject_reason text,
+  place_type text,
+  governorate text,
+  disambiguation_note text,
+  google_place_id text
+);
+
+CREATE TABLE IF NOT EXISTS public.map_places_backup_115 (
+  id uuid,
+  name_key text,
+  name_en text,
+  name_ar text,
+  developer text,
+  district text,
+  lat double precision,
+  lng double precision,
+  aliases text[],
+  verified boolean,
+  source text,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone,
+  approved boolean,
+  pin_checked_at timestamp with time zone,
+  area_id uuid,
+  subzone_id uuid,
+  google_place_id text,
+  project_info_en text,
+  project_info_ar text,
+  project_info_source text
+);
+
+CREATE TABLE IF NOT EXISTS public.listings_location_backup_115 (
+  id uuid,
+  area_id uuid,
+  subzone_id uuid,
+  place_id uuid
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1746,6 +1804,7 @@ ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KE
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE place_names ADD CONSTRAINT place_names_pkey PRIMARY KEY (id);
 ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_pkey PRIMARY KEY (id);
+ALTER TABLE place_zones ADD CONSTRAINT place_zones_pkey PRIMARY KEY (place_id, area_id);
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_pkey PRIMARY KEY (id);
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id);
 ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_pkey PRIMARY KEY (fingerprint);
@@ -1960,6 +2019,7 @@ ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) 
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
 ALTER TABLE place_names ADD CONSTRAINT place_names_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'merged'::text, 'rejected'::text])));
 ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'area'::text])));
+ALTER TABLE place_zones ADD CONSTRAINT place_zones_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text])));
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_client_name_check CHECK (((client_name IS NULL) OR (length(client_name) <= 120)));
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_link_check CHECK ((length(link) <= 1000));
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_listing_no_check CHECK (((listing_no IS NULL) OR ((length(listing_no) >= 4) AND (length(listing_no) <= 20))));
@@ -2119,6 +2179,8 @@ ALTER TABLE payments ADD CONSTRAINT payments_bundle_id_fkey FOREIGN KEY (bundle_
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE place_names ADD CONSTRAINT place_names_place_id_fkey FOREIGN KEY (place_id) REFERENCES map_places(id) ON DELETE SET NULL;
 ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE place_zones ADD CONSTRAINT place_zones_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE CASCADE;
+ALTER TABLE place_zones ADD CONSTRAINT place_zones_place_id_fkey FOREIGN KEY (place_id) REFERENCES map_places(id) ON DELETE CASCADE;
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE portal_enquiries ADD CONSTRAINT portal_enquiries_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2300,6 +2362,7 @@ CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WH
 CREATE INDEX place_names_status ON public.place_names USING btree (status, times_seen DESC);
 CREATE INDEX place_proposals_broker ON public.place_proposals USING btree (broker_id, created_at DESC);
 CREATE INDEX place_proposals_ref ON public.place_proposals USING btree (kind, ref_id);
+CREATE INDEX place_zones_area ON public.place_zones USING btree (area_id);
 CREATE INDEX portal_enquiries_agency_idx ON public.portal_enquiries USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effective_on) WHERE (status = 'scheduled'::text);
 CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);

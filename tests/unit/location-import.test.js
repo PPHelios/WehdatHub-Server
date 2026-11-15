@@ -38,12 +38,14 @@ describe("location import", () => {
     expect(notes).toBeLessThanOrEqual(22);
   });
 
-  test("a second run changes nothing", async () => {
+  // 115 (the v6 list) runs after 111 and merges one of its areas, so the two run again together.
+  test("a second run of the location imports changes nothing", async () => {
     const count = async () => (await q("SELECT (SELECT count(*) FROM areas)::int AS a, (SELECT count(*) FROM map_places)::int AS p")).rows[0];
     const before = await count();
     const client = await db.pool.connect();
     await client.query("BEGIN");
     await up(client);
+    await require("../../db/migrations/115_location_v6").up(client);
     await client.query("COMMIT");
     client.release();
     expect(await count()).toEqual(before);
