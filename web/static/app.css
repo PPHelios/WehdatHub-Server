@@ -720,3 +720,54 @@ input, select, textarea { min-height: 46px; border-color: #c9d2dc; }
   .tabbar .fab svg { width: 20px; height: 20px; }
   .tabbar .fab-label { display: inline; font-weight: 700; }
 }
+
+/* ---- The add/edit unit form (docs/plans/unified-unit-box.md): one centred column on laptop, tablet and phone alike,
+   numbered sections, and the one box for the place and the features. ---- */
+.uf, .uf-top { max-width: 760px; margin-inline: auto; }
+.uf-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.uf-top h1 { margin-block: 8px 0; }
+.uf .ic, .ubox .ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.uf-card { display: grid; gap: 14px; padding: 20px; }
+.uf-head h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.15rem; font-weight: 800; }
+.uf-head p { margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }
+.uf-n { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-ink); font-size: 0.9rem; font-weight: 800; flex: none; }
+.uf-sub { margin: 0; font-size: 1rem; font-weight: 700; }
+.uf-fill { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.uf-private { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 0.88rem; }
+/* Edit shows every section: a row of section links stays on top, Save stays at the bottom. */
+.uf-jump { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 0; background: var(--bg); }
+.uf-jump a { flex: none; padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 0.88rem; font-weight: 600; text-decoration: none; }
+.uf-edit .uf-save { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 4; padding: 10px; border-radius: 16px; background: var(--card); box-shadow: 0 6px 18px rgba(14, 21, 33, 0.16); }
+.uf-save button { flex: 1; }
+.tg-main-on .uf-edit .uf-save { position: static; }
+
+/* The box: chips and the text you type sit in one field. */
+.ubox { position: relative; display: grid; gap: 8px; }
+.ubox-label { font-weight: 700; }
+.ubox-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 52px; padding: 7px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--field); cursor: text; }
+.ubox-field:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+.ubox.field-missing .ubox-field { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
+.ubox-input { flex: 1 1 180px; min-width: 120px; min-height: 36px; border: 0 !important; outline: none; box-shadow: none !important; padding: 0 4px; background: transparent; font: inherit; font-size: 1rem; color: var(--ink); }
+.chip { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding-inline: 12px 4px; border-radius: 999px; font-size: 0.95rem; font-weight: 600; line-height: 1.2; }
+.chip-place { background: var(--brand); color: #fff; font-weight: 700; padding-inline-start: 10px; }
+.chip-place[data-state="check"] { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+.chip-place[data-state="new"] { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent); }
+.chip-feature { background: var(--brand-soft); color: var(--brand-ink); }
+.chip-other { background: var(--soft); color: var(--ink); border: 1px dashed var(--muted); font-weight: 500; }
+.chip-tag { font-style: normal; font-size: 0.75rem; font-weight: 600; opacity: 0.8; }
+.chip .chip-x { min-height: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; box-shadow: none; }
+.chip .chip-x:hover, .chip .chip-x:focus-visible { background: rgba(127, 127, 127, 0.18); }
+.chip .chip-x .ic { width: 14px; height: 14px; stroke-width: 2.5; }
+.ubox-list { display: grid; max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--card); box-shadow: var(--shadow); }
+.ubox-group { padding: 8px 14px 4px; background: var(--soft); color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.ubox .ubox-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-height: 52px; width: 100%; padding: 6px 14px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; text-align: start; box-shadow: none; }
+.ubox .ubox-opt strong { font-size: 1rem; }
+.ubox .ubox-opt span { color: var(--muted); font-size: 0.85rem; }
+.ubox .ubox-opt[aria-selected="true"], .ubox .ubox-opt:hover { background: var(--brand-soft); }
+.ubox .ubox-opt.ubox-act strong { color: var(--brand-ink); font-weight: 700; }
+.ubox-context { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 0.9rem; }
+.ubox-context .ic { color: var(--ok); }
+.ubox-warn { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 0.9rem; }
+.ubox-new { display: grid; gap: 10px; margin: 0; padding: 14px; border: 1px solid var(--accent); border-radius: var(--radius-btn); background: var(--card); }
+.ubox-new legend { padding-inline: 6px; font-weight: 700; }
+.ubox-new p { margin: 0; }

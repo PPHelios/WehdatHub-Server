@@ -137,6 +137,14 @@ function keysFromDetails(details = {}) {
   return sortKeys(keys);
 }
 
+// Features a unit type always has: a roof unit has a roof, so a search for "roof" finds it too.
+const IMPLIED_BY_TYPE = { roof: ["roof"] };
+
+/** The keys plus the ones the unit type implies, in dictionary order. */
+function withTypeKeys(keys = [], propertyType = null) {
+  return sortKeys([...(keys || []), ...(IMPLIED_BY_TYPE[String(propertyType || "").toLowerCase()] || [])]);
+}
+
 /** Bilingual words for the search text of a set of keys (both labels and all synonyms). */
 function searchTermsFor(keys = []) {
   const out = [];
@@ -156,5 +164,6 @@ module.exports = {
   keysFromDetails,
   searchTermsFor,
   sortKeys,
+  withTypeKeys,
   isFeatureKey: isKey
 };

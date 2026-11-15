@@ -87,28 +87,36 @@ async function next(pg, label) {
   }
 }
 
-/** Fills step 1 to step 3 of the add form with a complete unit. */
+/** Fills step 1 (unit and place) of the add form: the code, sale, the type, and the place through the one box. */
 async function fillUnit(pg, { code, price = "9 مليون", area = "150", phone = "01012345678" }) {
   await pg.goto(`${BASE}/app/units/new?lang=en`, { waitUntil: "networkidle" });
   await pg.fill('#unit-form [name="code"]', code);
   await pg.selectOption('#unit-form [name="listing_type"]', "sale");
   await pg.selectOption('#unit-form [name="property_type"]', "apartment");
-  await pg.fill('#unit-form [name="compound"]', "Hyde Park");
+  await pg.fill("#unit-form [data-ubox-input]", "Hyde Park");
+  await pg.locator("#unit-form [data-ubox-list] [data-i]", { hasText: /^Hyde Park/ }).first().click();
+  return { phone, price, area };
+}
+
+/** Fills step 2 (size and price). */
+async function fillSize(pg, { price, area }) {
   await pg.fill('#unit-form [name="price_value"]', price);
   await pg.fill('#unit-form [name="area_value"]', area);
   await pg.fill('#unit-form [name="bedrooms"]', "3");
   await pg.fill('#unit-form [name="bathrooms"]', "2");
   await pg.selectOption('#unit-form [name="finishing"]', "fully_finished");
-  return { phone };
 }
 
-/** Goes from step 1 to the last step (check and save), filling the owner on the way. */
-async function toSave(pg, { phone }, label, { from = 1 } = {}) {
+/** Goes from step `from` (1 = unit and place) to the last step (owner, check and save), filling size and owner on the way. */
+async function toSave(pg, opts, label, { from = 1 } = {}) {
   if (from <= 1) await next(pg, `${label} step 1`);
-  await next(pg, `${label} step 2`);
-  await pg.fill('#unit-form [name="owner_name"]', "Mr Owner");
-  await pg.fill('#unit-form [name="owner_phone"]', phone);
+  if (from <= 2) {
+    await fillSize(pg, opts);
+    await next(pg, `${label} step 2`);
+  }
   await next(pg, `${label} step 3`);
+  await pg.fill('#unit-form [name="owner_name"]', "Mr Owner");
+  await pg.fill('#unit-form [name="owner_phone"]', opts.phone);
   await pg.waitForSelector("#unit-form [data-review]", { timeout: 15000 });
   await pg.waitForFunction(() => {
     const b = document.querySelector("#unit-form [data-save-row] button[type=submit]");
@@ -150,13 +158,16 @@ test("a look-alike unit: the warning shows at Next, Next again accepts it, and S
   const { ctx, pg, errors } = await openAs();
   // Same compound, type, rooms, size and price as MP-DUP0: the server calls it a look-alike.
   const opts = await fillUnit(pg, { code: "MP-DUP1", price: "7 مليون", area: "133", phone: "01022220001" });
+  await next(pg, "duplicate step 1");
+  // The look-alike is found when the size and price are known: leaving step 2.
+  await fillSize(pg, opts);
   await pg.locator("#unit-form button[type=button]", { hasText: /^(Next|التالي)$/ }).first().click();
   await pg.waitForFunction(() => /MP-DUP0/.test(document.querySelector("#unit-form")?.textContent || ""), null, { timeout: 15000 }).catch(async () => {
     throw new Error(`duplicate: no look-alike warning at Next. Page says: ${await pageSays(pg)}`);
   });
-  expect(await visibleStep(pg)).toBe(1);
+  expect(await visibleStep(pg)).toBe(2);
   await next(pg, "duplicate: Next again after the warning");
-  await toSave(pg, opts, "duplicate", { from: 2 });
+  await toSave(pg, opts, "duplicate", { from: 3 });
   const code = await save(pg, "duplicate accepted");
   expect(code).toBe("MP-DUP1");
   expect(await countLike("MP-DUP")).toBe(2);

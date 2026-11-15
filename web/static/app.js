@@ -978,9 +978,11 @@
       if (part && part.hidden) unitFormEl.dispatchEvent(new CustomEvent("stepgoto", { detail: part.getAttribute("data-step") }));
       var more = input.closest("details");
       if (more) more.open = true;
-      var lab = input.closest("label");
+      // A field kept by a box (the unit box's hidden place fields) is marked and focused through the box.
+      var lab = input.closest("label, [data-field-wrap]");
       if (lab) lab.classList.add("field-missing");
-      setTimeout(function () { input.focus(); input.scrollIntoView({ block: "center" }); }, 0);
+      var target = input.type === "hidden" || input.hidden ? (lab && lab.querySelector("input:not([type=hidden])")) || input : input;
+      setTimeout(function () { target.focus(); target.scrollIntoView({ block: "center" }); }, 0);
     };
     unitFormEl.addEventListener("click", function (e) { var li = e.target.closest && e.target.closest("[data-blocker]"); if (li) jump(li); });
     unitFormEl.addEventListener("keydown", function (e) { if (e.key !== "Enter" && e.key !== " ") return; var li = e.target.closest && e.target.closest("[data-blocker]"); if (li) { e.preventDefault(); jump(li); } });
@@ -995,7 +997,7 @@
   function stepForm(form) {
     if (!form || form.hasAttribute("data-stepped")) return;
     form.addEventListener("input", function (e) {
-      var lab = e.target && e.target.closest ? e.target.closest("label") : null;
+      var lab = e.target && e.target.closest ? e.target.closest("label, [data-field-wrap]") : null;
       if (lab) lab.classList.remove("field-missing");
     });
     var names = form.getAttribute("data-steps").split("|");
@@ -1023,24 +1025,49 @@
     form.appendChild(nav);
     var checkUrl = form.getAttribute("data-check");
     var at = 1;
-    function show(n) {
-      at = Math.max(1, Math.min(names.length, n));
-      for (var i = 0; i < parts.length; i++) parts[i].hidden = String(at) !== parts[i].getAttribute("data-step");
+    // A step whose sections the form's rules switched off (a rental has no delivery and payment step) is skipped: the bar lists
+    // the steps that are on, numbered in order, and Next and Back go to the next one that is on.
+    function stepsOn() {
+      var on = [];
+      for (var n = 1; n <= names.length; n++) {
+        for (var i = 0; i < parts.length; i++) {
+          if (Number(parts[i].getAttribute("data-step")) === n && !parts[i].hasAttribute("data-rule-off")) { on.push(n); break; }
+        }
+      }
+      return on.length ? on : [1];
+    }
+    // The step on or after n in this direction (+1 / -1), or the nearest one that exists.
+    function nearest(n, dir) {
+      var on = stepsOn();
+      if (on.indexOf(n) >= 0) return n;
+      var pick = dir < 0 ? on.filter(function (s) { return s < n; }).pop() : on.filter(function (s) { return s > n; })[0];
+      return pick || (dir < 0 ? on[0] : on[on.length - 1]);
+    }
+    function draw() {
+      var on = stepsOn();
+      for (var i = 0; i < parts.length; i++) parts[i].hidden = String(at) !== parts[i].getAttribute("data-step") || parts[i].hasAttribute("data-rule-off");
       bar.innerHTML = "";
-      for (var k = 0; k < names.length; k++) {
+      for (var k = 0; k < on.length; k++) {
         var dot = document.createElement("span");
-        dot.className = "stepdot" + (k + 1 < at ? " done" : k + 1 === at ? " on" : "");
-        dot.textContent = (k + 1) + ". " + names[k];
+        dot.className = "stepdot" + (on[k] < at ? " done" : on[k] === at ? " on" : "");
+        dot.textContent = (k + 1) + ". " + names[on[k] - 1];
         bar.appendChild(dot);
       }
-      prev.hidden = at === 1;
-      next.hidden = at === names.length;
+      prev.hidden = at === on[0];
+      next.hidden = at === on[on.length - 1];
+    }
+    function show(n, dir) {
+      at = nearest(Math.max(1, Math.min(names.length, n)), dir || 1);
+      draw();
       stepErr.hidden = true;
       window.scrollTo(0, 0);
       document.dispatchEvent(new CustomEvent("steps:change"));
       // The last step is "check and save": the review loads by itself and decides whether Save is open.
-      if (at === names.length) runReview(form);
+      var on = stepsOn();
+      if (at === on[on.length - 1]) runReview(form);
     }
+    // The form's rules changed (sale or rental): the steps that are on change; the step on screen stays.
+    form.addEventListener("rules:change", function () { at = nearest(at, 1); draw(); });
     // Next: the browser's own checks first; then, when the form has a check address, the server's field rules for this
     // step (a spinner shows while they run). A blocker on a field of this step keeps the step open with its message.
     // If the check cannot be reached, Next still moves on: the final save checks everything.
@@ -1094,7 +1121,8 @@
           // Red outline on each field that blocks this step; it clears when the field is changed.
           for (var m = 0; m < shown.length; m++) {
             var mf = form.querySelector('[data-step="' + here + '"] [name="' + shown[m].field + '"]');
-            if (mf && mf.closest("label")) mf.closest("label").classList.add("field-missing");
+            var mw = mf && mf.closest("label, [data-field-wrap]");
+            if (mw) mw.classList.add("field-missing");
           }
           stepErr.textContent = shown.map(function (x) { return x.label; }).join(" · ");
           showStepErr();
@@ -1103,7 +1131,7 @@
         })
         .catch(function () { busy(false); show(here + 1); });
     });
-    prev.addEventListener("click", function () { show(at - 1); });
+    prev.addEventListener("click", function () { show(at - 1, -1); });
     // A required field left empty on an earlier step: jump back to it instead of a silent failed submit.
     form.addEventListener("invalid", function (e) {
       var part = e.target.closest && e.target.closest("[data-step]");

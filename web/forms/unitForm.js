@@ -129,6 +129,16 @@ function unitFromForm(body = {}) {
       clean_summary: str(body.clean_summary, 600)
     }
   };
+  // A rental has no delivery date, payment plan or developer terms; a sale has no rent period (the page hides them, and a
+  // value left in a hidden field is never saved).
+  if (out.listing_type === "rent") {
+    for (const k of ["is_ready", "delivery_year", "delivery_quarter", "down_payment_value", "remaining_amount", "installment_value", "payment_frequency", "installments_end", "maintenance_pct"]) out[k] = null;
+    out.payment_terms = {};
+    out.details.project = null;
+    out.details.developer = null;
+  } else if (out.listing_type === "sale") {
+    out.details.rent_period = null;
+  }
   return out;
 }
 
@@ -139,7 +149,8 @@ function unitFromForm(body = {}) {
 function composeFromForm({ existing = null, form, lang = "ar" }) {
   const composed = L.composeFields({ existing, draft: form, lang });
   for (const col of FORM_COLUMNS) composed[col] = form[col] ?? null;
-  composed.feature_keys = form.feature_keys;
+  const fromAreas = Features.keysFromDetails({ garden_area: form.details?.garden_area, roof_area: form.details?.roof_area });
+  composed.feature_keys = Features.withTypeKeys([...(form.feature_keys || []), ...fromAreas], composed.property_type);
   composed.features_other = form.features_other;
   composed.market = form.market;
   composed.inventory_type = form.market === "primary" ? "primary_unit" : existing?.inventory_type && existing.inventory_type !== "primary_unit" ? existing.inventory_type : "resale_unit";

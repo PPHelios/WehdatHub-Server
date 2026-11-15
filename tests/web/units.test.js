@@ -101,7 +101,11 @@ describe("add a unit on the web", () => {
     for (const name of ["listing_type", "property_type", "compound", "price_value", "area_value", "bedrooms", "is_ready", "delivery_year", "remaining_amount", "plan_down_1", "owner_name", "photos"]) {
       expect(r.text).toContain(`name="${name}"`);
     }
-    expect(r.text).toMatch(/name="feature" value="nanny_room"/);
+    // The place and the features are one box (chips); what is typed in it is answered by /app/places/box.
+    expect(r.text).toContain("data-ubox-input");
+    const box = await agent.get("/app/places/box?q=" + encodeURIComponent("مربية"));
+    expect(box.status).toBe(200);
+    expect(JSON.parse(box.text).items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "feature", key: "nanny_room" })]));
     expect(r.text).toMatch(/data-voice-url="\/app\/units\/extract"/);
   });
 
@@ -223,9 +227,9 @@ describe("fill from a description or a voice note (same extraction as WhatsApp)"
     const r = await post(agent, "/app/units/extract", csrf, { describe: "شقة في ميفيدا 200 متر 3 غرف بحري", owner_name: "Typed Owner", bathrooms: "2" }, { header: true });
     expect(r.status).toBe(200);
     expect(r.text).toMatch(/^<form id="unit-form"/);
-    expect(r.text).toMatch(/name="compound" type="text" value="ميفيدا"/);
+    expect(r.text).toMatch(/name="compound" value="ميفيدا"/);
     expect(r.text).toMatch(/name="price_value" type="text" value="10000000"/);
-    expect(r.text).toMatch(/name="feature" value="nanny_room" checked/);
+    expect(r.text).toMatch(/name="feature" value="nanny_room"/);
     expect(r.text).toMatch(/name="remaining_amount" type="text" value="6000000"/);
     expect(r.text).toMatch(/name="owner_name" type="text" value="Typed Owner"/);
     expect(r.text).toMatch(/name="bathrooms" type="number" value="2"/);
@@ -280,7 +284,7 @@ describe("edit a unit on the web", () => {
     const l = await seed();
     const { agent, csrf } = await signIn(h, "broker");
     const { page, version } = await editFields(agent);
-    expect(page.text).toMatch(/name="feature" value="corner" checked/);
+    expect(page.text).toMatch(/name="feature" value="corner"/);
     expect(page.text).toMatch(/name="owner_name" type="text" value="Owner A"/);
     const r = await post(agent, "/app/units/ED-1/edit", csrf, {
       version,

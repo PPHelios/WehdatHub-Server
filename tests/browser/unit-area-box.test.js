@@ -28,6 +28,10 @@ beforeAll(async () => {
   await add(OCT, "6th of October", "6 أكتوبر", ["october"], null);
   await add(BAN, "Al Banafseg", "البنفسج", [], NC);
   await add(ZAY, "Sheikh Zayed", "الشيخ زايد", [], OCT);
+  // An approved compound in New Cairo that is also in the Al Banafseg zone (the box shows both).
+  // (The location import already loads Hyde Park: it is moved to New Cairo here and given the zone.)
+  const hyde = await h.query("UPDATE map_places SET approved = true, area_id = $1, subzone_id = NULL WHERE name_key = 'hyde park' RETURNING id", [NC]);
+  await h.query("INSERT INTO place_zones (place_id, area_id) VALUES ($1, $2)", [hyde[0].id, BAN]);
   const { chromium } = require("playwright");
   browser = await chromium.launch({ args: ["--no-sandbox"] });
   server = h.app.app.listen(4581);
@@ -53,12 +57,11 @@ async function openForm(lang = "en", init = null) {
   return { ctx, pg };
 }
 
-/** Types a compound the list does not know, so the add-new part (with the area boxes) opens. */
+/** Types a place the list does not know and asks for it as new, so the add-new part (with the area boxes) opens. */
 async function openNewCompound(pg) {
-  await pg.fill("input[data-place-suggest]", "zzzzzzzz");
-  await pg.locator("input[data-place-suggest]").blur();
-  await pg.waitForTimeout(500);
-  if ((await pg.locator("[data-place-new]").getAttribute("hidden")) !== null) await pg.locator("[data-place-add]").click();
+  await pg.fill("[data-ubox-input]", "zzzzzzzz");
+  await pg.locator("[data-ubox-list] [data-i]", { hasText: /request a new place/i }).click();
+  await pg.locator("[data-ubox-new]").waitFor({ state: "visible" });
 }
 
 const areaBox = (pg) => pg.locator('input[data-area-input="area_id"]');
@@ -223,5 +226,87 @@ test("after Fill from text, Save is closed while the warnings box is unticked an
   expect(await saveDisabled(pg)).toBe(true);
   await pg.waitForTimeout(1500); // the review runs again; an unticked box keeps Save closed
   expect(await saveDisabled(pg)).toBe(true);
+  await ctx.close();
+});
+
+// ---- the one box: place and features as chips ----
+const chips = (pg, kind) => pg.locator(`[data-ubox-chip="${kind}"] [data-chip-text]`).allTextContents();
+const hidden = (pg, name) => pg.locator(`input[type=hidden][name="${name}"]`).evaluateAll((els) => els.map((e) => e.value));
+
+test("typing a compound picks it as the one place chip, with its area and zones; picking another replaces it", async () => {
+  const { ctx, pg } = await openForm("en");
+  await pg.fill("[data-ubox-input]", "hyde");
+  await pg.locator("[data-ubox-list] [data-i]", { hasText: "Hyde Park" }).first().click();
+  expect(await chips(pg, "place")).toEqual(["Hyde Park"]);
+  expect(await hidden(pg, "compound")).toEqual(["Hyde Park"]);
+  expect(await areaId(pg)).toBe(NC);
+  expect(await pg.locator("[data-ubox-context]").textContent()).toContain("Al Banafseg");
+  expect(await pg.locator("[data-ubox-new]").getAttribute("hidden")).not.toBeNull();
+  // An alias finds it too, and a second place replaces the first.
+  await pg.fill("[data-ubox-input]", "zayed");
+  await pg.locator("[data-ubox-list] [data-i]", { hasText: /^Sheikh Zayed/ }).first().click();
+  expect(await chips(pg, "place")).toEqual(["Sheikh Zayed"]);
+  expect(await hidden(pg, "compound")).toEqual([""]);
+  expect(await areaId(pg)).toBe(OCT); // a sub-zone is saved with its area
+  expect(await subId(pg)).toBe(ZAY);
+  await ctx.close();
+});
+
+test("a feature is a chip that writes the same field the checkboxes did, and removing it takes it out", async () => {
+  const { ctx, pg } = await openForm("en");
+  await pg.fill("[data-ubox-input]", "roof");
+  await pg.locator("[data-ubox-list] [data-i]", { hasText: /^Roof/ }).first().click();
+  expect(await chips(pg, "feature")).toEqual(["Roof"]);
+  expect(await hidden(pg, "feature")).toEqual(["roof"]);
+  await pg.locator('[data-ubox-chip="feature"] [data-ubox-remove]').click();
+  expect(await hidden(pg, "feature")).toEqual([]);
+  // Words the dictionary does not know stay as free text.
+  await pg.fill("[data-ubox-input]", "jacuzzi");
+  await pg.locator("[data-ubox-list] [data-i]", { hasText: /add .jacuzzi. as another feature/i }).click();
+  expect(await chips(pg, "other")).toEqual(["jacuzzi not in the list"].map((t) => expect.stringContaining("jacuzzi")));
+  expect(await hidden(pg, "features_other")).toEqual(["jacuzzi"]);
+  await ctx.close();
+});
+
+test("pasting a message into the box reads the place and the features, free", async () => {
+  const { ctx, pg } = await openForm("en");
+  await pg.fill("textarea[name=describe]", "شقة للبيع في هايد بارك 150 متر 3 غرف بحري روف");
+  await pg.locator("textarea[name=describe]").blur();
+  await pg.waitForFunction(() => document.querySelectorAll('[data-ubox-chip="place"]').length === 1, null, { timeout: 8000 });
+  expect(await chips(pg, "place")).toEqual(["Hyde Park"]); // the chip is in the page's language, whichever language was pasted
+  expect((await hidden(pg, "feature")).sort()).toEqual(["north_facing", "roof"]);
+  await ctx.close();
+});
+
+// ---- sale and rent ----
+const stepNames = (pg) => pg.locator(".stepbar .stepdot").allTextContents();
+
+test("a rental skips the delivery and payment step and shows the rent period; a sale hides the rent period", async () => {
+  const { ctx, pg } = await openForm("en");
+  expect(await stepNames(pg)).toEqual(["1. Unit and place", "2. Size and price", "3. Delivery and payment", "4. Owner and photos"]);
+  await pg.selectOption("select[name=listing_type]", "rent");
+  expect(await stepNames(pg)).toEqual(["1. Unit and place", "2. Size and price", "3. Owner and photos"]);
+  await pg.selectOption("select[name=property_type]", "apartment");
+  expect(await pg.locator("select[name=rent_period]").isVisible()).toBe(false); // step 2 is not on screen yet
+  // A hidden section's fields are disabled, so they are never sent.
+  expect(await pg.locator("input[name=delivery_year]").isDisabled()).toBe(true);
+  expect(await pg.locator("input[name=remaining_amount]").isDisabled()).toBe(true);
+  await pg.selectOption("select[name=listing_type]", "sale");
+  expect(await stepNames(pg)).toHaveLength(4);
+  expect(await pg.locator("input[name=delivery_year]").isDisabled()).toBe(false);
+  expect(await pg.locator("select[name=rent_period]").isDisabled()).toBe(true);
+  await ctx.close();
+});
+
+test("size fields follow the unit type: land only for houses, and a field that has a value is never hidden", async () => {
+  const { ctx, pg } = await openForm("en");
+  await pg.selectOption("select[name=property_type]", "apartment");
+  expect(await pg.locator("input[name=land_area]").isDisabled()).toBe(true);
+  expect(await pg.locator("input[name=floor_level]").isDisabled()).toBe(false);
+  await pg.selectOption("select[name=property_type]", "villa");
+  expect(await pg.locator("input[name=land_area]").isDisabled()).toBe(false);
+  expect(await pg.locator("input[name=floor_level]").isDisabled()).toBe(true); // a house has no floor
+  await pg.selectOption("select[name=property_type]", "roof");
+  expect(await pg.locator("input[name=roof_area]").isDisabled()).toBe(false);
   await ctx.close();
 });

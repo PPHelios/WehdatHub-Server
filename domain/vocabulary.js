@@ -29,7 +29,9 @@ const TYPE_TERMS = {
   shop: ["محل تجاري", "محل", "محلات", "shop", "retail"],
   clinic: ["عيادة", "عيادات", "clinic"],
   commercial: ["تجاري", "commercial"],
-  land: ["أرض", "ارض", "land", "plot"]
+  land: ["أرض", "ارض", "land", "plot"],
+  // A unit that is the roof floor itself. Listed last: a text that names another type ("شقة بروف", "apartment with roof") keeps that type.
+  roof: ["روف", "رووف", "roof unit", "roof floor", "وحدة روف", "roof"]
 };
 
 /** Rows for the search_vocabulary table: { kind, key, terms } with normalized, space-joined terms. */

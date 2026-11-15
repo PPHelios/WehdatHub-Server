@@ -27,7 +27,8 @@ const TYPE_LABELS = {
   mazonette: ["مازونيت", "Mazonette"],
   i_villa: ["آي فيلا", "I Villa"],
   twin_villa: ["توين فيلا", "Twin villa"],
-  maisonette: ["ميزونيت", "Maisonette"]
+  maisonette: ["ميزونيت", "Maisonette"],
+  roof: ["روف", "Roof unit"]
 };
 
 const FINISHING_LABELS = {

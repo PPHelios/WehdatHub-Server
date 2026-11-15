@@ -460,6 +460,7 @@
     },
     "domain/fieldRules.js": {
       "PROPERTY_TYPES": "Array",
+      "FIELD_TYPES": "Object",
       "APARTMENT_LIKE": "Array",
       "VILLA_LIKE": "Array",
       "COMMERCIAL": "Array",
@@ -482,6 +483,7 @@
       "keysFromDetails": ["details"],
       "searchTermsFor": ["keys"],
       "sortKeys": ["keys"],
+      "withTypeKeys": ["keys", "propertyType"],
       "isFeatureKey": ["k"]
     },
     "domain/delivery.js": {
@@ -1306,6 +1308,11 @@
       "nameKey": ["name"],
       "isNewEnglishName": ["name"],
       "widenTerms": ["terms", "approved"]
+    },
+    "domain/unitBox.js": {
+      "suggestFeatures": ["text", "lang", "limit"],
+      "findPlace": ["text", "params", "lang"],
+      "resolve": ["text", "lists", "lang"]
     },
     "domain/unitCode.js": {
       "TYPE_LETTER": "Object",
@@ -2654,6 +2661,9 @@
     "services/placeSuggest.js": {
       "suggest": ["pool", "text", "limit", "lang"],
       "listing": ["pool", "since"],
+      "box": ["pool", "text", "lang"],
+      "boxResolve": ["pool", "text", "lang"],
+      "placeChip": ["pool", "params", "lang"],
       "resetCache": []
     },
     "services/areaSearch.js": {

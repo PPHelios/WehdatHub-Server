@@ -15,6 +15,16 @@ function register(api, { pool }) {
   api.get("/places/list", async (req, res) => {
     return res.json(await Suggest.listing(pool, String(req.query.since || "").slice(0, 40)));
   });
+
+  // The unit box (docs/plans/unified-unit-box.md), the same as the website's:
+  // GET /places/box?q=… → { items: [place suggestions…, { kind: "feature", key, label }…] }
+  api.get("/places/box", async (req, res) => {
+    return res.json({ items: await Suggest.box(pool, req.query.q, req.query.lang === "en" ? "en" : "ar") });
+  });
+  // POST /places/box/resolve { text } → { place, features: [{ key, label }] }: what a pasted message names, no AI.
+  api.post("/places/box/resolve", async (req, res) => {
+    return res.json(await Suggest.boxResolve(pool, String((req.body || {}).text || ""), req.query.lang === "en" ? "en" : "ar"));
+  });
 }
 
 module.exports = { register };

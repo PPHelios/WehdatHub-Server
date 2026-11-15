@@ -31,6 +31,10 @@ const FILES = {
   "heic2any.js": require.resolve("heic2any/dist/heic2any.min.js"),
   // The add/edit unit form's photo tray (zip of one unit's photos, ticks, order).
   "unitPhotos.js": path.join(STATIC_DIR, "unitPhotos.js"),
+  // The add/edit unit form's one box: place and feature chips (docs/plans/unified-unit-box.md).
+  "unitBox.js": path.join(STATIC_DIR, "unitBox.js"),
+  // The same form: which fields show for a sale or a rental and for each unit type.
+  "unitFields.js": path.join(STATIC_DIR, "unitFields.js"),
   // Excel import: the workbook is read in the browser, tab by tab.
   "xlsxread.js": path.join(STATIC_DIR, "xlsxread.js"),
   "ximport.js": path.join(STATIC_DIR, "ximport.js"),

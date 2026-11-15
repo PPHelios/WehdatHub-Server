@@ -74,6 +74,7 @@
  "/owners/:id": "api:/owners/:id",
  "/owners/requests": "api:/owners/requests",
  "/owners/suggest": "api:/owners",
+ "/places/box": "api:/places/box",
  "/places/suggest": "api:/places/suggest",
  "/plan": "api:/plan",
  "/portal-enquiries": "api:/portal-enquiries",

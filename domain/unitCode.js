@@ -20,7 +20,8 @@ const TYPE_LETTER = {
   studio: "S",
   office: "O",
   commercial: "R",
-  land: "L"
+  land: "L",
+  roof: "F"
 };
 
 // First letters of Arabic words in Latin (Egyptian sounds: ج → G, ق → Q).

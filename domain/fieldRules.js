@@ -5,10 +5,19 @@
 
 const { hasDelivery } = require("./delivery");
 
-const APARTMENT_LIKE = ["apartment", "duplex", "penthouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette"];
+const APARTMENT_LIKE = ["apartment", "duplex", "penthouse", "chalet", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "roof"];
 const VILLA_LIKE = ["villa", "townhouse", "i_villa", "twin_villa", "maisonette"];
 const COMMERCIAL = ["office", "shop", "clinic", "commercial"];
 const PROPERTY_TYPES = [...APARTMENT_LIKE, "studio", ...VILLA_LIKE, ...COMMERCIAL, "land"];
+
+// Which unit types each optional size field is asked for (the add/edit form shows a field only for these, and always when it
+// already has a value). Floor is not asked for a house (it has none) or land.
+const FIELD_TYPES = {
+  land_area: [...VILLA_LIKE, "land"],
+  garden_area: [...VILLA_LIKE, "duplex", "apartment", "chalet", "triplex"],
+  roof_area: [...VILLA_LIKE, "duplex", "penthouse", "triplex", "triplex_roof", "sky_loft", "roof"],
+  floor_level: [...APARTMENT_LIKE, "studio", ...COMMERCIAL]
+};
 
 const MISMATCH_TOLERANCE_EGP = 100;
 
@@ -251,6 +260,7 @@ function blockerLine(b, lang = "ar") {
 
 module.exports = {
   PROPERTY_TYPES,
+  FIELD_TYPES,
   APARTMENT_LIKE,
   VILLA_LIKE,
   COMMERCIAL,

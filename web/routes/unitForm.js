@@ -160,11 +160,15 @@ function register(web, { pool, page, assets }) {
     }
     return out;
   };
+  // The unit box's place chip and the area list (the new-compound part picks from it), for any render of the form.
+  const boxOf = async (values, lang) => ({
+    areas: await require("../../services/areas").approvedAreas(pool).catch(Swallow.logged(pool, "unitForm.areas", [])),
+    place: await require("../../services/placeSuggest").placeChip(pool, values || {}, lang).catch(Swallow.logged(pool, "unitForm.placeChip", null))
+  });
   const formPage = async (req, res, opts, status = 200) => {
     const lang = langOf(req);
-    const approvedPlaces = await pool.query("SELECT name_en, name_ar FROM map_places WHERE approved ORDER BY name_en").then((r) => r.rows).catch(Swallow.logged(pool, "unitForm.places", []));
     const leadChoices = await Leases.tenantChoices(pool, req.session.broker).catch(Swallow.logged(pool, "unitForm.tenants", []));
-    const areas = await require("../../services/areas").approvedAreas(pool).catch(Swallow.logged(pool, "unitForm.areas", []));
+    const { areas, place } = await boxOf({ ...opts.values, ...newPlace(req.body) }, lang);
     const edit = opts.mode === "edit";
     return page(
       req,
@@ -172,7 +176,7 @@ function register(web, { pool, page, assets }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, areas, extraValues: newPlace(req.body), ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.map((p) => (lang === "en" ? p.name_en || p.name_ar : p.name_ar || p.name_en)).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
+        body: html`<div class="uf-top"><h1>${edit ? html`${L10n(lang, "تعديل", "Edit")} <span dir="ltr">${opts.code}</span>` : L10n(lang, "إضافة وحدة", "Add a unit")}</h1>${edit ? html`<a href="/app/units/${encodeURIComponent(opts.code)}">${L10n(lang, "افتح الوحدة", "Open the unit")}</a>` : ""}</div>${unitForm({ lang, csrf: req.session.csrf, areas, place, extraValues: newPlace(req.body), ...opts })}${placeList()}<datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("unitFields.js")}"></script>`
       },
       status
     );
@@ -218,35 +222,31 @@ function register(web, { pool, page, assets }) {
     const form = Form.unitFromForm(req.body);
     const base = Form.composeFromForm({ existing, form, lang });
     const view = { mode, code: existing?.code, version: req.body.version, images: existing ? await imagesOf(pool, existing) : [], lang, csrf: req.session.csrf, extraValues: newPlace(req.body) };
+    // The form comes back whole: its box shows the place the fields now hold (after an AI fill, the one it found).
+    const send = async (status, values, extra) => res.status(status).type("html").send(String(unitForm({ ...view, ...(await boxOf({ ...values, ...newPlace(req.body) }, lang)), values, ...extra })));
     const text = String(req.body.describe || "").trim().slice(0, 4000);
     const voice = filesOf(req, "voice").slice(0, 5).map((f) => ({ buffer: f.buffer, mimeType: f.mimetype.split(";")[0] }));
     if (!text && !voice.length) {
-      return res.type("html").send(String(unitForm({ ...view, values: Form.formFromUnit({ ...base, code: form.code }), error: L10n(lang, "اكتب وصف أو سجّل فويس الأول.", "Type a description or record a voice note first.") })));
+      return send(200, Form.formFromUnit({ ...base, code: form.code }), { error: L10n(lang, "اكتب وصف أو سجّل فويس الأول.", "Type a description or record a voice note first.") });
     }
     const gate = await RateLimit.hit(pool, `extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker);
     if (!gate.allowed) {
-      return res.status(429).type("html").send(String(unitForm({ ...view, values: Form.formFromUnit({ ...base, code: form.code }), error: L10n(lang, "⏳ طلبات كتير. استنى شوية.", "⏳ Too many requests. Wait a moment.") })));
+      return send(429, Form.formFromUnit({ ...base, code: form.code }), { error: L10n(lang, "⏳ طلبات كتير. استنى شوية.", "⏳ Too many requests. Wait a moment.") });
     }
     try {
       const extracted = await L.extractPropertyDetails(AI, { texts: text ? [text] : [], voice, lang, ctx: ctxOf(pool, req) });
       const merged = L.composeFields({ existing: base, draft: extracted.fields, lang });
       const code = mode === "edit" ? existing.code : form.code || extracted.fields.code || "";
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_unit_extract", metadata: { voice: voice.length, text: Boolean(text) } });
-      return res.type("html").send(
-        String(unitForm({ ...view, values: { ...Form.formFromUnit(merged), code }, notice: L10n(lang, "✨ اتملت البيانات من الوصف. راجعها قبل الحفظ.", "✨ Filled from your description. Check before saving.") }))
-      );
+      return send(200, { ...Form.formFromUnit(merged), code }, { notice: L10n(lang, "✨ اتملت البيانات من الوصف. راجعها قبل الحفظ.", "✨ Filled from your description. Check before saving.") });
     } catch (err) {
       console.warn("Web extraction failed:", err.message);
       const why = AiBlock.kindOf(err);
-      return res.type("html").send(
-        String(unitForm({
-          ...view,
-          values: Form.formFromUnit({ ...base, code: form.code }),
-          error: why !== "ai"
-            ? `${AiBlock.text(why, lang, { owner: Authz.isAgencyOwner(broker) })} ${L10n(lang, "املأ البيانات يدوياً هنا، من غير رصيد.", "Fill the fields by hand here, no credits needed.")}`
-            : L10n(lang, "❌ تعذر قراءة الوصف حالياً. املأ البيانات يدوياً أو حاول تاني.", "❌ Could not read the description right now. Fill the fields by hand or try again.")
-        }))
-      );
+      return send(200, Form.formFromUnit({ ...base, code: form.code }), {
+        error: why !== "ai"
+          ? `${AiBlock.text(why, lang, { owner: Authz.isAgencyOwner(broker) })} ${L10n(lang, "املأ البيانات يدوياً هنا، من غير رصيد.", "Fill the fields by hand here, no credits needed.")}`
+          : L10n(lang, "❌ تعذر قراءة الوصف حالياً. املأ البيانات يدوياً أو حاول تاني.", "❌ Could not read the description right now. Fill the fields by hand or try again.")
+      });
     }
   });
 
