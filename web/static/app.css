@@ -849,3 +849,8 @@ label:has(> [data-area-list]) { position: relative; }
 .acc-body #access h3 { margin: 0; font-size: 1rem; }
 .acc-body #access form.row { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--card); flex-wrap: wrap; }
 .acc-body .chip.new { justify-self: start; }
+
+/* Access requests: the two answers side by side, equal size. */
+.req-actions .row { flex-wrap: nowrap; gap: 8px; }
+.req-actions form { margin: 0; }
+.req-actions button { min-width: 88px; min-height: 44px; margin: 0; }

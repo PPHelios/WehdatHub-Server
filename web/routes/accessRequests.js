@@ -58,7 +58,7 @@ ${card("مستني دلوقتي", "Waiting now", sum.pending, sum.oldestHours !=
 <section class="card stack" data-requests>${out.rows.length
         ? html`<table><thead><tr><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "السمسار", "Broker")}</th><th>${L(lang, "الحالة", "Status")}</th><th>${L(lang, "إمتى", "When")}</th><th></th></tr></thead><tbody>
 ${out.rows.map((r) => html`<tr data-request="${r.id}"><td><a href="/app/units/${encodeURIComponent(r.code)}#access">${r.code}</a></td><td>${r.broker_name}</td><td>${L(lang, STATUS_LABEL[r.status][0], STATUS_LABEL[r.status][1])}${r.decided_by_name ? html` <span class="muted small">${r.decided_by_name}</span>` : ""}</td><td class="muted">${when(r.created_at)}</td>
-<td>${r.status === "pending" && sum.canAnswer ? html`${act(r.id, "approve", L(lang, "وافق", "Approve"))} ${act(r.id, "decline", L(lang, "ارفض", "Decline"), "secondary")}` : ""}</td></tr>`)}</tbody></table>`
+<td class="req-actions">${r.status === "pending" && sum.canAnswer ? html`<div class="row">${act(r.id, "approve", L(lang, "وافق", "Approve"))}${act(r.id, "decline", L(lang, "ارفض", "Decline"), "secondary")}</div>` : ""}</td></tr>`)}</tbody></table>`
         : html`<p class="muted">${L(lang, "مفيش طلبات هنا.", "No requests here.")}</p>`}</section>
 ${Period.pager(PATH, params, pg, out.total, lang)}`
     });

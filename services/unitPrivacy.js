@@ -154,10 +154,9 @@ async function requestAccess(pool, broker, listing) {
   return { ok: true, id };
 }
 
-/** May this person answer asks now? Managers; the agency owner only when there is no other manager. */
+/** May this person answer asks? Managers and the agency owner (the owner is only notified when there is no manager). */
 async function mayDecide(pool, actor) {
-  if (!isManager(actor)) return false;
-  return !isAgencyOwner(actor) || (await deciders(pool, actor.agency_id)).some((d) => d.id === actor.id);
+  return isManager(actor);
 }
 
 /** Open asks for one unit, for whoever may answer them. */
