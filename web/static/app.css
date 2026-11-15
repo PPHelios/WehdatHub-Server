@@ -860,10 +860,6 @@ label:has(> [data-area-list]) { position: relative; }
 .uc-top .badge { flex: none; }
 .uc-top .uc-price { margin-inline-start: auto; }
 
-/* The map drawer's unit rows with the unit's cover photo. */
-.map-units a.has-thumb { grid-template-columns: 72px auto 1fr auto; }
-.map-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; background: var(--soft); }
-@media (max-width: 420px) { .map-units a.has-thumb { grid-template-columns: 72px 1fr; } .map-units a.has-thumb > :not(.map-thumb) { grid-column: 2; } }
 
 /* Carousel: smaller, arrows that follow the reading direction, and a thumbnail row. */
 .car { max-width: 720px; background: transparent; overflow: visible; }
@@ -908,3 +904,12 @@ label:has(> [data-area-list]) { position: relative; }
 .ltabs form.grid, .ltabs form.stack { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--soft); }
 .ltabs form.grid > button { grid-column: 1 / -1; }
 .stageform .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The map drawer's unit rows: photo on one side, code and type badge, facts, then the price. */
+.map-units a.map-row { display: flex; align-items: center; gap: 12px; padding: 8px; }
+.map-units a.map-row .map-thumb { flex: none; width: 88px; height: 66px; object-fit: cover; border-radius: 10px; background: var(--card); }
+.map-body { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.map-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.map-top strong { font-size: 1rem; }
+.map-facts { color: var(--muted); font-size: 0.88rem; line-height: 1.4; }
+.map-body .map-price { font-size: 1rem; white-space: normal; }

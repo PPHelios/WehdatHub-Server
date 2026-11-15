@@ -112,7 +112,8 @@ function drawerBody(lang, units, place, covers = new Map()) {
     const price = Describe.money(u.price_value, lang) || u.price_display || "—";
     const facts = [Describe.typeLabel(u, lang), u.bedrooms != null ? `${u.bedrooms} ${L(lang, "غرف", "bd")}` : "", u.area_value ? `${Math.round(u.area_value)} m²` : ""].filter(Boolean).join(" · ");
     const kind = u.listing_type === "rent" ? "rent" : "sale";
-    return html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}"${covers.get(u.id) ? raw(' class="has-thumb"') : ""}>${covers.get(u.id) ? html`<img class="map-thumb" src="${covers.get(u.id).thumb}" alt="" loading="lazy" width="72" height="54">` : ""}<strong dir="ltr">${u.code}</strong> <span class="badge ${kind}" data-listing-type="${kind}">${kind === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")}</span> <span>${facts}</span><span class="map-price">${price}</span></a></li>`;
+    const cover = covers.get(u.id);
+    return html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}" class="map-row">${cover ? html`<img class="map-thumb" src="${cover.thumb}" alt="" loading="lazy" width="88" height="66">` : ""}<span class="map-body"><span class="map-top"><strong dir="ltr">${u.code}</strong><span class="badge ${kind}" data-listing-type="${kind}">${kind === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")}</span></span><span class="map-facts">${facts}</span><span class="map-price">${price}</span></span></a></li>`;
   })}</ul>${place ? "" : ""}`;
 }
 
