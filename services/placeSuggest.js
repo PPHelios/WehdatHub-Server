@@ -12,6 +12,9 @@ const Areas = require("./areas");
 const CACHE_MS = 60 * 1000;
 let cache = { at: 0, places: [], areas: [], zones: [], version: "" };
 
+/** The feature dictionary for the phone: strict synonyms (syn), as the unit box matches them. */
+const featureList = () => Features.FEATURES.map(({ key, ar, en, group, syn }) => ({ key, ar, en, group, syn }));
+
 async function lists(pool) {
   if (Date.now() - cache.at < CACHE_MS) return cache;
   const [places, areas, zones] = await Promise.all([
@@ -19,8 +22,8 @@ async function lists(pool) {
     Areas.approvedAreas(pool),
     pool.query("SELECT place_id, area_id FROM place_zones").then((r) => r.rows).catch(() => [])
   ]);
-  // The version changes only when an approved place or area changes, so the phone can keep its copy until then.
-  const version = crypto.createHash("sha1").update(JSON.stringify([places.rows, areas])).digest("hex").slice(0, 16);
+  // The version changes only when an approved place, an area, a zone or the feature dictionary changes, so the phone can keep its copy until then.
+  const version = crypto.createHash("sha1").update(JSON.stringify([places.rows, areas, zones, featureList()])).digest("hex").slice(0, 16);
   cache = { at: Date.now(), places: places.rows, areas, zones, version };
   return cache;
 }
@@ -73,11 +76,11 @@ async function suggest(pool, text, limit = 8, lang = "en") {
   return A.suggest(String(text || "").slice(0, 80), { places, areas }, Math.min(Math.max(1, limit), 20), lang === "ar" ? "ar" : "en");
 }
 
-/** The whole approved list for the phone to keep: { version, places, areas }. With the version the phone already holds: { version, unchanged: true }. */
+/** The whole approved list for the phone to keep: { version, places, areas, zones, features }. With the version the phone already holds: { version, unchanged: true }. */
 async function listing(pool, since = "") {
-  const { places, areas, version } = await lists(pool);
+  const { places, areas, zones, version } = await lists(pool);
   if (since && since === version) return { version, unchanged: true };
-  return { version, places, areas };
+  return { version, places, areas, zones, features: featureList() };
 }
 
 /** Forget the cached lists (after the owner approves, merges or edits a place or an area). */
@@ -86,4 +89,4 @@ function resetCache() {
   require("./areaSearch").resetCache();
 }
 
-module.exports = { suggest, listing, box, boxResolve, placeChip, resetCache };
+module.exports = { suggest, listing, box, boxResolve, placeChip, resetCache, lists };

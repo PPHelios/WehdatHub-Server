@@ -10,7 +10,7 @@ function register(api, { pool }) {
     return res.json({ items });
   });
 
-  // GET /places/list[?since=<version>] → { version, places, areas } or { version, unchanged: true }.
+  // GET /places/list[?since=<version>] → { version, places, areas, zones, features } or { version, unchanged: true }.
   // The app keeps this list and matches typing on the phone (same rules as /places/suggest, see domain/areas.js).
   api.get("/places/list", async (req, res) => {
     return res.json(await Suggest.listing(pool, String(req.query.since || "").slice(0, 40)));

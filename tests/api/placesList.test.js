@@ -42,3 +42,26 @@ test("the list has a version, and the same version answers unchanged", async () 
   const other = await api().get("/api/v1/places/list").query({ since: "old" }).set({ Authorization: `Bearer ${t}` });
   expect(other.body.places).toBeDefined();
 });
+
+test("the list also carries zones and the feature dictionary, and the version follows a zone", async () => {
+  const t = await token();
+  const get = async () => (await api().get("/api/v1/places/list").set({ Authorization: `Bearer ${t}` })).body;
+  const first = await get();
+  expect(Array.isArray(first.zones)).toBe(true);
+  expect(Array.isArray(first.features)).toBe(true);
+  expect(first.features.length).toBeGreaterThan(10);
+  for (const f of first.features) {
+    expect(typeof f.key).toBe("string");
+    expect(typeof f.ar).toBe("string");
+    expect(typeof f.en).toBe("string");
+    expect(Array.isArray(f.syn)).toBe(true);
+  }
+  const place = (await h.pool.query("SELECT id FROM map_places WHERE approved LIMIT 1")).rows[0];
+  const area = (await h.pool.query("SELECT id FROM areas LIMIT 1")).rows[0];
+  expect(place && area).toBeTruthy();
+  await h.pool.query("INSERT INTO place_zones (place_id, area_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [place.id, area.id]);
+  Suggest.resetCache();
+  const second = await get();
+  expect(second.zones).toContainEqual({ place_id: place.id, area_id: area.id });
+  expect(second.version).not.toBe(first.version);
+});
