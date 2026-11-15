@@ -854,3 +854,8 @@ label:has(> [data-area-list]) { position: relative; }
 .req-actions .row { flex-wrap: nowrap; gap: 8px; }
 .req-actions form { margin: 0; }
 .req-actions button { min-width: 88px; min-height: 44px; margin: 0; }
+
+/* Unit card top line: code and type badge on the left, the price after them; it wraps instead of overlapping on a narrow card. */
+.uc-top { flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 4px 8px; }
+.uc-top .badge { flex: none; }
+.uc-top .uc-price { margin-inline-start: auto; }
