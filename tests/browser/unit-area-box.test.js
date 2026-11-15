@@ -310,3 +310,27 @@ test("size fields follow the unit type: land only for houses, and a field that h
   expect(await pg.locator("input[name=roof_area]").isDisabled()).toBe(false);
   await ctx.close();
 });
+
+const goStep = (pg, n) => pg.evaluate((k) => document.getElementById("unit-form").dispatchEvent(new CustomEvent("stepgoto", { detail: k })), n);
+
+test("the client description is written from the unit's fields until someone edits it by hand", async () => {
+  const { ctx, pg } = await openForm("en");
+  await pg.selectOption('select[name="listing_type"]', "sale");
+  await pg.selectOption('select[name="property_type"]', "apartment");
+  await goStep(pg, 2);
+  await pg.fill('input[name="area_value"]', "150");
+  await pg.fill('input[name="bedrooms"]', "3");
+  await pg.fill('input[name="garden_area"]', "40");
+  const text = () => pg.inputValue('textarea[name="clean_summary"]');
+  expect(await text()).toMatch(/for sale.*150 m².*3 bedrooms.*garden 40 m²/);
+  expect(await chips(pg, "feature")).toContain("Private garden"); // the garden area is the feature too
+  await goStep(pg, 4);
+  await pg.fill('textarea[name="clean_summary"]', "My own words");
+  await goStep(pg, 2);
+  await pg.fill('input[name="bedrooms"]', "4");
+  expect(await text()).toBe("My own words");
+  await goStep(pg, 4);
+  await pg.click("[data-draft-again]");
+  expect(await text()).toMatch(/4 bedrooms/);
+  await ctx.close();
+});

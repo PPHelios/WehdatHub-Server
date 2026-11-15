@@ -221,7 +221,8 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     </div></details>
   </div>
   <label>${L(lang, "ملاحظات", "Notes")}<textarea name="notes" rows="2">${v.notes}</textarea></label>
-  <label>${L(lang, "وصف للعميل", "Description for clients")}<textarea name="clean_summary" rows="2">${v.clean_summary}</textarea></label></section>
+  <label>${L(lang, "وصف للعميل", "Description for clients")}<textarea name="clean_summary" rows="3" data-draft="${lang === "en" ? "en" : "ar"}">${v.clean_summary}</textarea></label>
+  <button type="button" class="secondary small" data-draft-again>${L(lang, "اكتب الوصف من بيانات الوحدة", "Write it from the unit details")}</button></section>
 
   <section class="card uf-card" data-step="4"><h3 class="uf-sub">${L(lang, "الصور (حتى 15)", "Photos (up to 15)")}</h3>
     ${images.length
