@@ -134,9 +134,9 @@ describe("unit page sections", () => {
     await seed();
     const { agent } = await signIn(h, "broker");
     const closed = (await agent.get("/app/units/BD-1")).text;
-    expect(closed).toMatch(/<details class="acc"><summary>[^<]*<\/summary>/);
+    expect(closed).toMatch(/<details class="acc"><summary>[\s\S]*?<\/summary>/);
     expect(closed).not.toMatch(/<details class="acc" open>/);
     const asked = (await agent.get("/app/units/BD-1?private=saved")).text;
-    expect(asked).toMatch(/<details class="acc" open><summary>[^<]*<\/summary><div class="acc-body"><section class="card private/);
+    expect(asked).toMatch(/<details class="acc" open><summary>[\s\S]*?<\/summary><div class="acc-body"><section class="card private/);
   });
 });
