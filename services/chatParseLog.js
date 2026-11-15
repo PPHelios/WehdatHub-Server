@@ -22,7 +22,7 @@ function posts(pool, broker, importId, list) {
           total_duration_ms: Math.round((e.parseMs || 0) + (e.aiMs || 0)),
           gemini_ms: e.aiMs ? Math.round(e.aiMs) : null,
           model_used: e.model || null,
-          metadata: { import_id: importId, row: e.row, text: mask(e.text), read: e.read, missing: e.missing, ai_used: Boolean(e.aiUsed), ai_filled: e.aiFilled || [], ai_skipped: e.aiSkipped || null }
+          metadata: { import_id: importId, row: e.row, text: mask(e.text), read: e.read, missing: e.missing, ai_used: Boolean(e.aiUsed), ai_filled: e.aiFilled || [], ai_skipped: e.aiSkipped || null, ai_vs_parser: e.aiVsParser || null, complete_by_parser: !(e.missing || []).length }
         })
       )
     )

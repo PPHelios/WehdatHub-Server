@@ -13,9 +13,17 @@
   "use strict";
 
   const MAX_POSTS = 40;
+  const MAX_PICK = 60; // photos kept per post to choose from (a unit holds 15)
   const MEDIA_LINE = /^(?:<(?:attached|مرفق)\s*:[^>]*>|.+\((?:file attached|ملف مرفق)\))\s*$/i;
   const OMITTED = /^(<media omitted>|<الوسائط محذوفة>|image omitted)$/i;
   const NUMBER_WORDS = new Set(["كود", "code", "no", "رقم", "unit"]);
+
+  /** The unit code a post writes ("كود HP-12", "code: N4-105", "#VIL-08"), upper-cased; null when it names none. Same rules as domain/chatListing.js. */
+  function postCode(text) {
+    const t = P.latin(String(text || ""));
+    const m = t.match(/(?:كود(?:\s*(?:الوحدة|الداخلي))?|code)\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-/.]{1,29})/i) || t.match(/[#`]([A-Za-z0-9][A-Za-z0-9_\-/.]{1,29})`?/);
+    return m ? m[1].replace(/[./]+$/, "").toUpperCase() : null;
+  }
 
   /** A code with the noise taken out: "nh v-12" → "NHV12" (Arabic digits too). */
   const normCode = (s) => P.latin(String(s || "")).toUpperCase().replace(/[\s._\-/\\]+/g, "");
@@ -100,6 +108,7 @@
     // Items in chat order: an anchor (a description), or a photo.
     const seenPost = new Set();
     const items = [];
+    const skips = []; // videos and other files in the export: never uploaded, counted on the post they sit next to
     for (const m of messages) {
       const t = P.atMs(m.at);
       if (m.divider) {
@@ -111,6 +120,7 @@
       let anchor = null;
       if (hasText && MEDIA_LINE.test(m.text.trim())) {
         stats.skippedMedia++;
+        skips.push({ t, sender: m.sender || "", i: m.i });
       } else if (hasText && find) {
         const found = find(m.text);
         if (found.length) anchor = { codes: found };
@@ -266,12 +276,24 @@
       const used = new Set(result.units.map((u) => u.code));
       result.noPhotos = (codes || []).filter((c) => !used.has(c) || !result.units.find((u) => u.code === c).files.length);
     } else {
-      const posts = byAnchor.map((a) => ({ i: a.m.i, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, P.MAX_PHOTOS), over: Math.max(0, withFiles(a).length - P.MAX_PHOTOS), verify: Boolean(a.verify) }));
+      // A post keeps up to MAX_PICK photos so the person can choose which 15 go to the unit (the first 15 are the default).
+      const posts = byAnchor.map((a) => ({ i: a.m.i, t: a.t, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), code: postCode(a.m.text), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, MAX_PICK), over: Math.max(0, withFiles(a).length - MAX_PICK), videos: 0, verify: Boolean(a.verify) }));
+      // Each skipped video goes to the nearest post of the same sender within the time window (else it is only in the total).
+      for (const s of skips) {
+        let best = null;
+        for (const p of posts) {
+          if (sameSender && (p.sender || "") !== s.sender) continue;
+          const gap = p.t !== null && s.t !== null ? Math.abs(p.t - s.t) : Math.abs(p.i - s.i) <= 2 ? 0 : Infinity;
+          if (gap <= windowMs && (!best || gap < best.gap)) best = { p, gap };
+        }
+        if (best) best.p.videos++;
+      }
+      for (const p of posts) delete p.t;
       stats.truncated = Math.max(0, posts.length - MAX_POSTS);
       result.posts = posts.slice(0, MAX_POSTS);
     }
     return result;
   }
 
-  return { match, codeFinder, normCode, MAX_POSTS };
+  return { match, codeFinder, normCode, postCode, MAX_POSTS };
 });

@@ -849,6 +849,7 @@
       "xlsxSheets": ["buffer"]
     },
     "services/imports.js": {
+      "setPhotoChoice": ["pool", "broker", "id", "row", "params"],
       "escapeRegex": ["v"],
       "escapeLike": ["v"],
       "describeChanges": ["listing", "patch", "lang"],
@@ -2390,6 +2391,7 @@
       "match": ["text", "params"],
       "codeFinder": ["codes", "aliases"],
       "normCode": ["s"],
+      "postCode": ["text"],
       "MAX_POSTS": "Number"
     },
     "domain/chatParse.js": {
@@ -2753,10 +2755,15 @@
     "domain/chatListing.js": {
       "parsePost": ["text", "places", "from"],
       "fillFromAi": ["cells", "fields"],
+      "compareWithAi": ["cells", "fields"],
+      "numOf": ["v"],
       "findCompound": ["text", "places"],
       "findArea": ["text"],
       "mask": ["text"],
       "REQUIRED_CELLS": "Array"
+    },
+    "services/chatImportReport.js": {
+      "report": ["pool", "params"]
     },
     "services/chatParseLog.js": {
       "posts": ["pool", "broker", "importId", "list"],

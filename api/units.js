@@ -8,6 +8,9 @@ const Store = require("../lib/listingStore");
 const Storage = require("../lib/supabase");
 const Deal = require("../domain/dealType");
 const Authz = require("../lib/authz");
+const Credits = require("../services/credits");
+const { logOperation } = require("../lib/db");
+const { normalizeCode } = require("../domain/searchQuery");
 const Share = require("../lib/shareLinks");
 const UnitPrivacy = require("../services/unitPrivacy");
 const Owners = require("../services/unitOwners");
@@ -153,6 +156,35 @@ function register(api, { pool }) {
     const code = key ? await SaveKeys.lookup(pool, req.session.broker.agency_id, key) : null;
     res.set("Cache-Control", "no-store");
     return res.json(code ? { saved: true, code } : { saved: false });
+  });
+
+  // The codes the posts of a WhatsApp chat write (one call after the app has read the zip): which already belong to a unit
+  // the person may change (an update, with its photo count), which are free (new), which belong to a unit they may not
+  // change (taken; nothing else about it is shown). Same answer as the website's import page. Also the AI credit cost of one post.
+  api.post("/units/code-check", async (req, res) => {
+    const { broker } = req.session;
+    const t0 = Date.now();
+    const wanted = [...new Set((Array.isArray(req.body?.codes) ? req.body.codes : []).map((c) => String(c || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 200);
+    const byNorm = new Map(wanted.map((c) => [normalizeCode(c), c]));
+    const out = {};
+    if (byNorm.size) {
+      const { rows } = await pool.query(
+        `SELECT l.id, l.code, l.code_norm, l.agency_id, l.broker_id, l.is_private, l.status,
+                (SELECT count(*)::int FROM listing_images i WHERE i.listing_id = l.id) AS photos
+           FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.code_norm = ANY($2::text[])`,
+        [broker.agency_id, [...byNorm.keys()]]
+      );
+      for (const l of rows) out[byNorm.get(l.code_norm)] = Authz.canEdit(broker, l) ? { state: "update", code: l.code, photos: l.photos, status: l.status } : { state: "taken" };
+      const rest = [...byNorm.keys()].filter((n) => !out[byNorm.get(n)]);
+      if (rest.length) {
+        const { rows: hidden } = await pool.query("SELECT code_norm FROM listings WHERE agency_id = $1 AND code_norm = ANY($2::text[]) /* vis:exempt */", [broker.agency_id, rest]);
+        for (const l of hidden) out[byNorm.get(l.code_norm)] = { state: "taken" };
+      }
+    }
+    for (const c of wanted) if (!out[c]) out[c] = { state: "new" };
+    res.set("Cache-Control", "no-store");
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "chat_import_codes", total_duration_ms: Date.now() - t0, metadata: { channel: "app", codes: wanted.length, update: Object.values(out).filter((x) => x.state === "update").length, taken: Object.values(out).filter((x) => x.state === "taken").length, fresh: Object.values(out).filter((x) => x.state === "new").length } });
+    return res.json({ codes: out, max_photos: 15, ai_cost: Credits.costOf("chat_post") });
   });
 
   api.get("/units/:code", async (req, res) => {

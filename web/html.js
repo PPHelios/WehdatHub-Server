@@ -142,7 +142,7 @@ const NAV = [
 
 /** The More page links this broker sees (managers: the agency pages; the app owner: App tracking too). */
 // Data entry sees only these More links (the pages it may open); everything else is hidden, not just refused.
-const DATA_ENTRY_NAV = new Set(["notifications", "settings", "guide"]);
+const DATA_ENTRY_NAV = new Set(["notifications", "settings", "guide", "import"]);
 // Bar order for data entry: Search · Units · + · Owners · Settings (two places each side keep the + centred).
 const DATA_ENTRY_TABS = ["search", "units", "add", "owners", "settings"];
 const DATA_ENTRY_BAR = [

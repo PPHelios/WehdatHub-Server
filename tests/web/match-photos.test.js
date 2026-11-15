@@ -8,7 +8,7 @@ jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
 const sharp = require("sharp");
 const { createHarness, closeHarness } = require("../harness/app");
-const { signIn } = require("../harness/web");
+const { signIn, csrfOf } = require("../harness/web");
 const Imports = require("../../services/imports");
 
 jest.setTimeout(90000);
@@ -204,5 +204,50 @@ describe("the page, and what is gone", () => {
     const res = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", Buffer.from([0x50, 0x4b, 3, 4, 0, 0, 0, 0]), { filename: "chat.zip", contentType: "application/zip" });
     expect(res.status).toBe(422);
     expect(res.text).toMatch(/data-import-error="zip"/);
+  });
+});
+
+describe("code check (one call after the zip is read) and data entry", () => {
+  const check = (agent, csrf, codes) => agent.post("/app/import/match/codes").set("X-CSRF-Token", csrf).send({ codes });
+
+  test("a code of an existing unit is an update (with its photo count), a free code is new; brokers are refused", async () => {
+    const a = await h.insertListing({ code: "HP-1" });
+    await h.query("INSERT INTO listing_images (listing_id, agency_id, position, url) VALUES ($1, $2, 0, $3)", [a.id, h.AGENCY_A, `${h.Storage.BASE}x.jpg`]);
+    await h.insertListing({ code: "RIV-1", agency_id: h.AGENCY_B, broker_id: h.BROKERS.rival.id });
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await check(agent, csrf, ["hp-1", "HP-9", "RIV-1"]);
+    expect(res.status).toBe(200);
+    expect(res.body.codes["hp-1"]).toMatchObject({ state: "update", code: "HP-1", photos: 1 });
+    expect(res.body.codes["HP-9"]).toEqual({ state: "new" });
+    expect(res.body.codes["RIV-1"]).toEqual({ state: "new" }); // another agency's unit is never shown
+    const broker = await signIn(h, "broker");
+    expect((await check(broker.agent, broker.csrf, ["HP-1"])).status).toBe(403);
+  });
+
+  test("data entry may use the WhatsApp import (not Excel), and a unit it may not change is only 'taken'", async () => {
+    await h.pool.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+    await h.insertListing({ code: "HP-1" });
+    await h.insertListing({ code: "HP-SECRET", is_private: true });
+    const { agent } = await signIn(h, h.BROKERS.colleague); // data entry has no Today page, so the token comes from Units
+    const csrf = csrfOf((await agent.get("/app/units")).text);
+    const page = await agent.get("/app/import");
+    expect(page.status).toBe(200);
+    expect(page.text).toMatch(/data-cp[\s>]/);
+    expect(page.text).not.toMatch(/data-xi/);
+    const res = await check(agent, csrf, ["HP-1", "HP-SECRET"]);
+    expect(res.status).toBe(200);
+    expect(res.body.codes["HP-1"].state).toBe("update");
+    expect(res.body.codes["HP-SECRET"]).toEqual({ state: "taken" }); // a private unit is not shown to data entry at all: only that the code is taken
+    // a photo onto a unit data entry may not change is refused
+    expect((await sendPhoto(agent, csrf, unitUrl("HP-SECRET"), await picture(0.3))).status).toBe(404);
+    // Excel stays managers-only
+    expect((await agent.post("/app/import/excel").set("X-CSRF-Token", csrf)).status).toBe(403);
+  });
+
+  test("the agency owner has the whole import like a manager", async () => {
+    await h.pool.query("UPDATE brokers SET role = 'owner' WHERE id = $1", [h.BROKERS.manager.id]);
+    const { agent, csrf } = await signIn(h, h.BROKERS.manager);
+    expect((await agent.get("/app/import")).text).toMatch(/data-xi/);
+    expect((await check(agent, csrf, ["HP-1"])).status).toBe(200);
   });
 });

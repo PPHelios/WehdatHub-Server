@@ -18,6 +18,7 @@ const { logOperation } = require("../../lib/db");
 const { normalizeImageBuffer, MAX_PHOTOS } = require("../../lib/images");
 const PhotoHash = require("../../services/photoHash");
 const Imports = require("../../services/imports");
+const { normalizeCode } = require("../../domain/searchQuery");
 const Chat = require("../../domain/chatExport");
 const AiBlock = require("../../lib/aiBlock");
 const ChatPlan = require("../../services/chatPlan");
@@ -35,7 +36,8 @@ for (const re of [/^\/import\/match\/unit\/[^/]+\/photo$/, /^\/import\/match\/[0
 const PHOTO_LIMIT = { limit: 3000, windowSec: 3600 };
 
 function register(web, { pool }) {
-  const managersOnly = (req, res, next) => (Authz.isManager(req.session.broker) ? next() : res.status(403).json({ error: "managers_only" }));
+  // Managers (admin, owner, manager) and data entry may import; what a person may change is still checked per unit (Authz.canEdit).
+  const importersOnly = (req, res, next) => (Authz.isManager(req.session.broker) || Authz.isDataEntry(req.session.broker) ? next() : res.status(403).json({ error: "managers_only" }));
   const gate = async (req, res, next) => {
     const hit = await RateLimit.hit(pool, `matchphoto:broker:${req.session.broker.id}`, PHOTO_LIMIT);
     if (hit.allowed) return next();
@@ -44,7 +46,7 @@ function register(web, { pool }) {
   };
 
   // The unit codes of the agency (what the browser matches against) with how many photos each already has.
-  web.get("/import/match/units", managersOnly, async (req, res) => {
+  web.get("/import/match/units", importersOnly, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT l.code, (SELECT count(*)::int FROM listing_images i WHERE i.listing_id = l.id) AS photos
          FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 ORDER BY l.code LIMIT 20000`,
@@ -56,7 +58,40 @@ function register(web, { pool }) {
 
   // One photo onto the unit with this code: shrunk copy from the browser, normalised again here, stored, hashed.
   // answers { ok } | { dup: true } (the unit already has this picture) | { full: true } | { missing: true }
-  web.post("/import/match/unit/:code/photo", managersOnly, gate, uploadPhoto, async (req, res) => {
+  // The codes the posts of a freshly read zip write: which already belong to a unit (update, with its photo count), which are
+  // free (new) and which are a unit the person may not change. One call for all posts, before anything is uploaded.
+  web.post("/import/match/codes", importersOnly, express.json({ limit: "50kb" }), async (req, res) => {
+    const { broker } = req.session;
+    const t0 = Date.now();
+    const wanted = [...new Set((Array.isArray(req.body?.codes) ? req.body.codes : []).map((c) => String(c || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 200);
+    const byNorm = new Map(wanted.map((c) => [normalizeCode(c), c]));
+    const out = {};
+    if (byNorm.size) {
+      const { rows } = await pool.query(
+        `SELECT l.id, l.code, l.code_norm, l.agency_id, l.broker_id, l.is_private, l.status,
+                (SELECT count(*)::int FROM listing_images i WHERE i.listing_id = l.id) AS photos
+           FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.code_norm = ANY($2::text[])`,
+        [broker.agency_id, [...byNorm.keys()]]
+      );
+      for (const l of rows) {
+        const asked = byNorm.get(l.code_norm);
+        // A unit the person may not change: it exists (the code is taken) but nothing about it is shown.
+        out[asked] = Authz.canEdit(broker, l) ? { state: "update", code: l.code, photos: l.photos, status: l.status } : { state: "taken" };
+      }
+    }
+    // A code that belongs to a unit this person cannot see (a private unit) is taken too: nothing else about it is shown.
+    const rest = [...byNorm.keys()].filter((n) => !out[byNorm.get(n)]);
+    if (rest.length) {
+      const { rows: hidden } = await pool.query("SELECT code_norm FROM listings WHERE agency_id = $1 AND code_norm = ANY($2::text[]) /* vis:exempt */", [broker.agency_id, rest]);
+      for (const l of hidden) out[byNorm.get(l.code_norm)] = { state: "taken" };
+    }
+    for (const c of wanted) if (!out[c]) out[c] = { state: "new" };
+    res.set("Cache-Control", "no-store");
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "chat_import_codes", total_duration_ms: Date.now() - t0, metadata: { channel: "web", codes: wanted.length, update: Object.values(out).filter((x) => x.state === "update").length, taken: Object.values(out).filter((x) => x.state === "taken").length, fresh: Object.values(out).filter((x) => x.state === "new").length } });
+    return res.json({ codes: out, max_photos: MAX_PHOTOS });
+  });
+
+  web.post("/import/match/unit/:code/photo", importersOnly, gate, uploadPhoto, async (req, res) => {
     const { broker } = req.session;
     const file = (req.files?.photo || [])[0];
     if (!file) return res.status(400).json({ error: "no_photo" });
@@ -94,7 +129,7 @@ function register(web, { pool }) {
 
   // No codes: the posts the browser found become a group import (read in the background like a pasted one); the
   // photos follow one by one on /import/match/:id/photo/:n and the review page is the usual group review.
-  web.post("/import/match/start", managersOnly, express.json({ limit: "1mb" }), async (req, res) => {
+  web.post("/import/match/start", importersOnly, express.json({ limit: "1mb" }), async (req, res) => {
     const { broker } = req.session;
     const gateHit = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
     if (!gateHit.allowed) return res.status(429).json({ error: "rate", retry_after: gateHit.retryAfterSec });
@@ -117,7 +152,7 @@ function register(web, { pool }) {
   });
 
   // One photo onto post n of that group import (it goes on the unit when the post is applied).
-  web.post("/import/match/:id/photo/:n", managersOnly, gate, uploadPhoto, async (req, res) => {
+  web.post("/import/match/:id/photo/:n", importersOnly, gate, uploadPhoto, async (req, res) => {
     const { broker } = req.session;
     const file = (req.files?.photo || [])[0];
     const n = Number(req.params.n);
@@ -154,7 +189,7 @@ function register(web, { pool }) {
   });
   // ---- The chat import plan: posts read by the parser (AI only where it is missing something), planned like Excel. ----
 
-  web.post("/import/match/plan", managersOnly, express.json({ limit: "1mb" }), async (req, res) => {
+  web.post("/import/match/plan", importersOnly, express.json({ limit: "1mb" }), async (req, res) => {
     const { broker } = req.session;
     const lang = langOf(req);
     const t0 = Date.now();
@@ -167,8 +202,10 @@ function register(web, { pool }) {
       .filter((p) => p.text.trim().length >= 10);
     if (!posts.length) return res.status(422).json({ error: "no_posts" });
     try {
-      const out = await ChatPlan.planChat(pool, broker, posts, { AI, ctx: { pool, broker, agency: req.session.agency, lang }, lang, filename: String(req.body?.filename || "").slice(0, 120) || null });
-      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, ai: out.ai, ai_blocked: out.aiBlocked, counts: out.counts } });
+      // "Rules only" (ai: false): the parser reads every post and AI is never asked, so nothing is spent; what it cannot read is fixed in the review.
+      const useAi = req.body?.ai !== false;
+      const out = await ChatPlan.planChat(pool, broker, posts, { AI: useAi ? AI : null, ctx: { pool, broker, agency: req.session.agency, lang }, lang, filename: String(req.body?.filename || "").slice(0, 120) || null });
+      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, rules_only: !useAi, ai: out.ai, ai_blocked: out.aiBlocked, counts: out.counts } });
       return res.json({ id: out.id, posts: out.posts, ai: out.ai, ...(out.aiBlocked ? { ai_blocked: out.aiBlocked, message: AiBlock.text(out.aiBlocked, lang) } : {}) });
     } catch (err) {
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", status: "error", error_code: "chat_plan_failed", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, message: String(err.message || "").slice(0, 120) } });
@@ -177,7 +214,7 @@ function register(web, { pool }) {
   });
 
   // One photo onto row n of that plan (it goes on the unit when the row is applied; the review lets the person pick).
-  web.post("/import/match/p/:id/photo/:row", managersOnly, gate, uploadPhoto, async (req, res) => {
+  web.post("/import/match/p/:id/photo/:row", importersOnly, gate, uploadPhoto, async (req, res) => {
     const { broker } = req.session;
     const file = (req.files?.photo || [])[0];
     const row = Number(req.params.row);
@@ -212,7 +249,7 @@ function register(web, { pool }) {
   });
 
   // A unit's photos (to choose which to keep when more than 15 would be there), and removing some of them.
-  web.get("/import/match/unit/:code/photos", managersOnly, async (req, res) => {
+  web.get("/import/match/unit/:code/photos", importersOnly, async (req, res) => {
     const { broker } = req.session;
     const listing = await Store.findByCode(pool, broker.agency_id, String(req.params.code || "").slice(0, 80));
     if (!listing || !Authz.canEdit(broker, listing)) return res.status(404).json({ missing: true });
@@ -221,7 +258,7 @@ function register(web, { pool }) {
     return res.json({ photos: rows });
   });
 
-  web.post("/import/match/unit/:code/photos/remove", managersOnly, express.json({ limit: "20kb" }), async (req, res) => {
+  web.post("/import/match/unit/:code/photos/remove", importersOnly, express.json({ limit: "20kb" }), async (req, res) => {
     const { broker } = req.session;
     const listing = await Store.findByCode(pool, broker.agency_id, String(req.params.code || "").slice(0, 80));
     if (!listing || !Authz.canEdit(broker, listing)) return res.status(404).json({ missing: true });
@@ -232,7 +269,7 @@ function register(web, { pool }) {
   });
 
   // Steps timed and checked in the browser (read, match, shrink, upload): saved with their time and error.
-  web.post("/import/match/log", managersOnly, express.json({ limit: "20kb" }), async (req, res) => {
+  web.post("/import/match/log", importersOnly, express.json({ limit: "20kb" }), async (req, res) => {
     await ChatLog.steps(pool, req.session.broker, Array.isArray(req.body?.steps) ? req.body.steps : []);
     return res.json({ ok: true });
   });

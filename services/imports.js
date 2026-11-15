@@ -848,7 +848,23 @@ async function applyGroup(pool, broker, id, { rows = [], lang = "ar" } = {}) {
   return result;
 }
 
+/**
+ * The photo choices the person made on a chat plan's row (which uploaded photos to keep, in which order, which of the unit's
+ * own to remove), kept in the plan so editing the row's fields does not reset them. Only a ready plan of this broker.
+ */
+async function setPhotoChoice(pool, broker, id, row, { order = [], keep = [], drop = [] } = {}) {
+  const ints = (v) => [...new Set((Array.isArray(v) ? v : []).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n < 100))];
+  const choice = { order: ints(order), keep: ints(keep), drop: (Array.isArray(drop) ? drop : []).map(String).filter((x) => /^[0-9a-f-]{36}$/.test(x)) };
+  const { rowCount } = await pool.query(
+    `UPDATE web_imports SET payload = jsonb_set(jsonb_set(payload, '{choices}', COALESCE(payload->'choices', '{}'::jsonb), true), ARRAY['choices', $2::text], $3::jsonb, true)
+      WHERE id = $1 AND agency_id = $4 AND broker_id = $5 AND status = 'ready' AND kind = 'excel'`,
+    [id, String(Number(row)), JSON.stringify(choice), broker.agency_id, broker.id]
+  );
+  return rowCount > 0;
+}
+
 module.exports = {
+  setPhotoChoice,
   escapeRegex,
   escapeLike,
   describeChanges,

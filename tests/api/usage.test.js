@@ -56,3 +56,23 @@ test("rollUp turns rows older than 90 days into daily totals and deletes the det
   expect(sum).toEqual([{ n: 2, ok_n: 2, ms_avg: 200, ms_max: 300 }]);
   expect((await h.query("SELECT count(*)::int AS n FROM usage_events"))[0].n).toBe(1);
 });
+
+test("the WhatsApp import's app events are kept (with their short codes) and reach the import report; free text is dropped", async () => {
+  const ChatImportReport = require("../../services/chatImportReport");
+  const auth = await login("owner");
+  await request(h.app.app).post("/api/v1/usage-events").set(auth).send({ events: [
+    { event: "wa_import_read", ms: 8000, meta: { posts: 12, photos: 80, videos: 3, stage: "done", note: "Ahmed 0101" } },
+    { event: "wa_import_read", ok: false, ms: 900, meta: { reason: "password", stage: "list" } },
+    { event: "wa_import_add", ms: 4000, meta: { outcome: "saved", ai: true, photos: 9 } },
+    { event: "wa_import_add", ok: false, ms: 1500, meta: { outcome: "needs_edit", ai: false } },
+    { event: "wa_import_share" }
+  ] });
+  const rows = await h.query("SELECT event, ok, meta FROM usage_events WHERE event LIKE 'wa\_import\_%' ORDER BY event, ok");
+  expect(rows).toHaveLength(5);
+  expect(JSON.stringify(rows)).not.toMatch(/Ahmed|0101/);
+  const r = await ChatImportReport.report(h.pool, { days: 1 });
+  const read = r.app.events.find((e) => e.event === "wa_import_read");
+  expect(read).toMatchObject({ n: 2, ok: 1, ok_pct: 50 });
+  expect(r.app.outcomes).toEqual(expect.arrayContaining([expect.objectContaining({ event: "wa_import_read", what: "password", n: 1 }), expect.objectContaining({ event: "wa_import_add", what: "saved", n: 1 })]));
+  expect(r.app.ai_switch).toEqual(expect.arrayContaining([expect.objectContaining({ ai: "true", n: 1, saved: 1 }), expect.objectContaining({ ai: "false", n: 1, saved: 0 })]));
+});

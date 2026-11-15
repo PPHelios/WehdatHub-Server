@@ -3,8 +3,9 @@
 // only sees the photos (and, with no unit codes, the text of the posts that look like units).
 (function () {
   "use strict";
-  var root = document.querySelector("[data-cp]");
-  if (!root || !window.ZipRead || !window.ChatMatch) return;
+  if (!window.ZipRead || !window.ChatMatch) return;
+  // One instance per [data-cp] box: the WhatsApp import tab (posts, data-cp-mode=posts) and the photos-by-code tab.
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cp]"), function (root) {
 
   var lang = root.getAttribute("data-lang") === "en" ? "en" : "ar";
   var TEXT = {
@@ -17,6 +18,9 @@
       addNew: "ضيف الصور الجديدة بس", skipHave: "سيب الوحدات اللي فيها صور", apply: "ابدأ التحميل", cancel: "إلغاء", keepOpen: "سيب الصفحة مفتوحة والشاشة منورة لحد ما يخلص.",
       stageShrink: "تصغير وتحميل الصور", of: "من", left: "دقيقة متبقية تقريباً", done: "خلص", uploaded: "اتحملت", dup: "مكررة (موجودة)", full: "الوحدة اكتملت 15 صورة", unreadable: "مش قابلة للقراءة", failed: "فشلت", cancelled: "اتلغى",
       seeUnits: "افتح الوحدات", seeReview: "افتح المراجعة", nothing: "مفيش صور لتحميلها.", noPosts: "ملقيناش بوستات فيها وحدات.", cap: "بنقرا لحد 40 بوست في المرة. غيّر التاريخ للباقي.", post: "بوست", tooMany: "اتجاوزت الحد", rateWait: "بنستنى شوية…", startFail: "مقدرناش نبدأ الاستيراد. جرب تاني.",
+      aiUpTo: "ذكاء اصطناعي: حتى", aiCredits: "رصيد", aiOffLabel: "من غير ذكاء اصطناعي: قراءة بالقواعد بس", 
+      codeChecking: "بنراجع الأكواد…", codeNew: "وحدة جديدة", codeUpdate: "تحديث للوحدة", codeHas: "فيها صور", codeTaken: "الكود ده لوحدة مش من حقك تعدلها", codeDup: "نفس الكود في بوست", codeFail: "مقدرناش نراجع الأكواد دلوقتي: هتتراجع في المراجعة.",
+      videos: "فيديو اتتخطى (مش بيتحمل)", videosTotal: "فيديو أو ملف اتتخطى ومش هيتحمل", pickNote: "اختار 15 صورة بس: أول 15 معلّمين، والباقي علّمه بإيدك. استخدم ◀ ▶ لترتيب الصور.", stageRead: "قراءة الملف", stageMatch: "توزيع الصور على البوستات", stagePosts: "قراءة بيانات الوحدات", stageUpload: "تحميل الصور", leaveWarn: "لو قفلت الصفحة التحميل هيقف.",
       verify: "راجع الصور", swap: "بدّل الصور مع الوحدة اللي بعدها", full15: "الوحدة وصلت 15 صورة. شيل علامة صورة تانية أو شيل صورة قديمة.", oldPhotos: "صور الوحدة الحالية: علّم اللي تتشال", removeFail: "مقدرناش نشيل الصور القديمة", heicFail: "صور HEIC متحولتش", converted: "صور اتحولت من HEIC", aiOff: "الذكاء الاصطناعي مش متاح: القراءة بالقواعد بس.", errors: "أخطاء", planFail: "مقدرناش نقرا البوستات. جرب تاني."
     },
     en: {
@@ -28,6 +32,9 @@
       addNew: "Add new photos only", skipHave: "Skip units that already have photos", apply: "Start upload", cancel: "Cancel", keepOpen: "Keep this page open and the screen on until it finishes.",
       stageShrink: "Shrinking and uploading photos", of: "of", left: "min left (about)", done: "Done", uploaded: "uploaded", dup: "duplicates (already there)", full: "unit already has 15 photos", unreadable: "unreadable", failed: "failed", cancelled: "Cancelled",
       seeUnits: "Open units", seeReview: "Open the review", nothing: "No photos to upload.", noPosts: "No posts describing a unit were found.", cap: "Up to 40 posts at a time. Change the date for the rest.", post: "Post", tooMany: "over the limit", rateWait: "Waiting a moment…", startFail: "Could not start the import. Try again.",
+      aiUpTo: "AI: up to", aiCredits: "credits", aiOffLabel: "no AI: rules only", 
+      codeChecking: "Checking the codes…", codeNew: "New unit", codeUpdate: "Updates unit", codeHas: "already has photos", codeTaken: "Code belongs to a unit you can't change", codeDup: "Same code as post", codeFail: "Could not check the codes now: they are checked again in the review.",
+      videos: "videos skipped (not uploaded)", videosTotal: "videos or files skipped and not uploaded", pickNote: "Choose 15 photos only: the first 15 are ticked, tick the others by hand. Use ◀ ▶ to put the photos in order.", stageRead: "Reading the file", stageMatch: "Placing photos on posts", stagePosts: "Reading the units", stageUpload: "Uploading photos", leaveWarn: "Closing this page stops the upload.",
       verify: "Verify photos", swap: "Swap photos with the next unit", full15: "The unit is at 15 photos. Untick another photo or remove an old one.", oldPhotos: "The unit's current photos: tick the ones to remove", removeFail: "Could not remove the old photos", heicFail: "HEIC photos that could not be converted", converted: "photos converted from HEIC", aiOff: "AI is not available: read with the rules only.", errors: "Errors", planFail: "Could not read the posts. Try again."
     }
   }[lang];
@@ -50,6 +57,12 @@
   }
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var say = function (msg, bad) { out.textContent = ""; out.appendChild(el("p", { class: "card notice" + (bad ? " bad" : ""), role: "status", text: msg })); };
+  // A stage with a real percentage (a bar and the number), so a long read never looks stuck.
+  var stage = function (label, pct) {
+    out.textContent = "";
+    out.appendChild(el("div", { class: "card stack", role: "status", "data-cp-stage": true }, [el("strong", { text: label + " · " + pct + "%" }), el("progress", { max: "100", value: String(pct) })]));
+    return sleep(15);
+  };
   var base = function (p) { return String(p).split("/").pop(); };
   var MAXP = 15;
 
@@ -76,7 +89,7 @@
   async function load() {
     var file = $("file").files && $("file").files[0];
     if (!file) return say(TEXT.pick, true);
-    say(TEXT.reading);
+    await stage(TEXT.stageRead, 5);
     var zip = null;
     var text;
     try {
@@ -84,6 +97,7 @@
         text = await file.text();
       } else {
         zip = await timed("read_zip", function () { return ZipRead.open(file); }, { mb: Math.round(file.size / 1048576) });
+        await stage(TEXT.stageRead, 15);
         var txts = zip.entries.filter(function (e) { return /\.txt$/i.test(e.name) && e.size <= 40 * 1024 * 1024; })
           .sort(function (a, b) { return Number(/chat/i.test(base(b.name))) - Number(/chat/i.test(base(a.name))); });
         if (!txts.length) return say(TEXT.noChat, true);
@@ -93,6 +107,7 @@
       flush();
       return say(err && err.code === "ENCRYPTED" ? TEXT.encrypted : TEXT.badZip, true);
     }
+    await stage(TEXT.stageMatch, 30);
     var byName = {};
     var byLower = {};
     if (zip) zip.entries.forEach(function (e) { byName[base(e.name)] = e; byLower[base(e.name).toLowerCase()] = e; });
@@ -103,7 +118,7 @@
       units = r.ok ? (await r.json()).units : [];
       if (!units.length) return say(TEXT.noUnits, true);
     }
-    state = { file: file, zip: zip, text: text, byName: byName, byLower: byLower, mode: mode, units: units, aliases: {}, assigned: {}, pick: {}, files: {}, drops: {}, olds: {}, skipped: {} };
+    state = { file: file, zip: zip, text: text, byName: byName, byLower: byLower, mode: mode, units: units, aliases: {}, assigned: {}, pick: {}, files: {}, drops: {}, olds: {}, skipped: {}, codeInfo: null, codeState: null };
     if (file.size > 1024 * 1024 * 1024 && /Mobi|Android|iPhone/i.test(navigator.userAgent)) state.bigWarn = true;
     compute();
   }
@@ -120,13 +135,41 @@
     steps.push({ step: "match", ms: Date.now() - t0, ok: true, meta: { messages: state.res.stats.messages, photos: state.res.stats.photos, dividers: state.res.stats.dividers || 0, tray: state.res.tray.length } });
     flush();
     render();
+    checkCodes();
+  }
+
+  // Posts mode: the codes the posts write are checked against the agency's units in one separate server call, right after the
+  // zip is read, so a post for an existing unit shows as an update (never as new) before anything is uploaded.
+  var codeAsk = 0;
+  function checkCodes() {
+    if (!state || state.res.mode !== "posts" || !root.getAttribute("data-codes-url")) return;
+    var codes = [];
+    state.res.posts.forEach(function (p) { if (p.code && codes.indexOf(p.code) < 0) codes.push(p.code); });
+    if (!codes.length) { state.codeState = "done"; return; }
+    var ask = ++codeAsk;
+    var tCodes = Date.now();
+    state.codeState = "checking";
+    render();
+    fetch(root.getAttribute("data-codes-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ codes: codes }) })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("http_" + r.status)); })
+      .then(function (j) { if (ask !== codeAsk) return; steps.push({ step: "codes", ms: Date.now() - tCodes, ok: true, meta: { codes: codes.length } }); flush(); state.codeInfo = j.codes || {}; state.codeState = "done"; render(); })
+      .catch(function (err) { if (ask !== codeAsk) return; steps.push({ step: "codes", ms: Date.now() - tCodes, ok: false, error: (err && err.message) || "codes_failed", meta: { codes: codes.length } }); flush(); state.codeState = "failed"; render(); });
   }
 
   // ---- showing the result ----------------------------------------------------------------------------------------
   // Which photos are ticked: the person's choice, else the first ones that fit (a unit holds 15).
   var pickOf = function (ref, k, slots) { return state.pick[ref.name] === undefined ? k < slots : state.pick[ref.name]; };
-  function thumbs(refs, limit, slots) {
-    var box = el("div", { class: "row thumbs" });
+  // Put one photo before/after its neighbour: the order is the order they are saved in (the unit's first photo is the cover).
+  function movePhoto(id, refs, k, by) {
+    var j = k + by;
+    if (j < 0 || j >= refs.length) return;
+    var list = refs.slice();
+    var tmp = list[k]; list[k] = list[j]; list[j] = tmp;
+    state.files[id] = list;
+    render();
+  }
+  function thumbs(refs, limit, slots, moveId) {
+    var box = el("div", { class: "row thumbs" + (moveId ? " big" : "") });
     var room = slots === undefined ? MAXP : slots;
     refs.slice(0, limit || refs.length).forEach(function (ref, k) {
       var entry = state.zip ? entryOf(ref.name) : null;
@@ -135,13 +178,24 @@
         var on = refs.filter(function (r, i) { return r.name !== ref.name && entryOf(r.name) && pickOf(r, i, room); }).length;
         if (ev.target.checked && on >= room) { ev.target.checked = false; say(TEXT.full15, true); return; }
         state.pick[ref.name] = ev.target.checked;
+        if (moveId) {
+          var counter = root.querySelector('[data-cp-count="' + moveId + '"]');
+          if (counter) counter.textContent = refs.filter(function (r2, i2) { return entryOf(r2.name) && pickOf(r2, i2, room); }).length + " / " + MAXP + " " + TEXT.photos;
+        }
       } } });
       cell.appendChild(box1);
       if (!entry) cell.appendChild(el("span", { class: "muted", text: TEXT.missing }));
       else {
-        var img = el("img", { alt: "", width: "64", height: "64", loading: "lazy" });
+        var size = moveId ? "96" : "64";
+        var img = el("img", { alt: "", width: size, height: size, loading: "lazy" });
         state.zip.blob(entry).then(function (b) { return previewOf(b, ref.name); }).then(function (b) { img.src = URL.createObjectURL(b); img.onload = function () { URL.revokeObjectURL(img.src); }; }).catch(function () {});
         cell.appendChild(img);
+      }
+      if (moveId) {
+        cell.appendChild(el("span", { class: "row move" }, [
+          el("button", { type: "button", class: "secondary small", "data-cp-move": "earlier", text: lang === "ar" ? "▶" : "◀", on: { click: function (ev) { ev.preventDefault(); movePhoto(moveId, refs, k, -1); } } }),
+          el("button", { type: "button", class: "secondary small", "data-cp-move": "later", text: lang === "ar" ? "◀" : "▶", on: { click: function (ev) { ev.preventDefault(); movePhoto(moveId, refs, k, 1); } } })
+        ]));
       }
       box.appendChild(cell);
     });
@@ -192,6 +246,22 @@
     return d;
   }
 
+  // The state of a post's code: update of an existing unit, a free code, a unit the person may not change, or a repeat in this zip.
+  function codeBadge(x, list) {
+    if (!x.code) return null;
+    var first = null;
+    list.forEach(function (o, k) { if (first === null && o.code === x.code) first = k; });
+    var mine = list.indexOf(x);
+    if (first !== null && first !== mine) return el("span", { class: "warn", "data-cp-code-state": "dup", text: "⚠️ " + TEXT.codeDup + " " + (first + 1) + ": " + x.code });
+    if (state.codeState === "checking") return el("span", { class: "muted", "data-cp-code-state": "checking", text: TEXT.codeChecking });
+    if (state.codeState === "failed") return el("span", { class: "muted", "data-cp-code-state": "failed", text: TEXT.codeFail });
+    var info = state.codeInfo && state.codeInfo[x.code];
+    if (!info) return null;
+    if (info.state === "update") return el("span", { class: "chip on", "data-cp-code-state": "update", text: "🔄 " + TEXT.codeUpdate + " " + info.code + (info.photos ? " · " + info.photos + " " + TEXT.codeHas : "") });
+    if (info.state === "taken") return el("span", { class: "warn", "data-cp-code-state": "taken", text: "⛔ " + TEXT.codeTaken });
+    return el("span", { class: "chip", "data-cp-code-state": "new", text: "🆕 " + TEXT.codeNew + " " + x.code });
+  }
+
   function render() {
     var r = state.res;
     out.textContent = "";
@@ -207,17 +277,29 @@
     var ol = el("ol", { class: "results", "data-cp-list": true });
     list.forEach(function (x, k) {
       var id = r.mode === "codes" ? x.code : String(x.i);
-      var refs = filesOf(x).concat(assignedTo(id));
+      var seenRef = {};
+      var refs = filesOf(x).concat(assignedTo(id)).filter(function (f) { if (seenRef[f.name]) return false; seenRef[f.name] = true; return true; });
+      var gallery = r.mode === "posts";
       var slots = Math.max(0, MAXP - (existing[id] || 0) + dropCount(id));
       var title = r.mode === "codes" ? x.code : TEXT.post + " " + (k + 1) + " · " + (x.sender || "") + " · " + x.text.slice(0, 70);
+      var badge = gallery ? codeBadge(x, list) : null;
       var head = el("div", { class: "row" }, [
-        el("input", { type: "checkbox", "data-cp-pick": id, checked: !state.skipped[id], on: { change: function (ev) { state.skipped[id] = !ev.target.checked; } } }),
+        el("input", { type: "checkbox", "data-cp-pick": id, checked: !state.skipped[id], on: { change: function (ev) { state.skipped[id] = !ev.target.checked; refreshApply(); } } }),
         el("strong", { text: title }),
-        el("span", { class: "muted", text: refs.length + " " + TEXT.photos + (existing[id] ? " · " + TEXT.existing + " (" + existing[id] + ")" : "") + (x.over ? " · " + x.over + " " + TEXT.overCap : "") + (refs.length > slots ? " · " + slots + " / " + MAXP : "") }),
+        el("span", { class: "muted", text: refs.length + " " + TEXT.photos + (existing[id] ? " · " + TEXT.existing + " (" + existing[id] + ")" : "") + (x.over ? " · " + x.over + " " + TEXT.overCap : "") + (refs.length > slots ? " · " + slots + " / " + MAXP : "") + (x.videos ? " · 🎞 " + x.videos + " " + TEXT.videos : "") }),
+        badge,
         x.verify ? el("span", { class: "warn", "data-cp-verify": id, text: "⚠️ " + TEXT.verify }) : null,
         x.verify && list[k + 1] ? el("button", { type: "button", class: "secondary", "data-cp-swap": id, text: "⇄ " + TEXT.swap, on: { click: function () { swapWithNext(list, k); } } }) : null
       ]);
-      ol.appendChild(el("li", { class: "card", "data-cp-unit": id }, [head, refs.length ? lazy(refs.length + " " + TEXT.photos, refs, slots) : null, r.mode === "codes" && existing[id] ? oldPhotos(id) : null]));
+      var picked = refs.filter(function (f, i) { return entryOf(f.name) && pickOf(f, i, slots); }).length;
+      ol.appendChild(el("li", { class: "card", "data-cp-unit": id }, [
+        head,
+        gallery && x.text ? el("p", { class: "muted", text: x.text.slice(0, 280) }) : null,
+        gallery && refs.length ? el("p", { class: "muted", "data-cp-count": id, text: picked + " / " + MAXP + " " + TEXT.photos }) : null,
+        gallery && refs.length > MAXP ? el("p", { class: "warn", text: TEXT.pickNote }) : null,
+        refs.length ? (gallery ? thumbs(refs, 0, slots, id) : lazy(refs.length + " " + TEXT.photos, refs, slots)) : null,
+        r.mode === "codes" && existing[id] ? oldPhotos(id) : null
+      ]));
     });
     out.appendChild(ol);
 
@@ -252,8 +334,21 @@
       var sel = el("select", { "data-cp-have": true }, [el("option", { value: "add", text: TEXT.addNew }), el("option", { value: "skip", text: TEXT.skipHave })]);
       out.appendChild(el("label", {}, [sel]));
     }
-    out.appendChild(el("button", { type: "button", "data-cp-apply": true, text: TEXT.apply, on: { click: apply } }));
+    out.appendChild(el("button", { type: "button", "data-cp-apply": true, text: applyLabel(), on: { click: apply } }));
   }
+
+  // The upload button says what AI may cost: up to the per-post credits × the posts ticked (only a post the normal reader cannot
+  // read is sent to AI), or that it is rules only. Units photos-by-code never use AI.
+  var aiBox = function () { return $("ai"); };
+  var aiOn = function () { return Boolean(aiBox() && aiBox().checked); };
+  function applyLabel() {
+    if (!state || state.res.mode !== "posts" || !aiBox()) return TEXT.apply;
+    if (!aiOn()) return TEXT.apply + " · " + TEXT.aiOffLabel;
+    var cost = Number(root.getAttribute("data-ai-cost")) || 0;
+    var n = state.res.posts.filter(function (x) { return !state.skipped[String(x.i)]; }).length;
+    return cost ? TEXT.apply + " · " + TEXT.aiUpTo + " " + cost * n + " " + TEXT.aiCredits : TEXT.apply;
+  }
+  function refreshApply() { var b = root.querySelector("[data-cp-apply]"); if (b) b.textContent = applyLabel(); }
 
   // The units (or posts) shown and sent: the matched ones, plus units that only got photos placed by hand.
   function entries() {
@@ -408,13 +503,14 @@
     if (postsMode) {
       var chosen = state.res.posts.filter(function (x) { return !state.skipped[String(x.i)]; });
       var j0 = null;
+      await stage(TEXT.stagePosts + " (" + chosen.length + ")", 35);
       try {
         j0 = await timed("plan", async function () {
-          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: x.text }; }) }) });
+          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: x.text }; }) }) });
           var j = await r0.json().catch(function () { return {}; });
           if (!r0.ok || !j.id) { var e = new Error(j.message || (r0.status === 422 ? TEXT.noPosts : TEXT.planFail)); e.code = j.error || "http_" + r0.status; throw e; }
           return j;
-        }, { posts: chosen.length });
+        }, { posts: chosen.length, ai: aiOn() });
       } catch (err) {
         flush();
         return say(err.message || TEXT.planFail, true);
@@ -446,9 +542,15 @@
     var bar = el("progress", { max: String(run.total), value: "0", "data-cp-progress": true });
     var line = el("p", { "data-cp-progress-text": true });
     var cancel = el("button", { type: "button", class: "secondary", text: TEXT.cancel, on: { click: function () { run.cancelled = true; } } });
-    out.appendChild(el("div", { class: "card stack" }, [el("strong", { text: TEXT.stageShrink }), bar, line, el("p", { class: "muted", text: TEXT.keepOpen }), cancel]));
+    var title = el("strong", { text: TEXT.stageUpload + " · 0%" });
+    out.appendChild(el("div", { class: "card stack", "data-cp-upload": true }, [title, bar, line, el("p", { class: "muted", text: TEXT.keepOpen + " " + TEXT.leaveWarn }), cancel]));
+    var leave = function (ev) { ev.preventDefault(); ev.returnValue = ""; return ""; };
+    window.addEventListener("beforeunload", leave);
+    run.unload = function () { window.removeEventListener("beforeunload", leave); };
     var tick = function () {
       bar.value = run.done;
+      var pct = run.total ? Math.round((run.done / run.total) * 100) : 100;
+      title.textContent = TEXT.stageUpload + " · " + pct + "%";
       var eta = run.done >= 3 ? Math.ceil((((Date.now() - run.started) / run.done) * (run.total - run.done)) / 60000) : null;
       line.textContent = run.done + " " + TEXT.of + " " + run.total + (eta !== null ? " · ~" + eta + " " + TEXT.left : "") + (run.note ? " · " + run.note : "");
       run.note = "";
@@ -487,6 +589,7 @@
     tick();
     await Promise.all([worker(), worker(), worker()]);
     if (wake && wake.release) wake.release().catch(function () {});
+    if (run.unload) run.unload();
     finish(importId);
   }
 
@@ -516,5 +619,7 @@
     b.disabled = true;
     Promise.resolve(load()).finally(function () { b.classList.remove("busy"); b.disabled = false; });
   });
+  if ($("ai")) $("ai").addEventListener("change", refreshApply);
   ["window", "pattern", "same", "since"].forEach(function (n) { $(n).addEventListener("change", function () { if (state) compute(); }); });
+  });
 })();

@@ -46,7 +46,8 @@ async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = 
   await Promise.all(
     parsed.map((r, i) =>
       limit(async () => {
-        if (!r.missing.length || !AI) return;
+        if (!r.missing.length) return;
+        if (!AI) return void (logs[i].aiSkipped = "rules_only");
         if (blocked) return void (logs[i].aiSkipped = blocked);
         if (Date.now() > until) return void (logs[i].aiSkipped = "time");
         const t0 = Date.now();
@@ -55,6 +56,8 @@ async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = 
         try {
           const ex = await L.extractPropertyDetails(AI, { texts: [list[i].text], lang, ctx });
           const filled = ChatListing.fillFromAi(cells[i], ex.fields);
+          // Where both read the same cell: did they agree? (cell names only) This is how the parser's quality against AI is measured.
+          logs[i].aiVsParser = ChatListing.compareWithAi(parsed[i].cells, ex.fields);
           cells[i] = filled.cells;
           logs[i].aiFilled = filled.filled;
           logs[i].model = ex.modelUsed || null;

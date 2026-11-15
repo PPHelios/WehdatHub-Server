@@ -172,3 +172,32 @@ describe("no codes: the posts that look like units", () => {
     expect(big.stats.truncated).toBe(5);
   });
 });
+
+describe("posts mode: all photos to pick from, and the videos left out per post", () => {
+  const listing = (n) => `شقة للبيع في التجمع ${n} 200 متر 3 غرف السعر 12 مليون`;
+
+  test("a post with 20 photos keeps them all (to choose 15) and counts nothing as lost", () => {
+    const lines = [say(listing("A"))];
+    for (let k = 1; k <= 20; k++) lines.push(photo(`p${k}`));
+    const r = match(lines.join("\n"));
+    expect(r.mode).toBe("posts");
+    expect(r.posts).toHaveLength(1);
+    expect(r.posts[0].files).toHaveLength(20);
+    expect(r.posts[0].over).toBe(0);
+  });
+
+  test("a video next to a post is counted on that post, not on the other sender's post", () => {
+    const text = [
+      say(listing("A"), "Ahmed", T(10, 0)),
+      photo("a1", "Ahmed", T(10, 1)),
+      `${T(10, 2)} - Ahmed: VID-1.mp4 (file attached)`,
+      say(listing("B"), "Mona", T(10, 3)),
+      photo("b1", "Mona", T(10, 4))
+    ].join("\n");
+    const r = match(text);
+    const byText = (s) => r.posts.find((p) => p.text.includes(s));
+    expect(r.stats.skippedMedia).toBe(1);
+    expect(byText("A").videos).toBe(1);
+    expect(byText("B").videos).toBe(0);
+  });
+});

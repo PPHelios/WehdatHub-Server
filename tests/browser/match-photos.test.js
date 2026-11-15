@@ -71,7 +71,13 @@ afterAll(async () => {
   await closeHarness();
 });
 
-async function openPage() {
+// The page has two readers (WhatsApp import = posts, tab 2; photos for existing units = codes, tab 3): keep the one under test.
+async function showBox(pg, mode) {
+  await pg.click(`label[for=import_tab-${mode === "posts" ? 2 : 3}]`);
+  await pg.evaluate((m) => document.querySelectorAll("[data-cp]").forEach((b) => { if (b.querySelector("[data-cp-mode]").value !== m) b.remove(); }), mode);
+}
+
+async function openPage(mode = "codes") {
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 }, serviceWorkers: "block" });
   await ctx.route(/.*/, (route) => (LOCAL.test(route.request().url()) ? route.continue() : route.abort()));
   const pg = await ctx.newPage();
@@ -86,7 +92,7 @@ async function openPage() {
   await pg.click("form button[type=submit], form input[type=submit]");
   await pg.waitForURL((u) => !u.pathname.includes("login"));
   await pg.goto("http://127.0.0.1:4573/app/import", { waitUntil: "networkidle" });
-  await pg.click("label[for=import_tab-3]");
+  await showBox(pg, mode);
   return { ctx, pg, errors, zipUploads };
 }
 
@@ -120,7 +126,7 @@ test("with unit codes: the zip is read in the browser, photos are placed, the tr
 
   // Running the same export again adds nothing: the duplicates are recognised.
   await pg.reload({ waitUntil: "networkidle" });
-  await pg.click("label[for=import_tab-3]");
+  await showBox(pg, "codes");
   await pg.setInputFiles("[data-cp-file]", path.join(dir, "export.zip"));
   await pg.fill("[data-cp-since]", "2026-01-01");
   await pg.click("[data-cp-read]");
@@ -132,9 +138,8 @@ test("with unit codes: the zip is read in the browser, photos are placed, the tr
 });
 
 test("with no codes: the posts and their photos become an import plan for review (parser first, photos to pick)", async () => {
-  const { ctx, pg, errors } = await openPage();
+  const { ctx, pg, errors } = await openPage("posts");
   await pg.setInputFiles("[data-cp-file]", path.join(dir, "export.zip"));
-  await pg.selectOption("[data-cp-mode]", "posts");
   await pg.fill("[data-cp-since]", "2026-01-01");
   await pg.click("[data-cp-read]");
   await pg.waitForSelector("[data-cp-unit]");

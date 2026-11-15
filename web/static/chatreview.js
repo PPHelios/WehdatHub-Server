@@ -4,6 +4,40 @@
   "use strict";
   var lang = document.documentElement.lang === "en" ? "en" : "ar";
   var MSG = { ar: "الوحدة وصلت 15 صورة. شيل صورة قديمة أو الغي علامة صورة تانية.", en: "The unit is at 15 photos. Remove an old photo or untick another one." };
+  // The edit window of a unit: a dialog opened by its Edit button (also used by the plain Excel plan page).
+  document.addEventListener("click", function (ev) {
+    var open = ev.target.closest && ev.target.closest("[data-edit-open]");
+    var close = ev.target.closest && ev.target.closest("[data-edit-close]");
+    if (open) {
+      var dlg = document.querySelector('[data-edit-dialog="' + open.getAttribute("data-edit-open") + '"]');
+      if (dlg && dlg.showModal) dlg.showModal();
+      else if (dlg) dlg.setAttribute("open", "");
+    } else if (close) {
+      var d = close.closest("dialog");
+      if (d && d.close) d.close();
+    }
+  });
+  // Saving an edit re-plans the import and reloads the page: send the photo ticks and their order along so they are kept.
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    var m = form && form.id && /^edit-(\d+)$/.exec(form.id);
+    if (!m) return;
+    var row = m[1];
+    var add = function (name, value) {
+      var input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    };
+    var inputs = document.querySelectorAll('input[name="keep_' + row + '"]');
+    if (!inputs.length) return;
+    Array.prototype.forEach.call(inputs, function (c) {
+      add("order_" + row, c.value);
+      if (c.checked) add("keep_" + row, c.value);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="drop_' + row + '"]:checked'), function (c) { add("drop_" + row, c.value); });
+  });
   Array.prototype.forEach.call(document.querySelectorAll("[data-photo-pick]"), function (box) {
     var max = Number(box.getAttribute("data-max")) || 15;
     var have = Number(box.getAttribute("data-have")) || 0;

@@ -162,4 +162,35 @@ function fillFromAi(cells, fields = {}) {
   return { cells: out, filled };
 }
 
-module.exports = { parsePost, fillFromAi, findCompound, findArea, mask, REQUIRED_CELLS };
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+/** A cell or an AI value as a number: "8.6 مليون" / "8,600,000" / 8600000 all read 8600000; null when it holds no number. */
+function numOf(v) {
+  const t = String(v ?? "").replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d))).replace(/(\d),(?=\d{3}\b)/g, "$1").toLowerCase();
+  const m = t.match(/\d+(?:\.\d+)?/);
+  if (!m) return null;
+  let n = Number(m[0]);
+  if (/مليون|million|\bm\b/.test(t)) n *= 1e6;
+  else if (/الف|ألف|\bk\b|thousand/.test(t)) n *= 1e3;
+  return n;
+}
+const fold = (v) => String(v ?? "").toLowerCase().replace(/_/g, " ").replace(/[\s\-ـ]+/g, " ").trim();
+
+/**
+ * Parser and AI read the same post: for each cell both gave, did they agree? Only cell names go to the log (never the values).
+ * Numbers (price, area, rooms) are compared as numbers, words folded. Used to see where the parser can replace AI.
+ */
+function compareWithAi(cells = {}, fields = {}) {
+  const ai = { ...fields, floor: fields.details?.floor };
+  const agree = [];
+  const differ = [];
+  for (const k of ["compound", "property_type", "listing_type", "price_value", "area_value", "bedrooms", "bathrooms", "down_payment_value", "remaining_amount", "installment_value", "finishing", "floor"]) {
+    const a = ai[k];
+    if (cells[k] === undefined || a === undefined || a === null || String(a).trim() === "") continue;
+    const numeric = ["price_value", "area_value", "bedrooms", "bathrooms", "down_payment_value", "remaining_amount", "installment_value"].includes(k);
+    const same = numeric ? numOf(cells[k]) !== null && numOf(cells[k]) === numOf(a) : fold(cells[k]) === fold(a) || fold(cells[k]).includes(fold(a)) || fold(a).includes(fold(cells[k]));
+    (same ? agree : differ).push(k);
+  }
+  return { agree, differ };
+}
+
+module.exports = { parsePost, fillFromAi, compareWithAi, numOf, findCompound, findArea, mask, REQUIRED_CELLS };
