@@ -128,3 +128,15 @@ describe("compare up to 3", () => {
     expect((await open("/agency-alpha/compare/AAAAAAAAAAAAAAAAAAAAAA")).status).toBe(404);
   });
 });
+
+describe("unit page sections", () => {
+  test("sections are closed by default; a notice or a prefilled lease opens its own", async () => {
+    await seed();
+    const { agent } = await signIn(h, "broker");
+    const closed = (await agent.get("/app/units/BD-1")).text;
+    expect(closed).toMatch(/<details class="acc"><summary>[^<]*<\/summary>/);
+    expect(closed).not.toMatch(/<details class="acc" open>/);
+    const asked = (await agent.get("/app/units/BD-1?private=saved")).text;
+    expect(asked).toMatch(/<details class="acc" open><summary>[^<]*<\/summary><div class="acc-body"><section class="card private/);
+  });
+});

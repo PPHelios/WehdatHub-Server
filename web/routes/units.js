@@ -599,7 +599,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
 </article>
 <div class="unit-sections">
 ${section(priv, Boolean(req.query.private))}
-${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? section(await leaseCard(req, broker, listing, lang), Boolean(req.query.lease)) : ""}
+${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? section(await leaseCard(req, broker, listing, lang), Boolean(req.query.lease || req.query.lease_tenant)) : ""}
 ${listing.status === "active" && !Authz.isDataEntry(broker) ? section(await wantedSection(pool, broker, listing, lang, req.session.csrf)) : ""}
 ${section(await shareSection(broker, listing, lang))}
 </div>`
