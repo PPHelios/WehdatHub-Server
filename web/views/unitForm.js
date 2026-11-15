@@ -41,7 +41,7 @@ function searchText(a) {
 /** An area or sub-zone: one searchable box with suggestions, like the compound box. The hidden select keeps the id the form sends. */
 function areaBox(lang, { name, label, placeholder, selectedId, rows, selectInner }) {
   const chosen = rows.find((r) => String(r.id) === String(selectedId));
-  return html`<label${req(label)}>${label}<input type="text" list="${name}-list" autocomplete="off" data-area-input="${name}" data-msg-pick="${L(lang, "اختار من القايمة.", "Pick one from the suggestions.")}" value="${chosen ? chosen.text : ""}" placeholder="${placeholder}"><select name="${name}" hidden>${selectInner}</select><datalist id="${name}-list"></datalist></label>`;
+  return html`<label${req(label)}>${label}<input type="text" data-list="${name}-list" autocomplete="off" data-area-input="${name}" data-msg-pick="${L(lang, "اختار من القايمة.", "Pick one from the suggestions.")}" value="${chosen ? chosen.text : ""}" placeholder="${placeholder}"><select name="${name}" hidden>${selectInner}</select><datalist id="${name}-list"></datalist><span class="ubox-list area-list" data-area-list role="listbox" hidden></span></label>`;
 }
 
 // Small stroke icons (no emoji in headings or buttons: the form reads as a product, not a chat).

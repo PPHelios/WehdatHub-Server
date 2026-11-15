@@ -1393,7 +1393,7 @@
   };
   var areaBoxOf = function (box) {
     var sel = box.form && box.form.querySelector('select[name="' + box.getAttribute("data-area-input") + '"]');
-    var list = document.getElementById(box.getAttribute("list") || "");
+    var list = document.getElementById(box.getAttribute("data-list") || box.getAttribute("list") || "");
     return sel && list ? { sel: sel, list: list } : null;
   };
   var setAreaValue = function (sel, value) {
@@ -1435,9 +1435,48 @@
       });
     });
   };
+  // The suggestions show as the app's own list (not the browser's datalist, which cannot be styled): the names and aliases of
+  // the list that match what is typed, picked by click or Enter.
+  var showAreaList = function (box) {
+    var c = areaBoxOf(box);
+    var pop = box.parentNode && box.parentNode.querySelector("[data-area-list]");
+    if (!c || !pop) return;
+    var typed = normalizeArea(box.value);
+    var hits = Array.prototype.map.call(c.list.options, function (o) { return o.value; }).filter(function (t) {
+      return !typed || normalizeArea(t).indexOf(typed) >= 0;
+    }).slice(0, 8);
+    pop.innerHTML = "";
+    hits.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "ubox-opt"; b.setAttribute("role", "option"); b.textContent = t;
+      pop.appendChild(b);
+    });
+    pop.hidden = !hits.length;
+  };
+  document.addEventListener("mousedown", function (e) {
+    var opt = e.target && e.target.closest && e.target.closest("[data-area-list] .ubox-opt");
+    if (!opt) return;
+    e.preventDefault(); // keep the focus in the box
+    var box = opt.closest("label").querySelector("[data-area-input]");
+    box.value = opt.textContent;
+    var pop = opt.parentNode;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    pop.hidden = true;
+  });
+  document.addEventListener("focusout", function (e) {
+    var box = e.target;
+    if (!box || !box.matches || !box.matches("[data-area-input]")) return;
+    setTimeout(function () { var pop = box.parentNode && box.parentNode.querySelector("[data-area-list]"); if (pop) pop.hidden = true; }, 150);
+  });
+  document.addEventListener("keydown", function (e) {
+    var box = e.target;
+    if (e.key === "Escape" && box && box.matches && box.matches("[data-area-input]")) { var pop = box.parentNode.querySelector("[data-area-list]"); if (pop) pop.hidden = true; }
+  });
   document.addEventListener("input", function (e) {
     var box = e.target;
     if (!box || !box.matches || !box.matches("[data-area-input]")) return;
+    showAreaList(box);
     var c = areaBoxOf(box);
     if (!c) return;
     var id = areaIdFor(box);
@@ -1445,7 +1484,7 @@
     box.setCustomValidity(!normalizeArea(box.value) || id ? "" : box.getAttribute("data-msg-pick") || "");
   });
   document.addEventListener("focusin", function (e) {
-    if (e.target && e.target.matches && e.target.matches("[data-area-input]")) fillAreaList(e.target);
+    if (e.target && e.target.matches && e.target.matches("[data-area-input]")) { fillAreaList(e.target); showAreaList(e.target); }
   });
   // Changing the area refills the sub-zone list and drops a sub-zone that belongs to another area.
   document.addEventListener("change", function (e) {

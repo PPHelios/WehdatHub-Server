@@ -773,3 +773,5 @@ input, select, textarea { min-height: 46px; border-color: #c9d2dc; }
 .ubox-new p { margin: 0; }
 .ubox-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .ubox-chips:empty { display: none; }
+label:has(> [data-area-list]) { position: relative; }
+.area-list { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: 4px; }
