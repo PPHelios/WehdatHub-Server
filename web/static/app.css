@@ -824,3 +824,28 @@ label:has(> [data-area-list]) { position: relative; }
 .unit-card > p a { font-weight: 600; }
 .unit-card > details[data-price-history] > summary { cursor: pointer; font-weight: 600; }
 .unit-card > details:not([data-price-history]):not(.more-menu) { margin: 8px 0; padding: 10px 14px; border-radius: var(--radius-btn); background: var(--soft); }
+
+/* Inside the unit page's sections: lease, private details, interested clients, client link. */
+.acc-body { display: grid; gap: 14px; padding-top: 14px; }
+.acc-body > .card { display: grid; gap: 14px; }
+.acc-body > .card > * { margin: 0; }
+.acc-body .muted { line-height: 1.6; }
+.acc-body .notice[data-lease-notice^="bad"] { background: var(--bad-soft); color: var(--bad-ink); }
+.acc-body .notice[data-lease-notice]:not([data-lease-notice^="bad"]) { background: var(--ok-soft); color: var(--ok-ink); }
+.acc-body p[data-lease-end] { padding: 12px 14px; border-radius: var(--radius-btn); background: var(--soft); font-weight: 700; }
+.acc-body .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; align-items: stretch; }
+.acc-body .actions .btn, .acc-body .actions button { width: 100%; min-height: 48px; margin: 0; }
+.acc-body form[data-lease-done] { display: grid; }
+.acc-body form.grid, .acc-body form.stack { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--field-soft, var(--soft)); }
+.acc-body form.grid > button, .acc-body form.stack > button[type="submit"] { grid-column: 1 / -1; }
+.acc-body label { display: grid; gap: 6px; font-weight: 600; }
+.acc-body details > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.acc-body .share-url { padding: 12px 14px; border-radius: var(--radius-btn); background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; }
+.acc-body ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.acc-body ul > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--card); }
+.acc-body ul > li a { font-weight: 600; }
+.acc-body ul > li form { margin: 0; }
+.acc-body #access { display: grid; gap: 10px; }
+.acc-body #access h3 { margin: 0; font-size: 1rem; }
+.acc-body #access form.row { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--card); flex-wrap: wrap; }
+.acc-body .chip.new { justify-self: start; }
