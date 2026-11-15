@@ -877,3 +877,5 @@ label:has(> [data-area-list]) { position: relative; }
 .car-thumbs a:hover, .car-thumbs a:focus-visible, .car:has(.car-slide:target) .car-thumbs a { transition: opacity 0.15s; }
 .car-thumbs a:hover, .car-thumbs a:focus-visible { opacity: 1; }
 .car-thumbs img { display: block; width: 64px; height: 48px; object-fit: cover; }
+
+.car { margin-inline: auto; }
