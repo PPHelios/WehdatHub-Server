@@ -21,6 +21,7 @@ const SchedulePdf = require("../../lib/schedulePdf");
 const Compare = require("../../lib/compareLinks");
 const { fetchBuf } = require("../../lib/flyerAssets");
 const { photoUrl } = require("../../lib/supabase");
+const { carousel } = require("../views/carousel");
 const sharp = require("sharp");
 const { RESERVED_SLUGS } = require("../../domain/slug");
 const Session = require("../session");
@@ -124,7 +125,7 @@ function unitBody(u, { otherLangUrl, interest = null, plans = {} }) {
   </header>
   <h1>${u.headline}</h1>
   ${u.price ? html`<p class="line"><strong>💰 ${u.price}</strong></p>` : ""}
-  ${u.images.length ? html`<div class="photos">${u.images.map((src) => html`<img src="${src}" alt="" loading="lazy">`)}</div>` : ""}
+  ${carousel(u.images, lang)}
   <ul class="facts">${u.facts.map((f) => html`<li>${f}</li>`)}</ul>
   ${u.features.length ? html`<ul class="tags">${u.features.map((f) => html`<li>${f}</li>`)}</ul>` : ""}
   ${u.summary ? html`<p>${u.summary}</p>` : ""}

@@ -66,6 +66,7 @@ ${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
 <link rel="stylesheet" href="${assets("app.css")}">
 ${head || ""}
 ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
+<script src="${assets("carousel.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
 <script src="${assets("voice.js")}" defer></script>` : ""}
 </head>

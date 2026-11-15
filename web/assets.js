@@ -34,6 +34,8 @@ const FILES = {
   // The add/edit unit form's one box: place and feature chips (docs/plans/unified-unit-box.md).
   "unitBox.js": path.join(STATIC_DIR, "unitBox.js"),
   // The same form: which fields show for a sale or a rental and for each unit type.
+  // Photo carousel of the unit page and the client link; also opens a closed section a link points into.
+  "carousel.js": path.join(STATIC_DIR, "carousel.js"),
   "unitFields.js": path.join(STATIC_DIR, "unitFields.js"),
   // Excel import: the workbook is read in the browser, tab by tab.
   "xlsxread.js": path.join(STATIC_DIR, "xlsxread.js"),

@@ -72,7 +72,7 @@ describe("wow 1: clients who want the unit", () => {
     await lead("rival", "01212345678", "Rival Client");
     const b = await signIn(h, "broker");
     const page = await b.agent.get("/app/units/HP-1");
-    expect(page.text).toMatch(/id="wanted"[\s\S]*🔥 1 عملاء/);
+    expect(page.text).toMatch(/🔥 1 عملاء[\s\S]*id="wanted"/);
     expect(page.text).toContain('action="/app/leads/L-0001/send"');
     const send = await b.agent.post("/app/leads/L-0001/send").type("form").send({ _csrf: b.csrf, code: "HP-1" });
     expect(send.status).toBe(303);

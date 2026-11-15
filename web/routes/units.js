@@ -24,10 +24,11 @@ const { unitOwnerBlock } = require("./owners");
 const Owners = require("../../services/unitOwners");
 const Bulk = require("../../services/bulk");
 const { logOperation } = require("../../lib/db");
-const { html } = require("../html");
+const { html, raw } = require("../html");
 const Today = require("../../services/today");
 const TodayCards = require("../todayCards");
 const { resultItem, factList } = require("../views/units");
+const { carousel } = require("../views/carousel");
 const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -52,6 +53,14 @@ async function imagesOf(pool, listing) {
 }
 
 /** Wow 1: "🔥 N clients want this unit", the broker's own listed with Send (the count is the agency's). */
+/** A card section as a collapsed block: its heading is the row's title, the rest is the body. */
+function section(node, open = false) {
+  const s = String(node || "");
+  const m = s.match(/<h2>([\s\S]*?)<\/h2>/);
+  if (!s || !m) return node || "";
+  return raw(`<details class="acc"${open ? " open" : ""}><summary>${m[1]}</summary><div class="acc-body">${s.replace(m[0], "")}</div></details>`);
+}
+
 async function wantedSection(pool, broker, listing, lang, csrf) {
   const w = await LeadRequests.whoWants(pool, broker, listing);
   if (!w.total) return "";
@@ -565,31 +574,35 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       nav: "units",
       body: html`<article class="card" data-code="${listing.code}">
   ${req.query.saved ? html`<div class="notice card ok" data-saved>✅ ${L(lang, "تم الحفظ", "Saved")} <a class="btn secondary" href="/app/units/new">➕ ${L(lang, "ضيف وحدة تانية", "Add another unit")}</a></div>` : ""}
-  <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
+  <div class="unit-head"><h1 dir="ltr">${listing.code}</h1><span class="unit-pill">${status}</span>${conf ? html`<span class="muted">${conf[0]}</span>` : ""}${listing.is_private ? html`<span class="unit-pill">⭐ VIP</span>` : ""}</div>
+  ${carousel(images.map((i) => i.url), lang)}
   ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
   ${listing.details?.owner_lead && Authz.canEdit(broker, listing) && !Authz.isDataEntry(broker) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
   ${!view.hidden && (!Authz.isDataEntry(broker) || (await Owners.dataEntryOwnersOn(pool, broker.agency_id))) ? await unitOwnerBlock(pool, broker, listing, lang, req.session.csrf) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
-  ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
+    ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
     ${Authz.canEdit(broker, listing) && listing.status !== "deleted" ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/status" class="inline" data-unit-status><input type="hidden" name="_csrf" value="${req.session.csrf}">
       <details class="status-menu"><summary class="btn secondary">🔄 ${L(lang, "غيّر الحالة", "Change status")}</summary>
         <div class="status-options">${[["active", L(lang, "نشطة", "Active")], ["sold", L(lang, "مباعة", "Sold")], ["archived", L(lang, "مؤرشفة", "Archived")]].filter(([v]) => v !== listing.status).map(([v, t]) => html`<button type="submit" name="status" value="${v}" class="secondary">${t}</button>`)}</div></details></form>` : ""}
-    ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
-    ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
     ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
-    ${listing.status === "active" ? html`<a class="btn secondary" href="#share">🔗 ${L(lang, "لينك للعميل", "Link for a client")}</a>` : ""}
-    ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/flyer">🖼 ${L(lang, "الفلاير", "Flyer")}</a>` : ""}
-    ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
+    <details class="more-menu"><summary class="btn secondary">⋯ ${L(lang, "المزيد", "More")}</summary><div class="more-list">
+      ${listing.status === "active" ? html`<a class="btn secondary" href="#share">🔗 ${L(lang, "لينك للعميل", "Link for a client")}</a>` : ""}
+      ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/flyer">🖼 ${L(lang, "الفلاير", "Flyer")}</a>` : ""}
+      ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
+      ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button></form>` : ""}
+      ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
+    </div></details>
   </div>
-  ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button>${listing.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 </article>
-${priv}
-${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? await leaseCard(req, broker, listing, lang) : ""}
-${listing.status === "active" && !Authz.isDataEntry(broker) ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
-${await shareSection(broker, listing, lang)}`
+<div class="unit-sections">
+${section(priv, Boolean(req.query.private))}
+${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? section(await leaseCard(req, broker, listing, lang), Boolean(req.query.lease)) : ""}
+${listing.status === "active" && !Authz.isDataEntry(broker) ? section(await wantedSection(pool, broker, listing, lang, req.session.csrf)) : ""}
+${section(await shareSection(broker, listing, lang))}
+</div>`
     });
   });
 }
