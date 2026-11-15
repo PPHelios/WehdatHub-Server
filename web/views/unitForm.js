@@ -79,13 +79,15 @@ function unitBox(v, areas, lang, place) {
     data-msg-swap="${L(lang, "اتغير المكان: %s", "Place changed to %s")}" data-msg-remove="${L(lang, "شيل %s", "Remove %s")}" data-msg-other-tag="${L(lang, "مش في القائمة", "not in the list")}">
     <span class="ubox-label" id="ubox-label">${L(lang, "المكان والمميزات *", "Place and features *")}</span>
     <div class="ubox-field" data-ubox-field role="group" aria-labelledby="ubox-label">
-      ${place ? html`<span class="chip chip-place" data-ubox-chip="place" data-state="${placeState}">${ICON.pin}<span data-chip-text>${place.label}</span>${isNew ? html`<em class="chip-tag">${L(lang, "جديد", "new")}</em>` : ""}${chipX(place.label)}</span>` : ""}
-      ${(v.feature || []).filter((k) => Features.featureLabel(k)).map((k) => html`<span class="chip chip-feature" data-ubox-chip="feature" data-key="${k}"><span data-chip-text>${Features.featureLabel(k, lang)}</span>${chipX(Features.featureLabel(k, lang))}<input type="hidden" name="feature" value="${k}"></span>`)}
-      ${others.map((o) => html`<span class="chip chip-other" data-ubox-chip="other"><span data-chip-text>${o}</span> <em class="chip-tag">${L(lang, "مش في القائمة", "not in the list")}</em>${chipX(o)}</span>`)}
       <input type="text" class="ubox-input" data-ubox-input autocomplete="off" enterkeyhint="done" aria-autocomplete="list" aria-controls="ubox-list" aria-labelledby="ubox-label"
         placeholder="${L(lang, "اكتب كمبوند، منطقة، أو ميزة… (مثال: ميفيدا، بحري، روف)", "Type a compound, an area or a feature… (e.g. Mivida, north facing, roof)")}">
     </div>
     <div class="ubox-list" id="ubox-list" data-ubox-list role="listbox" hidden></div>
+    <div class="ubox-chips" data-ubox-chips>
+      ${place ? html`<span class="chip chip-place" data-ubox-chip="place" data-state="${placeState}">${ICON.pin}<span data-chip-text>${place.label}</span>${isNew ? html`<em class="chip-tag">${L(lang, "جديد", "new")}</em>` : ""}${chipX(place.label)}</span>` : ""}
+      ${(v.feature || []).filter((k) => Features.featureLabel(k)).map((k) => html`<span class="chip chip-feature" data-ubox-chip="feature" data-key="${k}"><span data-chip-text>${Features.featureLabel(k, lang)}</span>${chipX(Features.featureLabel(k, lang))}<input type="hidden" name="feature" value="${k}"></span>`)}
+      ${others.map((o) => html`<span class="chip chip-other" data-ubox-chip="other"><span data-chip-text>${o}</span> <em class="chip-tag">${L(lang, "مش في القائمة", "not in the list")}</em>${chipX(o)}</span>`)}
+    </div>
     <p class="ubox-context" data-ubox-context${hid(!context.length)}>${ICON.pin}<span data-ubox-context-text>${context.join(" · ")}</span></p>
     <p class="ubox-warn" data-ubox-warn role="status"${hid(placeState !== "check")}>${L(lang, "مش في القائمة: اختار من الاقتراحات أو اطلبه كجديد.", "Not on the list: pick a suggestion or request it as new.")}</p>
     <input type="hidden" name="compound" value="${v.compound}" data-ubox-compound>

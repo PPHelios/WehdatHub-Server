@@ -11,6 +11,7 @@
     if (!box || box.hasAttribute("data-ubox-on")) return;
     box.setAttribute("data-ubox-on", "");
     var field = box.querySelector("[data-ubox-field]");
+    var chips = box.querySelector("[data-ubox-chips]"); // the chips sit under the typing line
     var input = box.querySelector("[data-ubox-input]");
     var list = box.querySelector("[data-ubox-list]");
     var ctx = box.querySelector("[data-ubox-context]");
@@ -59,7 +60,7 @@
       c.appendChild(x);
       return c;
     }
-    function placeChip() { return field.querySelector('[data-ubox-chip="place"]'); }
+    function placeChip() { return chips.querySelector('[data-ubox-chip="place"]'); }
     function setSelect(sel, value) {
       if (!sel || sel.value === (value || "")) return;
       sel.value = value || "";
@@ -88,7 +89,7 @@
       if (old) old.remove();
       var c = chip("place", it.label || it.name_ar || it.name_en);
       c.setAttribute("data-state", "known");
-      field.insertBefore(c, field.firstChild);
+      chips.insertBefore(c, chips.firstChild);
       openNew(false);
       compound.value = it.kind === "compound" ? (it.label || it.name_ar || it.name_en) : "";
       setSelect(areaSel, it.area_id || "");
@@ -103,14 +104,14 @@
       if (old) old.remove();
       var c = chip("place", name, msg("new"));
       c.setAttribute("data-state", "new");
-      field.insertBefore(c, field.firstChild);
+      chips.insertBefore(c, chips.firstChild);
       compound.value = name;
       setContext([]);
       warn.hidden = true;
       openNew(true, name);
       changed();
     }
-    function hasFeature(key) { return Boolean(field.querySelector('[data-ubox-chip="feature"][data-key="' + key + '"]')); }
+    function hasFeature(key) { return Boolean(chips.querySelector('[data-ubox-chip="feature"][data-key="' + key + '"]')); }
     function addFeature(key, label) {
       if (!key || hasFeature(key)) return;
       var c = chip("feature", label);
@@ -118,16 +119,16 @@
       var h = document.createElement("input");
       h.type = "hidden"; h.name = "feature"; h.value = key;
       c.appendChild(h);
-      field.insertBefore(c, input);
+      chips.appendChild(c);
       changed(h);
     }
     function others() {
-      return Array.prototype.map.call(field.querySelectorAll('[data-ubox-chip="other"] [data-chip-text]'), function (t) { return t.textContent.trim(); });
+      return Array.prototype.map.call(chips.querySelectorAll('[data-ubox-chip="other"] [data-chip-text]'), function (t) { return t.textContent.trim(); });
     }
     function addOther(text) {
       text = text.trim().slice(0, 60);
       if (!text || others().indexOf(text) >= 0) return;
-      field.insertBefore(chip("other", text, msg("other-tag")), input);
+      chips.appendChild(chip("other", text, msg("other-tag")));
       other.value = others().join("، ");
       changed(other);
     }
@@ -248,8 +249,8 @@
       } else if (e.key === "Escape") {
         close();
       } else if (e.key === "Backspace" && !input.value) {
-        var chips = field.querySelectorAll("[data-ubox-chip]");
-        if (chips.length) remove(chips[chips.length - 1]);
+        var all = chips.querySelectorAll("[data-ubox-chip]");
+        if (all.length) remove(all[all.length - 1]);
       }
     });
     list.addEventListener("mousedown", function (e) { e.preventDefault(); }); // keep the focus in the box
@@ -258,11 +259,11 @@
       if (b) choose(items[Number(b.getAttribute("data-i"))]);
     });
     input.addEventListener("blur", function () { setTimeout(close, 150); });
-    field.addEventListener("click", function (e) {
+    chips.addEventListener("click", function (e) {
       var x = e.target.closest && e.target.closest("[data-ubox-remove]");
       if (x) remove(x.closest("[data-ubox-chip]"));
-      else if (e.target === field) input.focus();
     });
+    field.addEventListener("click", function (e) { if (e.target === field) input.focus(); });
     // The new compound's name is the chip's name.
     newName.addEventListener("input", function () {
       var c = placeChip();

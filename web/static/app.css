@@ -771,3 +771,5 @@ input, select, textarea { min-height: 46px; border-color: #c9d2dc; }
 .ubox-new { display: grid; gap: 10px; margin: 0; padding: 14px; border: 1px solid var(--accent); border-radius: var(--radius-btn); background: var(--card); }
 .ubox-new legend { padding-inline: 6px; font-weight: 700; }
 .ubox-new p { margin: 0; }
+.ubox-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ubox-chips:empty { display: none; }
