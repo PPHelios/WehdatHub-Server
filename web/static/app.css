@@ -859,3 +859,8 @@ label:has(> [data-area-list]) { position: relative; }
 .uc-top { flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 4px 8px; }
 .uc-top .badge { flex: none; }
 .uc-top .uc-price { margin-inline-start: auto; }
+
+/* The map drawer's unit rows with the unit's cover photo. */
+.map-units a.has-thumb { grid-template-columns: 72px auto 1fr auto; }
+.map-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; background: var(--soft); }
+@media (max-width: 420px) { .map-units a.has-thumb { grid-template-columns: 72px 1fr; } .map-units a.has-thumb > :not(.map-thumb) { grid-column: 2; } }

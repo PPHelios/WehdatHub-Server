@@ -11,6 +11,7 @@ const Maps = require("../../services/mapPlaces");
 const Lookup = require("../../services/placeLookup");
 const MapRules = require("../../domain/mapPlaces");
 const Describe = require("../../domain/describe");
+const Store = require("../../lib/listingStore");
 const DealRules = require("../../domain/dealType");
 const { html, raw } = require("../html");
 
@@ -105,13 +106,13 @@ function mapPage(lang, tilesUrl) {
 </section>`;
 }
 
-function drawerBody(lang, units, place) {
+function drawerBody(lang, units, place, covers = new Map()) {
   if (!units.length) return html`<p class="muted">${words(lang).none}</p>`;
   return html`<ul class="map-units">${units.map((u) => {
     const price = Describe.money(u.price_value, lang) || u.price_display || "—";
     const facts = [Describe.typeLabel(u, lang), u.bedrooms != null ? `${u.bedrooms} ${L(lang, "غرف", "bd")}` : "", u.area_value ? `${Math.round(u.area_value)} m²` : ""].filter(Boolean).join(" · ");
     const kind = u.listing_type === "rent" ? "rent" : "sale";
-    return html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}"><strong dir="ltr">${u.code}</strong> <span class="badge ${kind}" data-listing-type="${kind}">${kind === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")}</span> <span>${facts}</span><span class="map-price">${price}</span></a></li>`;
+    return html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}"${covers.get(u.id) ? raw(' class="has-thumb"') : ""}>${covers.get(u.id) ? html`<img class="map-thumb" src="${covers.get(u.id).thumb}" alt="" loading="lazy" width="72" height="54">` : ""}<strong dir="ltr">${u.code}</strong> <span class="badge ${kind}" data-listing-type="${kind}">${kind === "rent" ? L(lang, "إيجار", "Rent") : L(lang, "بيع", "Sale")}</span> <span>${facts}</span><span class="map-price">${price}</span></a></li>`;
   })}</ul>${place ? "" : ""}`;
 }
 
@@ -227,7 +228,7 @@ function register(web, { pool, page, assets }) {
     const place = await Maps.place(pool, req.params.id);
     if (!place) return res.status(404).send("Not found");
     const units = await Maps.unitsAt(pool, broker, place.id, req.query);
-    return res.type("html").send(String(html`<div data-place-title="${L(lang, place.name_ar || place.name_en, place.name_en || place.name_ar)}">${drawerBody(lang, units)}</div>`));
+    return res.type("html").send(String(html`<div data-place-title="${L(lang, place.name_ar || place.name_en, place.name_en || place.name_ar)}">${drawerBody(lang, units, null, await Store.coverImages(pool, broker.agency_id, units))}</div>`));
   });
 
   // The CRM owner
