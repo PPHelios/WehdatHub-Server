@@ -53,6 +53,7 @@ Never invent a filter that was not asked for.
     "floor_min": integer or null, "floor_max": integer or null,   // ground floor = 0
     "finishing": [ any of: core_and_shell, semi_finished, fully_finished, super_lux, ultra_super_lux ],
     "furnishing": "furnished" | "semi_furnished" | "unfurnished" | null,
+    "sort": "price_asc" | "price_desc" | "newest" | "area_desc" | "area_asc" | null,   // only when the request asks for an order ("الأرخص", "الأحدث", "أكبر مساحة")
     "delivery": { "ready": true or null, "off_plan": true or null, "by_year": integer or null },
     "payment": { "cash": true or null, "installments": true or null, "years": integer or null, "down_pct": number or null, "max_down_payment": number or null, "max_installment": number or null },
     "features": [ keys from this list only: ${featureList} ],
@@ -341,11 +342,13 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     : "";
   // A price in the search lists the cheapest first (units with no price last).
   const priceRank = f.price_max || f.price_min ? "l.price_value ASC NULLS LAST, " : "";
+  // An order the request asked for ("الأرخص", "newest") comes before the usual one.
+  const sortRank = { price_asc: "l.price_value ASC NULLS LAST, ", price_desc: "l.price_value DESC NULLS LAST, ", newest: "l.created_at DESC, ", area_desc: "l.area_value DESC NULLS LAST, ", area_asc: "l.area_value ASC NULLS LAST, " }[f.sort] || "";
   const sql = `
     SELECT l.*, COUNT(*) OVER() AS total_count
     FROM listings l
     WHERE ${Vis.units("l")} AND ${where.join("\n      AND ")}
-    ORDER BY ${rank} ${bedRank} ${typeRank} ${exactFirst} ${priceRank}l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
+    ORDER BY ${rank} ${sortRank}${bedRank} ${typeRank} ${exactFirst} ${priceRank}l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
     LIMIT ${add(limit)} OFFSET ${add(offset)}`;
   return { sql, params };
 }

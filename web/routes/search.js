@@ -93,7 +93,7 @@ function understoodBlock({ meta = {}, source = null, filters, logId = null, q = 
   <p><strong>🔎 ${L(lang, "فهمت إنك بتدور على", "I understood")}:</strong> ${interp || L(lang, "(مفيش فلتر)", "(no filter)")}</p>
   ${note ? html`<p class="muted small">${L(lang, note[0], note[1])}</p>` : ""}
   ${unapplied.length ? html`<p class="small" data-unapplied>⚠️ ${L(lang, "ما اتطبقش (الفلاتر مش بتدعمه):", "Not applied (filters cannot say it):")} <strong>${unapplied.join("، ")}</strong></p>` : ""}
-  ${guesses.length ? html`<p class="muted small" data-guesses>🔤 ${L(lang, "فهمت", "I read")} ${guesses.map((g) => `«${g.typed}» ${L(lang, "على إنها", "as")} «${g.as}»`).join("، ")}</p>` : ""}
+  ${guesses.length ? html`<p class="muted small" data-guesses>🔤 ${guesses.map((g) => L(lang, `ملقيتش «${g.typed}». دي نتايج «${g.as}»، لو مش قصدك صحّح الكلمة.`, `Couldn't find «${g.typed}». Showing «${g.as}». Is that what you meant? If not, fix the word.`)).join(" ")}</p>` : ""}
   ${ignored.length ? html`<p class="small" data-ignored>ℹ️ ${L(lang, "مفيش عندي", "I could not match")} <strong>${ignored.join("، ")}</strong> ${L(lang, "في المخزون، فدورت من غيرها.", "in your inventory, so I searched without it.")}</p>` : ""}
   ${termWords ? html`<p class="muted small">${L(lang, "كلمات اتدور بيها كاسم مكان:", "Words searched as a place name:")} ${termWords}</p>` : ""}
   ${logId

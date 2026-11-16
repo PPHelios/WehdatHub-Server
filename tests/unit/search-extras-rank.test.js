@@ -105,3 +105,122 @@ describe("extras rank and never hide", () => {
     expect(res.ids).toHaveLength(1);
   });
 });
+
+describe("places and words from the logged searches that the quick reader missed", () => {
+  const read = (text) => Q.fallbackParse(text);
+  const places = (text) => read(text).filters.places.map((p) => p.key);
+
+  test("the start of a compound name is read as that compound and shown as a guess", () => {
+    for (const text of ["شقة 3 غرف في هايد", "apartment in hyde", "Apartment in hyde pay"]) {
+      const r = read(text);
+      expect(places(text)).toEqual(["hyde_park"]);
+      expect(r.filters.place_terms).toEqual([]);
+      expect(r.meta.guesses.length).toBe(1);
+    }
+  });
+  test("a country, city or governorate word is never the start of a compound", () => {
+    expect(places("apartment in cairo")).toEqual([]);
+    expect(read("apartment in cairo").filters.place_terms).toEqual(["cairo"]);
+  });
+  test("an unknown spelling is a guess the person can accept or fix", () => {
+    const r = read("شقة في فيلدا");
+    expect(r.meta.guesses).toEqual([expect.objectContaining({ typed: "فيلدا", as: "فيلدج" })]);
+    expect(r.filters.places.map((p) => p.key)).toEqual(["the_village"]);
+  });
+  test("the kitchen with ال, 'full furnished' and 'ned' leave nothing behind", () => {
+    expect(read("شقة 3 نوم في هايد بارك، المطبخ تكييفات").filters.place_terms).toEqual([]);
+    expect(read("شقة 3 نوم في هايد بارك، المطبخ تكييفات").filters.furnishing).toBe("kitchen_and_ac");
+    const a = read("Studio for rent in mivida full furnished").filters;
+    expect(a.place_terms).toEqual([]);
+    expect(a.furnishing).toBe("furnished");
+    expect(read("Ned apartment for rent in mivida Fully furnished").filters.place_terms).toEqual([]);
+  });
+  test("a guessed spelling is not counted as a parser-vs-AI disagreement on places", () => {
+    const local = read("استوديو للايجار في فيلدا");
+    const ai = { filters: { ...local.filters, places: [{ kind: "compound", key: "villette" }] } };
+    expect(Q.disagreements(local, ai)).not.toContain("places");
+    expect(Q.disagreements({ filters: local.filters }, ai)).toContain("places"); // with no guess it still counts
+  });
+});
+
+describe("more words the quick reader understands", () => {
+  const x = (text) => Q.fallbackParse(text);
+
+  test.each([
+    ["الأرخص شقة في التجمع", "price_asc"],
+    ["cheapest apartment in new cairo", "price_asc"],
+    ["الأغلى شقة", "price_desc"],
+    ["شقة الأحدث", "newest"],
+    ["newest apartment", "newest"],
+    ["شقة أكبر مساحة", "area_desc"],
+    ["شقة أصغر مساحة", "area_asc"]
+  ])("order: %s", (text, sort) => {
+    const r = x(text);
+    expect(r.filters.sort).toBe(sort);
+    expect(r.filters.place_terms).toEqual([]);
+  });
+
+  test("an order alone is not a search", () => {
+    expect(Q.fallbackParse("الأرخص").intent).toBe("other");
+  });
+
+  test.each([
+    ["شقة حوالي 150 متر", 135, 165],
+    ["apartment about 200 sqm", 180, 220],
+    ["شقة 150 متر", 150, null]
+  ])("area: %s", (text, min, max) => {
+    const f = x(text).filters;
+    expect([f.area_min, f.area_max]).toEqual([min, max]);
+    expect(f.place_terms).toEqual([]);
+  });
+
+  test.each([
+    ["شقة مش ارضي", 1, null],
+    ["apartment not ground floor", 1, null],
+    ["شقة دور عالي", 4, null],
+    ["apartment high floor", 4, null],
+    ["شقة دور أرضي", 0, 0],
+    ["شقة دور 3", 3, 3]
+  ])("floor: %s", (text, min, max) => {
+    const f = x(text).filters;
+    expect([f.floor_min, f.floor_max]).toEqual([min, max]);
+    expect(f.place_terms).toEqual([]);
+  });
+
+  test("ready, in the spelling people use", () => {
+    expect(x("شقة جاهزة").filters.delivery_ready).toBe(true);
+  });
+
+  test("near a landmark stays a place word: it is looked up in the unit text (an earlier decision)", () => {
+    expect(x("شقة جنب النادي").filters.place_terms).toEqual(["النادي"]);
+    expect(x("apartment near new cairo").filters.places.map((p) => p.key)).toEqual(["new_cairo"]);
+  });
+
+  test("an AI answer may carry the order, and anything else is dropped", () => {
+    expect(Q.normalizeAiSearch({ intent: "search", filters: { sort: "newest", property_types: ["apartment"] } }).filters.sort).toBe("newest");
+    expect(Q.normalizeAiSearch({ intent: "search", filters: { sort: "drop table", property_types: ["apartment"] } }).filters.sort).toBeNull();
+  });
+});
+
+describe("the asked order is used when the units are listed", () => {
+  let h;
+  beforeAll(async () => { h = await createHarness(); });
+  afterAll(closeHarness);
+
+  const order = async (sort) => {
+    const res = await Search.runSearch(h.pool, h.AGENCY_A, { filters: { ...Q.emptyFilters(), property_types: ["apartment"], sort } });
+    const codes = (await h.query("SELECT id, code FROM listings WHERE id = ANY($1::uuid[])", [res.ids])).reduce((m, r) => ({ ...m, [r.id]: r.code }), {});
+    return res.ids.map((id) => codes[id]);
+  };
+
+  test("cheapest, most expensive, largest and smallest first", async () => {
+    await h.query("DELETE FROM listings WHERE agency_id = $1", [h.AGENCY_A]);
+    await h.insertListing({ code: "MID", property_type: "apartment", price_value: 5e6, area_value: 150 });
+    await h.insertListing({ code: "LOW", property_type: "apartment", price_value: 3e6, area_value: 90 });
+    await h.insertListing({ code: "HIGH", property_type: "apartment", price_value: 9e6, area_value: 220 });
+    expect(await order("price_asc")).toEqual(["LOW", "MID", "HIGH"]);
+    expect(await order("price_desc")).toEqual(["HIGH", "MID", "LOW"]);
+    expect(await order("area_desc")).toEqual(["HIGH", "MID", "LOW"]);
+    expect(await order("area_asc")).toEqual(["LOW", "MID", "HIGH"]);
+  });
+});

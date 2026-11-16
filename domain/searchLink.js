@@ -27,6 +27,7 @@ function sanitizeFilters(input) {
   if (["sale", "rent"].includes(f.listing_type)) out.listing_type = f.listing_type;
   if (["primary", "resale"].includes(f.market)) out.market = f.market;
   if (["EGP", "USD", "EUR"].includes(f.currency)) out.currency = f.currency;
+  if (Q.SORTS.includes(f.sort)) out.sort = f.sort;
   out.property_types = strList(f.property_types).filter((t) => PROPERTY_TYPES.includes(t));
   out.property_type_order = strList(f.property_type_order).filter((t) => PROPERTY_TYPES.includes(t));
   out.places = (Array.isArray(f.places) ? f.places : [])

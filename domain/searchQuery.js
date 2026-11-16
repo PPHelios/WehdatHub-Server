@@ -55,6 +55,9 @@ const sortPlaces = (list) =>
     .sort()
     .map((s) => ({ kind: s.split(":")[0], key: s.split(":")[1] }));
 
+/** How the answer is ordered when the request says so ("الأرخص", "newest"): never a filter, only the order. */
+const SORTS = ["price_asc", "price_desc", "newest", "area_desc", "area_asc"];
+
 function emptyFilters() {
   return {
     code: null,
@@ -85,7 +88,8 @@ function emptyFilters() {
     max_down_payment: null,
     max_installment: null,
     features: [],
-    feature_terms: []
+    feature_terms: [],
+    sort: null
   };
 }
 
@@ -146,6 +150,7 @@ function canonical(f) {
   out.features = Features.sortKeys(out.features);
   out.feature_terms = uniq(out.feature_terms.map(normalizeSearch).filter(Boolean)).sort();
   out.finishing = uniq(out.finishing.filter((k) => FINISHING_KEYS.includes(k))).sort();
+  out.sort = SORTS.includes(out.sort) ? out.sort : null;
   if (out.property_types.includes("studio") && out.bedrooms_min === null && out.bedrooms_max === null) {
     out.bedrooms_min = 0;
     out.bedrooms_max = 0;
@@ -230,6 +235,7 @@ function normalizeAiSearch(raw) {
     floor_max: num(f.floor_max) !== null ? Math.round(num(f.floor_max)) : null,
     finishing: (Array.isArray(f.finishing) ? f.finishing : f.finishing ? [f.finishing] : []).map((x) => mapFinishing(x)).filter(Boolean),
     furnishing: mapFurnishing(f.furnishing),
+    sort: SORTS.includes(f.sort) ? f.sort : null,
     delivery_ready: delivery.ready === true ? true : delivery.off_plan === true ? false : null,
     delivery_by_year: num(delivery.by_year) && num(delivery.by_year) >= 2000 ? Math.round(num(delivery.by_year)) : null,
     payment_cash: payment.cash === true ? true : null,
@@ -270,7 +276,7 @@ const STOP = new Set(
     "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
     "حتي", "لحد", "اقل", "تحت", "حدود", "بحدود", "فوق", "اكتر", "اكثر", "up", "under", "budget", "متكرر", "متكرره", "typical",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
-    "compound", "please", "any",
+    "compound", "please", "any", "ned", "neeed", "nead", "full", "fully",
     // Spoken fillers and polite words (Egyptian Arabic): they carry no filter.
     "ممكن", "تكرمت", "تكرم", "تدورلي", "تدور", "ادورلي", "بلاش", "اللي", "يا", "باشا", "بيه", "ريس", "هندسه", "استاذ", "اخي", "تمام", "طيب",
     "بسعر", "سعر", "ميزانيه", "ميزانيتي", "بميزانيه", "بادجت", "جنيه", "جنية", "جنيها", "الشهر", "شهريا", "شهري", "وصاله", "صاله",
@@ -278,6 +284,14 @@ const STOP = new Set(
     "more", "less", "than", "دولار", "يورو", "دولارات", "dollar", "dollars", "euro", "euros", "usd", "eur", "شقتين", "فيلتين", "وحدتين", "بدور", "دور", "البادجت", "بدجت", "بودجت", "الميزانيه", "بدوّر", "عاوزه", "عايزين", "محتاجه"
   ].map(normalizeSearch)
 );
+
+const SORT_WORDS = [
+  [/ (?:الارخص|ارخص|اقل سعر|اقل سعرا|cheapest|lowest price|lowest priced) /, "price_asc"],
+  [/ (?:الاغلي|اغلي|اعلي سعر|most expensive|highest price) /, "price_desc"],
+  [/ (?:الاحدث|احدث|الاجدد|اجدد|newest|latest|most recent) /, "newest"],
+  [/ (?:اكبر مساحه|الاكبر مساحه|اوسع|largest|biggest) /, "area_desc"],
+  [/ (?:اصغر مساحه|الاصغر مساحه|smallest) /, "area_asc"]
+];
 
 const STANDALONE_TERMS = new Set(["standalone", "stand alone", normalizeSearch("فيلا مستقلة")]);
 const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
@@ -513,6 +527,7 @@ function fallbackParse(text) {
   hay = hay.replace(/ و(?=\d|حمام|[ء-ي]+ حمام)/g, " ");
 
   // "بجنينة" / "بغرفة مربية" / "بتراس": the attached "ب" (with) is dropped before a feature word.
+  hay = hay.replace(/ (المطبخ|المطابخ) /g, " مطبخ "); // "the kitchen" is the kitchen feature, not a place word
   hay = hay.replace(/ ب(غرفه|جنينه|حديقه|جراج|اسانسير|تراس|روف|بلكونه|حمام سباحه|مطبخ|تكييف|ماستر|دريسنج|امن|سطح|دولار|يورو)/g, " $1");
   // Franco-Arabic (Arabic in Latin letters): the common words become their Arabic spelling so the rules below read them.
   hay = hay
@@ -650,6 +665,13 @@ function fallbackParse(text) {
     }
   }
 
+  // "حوالي 150 متر" / "around 150 m": 10% either side.
+  c = consume(hay, / (?:حوالي|تقريبا|around|about|approximately) (\d{2,4}) (?:متر|م|m2|m|sqm|meter|meters) /);
+  if (c.m && Number(c.m[1]) >= 30) {
+    f.area_min = Math.round(Number(c.m[1]) * 0.9);
+    f.area_max = Math.round(Number(c.m[1]) * 1.1);
+    hay = c.hay;
+  }
   // Area: "150 متر" / "150 m2" is a minimum (150 or more); "من 120 ل 150 متر" is a range.
   c = consume(hay, / (?:من |from )?(\d{2,4}) (?:ل|الي|to|-) (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
   if (c.m) {
@@ -747,7 +769,7 @@ function fallbackParse(text) {
     c = consume(hay, / (?:نص فرش|نصف فرش|semi furnished|semi-furnished) /);
     if (c.m) f.furnishing = "semi_furnished";
     else {
-      c = consume(hay, / (?:مفروشه|مفروش|فرش كامل|fully furnished|furnished) /);
+      c = consume(hay, / (?:مفروشه|مفروش|فرش كامل|fully furnished|full furnished|fully furnish|furnished) /);
       if (c.m) f.furnishing = "furnished";
     }
   }
@@ -781,6 +803,17 @@ function fallbackParse(text) {
     f.floor_min = 1;
     hay = c.hay;
   }
+  // "مش ارضي" / "not ground floor": any floor above ground. "دور عالي" / "high floor": the fourth floor and up.
+  c = consume(hay, / (?:مش|غير|ماعدا|not|except|above) (?:ب|بال)?(?:الدور الارضي|دور ارضي|الارضي|ارضي|ground floor|ground) /);
+  if (c.m && f.floor_min === null) {
+    f.floor_min = 1;
+    hay = c.hay;
+  }
+  c = consume(hay, / (?:الدور العالي|دور عالي|ادوار عاليه|الادوار العاليه|high floor|higher floor|upper floor) /);
+  if (c.m && f.floor_min === null) {
+    f.floor_min = 4;
+    hay = c.hay;
+  }
   c = consume(hay, / (?:ب|بال)?(?:الدور الارضي|دور ارضي|ground floor) /);
   if (c.m) {
     f.floor_min = f.floor_max = 0;
@@ -788,7 +821,7 @@ function fallbackParse(text) {
   }
 
   // Delivery.
-  c = consume(hay, / (استلام فوري|فوري|جاهز|ready to move|ready|immediate) /);
+  c = consume(hay, / (استلام فوري|فوري|جاهز|جاهزه|جاهزه للسكن|جاهزه للاستلام|ready to move|ready|immediate) /);
   if (c.m) f.delivery_ready = true;
   hay = c.hay;
   c = consume(hay, / (?:تحت الانشاء|لسه بتتبني|قيد الانشاء) /);
@@ -850,6 +883,14 @@ function fallbackParse(text) {
     hay = c.hay;
   }
 
+  // How to order: "الأرخص" / "cheapest", "الأحدث" / "newest", "أكبر مساحة" / "largest". Only the order, never a filter.
+  for (const [re, key] of SORT_WORDS) {
+    c = consume(hay, re);
+    if (c.m) {
+      f.sort = f.sort || key;
+      hay = c.hay;
+    }
+  }
   // Leftover words: unresolved places (≥3 letters, not stop words, not numbers).
   let leftovers = hay
     .split(" ")
@@ -922,8 +963,11 @@ function disagreements(a, b) {
   const fb = canonical(b?.filters || b || {});
   // The display order of the types is not a disagreement about what is searched.
   const keys = Object.keys(emptyFilters()).filter((k) => !["feature_terms", "property_type_order"].includes(k));
+  // A spelling the quick reader guessed is shown as "couldn't find X, did you mean Y" (the person's call), so the AI's other place is not a disagreement.
+  const guessed = (a?.meta?.guesses || []).length > 0;
   const out = [];
   for (const k of keys) {
+    if (guessed && (k === "places" || k === "place_terms")) continue;
     let x = fa[k];
     let y = fb[k];
     if (k === "places") {
@@ -1024,6 +1068,7 @@ function enforceSaleForPayment(parsed, text) {
 }
 
 module.exports = {
+  SORTS,
   enforceSaleForPayment,
   enforceInstallmentWords,
   enforceMillionUnits,

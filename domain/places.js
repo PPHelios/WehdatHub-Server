@@ -377,6 +377,38 @@ const isArabic = (s) => /[؀-ۿ]/.test(s);
  * @param {string[]} words normalized words that nothing else used
  * @returns {{ matched: {typed, as, kind, key}[], ambiguous: {typed, options: string[]}[], used: Set<string> }}
  */
+/**
+ * Known names that begin with what was typed: each typed word is the start of the same word of the name, with one letter
+ * wrong allowed in a word of 4 or more letters ("hyde pay" starts "hyde park"). The typed text has 4 letters or more, the name
+ * has at most one more word than typed, and the first 3 letters match exactly. Several places for the same name count as one.
+ */
+// Country, city and governorate words: never the start of a compound name.
+const PLACE_ROOTS = new Set(["cairo", "giza", "egypt", "القاهره", "الجيزه", "مصر"]);
+function namesStartingWith(typed) {
+  const tw = normalizeSearch(typed).split(" ").filter(Boolean);
+  const flat = tw.join("");
+  if (flat.length < 4 || /\d/.test(flat) || PLACE_ROOTS.has(flat)) return [];
+  const arabic = isArabic(typed);
+  const out = [];
+  for (const m of MATCHERS) {
+    if (isArabic(m.norm) !== arabic || m.norm === typed) continue;
+    const nw = m.norm.split(" ");
+    if (nw.length < tw.length || nw.length > tw.length + 1) continue; // one more word at most: "cairo" is not "cairo festival city"
+    if (nw[0].slice(0, 3) !== tw[0].slice(0, 3)) continue;
+    const ok = tw.every((w, i) => {
+      const head = nw[i].slice(0, w.length);
+      return w === head || (w.length >= 3 && i > 0 && distance(w, head, 1) <= 1) || (w.length >= 4 && distance(w, head, 1) <= 1);
+    });
+    if (ok && !out.some((o) => o.kind === m.kind && o.key === m.key)) out.push(m);
+  }
+  // A compound and its developer share a start ("hyde park" and "hyde park developments"): the compound is what people mean.
+  if (out.length > 1) {
+    const compounds = out.filter((o) => o.kind === "compound");
+    if (compounds.length === 1) return compounds;
+  }
+  return out;
+}
+
 function closePlaces(words = []) {
   const matched = [];
   const ambiguous = [];
@@ -388,7 +420,14 @@ function closePlaces(words = []) {
       if (slice.some((w, k) => !w || used.has(i + k) || /\d/.test(w) || w.length < 3)) continue;
       const typed = slice.join(" ");
       const key = fuzzKey(typed);
-      if (key.length < 5) continue;
+      if (key.length < 5) {
+        const only = namesStartingWith(typed); // a short word ("هايد") can still be the start of one name
+        if (only.length === 1) {
+          for (let k = 0; k < size; k++) used.add(i + k);
+          matched.push({ typed, as: only[0].norm, kind: only[0].kind, key: only[0].key });
+        }
+        continue;
+      }
       const arabic = isArabic(typed);
       const sk = arabic ? skeleton(typed) : "";
       const max = key.length >= 8 ? 2 : 1;
@@ -406,7 +445,13 @@ function closePlaces(words = []) {
           options = [m];
         } else if (d === best.d && !options.some((o) => o.kind === m.kind && o.key === m.key)) options.push(m);
       }
-      if (!best) continue;
+      if (!best) {
+        // The start of a longer name ("هايد", "hyde pay" for هايد بارك / hyde park): taken only when one place fits.
+        const start = namesStartingWith(typed);
+        if (start.length !== 1) continue;
+        best = { kind: start[0].kind, key: start[0].key, as: start[0].norm };
+        options = [start[0]];
+      }
       for (let k = 0; k < size; k++) used.add(i + k);
       if (options.length > 1) ambiguous.push({ typed, options: options.slice(0, 3).map((o) => o.norm) });
       else matched.push({ typed, as: best.as, kind: best.kind, key: best.key });

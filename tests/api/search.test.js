@@ -83,3 +83,12 @@ test("an app search is logged like a web or Telegram one, with timings, and its 
   await get("broker", { q: "شقة ايجار في هايد بارك 3 نوم", offset: "5" });
   expect((await h.query("SELECT COUNT(*)::int AS n FROM search_log WHERE channel = 'app'"))[0].n).toBe(1);
 });
+
+test("the answer says what was understood: a guessed spelling, the unapplied list, and the reading line", async () => {
+  const r = await get("broker", { q: "apartment in hyde not ground floor cheapest" });
+  expect(r.status).toBe(200);
+  expect(r.body.guesses).toEqual([{ typed: "hyde", as: "hyde park" }]);
+  expect(Array.isArray(r.body.unapplied)).toBe(true);
+  expect(r.body.reading).toContain("الأرخص أولاً");
+  expect(r.body.reading).not.toContain("*");
+});

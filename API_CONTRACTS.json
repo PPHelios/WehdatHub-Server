@@ -600,6 +600,7 @@
       "NORMALIZE_SEARCH_SQL": "String"
     },
     "domain/searchQuery.js": {
+      "SORTS": "Array",
       "enforceSaleForPayment": ["parsed", "text"],
       "enforceInstallmentWords": ["parsed", "text"],
       "enforceMillionUnits": ["parsed", "text"],
