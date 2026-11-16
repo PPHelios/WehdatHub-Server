@@ -6,9 +6,10 @@ const WebPush = require("../../lib/channels/webpush");
 const { getConfig } = require("../../config");
 const { html } = require("../html");
 const { switchField } = require("../views/switches");
+const { fxForm, capsForm } = require("../views/agencySettings");
 const Passkeys = require("../../services/passkeys");
 const { passkeySection } = require("./passkeys");
-const { isManager, isDataEntry, isCrmOwner } = require("../../lib/authz");
+const { isManager, isDataEntry, isCrmOwner, isAgencyOwner } = require("../../lib/authz");
 const AgencyLogo = require("../../services/agencyLogo");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
@@ -66,6 +67,72 @@ function notifyRow(k, policy, broker, lang, tgOn) {
 </div>`;
 }
 
+/** Theme: light, dark or the phone's choice (the same buttons as the More page; web/static/app.js remembers it). */
+function appearanceCard(lang) {
+  return html`<section class="card stack" id="appearance">
+  <h2>🎨 ${L(lang, "المظهر", "Appearance")}</h2>
+  <div class="row" data-theme-row>
+    <button type="button" class="chip" data-theme-set="system">${L(lang, "النظام", "System")}</button>
+    <button type="button" class="chip" data-theme-set="light">${L(lang, "فاتح", "Light")}</button>
+    <button type="button" class="chip" data-theme-set="dark">${L(lang, "داكن", "Dark")}</button>
+  </div>
+</section>`;
+}
+
+/**
+ * The Agency section (the owner, and managers where the owner allows): logo, unit code letters, currency rates, who sees
+ * private details, brokers editing units, the credits caps, and the places for team notifications and AI use per person.
+ * What only the owner may change is shown read only to a manager.
+ */
+async function agencySection({ pool, req, broker, lang, brandHtml }) {
+  const Credits = require("../../lib/credits");
+  const Privacy = require("../../services/unitPrivacy");
+  const Rights = require("../../services/unitRights");
+  const UnitCode = require("../../domain/unitCode");
+  const FxDomain = require("../../domain/fx");
+  const { privacySection, brokerEditSection } = require("./dashboard");
+  const owner = isAgencyOwner(broker);
+  const [state, ag, scope, brokersWrite] = await Promise.all([
+    Credits.check(pool, broker),
+    pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id]).then((r) => r.rows[0] || {}),
+    Privacy.scopeOf(pool, broker.agency_id),
+    Rights.brokersMayWrite(pool, broker.agency_id)
+  ]);
+  const rates = FxDomain.ratesFrom(ag.crm_settings?.fx);
+  const codePrefix = ag.code_prefix || UnitCode.prefixFrom(ag.name || "");
+  const csrf = req.session.csrf;
+  return html`<section id="agency" class="sect stack" data-settings-section="agency">
+  <h1 class="sect-title">🏢 ${L(lang, "الشركة", "Agency")}</h1>
+  ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
+  ${brandHtml}
+  ${capsForm({ lang, state, codePrefix, ret: "settings", id: "agency-caps" })}
+  ${fxForm({ lang, rates, bad: req.query.fx === "bad", ret: "settings", id: "fx" })}
+  ${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
+  ${brokerEditSection(brokersWrite, lang, csrf, owner, "settings")}
+  <section class="card stack" id="agency-links">
+    <h2>${L(lang, "أماكن تانية", "More agency settings")}</h2>
+    <p><a href="/app/team#notify-policy">🔔 ${L(lang, "تنبيهات الفريق (قناة وتكرار لكل تنبيه)", "Team notifications (channel and frequency for each alert)")}</a></p>
+    <p><a href="/app/usage#ai-limits" data-ai-usage-link>🤖 ${L(lang, "استهلاك الذكاء الاصطناعي لكل شخص", "AI use per person")}</a></p>
+    ${owner ? html`<p><a href="/app/usage/ai">🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي", "AI feature switches")}</a></p>` : ""}
+  </section>
+</section>`;
+}
+
+/** The Plan and billing section (the agency owner): this month's plan and credits, with the places to pay and ask for more. */
+async function planSection({ pool, broker, lang }) {
+  const Billing = require("../../services/billing");
+  const Plans = require("../../domain/plans");
+  const a = await Billing.allowance(pool, broker.agency_id);
+  return html`<section id="plan" class="sect stack" data-settings-section="plan">
+  <h1 class="sect-title">💳 ${L(lang, "الباقة والفواتير", "Plan and billing")}</h1>
+  <div class="card stack" data-plan-summary>
+    <p><strong>${Plans.planName(a.plan, lang)}</strong></p>
+    <p>${L(lang, `رصيد الذكاء الاصطناعي هذا الشهر: ${a.credits.used} من ${a.credits.limit}`, `AI credits this month: ${a.credits.used} of ${a.credits.limit}`)}</p>
+    <p><a class="btn secondary" href="/app/plan">${L(lang, "الباقة والدفع وطلب رصيد زيادة", "Plan, payments and more credits")}</a></p>
+  </div>
+</section>`;
+}
+
 function register(web, { pool, page }) {
   web.get("/settings", async (req, res) => {
     const lang = langOf(req);
@@ -85,13 +152,24 @@ function register(web, { pool, page }) {
     const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
     const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. حمل PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ التحميل فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
     const passkeyNotice = { on: ["✅ اتفتحت. ضيف Passkey على الجهاز ده.", "✅ On. Add a passkey on this device."], off: ["اتقفلت، والـ Passkeys اتمسحت.", "Off; your passkeys were removed."], removed: ["الـ Passkey اتمسحت.", "Passkey removed."] }[req.query.passkey];
+    const owner = isAgencyOwner(broker) && !crm;
+    const brandHtml = manager ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : "";
+    const agencyHtml = manager ? await agencySection({ pool, req, broker, lang, brandHtml }) : "";
+    const planHtml = owner ? await planSection({ pool, broker, lang }) : "";
+    // One Settings area, three sections; a role sees the sections it may use.
+    const sectionNav = manager || owner
+      ? html`<nav class="seg" aria-label="${L(lang, "أقسام الإعدادات", "Settings sections")}" data-settings-nav><a href="#me">${L(lang, "أنا", "Me")}</a>${manager ? html`<a href="#agency">${L(lang, "الشركة", "Agency")}</a>` : ""}${owner ? html`<a href="#plan">${L(lang, "الباقة والفواتير", "Plan and billing")}</a>` : ""}</nav>`
+      : "";
     return page(req, res, {
       title: L(lang, "الإعدادات", "Settings"),
       nav: "settings",
       body: html`<h1>⚙️ ${L(lang, "الإعدادات", "Settings")}</h1>
+${sectionNav}
 ${saved ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
 ${pushed === "ok" ? html`<p class="card notice ok" role="status">🔔 ${L(lang, "اتبعت إشعار تجربة.", "Test notification sent.")}</p>` : ""}
 ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "الإشعارات مش مفعلة على أي جهاز لسه.", "Notifications aren't on in any browser yet.")}</p>` : ""}
+<section id="me" class="sect stack" data-settings-section="me">
+<h1 class="sect-title">🙋 ${L(lang, "أنا", "Me")}</h1>
 <div class="fold" data-fold>
 <form method="post" action="/app/settings" class="card stack">
   <h2>🌐 ${L(lang, "اللغة", "Language")}</h2>
@@ -117,7 +195,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   </div>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
-${manager ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : ""}
+${appearanceCard(lang)}
 ${dataEntry ? "" : html`<form method="post" action="/app/settings/quiet-line" class="card stack" id="quiet-line">
   <h2>⏳ ${L(lang, "سطر «بقالك 60 يوم مكلمتوش»", "The \"60 days since you spoke\" line")}</h2>
   <label class="check"><input type="checkbox" name="on" value="1"${broker.quiet_line !== false ? html` checked` : ""}> ${L(lang, "في تنبيه الوحدات المناسبة، قولي لو العميل بقاله 60 يوم أو أكتر من غير مكالمة", "In match alerts, tell me when I haven't spoken to the client for 60 days or more")}</label>
@@ -149,7 +227,10 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
     "iPhone: open the site in Safari → Share → \"Add to Home Screen\", then open it from the icon and turn notifications on."
   )}</p>
 </section>
-</div>`
+</div>
+</section>
+${agencyHtml}
+${planHtml}`
     });
   });
 

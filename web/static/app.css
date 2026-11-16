@@ -1044,3 +1044,7 @@ label:has(> [data-area-list]) { position: relative; }
 .choice-opt input { margin-block-start: 3px; }
 .choice-opt b { display: block; font-weight: 600; }
 .choice-hint { display: block; }
+
+/* Settings: one page, three sections (Me, Agency, Plan and billing). */
+.sect { scroll-margin-block-start: 72px; margin-block-start: 24px; }
+.sect-title { font-size: 1.25rem; margin: 0; }

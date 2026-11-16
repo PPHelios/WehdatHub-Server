@@ -142,11 +142,11 @@ ${d.sources && d.sources.length
 }
 
 /** Data security for managers: who sees private unit details, and the Excel export of every unit. */
-function privacySection(scope, lang, csrf, notice, canSwitch = false) {
+function privacySection(scope, lang, csrf, notice, canSwitch = false, ret = null) {
   return html`<section class="card stack" id="data-security">
   <h2>${L(lang, "أمان البيانات", "Data security")}</h2>
   ${notice === "saved" ? html`<p class="notice ok">${L(lang, "✅ اتحفظ.", "✅ Saved.")}</p>` : ""}
-  <form method="post" action="/app/dashboard/secret-details" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
+  <form method="post" action="/app/dashboard/secret-details" class="stack"><input type="hidden" name="_csrf" value="${csrf}">${ret ? html`<input type="hidden" name="return" value="${ret}">` : ""}
     ${choiceField({ name: "scope", value: scope, disabled: !canSwitch, legend: L(lang, "مين يشوف المالك والعمولة ورقم الوحدة والعنوان واللوكيشن؟", "Who sees the owner, commission, unit number, address and pin?"), options: [{ value: "restricted", label: L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers") }, { value: "all", label: L(lang, "كل البروكرز في الشركة", "Every broker in the agency") }] })}
     <p class="muted small">${L(lang, "لو مقفولة، أي بروكر تاني يقدر يطلب يشوفها، وصاحب الوحدة أو مدير يوافق. كل طلب ورد بيتسجل.", "When closed, another broker can ask; the unit's broker or a manager answers. Every ask and answer is logged.")}</p>
     ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
@@ -156,10 +156,10 @@ function privacySection(scope, lang, csrf, notice, canSwitch = false) {
 }
 
 /** The agency owner's switch for brokers adding and editing units (on by default; managers and data entry are never limited). */
-function brokerEditSection(allowed, lang, csrf, canSwitch) {
+function brokerEditSection(allowed, lang, csrf, canSwitch, ret = null) {
   return html`<section class="card stack" id="broker-edit">
   <h2>${L(lang, "إضافة وتعديل الوحدات للبروكرز", "Brokers adding and editing units")}</h2>
-  <form method="post" action="/app/dashboard/brokers-edit-units" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
+  <form method="post" action="/app/dashboard/brokers-edit-units" class="stack"><input type="hidden" name="_csrf" value="${csrf}">${ret ? html`<input type="hidden" name="return" value="${ret}">` : ""}
     ${switchField({ name: "allowed", on: allowed, disabled: !canSwitch, lang, label: L(lang, "البروكرز يقدروا يضيفوا ويعدّلوا وحدات", "Brokers may add and edit units"), sentence: L(lang, "البروكرز ومسؤولو الفرق يقدروا يضيفوا ويعدّلوا الوحدات. اقفلها عشان تبقى للقراءة بس عندهم. المديرين وإدخال البيانات مش متأثرين.", "Brokers and team leads can add and edit units. Turn off to make units read-only for them. Managers and data entry are not affected.") })}
     ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
@@ -546,6 +546,7 @@ function register(web, { pool, page }) {
   web.post("/dashboard/secret-details", async (req, res) => {
     const out = await Privacy.setScope(pool, req.session.broker, String(req.body.scope || ""));
     if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
+    if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#data-security");
     return res.redirect(303, "/app/dashboard?privacy=saved#data-security");
   });
 
@@ -553,6 +554,7 @@ function register(web, { pool, page }) {
   web.post("/dashboard/brokers-edit-units", async (req, res) => {
     const out = await Rights.setBrokersMayWrite(pool, req.session.broker, req.body.allowed === "on");
     if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
+    if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#broker-edit");
     return res.redirect(303, "/app/dashboard?privacy=saved#broker-edit");
   });
 
@@ -801,4 +803,4 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
   }));
 }
 
-module.exports = { register };
+module.exports = { register, privacySection, brokerEditSection };

@@ -1005,6 +1005,10 @@
       "save": ["pool", "actor", "changes"],
       "setManagerCanEdit": ["pool", "owner", "allowed"]
     },
+    "web/views/agencySettings.js": {
+      "fxForm": ["params"],
+      "capsForm": ["params"]
+    },
     "web/views/switches.js": {
       "switchField": ["params"],
       "choiceField": ["params"]
@@ -1531,7 +1535,9 @@
       "setTeam": ["pool", "manager", "brokerId", "teamLeadId"]
     },
     "web/routes/dashboard.js": {
-      "register": ["web", "params"]
+      "register": ["web", "params"],
+      "privacySection": ["scope", "lang", "csrf", "notice", "canSwitch", "ret"],
+      "brokerEditSection": ["allowed", "lang", "csrf", "canSwitch", "ret"]
     },
     "web/routes/team.js": {
       "register": ["web", "params"]

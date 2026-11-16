@@ -155,14 +155,8 @@ function register(web, { pool, page }) {
     const own = manager ? (await pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] : null;
     const codePrefix = own ? own.code_prefix || UnitCode.prefixFrom(own.name) : "";
     const rates = FxDomain.ratesFrom(own?.crm_settings?.fx);
-    const fxCard = manager ? html`<form method="post" action="/app/usage/fx" class="card stack" data-fx-rates>
-  <h2>${L(lang, "سعر الدولار واليورو", "Dollar and euro rates")}</h2>
-  ${req.query.fx === "bad" ? html`<p class="bad">${L(lang, "السعر لازم يكون رقم بين 1 و 1000، أو فاضي.", "The rate must be a number from 1 to 1000, or blank.")}</p>` : ""}
-  <p class="muted">${L(lang, "بالجنيه لكل وحدة. الوحدات والميزانيات بالدولار أو اليورو بتتحول بيه في البحث. لو فاضي، الوحدات دي مش هتتطابق مع الأسعار.", "In EGP per unit. Dollar and euro units and budgets convert at this rate in search. Blank means those units do not match prices.")}</p>
-  <label>${L(lang, "الدولار (ج.م لكل دولار)", "USD (EGP per dollar)")} <input name="USD" inputmode="decimal" dir="ltr" value="${rates.USD ?? ""}" size="8"></label>
-  <label>${L(lang, "اليورو (ج.م لكل يورو)", "EUR (EGP per euro)")} <input name="EUR" inputmode="decimal" dir="ltr" value="${rates.EUR ?? ""}" size="8"></label>
-  <button type="submit">${L(lang, "حفظ السعر", "Save rates")}</button>
-</form>` : "";    const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
+    // The dollar and euro rates, the credits caps and the unit code letters are on Settings now (web/views/agencySettings.js).
+    const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
     const mineCard = html`<section class="card">
   <h2>${L(lang, "رسايلي", "My messages")}</h2>
   <p>${L(lang, `النهارده: ${mine.today} · الشهر الحالي: ${mine.total}`, `Today: ${mine.today} · This month: ${mine.total}`)}</p>
@@ -204,15 +198,7 @@ ${manager
   <tbody>${agency.brokers.map((b) => html`<tr data-broker="${b.id}"><td>${b.name}</td><td>${b.today}</td><td>${b.n}</td></tr>`)}</tbody></table>
   <p class="muted">${L(lang, `روابط الدخول (مش محسوبة من الرصيد): ${agency.login}`, `Sign-in links (not counted in the credits): ${agency.login}`)}</p>
 </section>`],
-      [L(lang, "الإعدادات", "Settings"), html`${fxCard}<form method="post" action="/app/usage/agency" class="card stack">
-  <h2>${L(lang, "رصيد الشركة وحدود البروكرز", "Agency credits and broker caps")}</h2>
-  <label>${L(lang, "الرصيد الشهري (رسايل)", "Monthly credits (messages)")} <input type="number" name="monthly" min="0" max="100000" value="${state.limit}"></label>
-  <label>${L(lang, "حد يومي لكل بروكر (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
-  <label>${L(lang, "حد أسبوعي لكل بروكر (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
-  <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
-  <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
-  <button type="submit">${L(lang, "حفظ", "Save")}</button>
-</form>
+      [L(lang, "الإعدادات", "Settings"), html`<p class="card"><a href="/app/settings#agency" data-agency-settings-link>⚙️ ${L(lang, "إعدادات الشركة (الأسعار وحدود البروكرز وحروف الأكواد) في صفحة الإعدادات", "Agency settings (rates, broker caps, unit code letters) are on the Settings page")}</a></p>
 ${isAgencyOwner(broker) ? html`<p class="card"><a href="/app/usage/ai" data-ai-switches-link>🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي (تشغيل وإيقاف)", "AI feature switches (on and off)")}</a></p>` : ""}
 <p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>`]
     ], { open: req.query.saved === "1" ? 2 : 0 })
@@ -264,6 +250,7 @@ ${t.features.map((f) => switchField({ name: `f_${f.key}`, on: f.on, lang, label:
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).send("Managers only");
     const out = await Fx.saveRates(pool, broker, { USD: req.body.USD, EUR: req.body.EUR });
+    if (req.body.return === "settings") return res.redirect(303, out.error ? "/app/settings?fx=bad#fx" : "/app/settings?saved=1#fx");
     return res.redirect(303, out.error ? "/app/usage?fx=bad" : "/app/usage?saved=1");
   });
 
@@ -276,6 +263,7 @@ ${t.features.map((f) => switchField({ name: `f_${f.key}`, on: f.on, lang, label:
       `UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4, code_prefix = COALESCE($5, code_prefix) WHERE id = $1`,
       [broker.agency_id, Number.isInteger(monthly) && monthly >= 0 && monthly <= 100000 ? monthly : null, optInt(req.body.daily_cap), optInt(req.body.weekly_cap), UnitCode.cleanPrefix(req.body.code_prefix)]
     );
+    if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#agency-caps");
     return res.redirect(303, "/app/usage?saved=1");
   });
 }
