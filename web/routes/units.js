@@ -251,7 +251,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     <option value="sold">${L(lang, "اتباعت", "Sold")}</option>
     <option value="archive">${L(lang, "أرشفة", "Archive")}</option>
   </select>
-  <button type="submit">${L(lang, "تطبيق على المختار", "Apply to selected")}</button>
+  <button type="submit" data-no-tg-main>${L(lang, "تطبيق على المختار", "Apply to selected")}</button>
 </form>`
   : html`<div class="card empty"><p data-total="0">${active || q ? L(lang, "مفيش وحدات بالشروط دي.", "No units match.") : L(lang, "مفيش وحدات هنا.", "No units here.")}</p>${active || q ? "" : html`<a class="btn" href="/app/units/new">${L(lang, "ضيف وحدة", "Add a unit")}</a>`}</div>`}`
     }, code);
