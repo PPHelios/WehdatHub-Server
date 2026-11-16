@@ -316,15 +316,15 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     const featureKeys = f.furnishing ? f.features.filter((k) => k !== "furnished") : f.features;
     // Lake View is a compound: the lake-view feature also matches that compound's units.
     const plainKeys = featureKeys.filter((k) => k !== "view_lagoon");
-    // Extras rank, they do not hide (Haytham 2026-11-12): a unit with no extras recorded still shows, after the ones that have them.
+    // Extras rank, they never hide (Haytham 2026-11-12): a unit still shows when it lacks the extra asked for, whether it has no
+    // extras recorded or other ones. The more of the asked extras a unit has, the earlier it is listed.
     // Only equipment and outdoor extras are soft; orientation, layout, view and building facts stay strict.
     const softKeys = plainKeys.filter((k) => SOFT_FEATURE_KEYS.has(k));
     const hardKeys = plainKeys.filter((k) => !SOFT_FEATURE_KEYS.has(k));
     if (hardKeys.length) where.push(`l.feature_keys @> ${add(hardKeys)}::text[]`);
     if (softKeys.length) {
       const k = add(softKeys);
-      where.push(`(coalesce(cardinality(l.feature_keys), 0) = 0 OR l.feature_keys @> ${k}::text[])`);
-      exactFirst += `CASE WHEN l.feature_keys @> ${k}::text[] THEN 0 ELSE 1 END, `;
+      exactFirst += `-coalesce(cardinality(ARRAY(SELECT x FROM unnest(${k}::text[]) AS x WHERE x = ANY(coalesce(l.feature_keys, ARRAY[]::text[])))), 0), `;
     }
     if (featureKeys.includes("view_lagoon")) where.push(`(l.feature_keys @> ARRAY['view_lagoon']::text[] OR l.compound_key = 'lake_view')`);
     for (const t of f.feature_terms) {

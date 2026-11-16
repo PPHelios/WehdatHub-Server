@@ -265,7 +265,7 @@ function normalizeAiSearch(raw) {
 
 const STOP = new Set(
   [
-    "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
+    "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "ضروري", "ضروره", "ضروريا", "بادجيت", "بودجيت", "urgent", "urgently", "asap", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
     "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
     "حتي", "لحد", "اقل", "تحت", "حدود", "بحدود", "فوق", "اكتر", "اكثر", "up", "under", "budget", "متكرر", "متكرره", "typical",
@@ -362,8 +362,12 @@ const SINGLE_TYPE_TERMS = TYPE_MATCHERS.filter((m) => !m.term.includes(" "));
  */
 function fuzzyTypes(hay, found) {
   let out = hay;
-  for (const w of hay.trim().split(/\s+/)) {
+  const words = hay.trim().split(/\s+/);
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
     if (!w || /\d/.test(w) || w.length < 4 || STOP.has(w)) continue;
+    // After "in" / "at" a word is a place name, not a typo of a property type ("في فيلدا" is a place, not a villa).
+    if (i > 0 && /^(في|فى|ب|ف|in|at)$/.test(words[i - 1])) continue;
     const limit = w.length >= 5 ? 2 : 1;
     let best = null;
     let tie = false;
@@ -478,6 +482,10 @@ function fallbackParse(text) {
   }
 
   hay = hay.replace(/(\d)([a-zء-ي])/g, "$1 $2");
+  // A budget range with k on the number: "50-55k", "50k-55k", "50 k - 55 k" is 50 to 55 thousand (read by the money rules below).
+  hay = hay.replace(/ (\d+(?:\.\d+)?) ?(?:k ?)?[-–] ?(\d+(?:\.\d+)?) ?k /g, " $1 الى $2 الف ");
+  // "2-3 غرف", "100-150 متر": a hyphen between two numbers before a bedroom, bathroom or area word is "from … to …".
+  hay = hay.replace(/ (\d+(?:\.\d+)?) ?[-–] ?(\d+(?:\.\d+)?)(?= (?:غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br|حمام|حمامات|bath|baths|bathroom|bathrooms|متر|م|م2|sqm|m2|sqft) )/g, " $1 الى $2 ");
   // "ب٥ مليون" / "ب 5 مليون": the attached "ب" (at / for) before a number is dropped.
   hay = hay.replace(/ ب ?(?=\d)/g, " ");
 
@@ -493,7 +501,12 @@ function fallbackParse(text) {
   hay = lake.hay;
 
   // Places first (they can contain type-like words, e.g. "town").
-  const placeScan = Places.findPlaces(hay);
+  let placeScan = Places.findPlaces(hay);
+  // "فالتجمع": the "ف" (in) glued to the place. Read it as "في التجمع" when that finds a place.
+  if (!placeScan.places.length && / ف(?=ال[ء-ي]{3})/.test(hay)) {
+    const alt = Places.findPlaces(hay.replace(/ ف(?=ال[ء-ي]{3})/g, " في "));
+    if (alt.places.length) placeScan = alt;
+  }
   f.places = placeScan.places;
   hay = speakNumbers(` ${placeScan.rest} `);
   // "و2 حمام": the "and" glued to a number is dropped (the money rules above already used it).
@@ -553,6 +566,13 @@ function fallbackParse(text) {
   // A plain count is a minimum: "2 bedroom" means 2 or more (same for bathrooms and area).
   if (c.m) f.bedrooms_min = 2;
   hay = c.hay;
+  // "2 الى 3 غرف" (or "2-3"): a range, not the larger number as a minimum.
+  c = consume(hay, / (?:من |from )?(\d+) (?:الي|ل|to) (\d+) (?:غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
+  if (c.m && Number(c.m[1]) <= Number(c.m[2])) {
+    f.bedrooms_min = Number(c.m[1]);
+    f.bedrooms_max = Number(c.m[2]);
+    hay = c.hay;
+  }
   c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
   if (c.m && n(c.m[1]) !== null) {
     f.bedrooms_min = n(c.m[1]);
