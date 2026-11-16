@@ -21,6 +21,8 @@ const TYPES = {
 const FILES = {
   "app.css": path.join(STATIC_DIR, "app.css"),
   "app.js": path.join(STATIC_DIR, "app.js"),
+  // The busy rule: one server call at a time locks the page's other controls and spins the one that started it.
+  "busy.js": path.join(STATIC_DIR, "busy.js"),
   "voice.js": path.join(STATIC_DIR, "voice.js"),
   // Match photos (managers): the chat parser and matcher are the server's own pure files, run in the browser too.
   "zipread.js": path.join(STATIC_DIR, "zipread.js"),

@@ -1103,3 +1103,7 @@ section[data-kind] li[data-row] { padding: 8px 0; border-block-end: 1px solid va
 .log-ic { flex: 0 0 32px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--soft); }
 .log-main { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .log-day > h2 { margin-block: 0 4px; font-size: 1.05rem; }
+
+/* The busy rule: while a server call runs, the other controls on the page cannot be used (web/static/busy.js). */
+[data-busy-off="a"] { pointer-events: none; opacity: 0.6; }
+[data-busy] input:disabled, [data-busy] select:disabled, [data-busy] textarea:disabled { opacity: 0.6; cursor: progress; }

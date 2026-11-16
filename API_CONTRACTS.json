@@ -1103,7 +1103,9 @@
       "KEEP_DAYS": "Number",
       "PAGE": "Number",
       "list": ["pool", "viewer", "params"],
-      "describe": ["row", "lang"]
+      "describe": ["row", "lang"],
+      "iconOf": ["action"],
+      "groupByDay": ["rows"]
     },
     "web/routes/openedLinks.js": {
       "register": ["web", "params"],

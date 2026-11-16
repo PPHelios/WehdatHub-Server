@@ -68,6 +68,7 @@ ${head || ""}
 ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("carousel.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
+<script src="${assets("busy.js")}" defer></script>
 <script src="${assets("voice.js")}" defer></script>` : ""}
 </head>
 <body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الشركة"}"`) : ""}>
