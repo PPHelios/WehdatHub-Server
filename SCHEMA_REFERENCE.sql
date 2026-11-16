@@ -1929,7 +1929,7 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_period_days_check CHECK ((period_days = ANY (ARRAY[1, 7, 30])));
-ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_tab_check CHECK ((tab = ANY (ARRAY['overview'::text, 'money'::text, 'ai'::text, 'performance'::text, 'search'::text, 'agencies'::text, 'operations'::text])));
+ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_tab_check CHECK ((tab = ANY (ARRAY['overview'::text, 'money'::text, 'ai'::text, 'performance'::text, 'search'::text, 'agencies'::text, 'operations'::text, 'health'::text, 'content'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_ai_usage_mode_check CHECK ((ai_usage_mode = ANY (ARRAY['pool'::text, 'per_user'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_ai_user_default_credits_check CHECK (((ai_user_default_credits IS NULL) OR (ai_user_default_credits >= 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));

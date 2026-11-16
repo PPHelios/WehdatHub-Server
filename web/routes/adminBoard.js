@@ -6,6 +6,7 @@
 const AdminBoard = require("../../services/adminBoard");
 const Dash = require("../../services/dashboards");
 const { html } = require("../html");
+const Charts = require("../views/charts");
 
 const TAB_LABELS = {
   overview: ["نظرة عامة", "Overview"],
@@ -14,8 +15,13 @@ const TAB_LABELS = {
   performance: ["الأداء والتأخير", "Performance and delays"],
   search: ["جودة البحث", "Search quality"],
   agencies: ["الشركات", "Agencies"],
-  operations: ["التشغيل", "Operations"]
+  operations: ["التشغيل", "Operations"],
+  health: ["الصحة والاستيراد", "Health and import"],
+  content: ["المحتوى", "Content"]
 };
+// The five views across the top; each opens on its first tab and lists the others as a second row.
+const VIEW_LABELS = { today: ["النهاردة", "Today"], agencies: ["الشركات", "Agencies"], money: ["الفلوس", "Money"], health: ["الصحة", "Health"], content: ["المحتوى", "Content"] };
+const viewOf = (tab) => Object.keys(AdminBoard.VIEWS).find((v) => AdminBoard.VIEWS[v].includes(tab)) || "today";
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const num = (n) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -28,7 +34,39 @@ const table = (heads, rows, lang) => (rows.length
   ? html`<div class="table-wrap"><table><thead><tr>${heads.map((h) => html`<th>${h}</th>`)}</tr></thead><tbody>${rows.map((r) => html`<tr>${r.map((c) => html`<td>${c}</td>`)}</tr>`)}</tbody></table></div>`
   : html`<p class="muted">${L(lang, "مفيش بيانات في الفترة دي.", "No data in this period.")}</p>`);
 
-function tabBody(tab, data, lang, { agency = "" } = {}) {
+function tabBody(tab, data, lang, { agency = "", days = 7 } = {}) {
+  if (tab === "health") {
+    const i = data.imports;
+    const pc = (v) => (v === null || v === undefined ? "—" : `${v}%`);
+    return html`<div class="charts">${Charts.bars(data.series, "active_brokers", { title: L(lang, "بروكرز نشطين كل يوم", "Active brokers per day"), lang })}
+${Charts.bars(data.series, "units", { title: L(lang, "وحدات جديدة", "New units"), lang })}
+${Charts.bars(data.series, "leads", { title: L(lang, "عملاء جدد", "New leads"), lang })}
+${Charts.bars(data.series, "ai_calls", { title: L(lang, "مكالمات الذكاء", "AI calls"), lang })}
+${Charts.bars(data.series, "errors", { title: L(lang, "أخطاء", "Errors"), lang })}</div>
+<h3>${L(lang, "الأخطاء حسب المصدر", "Errors by source")}</h3>
+${table([L(lang, "المصدر", "Source"), L(lang, "مرات", "Times"), ""], data.errorsBySource.map((x) => [x.source, num(x.n), html`<a class="secondary button small" href="/app/failures">${L(lang, "افتح", "Open")}</a>`]), lang)}
+<h3>${L(lang, "استيراد واتساب", "WhatsApp import")}</h3>
+${kv([[L(lang, "بوستات اتقرت", "Posts read"), i.posts], [L(lang, "القارئ العادي كفى %", "Parser alone was enough %"), pc(i.parserCompletePct)], [L(lang, "اتستخدم الذكاء %", "AI used %"), pc(i.aiUsedPct)], [L(lang, "فشل الذكاء %", "AI failed %"), pc(i.aiErrorPct)], [L(lang, "اتفاق الذكاء والقارئ %", "AI and parser agree %"), pc(i.agreePct)], [L(lang, "صفوف اتعدلت في المراجعة %", "Rows edited in review %"), pc(i.editedPct)], [L(lang, "مرات الحفظ", "Saves"), i.applies], [L(lang, "صفوف محفوظة", "Rows saved"), i.rows]], lang)}
+<h3>${L(lang, "خانات اختلفوا فيها", "Cells they differ on")}</h3>
+${table([L(lang, "الخانة", "Cell"), L(lang, "اختلاف", "Differ"), L(lang, "اتفاق %", "Agree %")], i.differCells.map((c) => [c.cell, num(c.differ), pc(c.agreePct)]), lang)}
+<h3>${L(lang, "خانات اتصلحت يدويًا", "Cells people corrected")}</h3>
+${table([L(lang, "الخانة", "Cell"), L(lang, "مرات", "Times")], i.cellsCorrected.map((c) => [c.cell, num(c.times)]), lang)}
+<h3>${L(lang, "خطوات الاستيراد", "Import steps")}</h3>
+${table([L(lang, "الخطوة", "Step"), L(lang, "مرات", "Times"), L(lang, "نجح %", "OK %"), "p50 ms", "p95 ms"], i.steps.map((s) => [s.step, num(s.n), pc(s.okPct), num(s.p50), num(s.p95)]), lang)}
+<h3>${L(lang, "أخطاء الخطوات", "Step errors")}</h3>
+${table([L(lang, "الخطوة", "Step"), L(lang, "الكود", "Code"), L(lang, "مرات", "Times")], i.stepErrors.map((s) => [s.step, s.error_code, num(s.n)]), lang)}
+<h3>${L(lang, "التطبيق", "App")}</h3>
+${table([L(lang, "الحدث", "Event"), L(lang, "مرات", "Times"), L(lang, "نجح %", "OK %")], i.app.map((e) => [e.event, num(e.n), pc(e.okPct)]), lang)}`;
+  }
+  if (tab === "content") {
+    const row = (label, n, href, cta) => [label, num(n), n ? html`<a class="secondary button small" href="${href}">${cta}</a>` : ""];
+    return table([L(lang, "البند", "Item"), L(lang, "العدد", "Count"), ""], [
+      row(L(lang, "أماكن مستنية موافقة", "Places waiting for approval"), data.placesWaiting, "/app/owner/queue", L(lang, "راجع", "Review")),
+      row(L(lang, "بلاغات بحث مفتوحة", "Open search reports"), data.openReports, "/app/owner/searches", L(lang, "راجع", "Review")),
+      row(L(lang, "كلمات جديدة مستنية", "New words waiting"), data.newWords, "/app/owner/searches", L(lang, "راجع", "Review")),
+      row(L(lang, "مشاريع في المكتبة", "Projects in the library"), data.libraryProjects, "/app/owner/library", L(lang, "افتح", "Open"))
+    ], lang);
+  }
   if (tab === "overview") {
     return kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م تقريبًا)", "AI cost (EGP, est.)"), data.aiEgp], [L(lang, "مكالمات الذكاء", "AI calls"), data.aiCalls], [L(lang, "شركات نشطة", "Active agencies"), data.agencies], [L(lang, "بروكرز نشطين", "Active brokers"), data.brokers], [L(lang, "وحدات جديدة", "New units"), data.units], [L(lang, "عملاء جدد", "New leads"), data.leads], [L(lang, "أخطاء", "Errors"), data.errors]], lang);
   }
@@ -61,8 +99,8 @@ ${table([L(lang, "الفلتر", "Filter"), L(lang, "مرات", "Times")], data.
 ${table([L(lang, "المكتوب", "Typed"), L(lang, "اتقرى على إنه", "Read as"), L(lang, "مرات", "Times")], data.guessedSpellings.map((x) => [x.typed, x.as, num(x.n)]), lang)}`;
   }
   if (tab === "agencies") {
-    return table([L(lang, "الشركة", "Agency"), L(lang, "الباقة", "Plan"), L(lang, "بروكرز", "Brokers"), L(lang, "نشطين", "Active"), L(lang, "وحدات", "Units"), L(lang, "عملاء", "Leads"), L(lang, "ذكاء (ج.م)", "AI (EGP)"), L(lang, "آخر نشاط", "Last active")],
-      data.filter((a) => !agency || a.id === agency).map((a) => [a.name, a.plan, num(a.brokers), num(a.activeBrokers), num(a.units), num(a.leads), num(a.aiEgp), when(a.lastActive)]), lang);
+    return table([L(lang, "الشركة", "Agency"), L(lang, "الباقة", "Plan"), L(lang, "بروكرز", "Brokers"), L(lang, "نشطين", "Active"), L(lang, "وحدات", "Units"), L(lang, "عملاء", "Leads"), L(lang, "ذكاء (ج.م)", "AI (EGP)"), L(lang, "آخر نشاط", "Last active"), ""],
+      data.filter((a) => !agency || a.id === agency).map((a) => [a.name, a.plan, num(a.brokers), num(a.activeBrokers), num(a.units), num(a.leads), num(a.aiEgp), when(a.lastActive), html`<a class="secondary button small" href="${link("ai", days, a.id)}">${L(lang, "استخدام الذكاء", "AI use")}</a>`]), lang);
   }
   return kv([[L(lang, "أخطاء مفتوحة", "Open errors"), data.openErrors], [L(lang, "بلاغات مفتوحة", "Open reports"), data.openReports], [L(lang, "مدفوعات مستنية", "Payments waiting"), data.pendingPayments], [L(lang, "طلبات رصيد مستنية", "Credit requests waiting"), data.pendingCreditRequests], [L(lang, "تسجيلات مستنية", "Sign-ups waiting"), data.pendingSignups]], lang);
 }
@@ -75,21 +113,24 @@ function register(web, { pool, page }) {
     if (!Dash.isOwner(req.session.broker)) return notFound(req, res, page);
     return handler(req, res, langOf(req));
   };
-  const tabOf = (v) => (AdminBoard.TABS.includes(v) ? v : "overview");
+  // ?tab= names a stored tab; ?view= names one of the five views and opens on its first tab.
+  const tabOf = (v, view) => (AdminBoard.TABS.includes(v) ? v : AdminBoard.VIEWS[view] ? AdminBoard.VIEWS[view][0] : "overview");
   const daysOf = (v) => (AdminBoard.PERIODS.includes(Number(v)) ? Number(v) : 7);
 
   const boardView = async (req, res, lang, { notice = null, status = 200, tab: tabIn = req.query.tab, days: daysIn = req.query.days } = {}) => {
-    const tab = tabOf(tabIn);
+    const tab = tabOf(tabIn, req.query.view);
     const days = daysOf(daysIn);
     const agency = /^[0-9a-f-]{36}$/i.test(String(req.query.agency || "")) ? String(req.query.agency) : "";
     const stored = await AdminBoard.readTab(pool, tab, days);
     const agencies = stored && tab === "ai" ? stored.data.agencies : [];
     const csrf = req.session.csrf;
     const money = tab === "money" ? await AdminBoard.listFixedCosts(pool) : [];
-    const nav = AdminBoard.TABS.map((t) => html`<a href="${link(t, days, agency)}"${t === tab ? html` aria-current="page"` : ""}>${L(lang, TAB_LABELS[t][0], TAB_LABELS[t][1])}</a>`);
+    const view = viewOf(tab);
+    const nav = Object.keys(AdminBoard.VIEWS).map((v) => html`<a href="${link(AdminBoard.VIEWS[v][0], days, agency)}"${v === view ? html` aria-current="page"` : ""} data-view="${v}">${L(lang, VIEW_LABELS[v][0], VIEW_LABELS[v][1])}</a>`);
+    const subnav = AdminBoard.VIEWS[view].length > 1 ? AdminBoard.VIEWS[view].map((t) => html`<a href="${link(t, days, agency)}"${t === tab ? html` aria-current="page"` : ""}>${L(lang, TAB_LABELS[t][0], TAB_LABELS[t][1])}</a>`) : null;
     const PERIOD_LABEL = { 1: [L(lang, "إمبارح", "Yesterday"), 1], 7: [L(lang, "٧ أيام", "7 days"), 7], 30: [L(lang, "الشهر", "Month"), 30] };
     const periods = AdminBoard.PERIODS.map((d) => html`<a href="${link(tab, d, agency)}"${d === days ? html` aria-current="page"` : ""} data-period="${d}">${PERIOD_LABEL[d][0]}</a>`);
-    const body = stored ? tabBody(tab, stored.data, lang, { agency }) : html`<p class="muted">${L(lang, "الرقم لسه متحسبش. دوس تحديث.", "Not computed yet. Press refresh.")}</p>`;
+    const body = stored ? tabBody(tab, stored.data, lang, { agency, days }) : html`<p class="muted">${L(lang, "الرقم لسه متحسبش. دوس تحديث.", "Not computed yet. Press refresh.")}</p>`;
     const fixed = tab === "money" ? html`<section class="card" id="fixed-costs">
   <h3>${L(lang, "تكاليف ثابتة", "Fixed costs")}</h3>
   <form method="post" action="/app/owner/board/fixed-costs" class="row" data-fixed-cost>
@@ -111,6 +152,7 @@ function register(web, { pool, page }) {
       body: html`<p><a href="/app/owner">← ${L(lang, "متابعة التطبيق", "App tracking")}</a></p>
 ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "التبويبات", "Tabs")}">${nav}</nav>
+${subnav ? html`<nav class="seg" aria-label="${L(lang, "الأقسام", "Sections")}" data-subnav>${subnav}</nav>` : ""}
 <nav class="seg" aria-label="${L(lang, "الفترة", "Period")}">${periods}</nav>
 <section class="card" data-board="${tab}">
   <div class="row">${agencyPick}${refresh}</div>

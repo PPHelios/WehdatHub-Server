@@ -1087,3 +1087,11 @@ section[data-kind] li[data-row] { padding: 8px 0; border-block-end: 1px solid va
 .unitcard .uc-feat li, .unitcard .tags li { justify-content: flex-start; text-align: start; }
 .uc-main.has-thumb { align-items: start; }
 .uc-price { display: block; margin-block: 2px; }
+
+/* Owner board charts (web/views/charts.js): bars in the brand colour; readable in light and dark. */
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.chart { margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.chart figcaption { display: flex; justify-content: space-between; gap: 8px; margin-block-end: 6px; }
+.chart svg { display: block; width: 100%; height: 80px; }
+.chart .bar { fill: var(--brand); }
+.chart-axis { display: flex; justify-content: space-between; }

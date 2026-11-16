@@ -93,3 +93,17 @@ test("the nightly job computes every tab for every period", async () => {
 function round(n) {
   return Math.round(n * 100) / 100;
 }
+
+describe("five views, health and content (Phase 5)", () => {
+  test("the board has five views and the health tab shows charts and the import report", async () => {
+    const crm = await signIn(h, "admin");
+    await AdminBoard.computeAll(h.pool, new Date());
+    const home = await crm.agent.get("/app/owner/board?view=health&days=7");
+    expect(home.status).toBe(200);
+    for (const v of ["today", "agencies", "money", "health", "content"]) expect(home.text).toContain(`data-view="${v}"`);
+    expect(home.text).toContain('data-chart="active_brokers"');
+    expect(home.text).toContain("WhatsApp import");
+    const content = await crm.agent.get("/app/owner/board?view=content&days=30");
+    expect(content.text).toContain('data-board="content"');
+  });
+});

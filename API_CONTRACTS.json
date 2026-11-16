@@ -1009,6 +1009,9 @@
       "fxForm": ["params"],
       "capsForm": ["params"]
     },
+    "web/views/charts.js": {
+      "bars": ["series", "key", "params"]
+    },
     "web/views/switches.js": {
       "switchField": ["params"],
       "choiceField": ["params"]
@@ -2578,6 +2581,7 @@
     },
     "services/adminBoard.js": {
       "TABS": "Array",
+      "VIEWS": "Object",
       "PERIODS": "Array",
       "REFRESH_COOLDOWN_MS": "Number",
       "computeAll": ["pool", "now"],

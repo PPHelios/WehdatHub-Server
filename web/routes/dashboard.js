@@ -11,6 +11,8 @@ const Credits = require("../../services/credits");
 const Leases = require("../../services/leases");
 const Targets = require("../../services/targets");
 const Reading = require("../../domain/priceReading");
+const AiUserLimits = require("../../services/aiUserLimits");
+const ChatImportReport = require("../../services/chatImportReport");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
 const Quotas = require("../../services/quotas");
@@ -532,6 +534,34 @@ function healthSections(d, lang, usd) {
 </section>`;
 }
 
+/** Per-person AI use this month (numbers only), for the agency's managers; each row links to that person's log. */
+function aiPeopleSection(people, lang) {
+  if (!people || !people.length) return "";
+  const n = (v) => Number(v || 0).toLocaleString("en-US");
+  return html`<section class="card" data-ai-people>
+  <h2>🤖 ${L(lang, "استخدام الذكاء لكل شخص (الشهر ده)", "AI use per person (this month)")}</h2>
+  <div class="scroll"><table><thead><tr><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "الدور", "Role")}</th><th>${L(lang, "استخدم", "Used")}</th><th>${L(lang, "الحد", "Limit")}</th><th></th></tr></thead><tbody>${people.map(
+    (p) => html`<tr><td>${p.name}</td><td>${p.role}</td><td>${n(p.used)}</td><td>${p.allowance === null || p.allowance === undefined ? "—" : n(p.allowance)}</td><td><a class="secondary button small" href="/app/usage#ai-limits">${L(lang, "الحدود", "Limits")}</a></td></tr>`
+  )}</tbody></table></div>
+</section>`;
+}
+
+/** The WhatsApp import in this agency over the period: how much the parser read alone, AI use, and corrections in review. */
+function importSection(r, lang) {
+  if (!r || !r.parser.posts) return "";
+  const pc = (v) => (v === null || v === undefined ? "—" : `${v}%`);
+  return html`<section class="card" data-import-report>
+  <h2>📥 ${L(lang, "استيراد واتساب", "WhatsApp import")}</h2>
+  <table class="kv"><tbody>
+    <tr><th>${L(lang, "بوستات اتقرت", "Posts read")}</th><td>${r.parser.posts}</td></tr>
+    <tr><th>${L(lang, "القارئ العادي كفى", "Read without AI")}</th><td>${pc(r.parser.complete_pct)}</td></tr>
+    <tr><th>${L(lang, "اتستخدم الذكاء", "AI used")}</th><td>${pc(r.parser.ai_used_pct)}</td></tr>
+    <tr><th>${L(lang, "صفوف اتعدلت في المراجعة", "Rows edited in review")}</th><td>${pc(r.review.edited_pct)}</td></tr>
+  </tbody></table>
+  <p><a class="secondary button small" href="/app/import">${L(lang, "استيراد جديد", "New import")}</a></p>
+</section>`;
+}
+
 function register(web, { pool, page }) {
   web.get("/dashboard", async (req, res) => {
     const lang = langOf(req);
@@ -539,7 +569,8 @@ function register(web, { pool, page }) {
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
     const brokersWrite = await Rights.brokersMayWrite(pool, req.session.broker.agency_id);
-    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    const [aiPeople, importReport] = await Promise.all([AiUserLimits.people(pool, req.session.broker.agency_id), ChatImportReport.report(pool, { days: Number(d.days) || 30, agencyId: req.session.broker.agency_id })]);
+    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${aiPeopleSection(aiPeople, lang)}${importSection(importReport, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   // Who sees a unit's private details (services/unitPrivacy.js); the agency owner only.

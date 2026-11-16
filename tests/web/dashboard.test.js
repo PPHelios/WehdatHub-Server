@@ -140,3 +140,11 @@ describe("owner dashboard (5.4)", () => {
     expect((await b.agent.get("/app/owner")).status).toBe(404);
   });
 });
+
+test("the agency dashboard shows AI use per person for managers, numbers only", async () => {
+  const mgr = await signIn(h, "admin");
+  const r = await mgr.agent.get("/app/dashboard");
+  expect(r.status).toBe(200);
+  expect(r.text).toContain("data-ai-people");
+  expect(r.text).not.toMatch(/\b01\d{9}\b/);
+});

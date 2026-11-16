@@ -7,9 +7,13 @@
 const Credits = require("./credits");
 const Signup = require("./signup");
 const Vis = require("../lib/visibility");
+const ChatImportReport = require("./chatImportReport");
+const PlaceReview = require("./placeReview");
 
 const DAY = 24 * 3600 * 1000;
-const TABS = ["overview", "money", "ai", "performance", "search", "agencies", "operations"];
+const TABS = ["overview", "money", "ai", "performance", "search", "agencies", "operations", "health", "content"];
+// The board shows five views; each groups stored tabs (the first is the one it opens on).
+const VIEWS = { today: ["overview", "operations"], agencies: ["agencies", "ai"], money: ["money"], health: ["health", "performance", "search"], content: ["content"] };
 // Yesterday (the last 24 hours), 7 days, Month (30 days). Each is stored once per tab.
 const PERIODS = [1, 7, 30];
 const REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -131,6 +135,47 @@ async function computeOperations(pool, since) {
   return { openErrors: errs.open_errors, openReports: errs.open_reports, pendingPayments: pay.n, pendingCreditRequests: credits.length, pendingSignups: signups.length };
 }
 
+/** One number per day for the last `days` days: new units, new leads, AI calls, active brokers, errors. Numbers only. */
+async function dailySeries(pool, since, now) {
+  const r = await rows(pool, `WITH d AS (SELECT generate_series(date_trunc('day', $1::timestamptz), date_trunc('day', $2::timestamptz), interval '1 day') AS day)
+    SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+      (SELECT count(*)::int FROM listings l WHERE ${Vis.allUnits()} AND date_trunc('day', l.created_at) = d.day) AS units,
+      (SELECT count(*)::int FROM leads l WHERE ${Vis.allLeads()} AND date_trunc('day', l.created_at) = d.day) AS leads,
+      (SELECT count(*)::int FROM operation_logs o WHERE o.model_used IS NOT NULL AND date_trunc('day', o.created_at) = d.day) AS ai_calls,
+      (SELECT count(DISTINCT o.broker_id)::int FROM operation_logs o WHERE o.broker_id IS NOT NULL AND date_trunc('day', o.created_at) = d.day) AS active_brokers,
+      (SELECT count(*)::int FROM error_events e WHERE e.kind = 'error' AND date_trunc('day', e.created_at) = d.day) AS errors
+    FROM d ORDER BY d.day`, [since, now.toISOString()]);
+  return r;
+}
+
+/** Health: adoption and errors over time, errors by source, and the WhatsApp import report (parser, AI, review, app). */
+async function computeHealth(pool, since, now) {
+  const days = Math.max(1, Math.round((now.getTime() - new Date(since).getTime()) / DAY));
+  const series = await dailySeries(pool, since, now);
+  const bySource = await rows(pool, "SELECT source, count(*)::int AS n FROM error_events WHERE kind = 'error' AND created_at >= $1 GROUP BY 1 ORDER BY n DESC LIMIT 10", [since]);
+  const imp = await ChatImportReport.report(pool, { days });
+  return {
+    series, errorsBySource: bySource,
+    imports: {
+      posts: imp.parser.posts, parserCompletePct: imp.parser.complete_pct, aiUsedPct: imp.parser.ai_used_pct, aiErrorPct: imp.parser.ai_error_pct,
+      agreePct: imp.ai_vs_parser.agree_pct, editedPct: imp.review.edited_pct, applies: imp.review.applies, rows: imp.review.rows,
+      cellsCorrected: imp.review.cells_corrected.slice(0, 10), steps: imp.steps.map((s) => ({ step: s.step, n: s.n, okPct: s.ok_pct, p50: s.p50, p95: s.p95 })),
+      stepErrors: imp.step_errors.slice(0, 10), differCells: imp.ai_vs_parser.by_cell.filter((c) => c.differ > 0).slice(0, 10).map((c) => ({ cell: c.cell, differ: c.differ, agreePct: c.agree_pct })),
+      app: imp.app.events.map((e) => ({ event: e.event, n: e.n, okPct: e.ok_pct }))
+    }
+  };
+}
+
+/** Content: what waits for a review (new places, search reports, new words) and what the library holds. */
+async function computeContent(pool, since) {
+  const places = await PlaceReview.counts(pool, since);
+  const [r] = await rows(pool, `SELECT
+      (SELECT count(*)::int FROM search_reports WHERE status = 'open') AS open_reports,
+      (SELECT count(*)::int FROM search_aliases WHERE status = 'pending') AS new_words,
+      (SELECT count(*)::int FROM global_projects) AS projects`);
+  return { placesWaiting: places.total, placesNew: places.fresh, openReports: r.open_reports, newWords: r.new_words, libraryProjects: r.projects };
+}
+
 const COMPUTE = {
   overview: (pool, since) => computeOverview(pool, since),
   money: (pool, since, now) => computeMoney(pool, since, now),
@@ -138,7 +183,9 @@ const COMPUTE = {
   performance: (pool, since) => computePerformance(pool, since),
   search: (pool, since) => computeSearch(pool, since),
   agencies: (pool, since) => computeAgencies(pool, since),
-  operations: (pool, since) => computeOperations(pool, since)
+  operations: (pool, since) => computeOperations(pool, since),
+  health: (pool, since, now) => computeHealth(pool, since, now),
+  content: (pool, since) => computeContent(pool, since)
 };
 
 /** Computes one tab for every period and stores each result. */
@@ -207,4 +254,4 @@ function adminBoardJob() {
   return { name: "admin_board_nightly", everyMs: DAY, run: async ({ pool, now }) => ({ counts: { tabs: await computeAll(pool, now || new Date()) } }) };
 }
 
-module.exports = { TABS, PERIODS, REFRESH_COOLDOWN_MS, computeAll, computeTab, refreshTab, readTab, addFixedCost, deleteFixedCost, listFixedCosts, adminBoardJob, usdToEgp };
+module.exports = { TABS, VIEWS, PERIODS, REFRESH_COOLDOWN_MS, computeAll, computeTab, refreshTab, readTab, addFixedCost, deleteFixedCost, listFixedCosts, adminBoardJob, usdToEgp };
