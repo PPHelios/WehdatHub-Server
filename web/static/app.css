@@ -1048,3 +1048,11 @@ label:has(> [data-area-list]) { position: relative; }
 /* Settings: one page, three sections (Me, Agency, Plan and billing). */
 .sect { scroll-margin-block-start: 72px; margin-block-start: 24px; }
 .sect-title { font-size: 1.25rem; margin: 0; }
+
+/* Unit cards (plan section 8): equal heights in a grid, the features pinned to the bottom with centred chips, and the sale and
+   rent badges in the two brand colours. Map list cards are the model. */
+.unitcard { display: flex; flex-direction: column; height: 100%; }
+.unitcard .uc-feat { margin-block-start: auto; padding-block-start: 6px; }
+.unitcard .uc-feat li, .unitcard .tags li { justify-content: center; text-align: center; }
+.uc-top .badge.sale { background: var(--brand-soft); color: var(--brand-ink); }
+.uc-top .badge.rent { background: var(--accent-soft); color: var(--accent-ink); }
