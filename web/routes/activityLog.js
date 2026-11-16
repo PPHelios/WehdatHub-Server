@@ -4,6 +4,7 @@
 
 const ActivityLog = require("../../services/activityLog");
 const LeadRules = require("../../services/leadRules");
+const Dash = require("../../services/dashboards");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -24,6 +25,10 @@ function register(web, { pool, page }) {
     const log = await ActivityLog.list(pool, broker, { offset: n * ActivityLog.PAGE, from: dayStart(fromDay), to: dayEnd(toDay), person: person || null, action: action || null });
     if (!log) return next();
     const people = await ActivityLog.people(pool, broker);
+    const groups = ActivityLog.groupByDay(log.rows);
+    const techOk = Dash.isOwner(broker);
+    const dayLabel = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", weekday: "long", day: "numeric", month: "long" });
+    const timeOf = (iso) => new Date(iso).toLocaleTimeString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
     const pageLink = (p) => {
       const q = new URLSearchParams({ ...(fromDay ? { from: fromDay } : {}), ...(toDay ? { to: toDay } : {}), ...(person ? { person } : {}), ...(action ? { action } : {}), page: String(p) });
       return `/app/activity-log?${q.toString()}`;
@@ -41,10 +46,7 @@ function register(web, { pool, page }) {
   <label>${L(lang, "العملية", "Action")} <input type="search" name="action" value="${action}" maxlength="40"></label>
   <button type="submit" class="secondary">${L(lang, "فلتر", "Filter")}</button>
 </form>
-<table data-activity-log>
-<thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "مين", "Who")}</th><th>${L(lang, "إيه اللي حصل", "What happened")}</th><th>${L(lang, "الجهاز", "Device")}</th></tr></thead>
-<tbody>${log.rows.map((r) => html`<tr data-log="${r.id}"><td>${new Date(r.created_at).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td><td>${r.broker_name || ""}</td><td>${ActivityLog.describe(r, lang)}</td><td dir="ltr" class="muted">${r.ip || ""} ${String(r.user_agent || "").slice(0, 60)}</td></tr>`)}</tbody>
-</table>
+<div class="stack" data-activity-log>${groups.length ? groups.map((g) => html`<section class="card log-day" data-day="${g.day}"><h2>${dayLabel(g.day)}</h2><ul class="log-list">${g.rows.map((r) => html`<li data-log="${r.id}"><span class="log-ic" aria-hidden="true">${ActivityLog.iconOf(r.operation_type)}</span><span class="log-main"><span><b>${r.broker_name || ""}</b> ${ActivityLog.describe(r, lang)}</span><span class="muted small">${timeOf(r.created_at)}</span>${techOk ? html`<details class="small"><summary>${L(lang, "تفاصيل", "Details")}</summary><span dir="ltr" class="muted">${r.operation_type} · ${r.ip || ""} ${String(r.user_agent || "").slice(0, 60)}</span></details>` : ""}</span></li>`)}</ul></section>`) : html`<p class="card muted">${L(lang, "مفيش حاجة في الفترة دي.", "Nothing in this period.")}</p>`}</div>
 <p class="row">${n > 0 ? html`<a href="${pageLink(n - 1)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${log.more ? html`<a href="${pageLink(n + 1)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`,
     });
   });

@@ -59,10 +59,41 @@ function describe(row, lang) {
       return L(`غيّر دور لـ ${m.role || ""}`, `Changed a role to ${m.role || ""}`);
     case "portfolio_private":
       return m.private ? L(`خلّى ${row.target_type === "lead" ? "عميل" : "وحدة"} خاص`, `Made a ${row.target_type} private`) : L(`رجّع ${row.target_type === "lead" ? "عميل" : "وحدة"} للفريق`, `Made a ${row.target_type} visible again`);
+    case "ai_usage_settings":
+      return L(`غيّر حدود الذكاء: ${m.mode === "per_user" ? "حد لكل شخص" : "رصيد مشترك"}`, `Changed the AI limits: ${m.mode === "per_user" ? "a limit per person" : "one shared pool"}`);
+    case "manager_can_edit_ai_settings":
+      return m.allowed ? L("سمح للمديرين يعدلوا حدود الذكاء", "Let managers change the AI limits") : L("منع المديرين من تعديل حدود الذكاء", "Stopped managers changing the AI limits");
+    case "brokers_edit_units":
+      return m.allowed ? L("سمح للبروكرز يضيفوا ويعدلوا وحدات", "Let brokers add and edit units") : L("منع البروكرز من إضافة وتعديل الوحدات", "Stopped brokers adding and editing units");
     default:
-      return String(row.operation_type).replace(/^web /, "");
+      return String(row.operation_type).replace(/^web /, "").replace(/_/g, " ");
   }
 }
 
+/** One icon per kind of action, so a long log can be scanned. */
+function iconOf(action) {
+  const a = String(action || "");
+  if (/failed|refused|denied|declined/.test(a)) return "❌";
+  if (/login|sign_?in|passkey|password/.test(a)) return "🔑";
+  if (/export|download/.test(a)) return "⬇️";
+  if (/role|team|invite/.test(a)) return "👥";
+  if (/^ai_|_ai_|credit/.test(a)) return "🤖";
+  if (/secret|private|portfolio|access/.test(a)) return "🔒";
+  if (/setting|brokers_edit|scope|switch/.test(a)) return "⚙️";
+  if (/delete|remove|archive/.test(a)) return "🗑️";
+  return "📝";
+}
+
+/** Rows grouped by Cairo day, newest first: [{ day: "2026-11-16", rows: [...] }]. */
+function groupByDay(rows) {
+  const out = [];
+  for (const r of rows) {
+    const day = new Date(r.created_at).toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
+    if (!out.length || out[out.length - 1].day !== day) out.push({ day, rows: [] });
+    out[out.length - 1].rows.push(r);
+  }
+  return out;
+}
+
 module.exports = {
-  people, KEEP_DAYS, PAGE, list, describe };
+  people, KEEP_DAYS, PAGE, list, describe, iconOf, groupByDay };
