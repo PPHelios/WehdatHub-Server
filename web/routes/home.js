@@ -42,7 +42,8 @@ function register(web, { pool, page }) {
 ${groups.map((g) => {
   const list = g.items;
   const label = en ? g.label.en : g.label.ar;
-  return list.length ? html`<section class="card list" data-more="${g.key}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : "";
+  const allDesktop = list.length > 0 && list.every((n) => n.desktop); // nothing to show on a phone: hide the whole card, not just its rows
+  return list.length ? html`<section class="card list${allDesktop ? " desktop-only" : ""}" data-more="${g.key}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : "";
 })}
 <section class="card list"><ul class="rows">
   <li><a class="listrow" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${icon("globe")}<span>${en ? "عربي" : "English"}</span></a></li>
