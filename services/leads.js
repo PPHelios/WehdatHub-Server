@@ -15,6 +15,7 @@ const Rules = require("../domain/leadRules");
 const { withTransaction, logOperation } = require("../lib/db");
 const { getConfig } = require("../config");
 const Vis = require("../lib/visibility");
+const LeadScope = require("./leadScope");
 
 const MAX_PHONES = 3;
 const UNDO_MS = 10 * 60 * 1000;
@@ -724,7 +725,7 @@ async function setLang(pool, actor, key, lang, { version = null, now = new Date(
 
 async function getLead(pool, actor, key) {
   const lead = await loadLead(pool, actor.agency_id, key);
-  return lead && Authz.canViewLead(actor, lead) ? lead : null;
+  return lead && Authz.canViewLead(actor, lead, await LeadScope.open(pool, actor)) ? lead : null;
 }
 
 /**
@@ -737,7 +738,7 @@ async function findByPhone(pool, actor, raw) {
   const { rows } = await pool.query(`SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.phones @> ARRAY[$2]::text[] LIMIT 1`, [actor.agency_id, e164]);
   const lead = rows[0];
   if (!lead) return { lead: null, elsewhere: false };
-  return Authz.canViewLead(actor, lead) ? { lead, elsewhere: false } : { lead: null, elsewhere: true };
+  return Authz.canViewLead(actor, lead, await LeadScope.open(pool, actor)) ? { lead, elsewhere: false } : { lead: null, elsewhere: true };
 }
 
 /**
@@ -751,7 +752,13 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
     args.push(v);
     where.push(sql.replace("?", `$${args.length}`));
   };
-  if (Authz.isTeamLead(actor)) {
+  const seeAll = await LeadScope.open(pool, actor);
+  if (seeAll) {
+    // The agency owner let brokers see every lead: all of them, or only their own with the "mine" filter.
+    if (f.mine) add("l.assigned_broker_id = ?", actor.id);
+    else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
+    else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
+  } else if (Authz.isTeamLead(actor)) {
     // A team lead's list: their own leads and the leads of brokers in their team.
     args.push(actor.id);
     where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);

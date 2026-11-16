@@ -38,7 +38,7 @@ test("groups come in the spec order and a group with no items for the role is le
 test("data entry: no Leases, Projects, Inbox, Leads or agency pages; menu is notifications, settings, guide plus its unit work", () => {
   const items = itemsOf("data_entry");
   for (const k of ["leases", "projects", "inbox", "leads", "deals", "dashboard", "team", "usage", "plan"]) expect(items).not.toContain(k);
-  for (const k of ["notifications", "settings", "guide", "units", "search", "owners", "import", "waimport"]) expect(items).toContain(k);
+  for (const k of ["notifications", "settings", "guide", "units", "search", "owners", "import", "waimport", "insights"]) expect(items).toContain(k); // Price per m² is open to every role (Haytham, 2026-11-16)
   const account = Nav.forBroker(who("data_entry")).groups.find((g) => g.key === "account").items.map((i) => i.key);
   expect(account).toEqual(["settings", "notifications", "guide"]);
 });

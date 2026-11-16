@@ -70,3 +70,11 @@ test("P1: like with like: same finishing, and for rent the same extras; else the
   // A kitchen-and-ACs flat has no group of its own (fewer than 5): same finishing, any extras.
   expect(await Insights.forUnit(h.pool, { ...furnished, furnishing: null, feature_keys: ["kitchen_installed"] })).toMatchObject({ units: 10, like: { finishing: "fully_finished", extras: null } });
 });
+
+test("every role opens Price per m², data entry included (Haytham, 2026-11-16)", async () => {
+  await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  for (const who of ["broker", "colleague", "admin"]) {
+    const { agent } = await signIn(h, who);
+    expect([who, (await agent.get("/app/insights")).status]).toEqual([who, 200]);
+  }
+});

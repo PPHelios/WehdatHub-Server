@@ -168,6 +168,17 @@ function brokerEditSection(allowed, lang, csrf, canSwitch, ret = null) {
 </section>`;
 }
 
+/** The agency owner's switch for what brokers see of the agency's leads (on by default: all leads, read only). */
+function leadScopeSection(seeAll, lang, csrf, canSwitch, ret = null) {
+  return html`<section class="card stack" id="lead-scope">
+  <h2>${L(lang, "العملاء قدّام البروكرز", "Leads brokers can see")}</h2>
+  <form method="post" action="/app/dashboard/brokers-see-all-leads" class="stack"><input type="hidden" name="_csrf" value="${csrf}">${ret ? html`<input type="hidden" name="return" value="${ret}">` : ""}
+    ${switchField({ name: "allowed", on: seeAll, disabled: !canSwitch, lang, label: L(lang, "البروكرز يشوفوا كل عملاء الشركة", "Brokers see all of the agency's leads"), sentence: L(lang, "شغّالة: البروكر يشوف كل العملاء (قراءة بس) ويشتغل على عملائه بس. اقفلها عشان كل بروكر يشوف عملائه بس. المديرين دايماً بيشوفوا الكل.", "On: a broker sees every lead (read only) and works only their own. Turn off so each broker sees only their own leads. Managers always see all.") })}
+    ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
+  </form>
+</section>`;
+}
+
 /** Owner controls (phase 2 step 4): the sign-up switch and waiting sign-ups, where agencies pay, payments to confirm. */
 /** CRM owner only: add an agency by hand (name, logo URL, owner's mobile, plan). The owner's start link is shown once. */
 function newAgencySection(lang, csrf) {
@@ -570,7 +581,7 @@ function register(web, { pool, page }) {
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
     const brokersWrite = await Rights.brokersMayWrite(pool, req.session.broker.agency_id);
     const [aiPeople, importReport] = await Promise.all([AiUserLimits.people(pool, req.session.broker.agency_id), ChatImportReport.report(pool, { days: Number(d.days) || 30, agencyId: req.session.broker.agency_id })]);
-    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${aiPeopleSection(aiPeople, lang)}${importSection(importReport, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${aiPeopleSection(aiPeople, lang)}${importSection(importReport, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${leadScopeSection(await require("../../services/leadScope").brokersSeeAll(pool, req.session.broker.agency_id), lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   // Who sees a unit's private details (services/unitPrivacy.js); the agency owner only.
@@ -587,6 +598,14 @@ function register(web, { pool, page }) {
     if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
     if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#broker-edit");
     return res.redirect(303, "/app/dashboard?privacy=saved#broker-edit");
+  });
+
+  // What brokers see of the agency's leads (services/leadScope.js); the agency owner only.
+  web.post("/dashboard/brokers-see-all-leads", async (req, res) => {
+    const out = await require("../../services/leadScope").setBrokersSeeAll(pool, req.session.broker, req.body.allowed === "on");
+    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
+    if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#lead-scope");
+    return res.redirect(303, "/app/dashboard?privacy=saved#lead-scope");
   });
 
   // The whole inventory as Excel: managers only, and every download is logged.
@@ -834,4 +853,4 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
   }));
 }
 
-module.exports = { register, privacySection, brokerEditSection };
+module.exports = { register, privacySection, brokerEditSection, leadScopeSection };

@@ -90,13 +90,14 @@ async function agencySection({ pool, req, broker, lang, brandHtml }) {
   const Rights = require("../../services/unitRights");
   const UnitCode = require("../../domain/unitCode");
   const FxDomain = require("../../domain/fx");
-  const { privacySection, brokerEditSection } = require("./dashboard");
+  const { privacySection, brokerEditSection, leadScopeSection } = require("./dashboard");
   const owner = isAgencyOwner(broker);
-  const [state, ag, scope, brokersWrite] = await Promise.all([
+  const [state, ag, scope, brokersWrite, seeAllLeads] = await Promise.all([
     Credits.check(pool, broker),
     pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id]).then((r) => r.rows[0] || {}),
     Privacy.scopeOf(pool, broker.agency_id),
-    Rights.brokersMayWrite(pool, broker.agency_id)
+    Rights.brokersMayWrite(pool, broker.agency_id),
+    require("../../services/leadScope").brokersSeeAll(pool, broker.agency_id)
   ]);
   const rates = FxDomain.ratesFrom(ag.crm_settings?.fx);
   const codePrefix = ag.code_prefix || UnitCode.prefixFrom(ag.name || "");
@@ -109,6 +110,7 @@ async function agencySection({ pool, req, broker, lang, brandHtml }) {
   ${fxForm({ lang, rates, bad: req.query.fx === "bad", ret: "settings", id: "fx" })}
   ${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
   ${brokerEditSection(brokersWrite, lang, csrf, owner, "settings")}
+  ${leadScopeSection(seeAllLeads, lang, csrf, owner, "settings")}
   <section class="card stack" id="agency-links">
     <h2>${L(lang, "أماكن تانية", "More agency settings")}</h2>
     <p><a href="/app/team#notify-policy">🔔 ${L(lang, "تنبيهات الفريق (قناة وتكرار لكل تنبيه)", "Team notifications (channel and frequency for each alert)")}</a></p>

@@ -627,6 +627,17 @@
     post("web_app_request_content_safe_area");
     post("web_app_ready");
     post("web_app_expand");
+    // Telegram's own bars take the page's background (our design tokens), so the Mini App looks like the website, not a frame around it.
+    function chrome() {
+      var m = /(\d+)[, ]+(\d+)[, ]+(\d+)/.exec(getComputedStyle(document.body).backgroundColor || "");
+      if (!m) return;
+      var hex = "#" + [1, 2, 3].map(function (i) { return ("0" + Number(m[i]).toString(16)).slice(-2); }).join("");
+      post("web_app_set_header_color", { color: hex });
+      post("web_app_set_background_color", { color: hex });
+      post("web_app_set_bottom_bar_color", { color: hex });
+    }
+    chrome();
+    try { new MutationObserver(chrome).observe(root, { attributes: true, attributeFilter: ["data-theme"] }); } catch (err) { /* no observer: the colours stay as first set */ }
     refreshMain();
     document.addEventListener("steps:change", refreshMain);
     document.addEventListener("htmx:load", refreshMain);

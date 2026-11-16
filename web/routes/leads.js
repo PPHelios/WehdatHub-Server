@@ -209,6 +209,7 @@ ${rows.length
       kind: req.query.kind,
       source: req.query.source ? String(req.query.source).slice(0, 60) : null,
       brokerId: manager ? (req.query.broker === "me" && isAgencyOwner(broker) ? broker.id : req.query.broker) : null,
+      mine: req.query.mine === "1",
       stage: Stages.STAGES.includes(tab) ? tab : null,
       dueToday: tab === "due_today",
       overdue: tab === "overdue",
@@ -217,6 +218,7 @@ ${rows.length
       limit: PAGE,
       offset: n * PAGE
     };
+    const seeAll = await require("../../services/leadScope").open(pool, broker); // brokers see every lead: offer "mine only"
     const { rows, more } = tab === "portal" ? { rows: [], more: false } : await Leads.listLeads(pool, broker, f);
     const portalHtml = tab === "portal" ? await Portal.panel(pool, broker, lang, { notice: Portal.noticeFor(lang, req.query) }) : "";
     const pipe = manager ? await Leads.pipeline(pool, broker) : null;
@@ -224,7 +226,7 @@ ${rows.length
     const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
     const qs = (over) => {
       const p = new URLSearchParams();
-      const all = { tab, q: f.q, kind: req.query.kind || "", source: f.source || "", broker: manager ? req.query.broker || "" : "", ...over };
+      const all = { tab, q: f.q, kind: req.query.kind || "", source: f.source || "", broker: manager ? req.query.broker || "" : "", mine: f.mine ? "1" : "", ...over };
       for (const [k, v] of Object.entries(all)) if (v !== "" && v !== null && v !== undefined && !(k === "tab" && v === "all")) p.set(k, v);
       const s = p.toString();
       return `/app/leads${s ? `?${s}` : ""}`;
@@ -239,12 +241,14 @@ ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notic
 ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">
   <div class="searchbox">${icon("search", 20)}<input id="lead-q" hx-preserve="true" hx-get="/app/leads" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="innerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${f.q}" aria-label="${L(lang, "بحث في العملاء", "Search leads")}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
-  <details class="card sheet"${req.query.kind || f.source || (manager && req.query.broker) ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length ? html` <span class="chip">${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length}</span>` : ""}</summary>
+  <details class="card sheet"${req.query.kind || f.source || f.mine || (manager && req.query.broker) ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length ? html` <span class="chip">${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length}</span>` : ""}</summary>
   <div class="grid two">
   <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
   <select name="source" aria-label="${L(lang, "المصدر", "Source")}"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
     ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل البروكرز", "All brokers")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
+    : seeAll
+    ? html`<label class="row"><input type="checkbox" name="mine" value="1"${f.mine ? html` checked` : ""}> ${L(lang, "المسلّمة ليّ بس", "Assigned to me only")}</label>`
     : ""}
   </div>
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>

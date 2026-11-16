@@ -27,7 +27,7 @@ async function resolveRecipient(pool, actor, text) {
   let leadId = null;
   if (rows[0]) {
     const lead = await Leads.getLead(pool, actor, rows[0].id);
-    if (lead && Authz.canViewLead(actor, lead)) leadId = lead.id;
+    if (lead) leadId = lead.id; // getLead already applied who may see it
   }
   return { phone, leadId };
 }

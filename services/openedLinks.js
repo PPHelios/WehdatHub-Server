@@ -101,7 +101,7 @@ async function withLeadRights(pool, viewer, r) {
     teamLead = rows[0]?.team_lead_id || null;
   }
   const lead = { agency_id: viewer.agency_id, assigned_broker_id: r.assigned_broker_id, assignee_team_lead_id: teamLead };
-  if (!Authz.canViewLead(viewer, lead)) return { ...r, lead: { ref: r.lead_ref, name: null, phone: null, hidden: true } };
+  if (!Authz.canViewLead(viewer, lead, await require("./leadScope").open(pool, viewer))) return { ...r, lead: { ref: r.lead_ref, name: null, phone: null, hidden: true } };
   return { ...r, lead: { ref: r.lead_ref, name: r.lead_name, phone: r.lead_phone, hidden: false } };
 }
 

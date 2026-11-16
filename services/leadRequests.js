@@ -129,7 +129,8 @@ async function whoWants(pool, actor, listing) {
     if ((await pool.query(sql, params)).rows.length) fits.set(r.id, r);
   }
   const all = [...fits.values()];
-  const visible = all.filter((l) => Authz.canViewLead(actor, l)).map(({ id, ref, name, phone_e164 }) => ({ id, ref, name, phone_e164 }));
+  const open = await require("./leadScope").open(pool, actor);
+  const visible = all.filter((l) => Authz.canViewLead(actor, l, open)).map(({ id, ref, name, phone_e164 }) => ({ id, ref, name, phone_e164 }));
   return { total: all.length, leads: visible, others: all.length - visible.length };
 }
 

@@ -65,6 +65,8 @@ function describe(row, lang) {
       return m.allowed ? L("سمح للمديرين يعدلوا حدود الذكاء", "Let managers change the AI limits") : L("منع المديرين من تعديل حدود الذكاء", "Stopped managers changing the AI limits");
     case "brokers_edit_units":
       return m.allowed ? L("سمح للبروكرز يضيفوا ويعدلوا وحدات", "Let brokers add and edit units") : L("منع البروكرز من إضافة وتعديل الوحدات", "Stopped brokers adding and editing units");
+    case "brokers_see_all_leads":
+      return m.allowed ? L("خلّى البروكرز يشوفوا كل العملاء", "Let brokers see all leads") : L("خلّى كل بروكر يشوف عملائه بس", "Made each broker see only their own leads");
     default:
       return String(row.operation_type).replace(/^web /, "").replace(/_/g, " ");
   }

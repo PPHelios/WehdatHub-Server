@@ -382,7 +382,7 @@
       "isTeamLead": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],
-      "canViewLead": ["broker", "lead"],
+      "canViewLead": ["broker", "lead", "agencyOpen"],
       "canEditLead": ["broker", "lead"],
       "canReassignLead": ["broker", "lead", "targetTeamLeadId", "targetBrokerId"],
       "canManageLeads": ["broker"],
@@ -1542,7 +1542,8 @@
     "web/routes/dashboard.js": {
       "register": ["web", "params"],
       "privacySection": ["scope", "lang", "csrf", "notice", "canSwitch", "ret"],
-      "brokerEditSection": ["allowed", "lang", "csrf", "canSwitch", "ret"]
+      "brokerEditSection": ["allowed", "lang", "csrf", "canSwitch", "ret"],
+      "leadScopeSection": ["seeAll", "lang", "csrf", "canSwitch", "ret"]
     },
     "web/routes/team.js": {
       "register": ["web", "params"]

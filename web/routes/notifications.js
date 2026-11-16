@@ -67,7 +67,7 @@ ${rows.length
 </li>`
     )}</ul>
 <p class="row">${n > 0 ? html`<a href="/app/notifications?page=${n - 1}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${more ? html`<a href="/app/notifications?page=${n + 1}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
-  : html`<p class="card">${L(lang, "مفيش تنبيهات لسه. التنبيهات بتتجمع هنا دايماً، حتى اللي وصلتك على تليجرام أو واتساب.", "No notifications yet. Every alert lands here, even the ones you got on WhatsApp.")}</p>`}`
+  : html`<p class="card">${L(lang, "مفيش تنبيهات لسه. التنبيهات بتتجمع هنا دايماً، حتى اللي وصلتك على تليجرام.", "No notifications yet. Every alert lands here, even the ones you got on Telegram.")}</p>`}`
     });
   });
 
