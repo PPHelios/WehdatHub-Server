@@ -1220,6 +1220,11 @@
       "timeline": ["pool", "actor", "key", "params"],
       "releaseBrokerLeads": ["pool", "agencyId", "brokerId", "params"]
     },
+    "services/leadScope.js": {
+      "brokersSeeAll": ["db", "agencyId"],
+      "open": ["db", "actor"],
+      "setBrokersSeeAll": ["pool", "owner", "on"]
+    },
     "services/brokers.js": {
       "deactivateBroker": ["pool", "params"]
     },
