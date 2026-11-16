@@ -85,7 +85,7 @@ function plansReadSection(lang, project, reading, query = {}) {
       </div>
       <p class="muted">${planLine(pl, lang)}</p></fieldset>`)}
     <div class="row"><button type="submit">${L(lang, "احفظ المعلّم", "Save ticked plans")}</button>
-    <button type="submit" class="secondary" formaction="${base}/plans/draft/discard" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}">${L(lang, "تجاهل", "Discard")}</button></div>
+    <button type="submit" class="secondary" formaction="${base}/plans/draft/discard" data-confirm="${L(lang, `تتجاهل مسودة أنظمة السداد؟ مش هينفع ترجع.`, `Discard the payment plan draft? This can't be undone.`)}">${L(lang, "تجاهل", "Discard")}</button></div>
   </form>`
     : "";
   const form = reading?.enabled
@@ -317,7 +317,7 @@ ${prices ? html`<details class="proj-fold" id="prices-fold"><summary>🏷️ ${L
 
 <details class="proj-fold" id="phases-fold"><summary>${L(lang, "المراحل", "Phases")}${phases.length ? ` (${phases.length})` : ""}</summary><section class="card" id="phases">
   <h2>${L(lang, "المراحل", "Phases")}</h2>
-  ${phases.length ? html`<ul>${phases.map((ph) => html`<li data-phase="${ph.id}">${ph.name} · ${label2(STATUS, ph.status, lang)} · <span dir="ltr">${deliveryText(ph, lang)}</span>${manager ? html` <form method="post" action="${base}/phases/${ph.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش مراحل (المشروع كله مرحلة واحدة).", "No phases (the whole project is one).")}</p>`}
+  ${phases.length ? html`<ul>${phases.map((ph) => html`<li data-phase="${ph.id}">${ph.name} · ${label2(STATUS, ph.status, lang)} · <span dir="ltr">${deliveryText(ph, lang)}</span>${manager ? html` <form method="post" action="${base}/phases/${ph.id}/delete" class="inline" data-confirm="${L(lang, `تمسح المرحلة «${ph.name}»؟ مش هينفع ترجعها.`, `Delete the phase “${ph.name}”? This can't be undone.`)}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش مراحل (المشروع كله مرحلة واحدة).", "No phases (the whole project is one).")}</p>`}
   ${manager ? html`<form method="post" action="${base}/phases" class="row" data-phase-form>
     <input name="name" required maxlength="80" placeholder="${L(lang, "اسم المرحلة", "Phase name")}" aria-label="${L(lang, "اسم المرحلة", "Phase name")}">
     ${statusSelect("status", "selling", lang)}
@@ -331,7 +331,7 @@ ${prices ? html`<details class="proj-fold" id="prices-fold"><summary>🏷️ ${L
   const plansTab = html`<section class="card" id="plans">
   <h2>💳 ${L(lang, "أنظمة السداد", "Payment plans")}</h2>
   <p class="muted">${L(lang, "النظام بيتطبق على كل وحدات المشروع (أو المرحلة) تلقائي، إلا الوحدة اللي ليها أنظمتها الخاصة.", "A plan applies to every unit of the project (or phase) automatically, except a unit with its own plans.")}</p>
-  ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
+  ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline" data-confirm="${L(lang, `تمسح نظام السداد «${pl.name}»؟ مش هينفع ترجعه.`, `Delete the payment plan “${pl.name}”? This can't be undone.`)}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
 </section>
 ${manager ? rulesForm(lang, p, base) : ""}
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
@@ -346,7 +346,7 @@ ${gallery || ""}
   ${materials.length ? html`<ul>${materials.map((m) => html`<li data-material="${m.id}" data-client-visible="${m.client_visible ? "1" : "0"}">
     <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.storage_path ? "📎 " : ""}${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
     ${manager ? html`${m.kind === "price_sheet" ? "" : html`<form method="post" action="${base}/materials/${m.id}/visibility" class="inline"><input type="hidden" name="visible" value="${m.client_visible ? "0" : "1"}"><button type="submit" class="link">${m.client_visible ? L(lang, "خليه داخلي", "Make internal") : L(lang, "اعرضه للعميل", "Show to clients")}</button></form>`}
-    <form method="post" action="${base}/materials/${m.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش ملفات أو لينكات.", "No files or links yet.")}</p>`}
+    <form method="post" action="${base}/materials/${m.id}/delete" class="inline" data-confirm="${L(lang, `تمسح «${m.label}»؟ مش هينفع ترجعه.`, `Delete “${m.label}”? This can't be undone.`)}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش ملفات أو لينكات.", "No files or links yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/materials" class="stack" data-material-form>
     <div class="row">
       <input name="label" required maxlength="80" placeholder="${L(lang, "الاسم (مثلاً: بروشور المرحلة 2)", "Label (e.g. Phase 2 brochure)")}" aria-label="${L(lang, "الاسم", "Label")}">
@@ -376,7 +376,7 @@ ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة
 `;
   const unitsTab = html`<section class="card" id="units">
   <h2>🏠 ${L(lang, "وحدات المشروع", "Project units")} (${units.length})</h2>
-  ${units.length ? html`<ul>${units.map((u) => html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a>${u.developer_unit_code ? ` · ${u.developer_unit_code}` : ""}${u.phase_id ? ` · ${phaseName(u.phase_id) || ""}` : ""} · ${u.status}${manager ? html` <form method="post" action="${base}/units/${u.id}/unlink" class="inline" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}"><button type="submit" class="link">${L(lang, "شيلها من المشروع", "Remove from project")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش وحدات مربوطة بالمشروع.", "No units linked yet.")}</p>`}
+  ${units.length ? html`<ul>${units.map((u) => html`<li data-unit="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a>${u.developer_unit_code ? ` · ${u.developer_unit_code}` : ""}${u.phase_id ? ` · ${phaseName(u.phase_id) || ""}` : ""} · ${u.status}${manager ? html` <form method="post" action="${base}/units/${u.id}/unlink" class="inline" data-confirm="${L(lang, `تشيل الوحدة ${u.code} من المشروع؟`, `Remove unit ${u.code} from the project?`)}"><button type="submit" class="link">${L(lang, "شيلها من المشروع", "Remove from project")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش وحدات مربوطة بالمشروع.", "No units linked yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/units" class="stack" data-link-units>
     <label>${L(lang, "اربط وحدات بأكوادها (مسافة أو فاصلة بينهم)", "Link units by code (space or comma between)")} <input name="codes" required dir="ltr"></label>
     ${phases.length ? html`<label>${L(lang, "المرحلة", "Phase")} <select name="phase_id"><option value="">—</option>${phases.map((ph) => html`<option value="${ph.id}">${ph.name}</option>`)}</select></label>` : ""}

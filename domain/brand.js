@@ -3,18 +3,19 @@
 // new agency's flyers all read it, so a new logo or palette drops in here only.
 "use strict";
 
+const Tokens = require("./designTokens");
+
 const BRAND = Object.freeze({
   name: "Wehdat Hub",
   // Brand v2 (2026-10-27): azure for actions and links, copper for "very interested" and featured, charcoal text.
-  colors: Object.freeze({ brand: "#1d70b8", accent: "#c45a30", ink: "#0e1521", bg: "#f4f6f9" }),
+  colors: Object.freeze({ brand: Tokens.COLORS.light.brand, accent: Tokens.COLORS.light.accent, ink: Tokens.COLORS.light.ink, bg: Tokens.COLORS.light.bg }),
   // Under web/static/ (served at /app/static/).
   logo: "icons/icon.svg"
 });
 
-/** The CSS custom properties every page starts from (web/static/app.css uses them; it never names a brand colour). */
-function cssTokens(brand = BRAND) {
-  const c = brand.colors;
-  return `/* Generated from domain/brand.js */\n:root { --brand: ${c.brand}; --accent: ${c.accent}; --ink: ${c.ink}; --bg: ${c.bg}; }\n`;
+/** The CSS custom properties every page starts from, light and dark (domain/designTokens.js; app.css never names a colour). */
+function cssTokens() {
+  return Tokens.cssVars();
 }
 
 module.exports = { BRAND, cssTokens };

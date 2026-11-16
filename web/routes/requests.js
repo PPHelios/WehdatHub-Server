@@ -55,7 +55,7 @@ ${out.items.length
   <div class="row">
     ${tab === "pending" ? html`<a class="btn secondary" href="/app/search?f=${it.token}">🏠 ${it.matches} ${L(lang, "وحدة مناسبة", "fit now")}</a>` : html`<a class="btn secondary" href="/app/search?f=${it.token}">${L(lang, "ابحث تاني", "Search again")}</a>`}
     ${tab === "pending" ? html`<form method="post" action="/app/requests/${it.id}/fulfil" class="inline"><input type="hidden" name="_csrf" value="${csrf}"><button type="submit" class="secondary">✅ ${L(lang, "اتنفذ", "Mark fulfilled")}</button></form>` : ""}
-    <form method="post" action="/app/requests/${it.id}/delete" class="inline" data-confirm="${L(lang, "متأكد؟ مش هينفع ترجع.", "Are you sure? This can't be undone.")}"><input type="hidden" name="_csrf" value="${csrf}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Delete")}</button></form>
+    <form method="post" action="/app/requests/${it.id}/delete" class="inline" data-confirm="${L(lang, `تمسح الطلب «${summary(it)}»؟ مش هينفع ترجع.`, `Delete the request “${summary(it)}”? This can't be undone.`)}"><input type="hidden" name="_csrf" value="${csrf}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Delete")}</button></form>
   </div>
 </li>`
     )}</ul>

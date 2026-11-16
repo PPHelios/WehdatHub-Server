@@ -1530,9 +1530,17 @@
       "REPEAT_WINDOW_MS": "Number",
       "STALE_MS": "Number"
     },
+    "domain/designTokens.js": {
+      "COLORS": "Object",
+      "SHAPE": "Object",
+      "PAIRS": "Array",
+      "contrast": ["a", "b"],
+      "unreadable": ["colors"],
+      "cssVars": ["colors", "shape"]
+    },
     "domain/brand.js": {
       "BRAND": "Object",
-      "cssTokens": ["brand"]
+      "cssTokens": []
     },
     "domain/plans.js": {
       "unitLimitText": ["limit", "lang"],

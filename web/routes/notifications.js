@@ -43,7 +43,7 @@ function register(web, { pool, page }) {
       body: html`<h1>🔔 ${L(lang, "التنبيهات", "Notifications")}</h1>
 <div class="row">
   <form method="post" action="/app/notifications/read-all"><button type="submit" class="secondary">${L(lang, "✓ علّم الكل مقروء", "✓ Mark all read")}</button></form>
-  ${rows.length ? html`<form method="post" action="/app/notifications/delete-all"><button type="submit" class="secondary" data-delete-all>🗑 ${L(lang, "امسح الكل", "Delete all")}</button></form>` : ""}
+  ${rows.length ? html`<form method="post" action="/app/notifications/delete-all"><button type="submit" class="secondary danger" data-delete-all data-confirm="${L(lang, `تمسح كل التنبيهات (${rows.length})؟`, `Delete all ${rows.length} notifications?`)}">🗑 ${L(lang, "امسح الكل", "Delete all")}</button></form>` : ""}
   <a class="btn secondary" href="/app/settings">${L(lang, "⚙️ اختار القناة لكل تنبيه", "⚙️ Choose the channel per alert")}</a>
   ${isManager(broker) ? html`<a class="btn secondary" href="/app/notifications/log">${L(lang, "📋 سجل التنبيهات", "📋 Notification log")}</a> <a class="btn secondary" href="/app/activity-log">${L(lang, "🗂️ سجل النشاط", "🗂️ Activity log")}</a>` : ""}
 </div>
@@ -58,7 +58,7 @@ ${rows.length
     <form method="post" action="/app/leads/${refLabel(r.follow_up_ref)}/follow-up/postpone"><button type="submit" class="secondary">${L(lang, "📅 أجّل يوم", "📅 Postpone a day")}</button></form>
   </div>`
     : ""}
-  <form method="post" action="/app/notifications/${r.id}/delete"><button type="submit" class="link danger" data-delete-notification>${L(lang, "امسح", "Delete")}</button></form>
+  <form method="post" action="/app/notifications/${r.id}/delete"><button type="submit" class="quiet danger small" data-delete-notification data-confirm="${L(lang, `تمسح التنبيه «${String(r.title || "").slice(0, 60)}»؟`, `Delete the notification “${String(r.title || "").slice(0, 60)}”?`)}">${L(lang, "امسح", "Delete")}</button></form>
   ${r.url
     ? html`<form method="post" action="/app/notifications/${r.id}/open"><button type="submit" class="link">${L(lang, "افتح", "Open")}</button></form>`
     : !r.read_at
