@@ -108,73 +108,30 @@ function footer(broker, lang) {
   return html`<footer class="foot muted"><a href="/app/report">${en ? "Report a problem" : "بلّغ عن مشكلة"}</a>${support ? html` · <a href="${support}" target="_blank" rel="noopener" data-support>${en ? "Talk to a person" : "كلّم حد من فريقنا"}</a>` : ""}</footer>`;
 }
 
-// Every page a signed-in broker can open besides the bottom bar's places, grouped for the More page (/app/more).
-// `who`: manager (Dashboard and other agency pages) or owner (App tracking, OWNER_BROKER_IDS only).
-const NAV = [
-  { key: "deals", href: "/app/deals", ar: "الصفقات", en: "Deals", icon: "deal", group: "work" },
-  { key: "catalogue", href: "/app/catalogue", ar: "كتالوج المطورين", en: "Developer catalogue", icon: "catalogue", group: "work" },
-  { key: "map", href: "/app/map", ar: "الخريطة", en: "Map", icon: "pin", group: "work" },
-  { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
-  { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
-  { key: "requests", href: "/app/requests", ar: "طلبات العملاء", en: "Client requests", icon: "star", group: "work" },
-  { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", group: "work", barBroker: true },
-  { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units", group: "work" },
-  { key: "links", href: "/app/links", ar: "الروابط المفتوحة", en: "Opened links", icon: "pin", group: "work" },
-  { key: "access", href: "/app/access-requests", ar: "طلبات البيانات الخاصة", en: "Private data requests", icon: "pin", group: "agency", who: "manager" },
-  { key: "import", href: "/app/import", ar: "استيراد وحدات", en: "Import units", icon: "import", group: "work", desktop: true },
-  { key: "leadimport", href: "/app/leads/import", ar: "استيراد عملاء", en: "Import leads", icon: "import", group: "work", desktop: true },
-  { key: "dashboard", href: "/app/dashboard", ar: "لوحة الشركة", en: "Agency dashboard", icon: "chart", group: "agency", who: "manager" },
-  { key: "sources", href: "/app/sources", ar: "مصادر العملاء وتكلفتها", en: "Lead sources and cost", icon: "chart", group: "agency", who: "manager" },
-  { key: "winloss", href: "/app/winloss", ar: "المكسب والخسارة", en: "Win and loss", icon: "chart", group: "agency", who: "manager" },
-  { key: "insights", href: "/app/insights", ar: "أسعار المتر", en: "Price per m²", icon: "chart", group: "agency" },
-  { key: "usage", href: "/app/usage", ar: "استخدامي والحصص", en: "My usage and limits", icon: "gauge", group: "agency" },
-  { key: "owner", href: "/app/owner", ar: "متابعة التطبيق", en: "App tracking", icon: "tools", group: "agency", who: "owner" },
-  { key: "ownermap", href: "/app/owner/map", ar: "أماكن الخريطة", en: "Map places", icon: "pin", group: "agency", who: "owner" },
-  { key: "ownerqueue", href: "/app/owner/queue", ar: "طابور الاعتماد", en: "Approval queue", icon: "tools", group: "agency", who: "owner" },
-  { key: "ownerlibrary", href: "/app/owner/library", ar: "مكتبة المشاريع", en: "Project library", icon: "tools", group: "agency", who: "owner" },
-  { key: "searchreview", href: "/app/owner/searches", ar: "مراجعة البحث", en: "Search review", icon: "tools", group: "agency", who: "owner" },
-  { key: "plan", href: "/app/plan", ar: "الاشتراك", en: "Plan", icon: "card", group: "account" },
-  { key: "invite", href: "/app/plan#referral", ar: "ادعُ شركة واكسب شهر مجاني", en: "Invite an agency, get a free month", icon: "gift", group: "account" },
-  { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings", group: "account" },
-  { key: "notifications", href: "/app/notifications", ar: "التنبيهات", en: "Notifications", icon: "bell", group: "account" },
-  { key: "guide", href: "/app/guide", ar: "الدليل", en: "Guide", icon: "book", group: "account" }
-];
+// The menu of every role comes from lib/navSpec.js (the app reads the same data on /me): this file only draws it.
+const NavSpec = require("../lib/navSpec");
+// Pages that need a laptop-sized screen (the import tools): marked so the phone's More list can hide them.
+const DESKTOP_ONLY = new Set(["import", "leadimport"]);
+const webTab = (t) => ({ key: t.key, href: t.web, ar: t.label.ar, en: t.label.en, icon: t.icon, fab: Boolean(t.fab) });
 
-/** The More page links this broker sees (managers: the agency pages; the app owner: App tracking too). */
-// Data entry sees only these More links (the pages it may open); everything else is hidden, not just refused.
-const DATA_ENTRY_NAV = new Set(["notifications", "settings", "guide", "import"]);
-// Bar order for data entry: Search · Units · + · Owners · Settings (two places each side keep the + centred).
-const DATA_ENTRY_TABS = ["search", "units", "add", "owners", "settings"];
-const DATA_ENTRY_BAR = [
-  { key: "search", href: "/app/search", ar: "بحث", en: "Search", icon: "search" },
-  { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units" },
-  { key: "add", href: "/app/units/new", ar: "إضافة", en: "Add", icon: "plus", fab: true },
-  { key: "owners", href: "/app/owners", ar: "المُلّاك", en: "Owners", icon: "units" },
-  { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings" }
-];
-
-// The CRM owner (OWNER_BROKER_IDS) is not part of any agency: their menu is the app-tracking pages and their account.
-const CRM_NAV = new Set(["owner", "ownermap", "ownerqueue", "ownerlibrary", "searchreview", "settings", "notifications", "guide"]);
-
-function navFor(broker) {
-  const Dash = require("../services/dashboards");
-  if (require("../lib/authz").isCrmOwner(broker)) return NAV.filter((n) => CRM_NAV.has(n.key));
-  if (require("../lib/authz").isDataEntry(broker)) return NAV.filter((n) => DATA_ENTRY_NAV.has(n.key));
-  // What the bottom bar already shows is not repeated in More (a broker has Units on the bar; managers and team leads find it here).
-  const onBar = new Set(tabsFor(broker).map((t) => t.href));
-  return NAV.filter((n) => !n.who || (n.who === "manager" ? Dash.isManager(broker) : Dash.isOwner(broker))).filter((n) => !n.barBroker || !onBar.has(n.href));
+/**
+ * The More page links for this broker, grouped: what the website has a page for, minus what is already on the bottom bar.
+ * [{ key, label: {ar,en}, items: [{ key, href, ar, en, icon, desktop }] }], groups in the spec order, empty groups left out.
+ */
+function moreGroups(broker) {
+  return NavSpec.forBroker(broker)
+    .groups.map((g) => ({
+      key: g.key,
+      label: g.label,
+      items: g.items.filter((i) => i.web && !i.onBar).map((i) => ({ key: i.key, href: i.web, ar: i.label.ar, en: i.label.en, icon: i.icon, desktop: DESKTOP_ONLY.has(i.key) }))
+    }))
+    .filter((g) => g.items.length);
 }
+/** The flat list of the More page links (kept for callers that want one list). */
+const navFor = (broker) => moreGroups(broker).flatMap((g) => g.items.map((i) => ({ ...i, group: g.key })));
 
 // The bottom bar: five places. Brokers: Today · Search · + · Leads · Units; managers swap Units for Team.
 // Units stays one tap away for managers under More, and inside Search as "My units".
-const TABS = [
-  { key: "home", href: "/app/", ar: "اليوم", en: "Today", icon: "home" },
-  { key: "search", href: "/app/search", ar: "بحث", en: "Search", icon: "search" },
-  { key: "add", href: "/app/add", ar: "إضافة", en: "Add", icon: "plus", fab: true },
-  { key: "leads", href: "/app/leads", ar: "العملاء", en: "Leads", icon: "leads" },
-  { key: "units", href: "/app/units", ar: "الوحدات", en: "Units", icon: "units", broker: true },
-  { key: "team", href: "/app/team", ar: "الفريق", en: "Team", icon: "team", manager: true }
-];
 const TAB_ROOTS = new Set(["/app", "/app/search", "/app/add", "/app/leads", "/app/units", "/app/team", "/app/more"]);
 
 /** Which bottom-bar place a page belongs to (by its path, else its nav key). */
@@ -205,45 +162,39 @@ function tabBar(broker, tab, lang) {
 }
 
 
-/** The bottom-bar places this role sees (the same roles as the app's tabs): team leads get Team instead of Units. */
-function tabsFor(broker) {
-  const Authz = require("../lib/authz");
-  if (Authz.isDataEntry(broker)) return DATA_ENTRY_BAR;
-  const manager = require("../services/dashboards").isManager(broker);
-  const lead = Authz.isTeamLead(broker);
-  return TABS.filter((t) => (t.key === "units" ? !manager && !lead : t.key === "team" ? manager || lead : true));
-}
+/** The bottom-bar places this role sees (lib/navSpec.js): the same places as the app's tabs. */
+const tabsFor = (broker) => NavSpec.forBroker(broker).tabs.filter((t) => t.web).map(webTab);
+
+// Groups that start open before the person's own choice (kept in the browser, web/static/app.js) is applied.
+const GROUP_OPEN = new Set(["clients", "listings"]);
 
 /**
- * The laptop side menu: every place this role can open (its bottom-bar places, then the More pages), the same links the
- * More page lists, so the side menu and the phone never disagree. Hidden under 1024px (the bottom bar is used there).
+ * The laptop side menu: Today and Add, then the role's groups (Clients, Listings, Find, Agency, Account), each one a
+ * <details> that works without script; the browser remembers which are open. The group holding the current page starts open.
+ * Hidden under 1024px (the bottom bar and the More page are used there).
  */
 function sideMenu(broker, tab, lang, { crm = false } = {}) {
   const en = lang === "en";
   const { icon } = require("./icons");
-  const bar = crm ? CRM_BAR : tabsFor(broker);
-  const shown = new Set(bar.map((t) => t.href));
-  const more = navFor(broker).filter((n) => !shown.has(n.href) && !n.desktopHidden);
-  const GROUPS = [["work", "الشغل", "Work"], ["agency", "الشركة", "Agency"], ["account", "حسابي", "Account"]];
+  const nav = NavSpec.forBroker(broker);
   const link = (n, current) => html`<a href="${n.href}"${current ? raw(' aria-current="page"') : ""}>${icon(n.icon, 20)}<span>${en ? n.en : n.ar}</span></a>`;
+  const home = nav.tabs.find((t) => t.key === "home" && t.web);
+  const groups = nav.groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => i.web).map((i) => ({ key: i.key, href: i.web, ar: i.label.ar, en: i.label.en, icon: i.icon })) }))
+    .filter((g) => g.items.length);
   return html`<nav class="sidemenu" aria-label="${en ? "Menu" : "القائمة"}">
   ${crm ? "" : html`<a class="side-add" href="${broker && require("../lib/authz").isDataEntry(broker) ? "/app/units/new" : "/app/add"}">${icon("plus", 20)}<span>${en ? "Add" : "إضافة"}</span></a>`}
-  ${bar.filter((t) => !t.fab).map((t) => link(t, t.key === tab))}
-  ${GROUPS.map(([g, ar, e]) => {
-    const items = more.filter((n) => n.group === g);
-    return items.length ? html`<div class="side-group">${en ? e : ar}</div>${items.map((n) => link(n, false))}` : "";
+  ${home ? link(webTab(home), home.key === tab) : ""}
+  ${groups.map((g) => {
+    const holds = g.items.some((i) => i.key === tab);
+    const open = holds || GROUP_OPEN.has(g.key);
+    return html`<details class="side-group" data-group="${g.key}"${open ? raw(" open") : ""}><summary aria-expanded="${open ? "true" : "false"}">${en ? g.label.en : g.label.ar}</summary>${g.items.map((n) => link(n, n.key === tab))}</details>`;
   })}
 </nav>`;
 }
 
 // The CRM owner's own bottom bar: Home · Tracking · Board · Alerts · Settings.
-const CRM_BAR = [
-  { key: "home", href: "/app", ar: "الرئيسية", en: "Home", icon: "home" },
-  { key: "owner", href: "/app/owner", ar: "المتابعة", en: "Tracking", icon: "chart" },
-  { key: "board", href: "/app/owner/board", ar: "اللوحة", en: "Board", icon: "gauge" },
-  { key: "alerts", href: "/app/notifications", ar: "التنبيهات", en: "Alerts", icon: "bell" },
-  { key: "settings", href: "/app/settings", ar: "الإعدادات", en: "Settings", icon: "settings" }
-];
+const CRM_BAR = NavSpec.TABS.crm.map(webTab);
 const CRM_ROOTS = new Set(["/app", "/app/owner", "/app/owner/board", "/app/notifications", "/app/settings", "/app/more"]);
 
 /** Which place of the CRM owner's bar a page belongs to. */
@@ -305,4 +256,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { sideMenu, tabsFor, SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, navFor, TABS, tabOf, HTMX_CONFIG };
+module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, navFor, tabOf, HTMX_CONFIG };

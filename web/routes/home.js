@@ -1,7 +1,7 @@
 // web/routes/home.js — /app/ home of a signed-in broker
 "use strict";
 
-const { html, raw, navFor } = require("../html");
+const { html, raw, moreGroups } = require("../html");
 const Swallow = require("../../lib/swallow");
 const { icon } = require("../icons");
 const Dash = require("../../services/dashboards");
@@ -33,20 +33,16 @@ function register(web, { pool, page }) {
   web.get("/more", (req, res) => {
     const { broker } = req.session;
     const en = broker.preferred_lang === "en";
-    const groups = [
-      ["work", en ? "Work" : "الشغل"],
-      ["agency", en ? "Agency" : "الشركة"],
-      ["account", en ? "Account" : "الحساب"]
-    ];
-    const items = navFor(broker);
+    const groups = moreGroups(broker); // the same groups as the side menu and the app (lib/navSpec.js)
     const support = Onboarding.supportUrl(broker, en ? "en" : "ar");
     const row = (href, ic, label, extra = "", cls = "") => html`<li${cls ? raw(` class="${cls}"`) : ""}><a class="listrow" href="${href}"${extra}>${icon(ic)}<span>${label}</span></a></li>`;
     return page(req, res, {
       title: en ? "More" : "المزيد",
       body: html`<h1>${en ? "More" : "المزيد"}</h1>
-${groups.map(([g, label]) => {
-  const list = items.filter((n) => n.group === g);
-  return list.length ? html`<section class="card list" data-more="${g}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : "";
+${groups.map((g) => {
+  const list = g.items;
+  const label = en ? g.label.en : g.label.ar;
+  return list.length ? html`<section class="card list" data-more="${g.key}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : "";
 })}
 <section class="card list"><ul class="rows">
   <li><a class="listrow" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${icon("globe")}<span>${en ? "عربي" : "English"}</span></a></li>

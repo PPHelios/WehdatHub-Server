@@ -20,6 +20,7 @@ const Commission = require("../../domain/commission");
 const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
+const { switchField, choiceField } = require("../views/switches");
 const PlaceReview = require("../../services/placeReview");
 const Referrals = require("../../services/referrals");
 const Intake = require("../../services/leadIntake");
@@ -142,13 +143,11 @@ ${d.sources && d.sources.length
 
 /** Data security for managers: who sees private unit details, and the Excel export of every unit. */
 function privacySection(scope, lang, csrf, notice, canSwitch = false) {
-  const opt = (v, label) => html`<label class="pill"><input type="radio" name="scope" value="${v}"${scope === v ? html` checked` : ""}><span>${label}</span></label>`;
   return html`<section class="card stack" id="data-security">
   <h2>${L(lang, "أمان البيانات", "Data security")}</h2>
   ${notice === "saved" ? html`<p class="notice ok">${L(lang, "✅ اتحفظ.", "✅ Saved.")}</p>` : ""}
   <form method="post" action="/app/dashboard/secret-details" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
-    <p>${L(lang, "مين يشوف المالك والعمولة ورقم الوحدة والعنوان واللوكيشن؟", "Who sees the owner, commission, unit number, address and pin?")}</p>
-    <div class="pills">${opt("restricted", L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers"))}${opt("all", L(lang, "كل البروكرز في الشركة", "Every broker in the agency"))}</div>
+    ${choiceField({ name: "scope", value: scope, disabled: !canSwitch, legend: L(lang, "مين يشوف المالك والعمولة ورقم الوحدة والعنوان واللوكيشن؟", "Who sees the owner, commission, unit number, address and pin?"), options: [{ value: "restricted", label: L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers") }, { value: "all", label: L(lang, "كل البروكرز في الشركة", "Every broker in the agency") }] })}
     <p class="muted small">${L(lang, "لو مقفولة، أي بروكر تاني يقدر يطلب يشوفها، وصاحب الوحدة أو مدير يوافق. كل طلب ورد بيتسجل.", "When closed, another broker can ask; the unit's broker or a manager answers. Every ask and answer is logged.")}</p>
     ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
@@ -161,8 +160,7 @@ function brokerEditSection(allowed, lang, csrf, canSwitch) {
   return html`<section class="card stack" id="broker-edit">
   <h2>${L(lang, "إضافة وتعديل الوحدات للبروكرز", "Brokers adding and editing units")}</h2>
   <form method="post" action="/app/dashboard/brokers-edit-units" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
-    <label class="pill"><input type="checkbox" name="allowed" value="on"${allowed ? html` checked` : ""}${canSwitch ? "" : html` disabled`}><span>${L(lang, "البروكرز يقدروا يضيفوا ويعدّلوا وحدات", "Brokers may add and edit units")}</span></label>
-    <p class="muted small">${L(lang, "لو اتقفلت، البروكرز ومسؤولو الفرق يشوفوا الوحدات بس. المديرين وإدخال البيانات مش متأثرين.", "When off, brokers and team leaders can only view units. Managers and data entry are not affected.")}</p>
+    ${switchField({ name: "allowed", on: allowed, disabled: !canSwitch, lang, label: L(lang, "البروكرز يقدروا يضيفوا ويعدّلوا وحدات", "Brokers may add and edit units"), sentence: L(lang, "البروكرز ومسؤولو الفرق يقدروا يضيفوا ويعدّلوا الوحدات. اقفلها عشان تبقى للقراءة بس عندهم. المديرين وإدخال البيانات مش متأثرين.", "Brokers and team leads can add and edit units. Turn off to make units read-only for them. Managers and data entry are not affected.") })}
     ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الشركة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
 </section>`;
@@ -194,10 +192,9 @@ function billingSections(b, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
   return html`${b.csrf !== undefined ? newAgencySection(lang, b.csrf) : ""}<section class="card" id="signups">
   <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
-  <form method="post" action="/app/owner/signup" class="row">
-    <span>${b.open ? L(lang, "التسجيل مفتوح؛ كل طلب مستني موافقتك.", "Sign-up is open; every request waits for your approval.") : L(lang, "التسجيل مقفول.", "Sign-up is closed.")}</span>
-    <input type="hidden" name="open" value="${b.open ? "0" : "1"}">
-    <button type="submit" class="${b.open ? "secondary" : ""}" data-signup-toggle="${b.open ? "close" : "open"}">${b.open ? L(lang, "اقفل التسجيل", "Close sign-up") : L(lang, "افتح التسجيل", "Open sign-up")}</button>
+  <form method="post" action="/app/owner/signup" class="stack" data-signup-form>
+    ${switchField({ name: "open", value: "1", on: b.open, lang, id: "signup-switch", label: L(lang, "التسجيل مفتوح", "Sign-up is open"), sentence: L(lang, "لما يكون شغّال، أي شركة تقدر تطلب تسجيل وكل طلب بيستنى موافقتك. لما يتقفل، مفيش طلبات جديدة.", "When on, any agency can ask to sign up and every request waits for your approval. When off, no new requests come in.") })}
+    <button type="submit" class="secondary" data-signup-toggle="save">${L(lang, "حفظ", "Save")}</button>
   </form>
   ${b.signups.length
     ? html`<table><tbody>${b.signups.map(
@@ -244,7 +241,7 @@ function readingSection(rows, lang) {
   <tbody>${rows.map(
     (a) => html`<tr data-reading="${a.id}"><td>${a.name}</td><td>${a.used} ${L(lang, "صفحة", "pages")}${a.reused ? html` <span class="muted">(+${a.reused} ${L(lang, "متعادة", "reused")})</span>` : ""}</td>
     <td><form method="post" action="/app/owner/price-reading/${a.id}" class="row">
-      <label><input type="checkbox" name="enabled" value="on"${a.enabled ? html` checked` : ""}> ${L(lang, "مفعّلة", "On")}</label>
+      ${switchField({ name: "enabled", on: a.enabled, lang, label: L(lang, "مفعّلة", "On") })}
       <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
     </form></td></tr>`
   )}</tbody></table></div>
@@ -437,7 +434,7 @@ ${notice || ""}
       <label>${L(lang, "مدفوعة لحد", "Paid until")}<input type="date" name="until" value="${day(a.paid_until)}"></label>
       <label>${L(lang, "أو عدد شهور من النهارده", "Or months from today")}<input type="number" name="months" min="0" max="36" inputmode="numeric"></label>
     </div>
-    <label class="check"><input type="checkbox" name="pilot" value="1"${a.pilot ? html` checked` : ""}> ${L(lang, "تجريبي مجاني (Pilot)", "Free pilot")}</label>
+    ${switchField({ name: "pilot", value: "1", on: a.pilot, lang, label: L(lang, "تجريبي مجاني (Pilot)", "Free pilot"), sentence: L(lang, "الشركة على باقة Office ببلاش لحد ما الـPOC يخلص.", "The agency is on the Office plan for free until the POC ends.") })}
     <button type="submit">${L(lang, "حفظ الباقة", "Save the plan")}</button>
   </form>
   <p class="muted small">${L(lang, "الأسعار في ملف الباقات؛ هنا بتغير باقة الشركة ومدتها بس.", "Prices live in the plans file; this only changes this agency's plan and dates.")}</p>

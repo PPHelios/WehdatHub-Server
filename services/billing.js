@@ -91,10 +91,11 @@ async function unitCapacity(db, agencyId, { adding = 1, now = new Date() } = {})
 
 /**
  * Throws PLAN_QUOTA_EXCEEDED (handled like the daily AI caps) when the agency has used this month's credits (the plan's
- * pool plus bundles and grants; services/credits.js). Only AI calls are checked, so searches fall back to the local
+ * pool plus bundles and grants; services/credits.js), or, in the agency's per-person mode, when this person (brokerId)
+ * has used their own allowance (err.kind "user"; services/aiUserLimits.js). Both must pass: the pool still caps the agency. Only AI calls are checked, so searches fall back to the local
  * parser and the website forms keep working with no AI when the credits are gone.
  */
-async function checkAllowance(db, agencyId, { now = new Date() } = {}) {
+async function checkAllowance(db, agencyId, { now = new Date(), brokerId = null } = {}) {
   const agency = await agencyRow(db, agencyId);
   const { plan } = effectivePlan(agency, now);
   const [used, pool] = await Promise.all([Credits.usedThisMonth(db, agencyId, { now }), Credits.poolFor(db, agencyId, plan.id, { now })]);
@@ -105,6 +106,17 @@ async function checkAllowance(db, agencyId, { now = new Date() } = {}) {
     err.limit = pool.total;
     err.used = used;
     throw err;
+  }
+  if (brokerId) {
+    const own = await require("./aiUserLimits").overOwnLimit(db, agencyId, brokerId, { now });
+    if (own.blocked) {
+      const err = new Error("AI credits used up for this person this month");
+      err.code = "PLAN_QUOTA_EXCEEDED";
+      err.kind = "user";
+      err.limit = own.allowance;
+      err.used = own.used;
+      throw err;
+    }
   }
   return { used, limit: pool.total };
 }

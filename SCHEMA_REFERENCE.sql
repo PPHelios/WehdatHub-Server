@@ -377,7 +377,10 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   referral_credit_months smallint DEFAULT 0 NOT NULL,
   lead_routing jsonb DEFAULT '{}'::jsonb NOT NULL,
   notify_policy jsonb DEFAULT '{}'::jsonb NOT NULL,
-  owner_code_next integer DEFAULT 1 NOT NULL
+  owner_code_next integer DEFAULT 1 NOT NULL,
+  ai_usage_mode text DEFAULT 'pool'::text NOT NULL,
+  ai_user_default_credits integer,
+  manager_can_edit_ai_settings boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -405,7 +408,8 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   target_deals smallint,
   target_commission bigint,
   onboarding jsonb DEFAULT '{}'::jsonb NOT NULL,
-  team_lead_id uuid
+  team_lead_id uuid,
+  ai_user_credits integer
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1926,6 +1930,8 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FRO
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_period_days_check CHECK ((period_days = ANY (ARRAY[1, 7, 30])));
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_tab_check CHECK ((tab = ANY (ARRAY['overview'::text, 'money'::text, 'ai'::text, 'performance'::text, 'search'::text, 'agencies'::text, 'operations'::text])));
+ALTER TABLE agencies ADD CONSTRAINT agencies_ai_usage_mode_check CHECK ((ai_usage_mode = ANY (ARRAY['pool'::text, 'per_user'::text])));
+ALTER TABLE agencies ADD CONSTRAINT agencies_ai_user_default_credits_check CHECK (((ai_user_default_credits IS NULL) OR (ai_user_default_credits >= 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
@@ -1945,6 +1951,7 @@ ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_chec
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg = ANY (ARRAY['-7'::integer, '-257'::integer])));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check CHECK (((length(credential_id) >= 16) AND (length(credential_id) <= 1400)));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
+ALTER TABLE brokers ADD CONSTRAINT brokers_ai_user_credits_check CHECK (((ai_user_credits IS NULL) OR (ai_user_credits >= 0)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_draft_style_check CHECK (((draft_style IS NULL) OR (length(draft_style) <= 600)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text, 'team_lead'::text, 'data_entry'::text])));
 ALTER TABLE brokers ADD CONSTRAINT brokers_target_commission_check CHECK (((target_commission IS NULL) OR (target_commission > 0)));

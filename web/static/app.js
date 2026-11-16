@@ -1605,3 +1605,22 @@
     }
   });
 })();
+
+/* Side menu groups: the browser remembers which are open. The page works without this (details/summary). */
+(function () {
+  var KEY = "wh-nav-";
+  function get(k) { try { return window.localStorage.getItem(KEY + k); } catch (e) { return null; } }
+  function set(k, v) { try { window.localStorage.setItem(KEY + k, v); } catch (e) { /* blocked: stay as is */ } }
+  function sync(d) { var s = d.querySelector("summary"); if (s) s.setAttribute("aria-expanded", d.open ? "true" : "false"); }
+  function init() {
+    document.querySelectorAll(".sidemenu details.side-group").forEach(function (d) {
+      var saved = get(d.getAttribute("data-group"));
+      // The group holding the page you are on stays open whatever was saved.
+      if (saved === "0" && !d.querySelector('[aria-current="page"]')) d.open = false;
+      else if (saved === "1") d.open = true;
+      sync(d);
+      d.addEventListener("toggle", function () { set(d.getAttribute("data-group"), d.open ? "1" : "0"); sync(d); });
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();

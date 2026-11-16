@@ -62,9 +62,9 @@ async function actionMap(db) {
  * Credits an agency used this Cairo month, charged once per user action: a voice note costs the voice credits (not a
  * text request on top), a search is one text request (its second telemetry row is free), flyer photo ordering is the
  * flyer credits, and each fresh document page is the page credits (the AI call behind a page is not charged twice;
- * a page another agency already read is free).
+ * a page another agency already read is free). With brokerId, only that person's use (their own allowance, services/aiUserLimits.js).
  */
-async function usedThisMonth(db, agencyId, { now = new Date() } = {}) {
+async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null } = {}) {
   const c = await actionMap(db);
   const { rows } = await db.query(
     `SELECT
@@ -76,10 +76,10 @@ async function usedThisMonth(db, agencyId, { now = new Date() } = {}) {
             WHEN operation_type = 'assistant' THEN $6
             ELSE $4 END), 0)::int
           FROM operation_logs
-         WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START}) AS ai,
+         WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START} AND ($8::uuid IS NULL OR broker_id = $8::uuid)) AS ai,
        (SELECT count(*)::int FROM price_read_log
-         WHERE agency_id = $1 AND created_at >= ${MONTH_START}) AS pages`,
-    [agencyId, now.toISOString(), c.voice ?? 0, c.text ?? 0, c.flyer ?? 0, c.assistant ?? 0, PAGE_OPS]
+         WHERE agency_id = $1 AND created_at >= ${MONTH_START} AND ($8::uuid IS NULL OR broker_id = $8::uuid)) AS pages`,
+    [agencyId, now.toISOString(), c.voice ?? 0, c.text ?? 0, c.flyer ?? 0, c.assistant ?? 0, PAGE_OPS, brokerId]
   );
   return rows[0].ai + rows[0].pages * (c.page ?? 0);
 }

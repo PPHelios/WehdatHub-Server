@@ -395,6 +395,7 @@ function errorText(out, lang = "ar") {
     case "empty":
       return L(lang, "اكتب أو سجّل التحديث الأول.", "Type or record the update first.");
     case "quota":
+    case "user":
     case "daily":
     case "off":
       return AiBlock.text(out.error, lang, { owner: Boolean(out.owner) });

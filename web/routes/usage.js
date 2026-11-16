@@ -13,6 +13,8 @@ const Fx = require("../../services/fx");
 const FxDomain = require("../../domain/fx");
 const Dash = require("../../services/dashboards");
 const { html } = require("../html");
+const { switchField, choiceField } = require("../views/switches");
+const AiLimits = require("../../services/aiUserLimits");
 const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -62,6 +64,54 @@ function aiLogPage(lang, log, filters, base, title, balance = null) {
 </section>`;
 }
 
+/**
+ * AI use per person (spec-web.md sections 4 and 4b). Every person sees their own standing; managers and the owner also see
+ * everyone's use. Only the owner changes the settings, or a manager when the owner allowed it; brokers never see the controls.
+ */
+function aiLimitSections(lang, broker, lim, query = {}) {
+  const owner = isAgencyOwner(broker);
+  const manager = isManager(broker);
+  const m = lim.mine;
+  const mineCard = html`<section class="card" data-ai-mine data-ai-mode="${lim.mode}">
+  <h2>${L(lang, "استهلاكي للذكاء الاصطناعي", "My AI use")}</h2>
+  ${lim.mode === "per_user"
+    ? m.allowance == null
+      ? html`<p>${L(lang, `مفيش حد شخصي ليك. استهلكت ${m.used} الشهر ده.`, `You have no personal limit. Used ${m.used} this month.`)}</p>`
+      : html`<p data-ai-own-limit><strong>${L(lang, `حدك في الذكاء الاصطناعي: ${m.allowance} الشهر ده، استهلكت ${m.used}`, `Your AI limit: ${m.allowance} this month, used ${m.used}`)}</strong></p>
+  <meter min="0" max="${m.allowance}" value="${Math.min(m.used, m.allowance)}"></meter>`
+    : html`<p>${L(lang, `استهلكت ${m.used} الشهر ده، من رصيد الشركة المشترك.`, `You used ${m.used} this month, from the agency's shared pool.`)}</p>`}
+  <p><a href="/app/usage/log">${L(lang, "سجلي سطر بسطر", "My log, line by line")}</a></p>
+</section>`;
+  if (!manager) return mineCard;
+  const can = lim.canEdit;
+  const peopleRows = lim.people.map(
+    (p) => html`<tr data-ai-person="${p.id}"><td>${p.name}</td><td>${can ? html`<input type="number" name="ov_${p.id}" min="0" max="1000000" inputmode="numeric" value="${p.override ?? ""}" placeholder="${lim.defaultCredits ?? ""}" aria-label="${L(lang, "حد " + p.name, "Limit for " + p.name)}">` : p.allowance ?? "—"}</td><td>${p.used}</td></tr>`
+  );
+  const body = html`${choiceField({
+    name: "ai_mode",
+    value: lim.mode,
+    disabled: !can,
+    legend: L(lang, "رصيد الذكاء الاصطناعي بيتوزع إزاي؟", "How is AI credit shared?"),
+    options: [
+      { value: "pool", label: L(lang, "رصيد مشترك", "Shared pool"), hint: L(lang, "كل الفريق بياخد من رصيد الشركة الشهري.", "Everyone draws from the agency's monthly credits.") },
+      { value: "per_user", label: L(lang, "كل شخص له حد", "Each person has a limit"), hint: L(lang, "كل شخص له حد شهري، وده فوق رصيد الشركة. الرصيد المشترك لسه هو السقف.", "Each person has a monthly limit on top of the pool. The pool still caps the agency.") }
+    ]
+  })}
+  <label>${L(lang, "الحد الافتراضي لكل شخص (فاضي = بدون حد)", "Default limit per person (blank = none)")} <input type="number" name="ai_default" min="0" max="1000000" inputmode="numeric" value="${lim.defaultCredits ?? ""}"${can ? "" : html` disabled`}></label>
+  <div class="scroll"><table><thead><tr><th>${L(lang, "الشخص", "Person")}</th><th>${L(lang, "الحد (فاضي = الافتراضي)", "Limit (blank = default)")}</th><th>${L(lang, "استهلك الشهر ده", "Used this month")}</th></tr></thead><tbody>${peopleRows}</tbody></table></div>`;
+  return html`${mineCard}<section class="card stack" id="ai-limits" data-ai-limits>
+  <h2>${L(lang, "الذكاء الاصطناعي لكل شخص", "AI use per person")}</h2>
+  ${query.ai === "saved" ? html`<p class="notice ok" role="status">✅ ${L(lang, "اتحفظ.", "Saved.")}</p>` : ""}
+  ${query.ai === "bad" ? html`<p class="notice bad" role="alert">❌ ${L(lang, "الرقم لازم يكون عدد صحيح من 0 لـ 1,000,000، أو فاضي.", "A limit must be a whole number from 0 to 1,000,000, or blank.")}</p>` : ""}
+  ${can
+    ? html`<form method="post" action="/app/usage/ai-limits" class="stack" data-ai-limits-form>${body}<button type="submit">${L(lang, "حفظ", "Save")}</button></form>`
+    : html`<div class="stack" data-ai-limits-readonly>${body}<p class="muted" data-ai-limits-locked>${L(lang, "مالك الشركة لم يسمح للمديرين بتغيير ده.", "The agency owner has not allowed managers to change this")}</p></div>`}
+  ${owner
+    ? html`<form method="post" action="/app/usage/ai-limits/managers" class="stack" data-ai-managers-form>${switchField({ name: "allowed", on: lim.managerCanEdit, lang, label: L(lang, "المديرين يقدروا يغيّروا إعدادات الذكاء الاصطناعي", "Managers can change AI usage settings"), sentence: L(lang, "لما يكون شغّال، المدير يشوف الإعدادات دي ويقدر يغيّرها. لما يتقفل، يشوفها للقراءة بس.", "When on, managers see these settings and can change them. When off, they see them read only.") })}<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button></form>`
+    : ""}
+</section>`;
+}
+
 function register(web, { pool, page }) {
   // F24: managers see their agency's AI log; the app owner any agency's (/app/owner links here).
   const logFor = async (req, res, agencyId, base, title, xlsx, { onlyBroker = null } = {}) => {
@@ -100,6 +150,7 @@ function register(web, { pool, page }) {
     const state = await Credits.check(pool, broker);
     const [ai, aiActions] = await Promise.all([Billing.allowance(pool, broker.agency_id), AiCredits.actions(pool)]);
     const mine = await Credits.usage(pool, broker.agency_id, { brokerId: broker.id });
+    const lim = await AiLimits.overview(pool, broker);
     const agency = manager ? await Credits.usage(pool, broker.agency_id) : null;
     const own = manager ? (await pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] : null;
     const codePrefix = own ? own.code_prefix || UnitCode.prefixFrom(own.name) : "";
@@ -143,6 +194,7 @@ ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L
   <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${isAgencyOwner(broker) ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : manager ? html` · <span class="muted">${L(lang, "لزيادة الرصيد كلّم مالك الشركة", "To add credits, ask your agency owner")}</span>` : ""}</p>
   ${creditTable(aiActions, lang)}
 </section>
+${aiLimitSections(lang, broker, lim, req.query)}
 ${manager
   ? tabs("usage_tab", [
       [L(lang, "أنا", "Me"), mineCard],
@@ -178,8 +230,8 @@ ${isAgencyOwner(broker) ? html`<p class="card"><a href="/app/usage/ai" data-ai-s
 <p class="muted">${L(lang, "أي ميزة مقفولة بيختفي زرها ومبتصرفش رصيد. مفتاح التبويب بيقفل كل اللي تحته.", "A feature that is off hides its button and spends no credits. A tab's master switch turns off everything under it.")}</p>
 ${req.query.saved === "1" ? html`<p class="ok">${L(lang, "اتحفظ.", "Saved.")}</p>` : ""}
 <form method="post" action="/app/usage/ai" class="stack" data-ai-switches><input type="hidden" name="_csrf" value="${req.session.csrf}">
-${sw.tabs.map((t) => html`<fieldset class="card stack" data-tab="${t.id}"><legend><label class="row"><input type="checkbox" name="tab_${t.id}" value="on"${t.on ? html` checked` : ""}> <b>${L(lang, t.ar, t.en)}</b></label></legend>
-${t.features.map((f) => html`<label class="row"><input type="checkbox" name="f_${f.key}" value="on"${f.on ? html` checked` : ""}> ${L(lang, f.ar, f.en)}</label>`)}</fieldset>`)}
+${sw.tabs.map((t) => html`<fieldset class="card stack" data-tab="${t.id}"><legend>${L(lang, t.ar, t.en)}</legend>${switchField({ name: `tab_${t.id}`, on: t.on, lang, label: L(lang, "الكل في التبويب ده", "This whole tab") })}
+${t.features.map((f) => switchField({ name: `f_${f.key}`, on: f.on, lang, label: L(lang, f.ar, f.en) }))}</fieldset>`)}
 <button type="submit">${L(lang, "حفظ", "Save")}</button></form>
 <p><a href="/app/usage">${L(lang, "رجوع", "Back")}</a></p>` });
   });
@@ -189,6 +241,23 @@ ${t.features.map((f) => html`<label class="row"><input type="checkbox" name="f_$
     if (!isAgencyOwner(broker)) return res.status(403).send("Agency owner only");
     await Switches.save(pool, broker, req.body);
     return res.redirect(303, "/app/usage/ai?saved=1");
+  });
+
+  // AI use per person: mode, default limit and per-person limits. The owner, or a manager the owner allowed.
+  web.post("/usage/ai-limits", async (req, res) => {
+    const { broker } = req.session;
+    const overrides = {};
+    for (const [k, v] of Object.entries(req.body || {})) if (k.startsWith("ov_") && /^[0-9a-f-]{36}$/i.test(k.slice(3))) overrides[k.slice(3)] = v;
+    const r = await AiLimits.save(pool, broker, { mode: req.body.ai_mode, defaultCredits: req.body.ai_default, overrides });
+    if (r.error === "forbidden") return res.status(403).type("text/plain").send(L(langOf(req), "مش مسموح", "Not allowed"));
+    return res.redirect(303, `/app/usage?ai=${r.ok ? "saved" : "bad"}#ai-limits`);
+  });
+
+  // The agency owner lets managers change those settings (or not).
+  web.post("/usage/ai-limits/managers", async (req, res) => {
+    const r = await AiLimits.setManagerCanEdit(pool, req.session.broker, req.body.allowed === "on");
+    if (!r.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الشركة بس", "Agency owner only"));
+    return res.redirect(303, "/app/usage?ai=saved#ai-limits");
   });
 
   web.post("/usage/fx", async (req, res) => {

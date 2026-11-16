@@ -5,6 +5,7 @@ const Notifications = require("../../lib/notifications");
 const WebPush = require("../../lib/channels/webpush");
 const { getConfig } = require("../../config");
 const { html } = require("../html");
+const { switchField } = require("../views/switches");
 const Passkeys = require("../../services/passkeys");
 const { passkeySection } = require("./passkeys");
 const { isManager, isDataEntry, isCrmOwner } = require("../../lib/authz");
@@ -59,7 +60,7 @@ function notifyRow(k, policy, broker, lang, tgOn) {
     ["app", L(lang, "التطبيق (ببلاش)", "Phone app (free)"), true]
   ].filter(([, , show]) => show);
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
-  ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`<label>${L(lang, "تشغيل", "On")} <select name="on_${k}" data-kind="${k}"${fixed("on") ? html` disabled` : ""}><option value="1"${eff.enabled ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${eff.enabled ? "" : html` selected`}>${L(lang, "مقفول", "Off")}</option></select></label>`}
+  ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`${switchField({ name: `on_${k}`, value: "1", send0: true, on: eff.enabled, lang, disabled: fixed("on"), label: L(lang, "تشغيل", "On"), sentence: L(lang, "شغّله عشان توصلك التنبيهات دي.", "Turn on to get these alerts.") })}`}
   <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") || !eff.enabled ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
   ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") || !eff.enabled ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
 </div>`;
@@ -159,7 +160,8 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
     const on = {};
     const frequency = {};
     for (const k of Notifications.kindsFor(broker)) {
-      if (req.body[`on_${k}`] === "0" || req.body[`on_${k}`] === "1") on[k] = req.body[`on_${k}`] === "1";
+      const onValue = [].concat(req.body[`on_${k}`] ?? []).pop(); // a switch posts "0" then "1" when on
+      if (onValue === "0" || onValue === "1") on[k] = onValue === "1";
       if (["immediate", "hourly", "daily"].includes(req.body[`fq_${k}`])) frequency[k] = req.body[`fq_${k}`];
     }
     await Notifications.savePrefs(pool, await loadBroker(pool, broker), {

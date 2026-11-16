@@ -667,7 +667,13 @@ select.need { border: 2px solid var(--brand); }
   .sidemenu a[aria-current="page"] { background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; }
   .sidemenu .side-add { justify-content: center; min-height: 48px; margin-block-end: 8px; background: var(--brand); color: var(--on-brand); font-weight: 700; border-radius: 12px; }
   .sidemenu .side-add:hover { background: var(--brand); filter: brightness(0.95); }
-  .side-group { margin-block: 12px 4px; padding-inline: 14px; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+  .side-group { margin-block: 4px 0; }
+  .side-group > summary { display: flex; align-items: center; justify-content: space-between; min-height: 40px; padding-inline: 14px; border-radius: 10px; cursor: pointer; list-style: none; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+  .side-group > summary::-webkit-details-marker { display: none; }
+  .side-group > summary::after { content: ""; width: 8px; height: 8px; border-inline-end: 2px solid currentColor; border-block-end: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
+  .side-group[open] > summary::after { transform: rotate(-135deg); }
+  .side-group > summary:hover { background: var(--soft); }
+  .side-group > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 }
 
 /* Sale / Rent badge on every unit row (search, units, map list): an inline pill, not the bell's red counter. */
@@ -1014,3 +1020,27 @@ label:has(> [data-area-list]) { position: relative; }
 
 .pj-card .pj-cover.pj-empty { aspect-ratio: 16 / 4.2; }
 .pj-card .pj-cover.pj-empty .pj-none svg { width: 32px; height: 32px; }
+
+/* Owner controls: one pattern (web/views/switches.js). On/off = a switch with the state word; a choice = radio buttons. */
+.sw-row { display: grid; gap: 4px; }
+.sw { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.sw input { position: absolute; inset-inline-start: 0; inset-block-start: 50%; width: 44px; height: 28px; margin: 0; transform: translateY(-50%); opacity: 0; cursor: pointer; }
+.sw-track { position: relative; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--neutral); transition: background 0.15s; }
+.sw-thumb { position: absolute; inset-block-start: 3px; inset-inline-start: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--on-neutral); transition: inset-inline-start 0.15s; }
+.sw input:checked + .sw-track { background: var(--brand); }
+.sw input:checked + .sw-track .sw-thumb { inset-inline-start: 21px; background: var(--on-brand); }
+.sw input:focus-visible + .sw-track { outline: 2px solid var(--brand); outline-offset: 2px; }
+.sw input:disabled + .sw-track, .sw input:disabled ~ .sw-label, .sw input:disabled ~ .sw-state { opacity: 0.55; cursor: not-allowed; }
+.sw-label { font-weight: 600; }
+.sw-state { margin-inline-start: auto; font-weight: 700; color: var(--muted); }
+.sw-on { display: none; }
+.sw input:checked ~ .sw-state .sw-on { display: inline; color: var(--brand-ink); }
+.sw input:checked ~ .sw-state .sw-off { display: none; }
+.sw-hint { margin: 0; padding-inline-start: 56px; }
+.choice { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.choice legend { margin-block-end: 8px; padding: 0; font-weight: 600; }
+.choice-opt { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-field); background: var(--field); cursor: pointer; }
+.choice-opt:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); }
+.choice-opt input { margin-block-start: 3px; }
+.choice-opt b { display: block; font-weight: 600; }
+.choice-hint { display: block; }
