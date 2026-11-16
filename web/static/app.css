@@ -1107,3 +1107,8 @@ section[data-kind] li[data-row] { padding: 8px 0; border-block-end: 1px solid va
 /* The busy rule: while a server call runs, the other controls on the page cannot be used (web/static/busy.js). */
 [data-busy-off="a"] { pointer-events: none; opacity: 0.6; }
 [data-busy] input:disabled, [data-busy] select:disabled, [data-busy] textarea:disabled { opacity: 0.6; cursor: progress; }
+
+/* Unit action menus (Status, More) open as a panel above the tab bar on phones, not anchored to a grid cell that can overflow. */
+@media (max-width: 1023.98px) {
+  #unit-actions .status-menu[open] .status-options, #unit-actions .more-menu[open] .more-list { position: fixed; inset-inline: 12px; top: auto; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 16px); max-height: 60vh; overflow-y: auto; min-width: 0; z-index: 40; box-shadow: 0 -8px 28px rgba(14, 21, 33, 0.22); }
+}
