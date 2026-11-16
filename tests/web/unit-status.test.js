@@ -52,11 +52,14 @@ describe("unit status on the web", () => {
     expect(page.text).toContain("status-menu");
     expect(page.text).toContain('href="#share"');
     expect(page.text).toContain("/app/units/VIL-44/flyer");
-    const branded = await agent.get("/app/units/VIL-44/flyer");
+    const first = await agent.get("/app/units/VIL-44/flyer");
+    expect(first.status).toBe(200);
+    expect(first.text).not.toContain("data-flyer-image"); // choosing a style comes first, nothing is made
+    const branded = await agent.get("/app/units/VIL-44/flyer?make=1");
     expect(branded.status).toBe(200);
     const src = (r) => (r.text.match(/data-flyer-image/) ? r.text.match(/<img src="([^"]+)"[^>]*data-flyer-image/)?.[1] : null);
     expect(src(branded)).toBeTruthy();
-    const plain = await agent.get("/app/units/VIL-44/flyer?unbranded=1");
+    const plain = await agent.get("/app/units/VIL-44/flyer?make=1&unbranded=1");
     expect(src(plain)).toBeTruthy();
     expect(src(plain)).not.toBe(src(branded));
   });

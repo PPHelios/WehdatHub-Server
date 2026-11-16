@@ -620,6 +620,13 @@
       root.classList.add("tg-main-on");
     }
     handlers.main_button_pressed = function () { var el = mainTarget(); if (el) el.click(); };
+    // Download an image inside Telegram: the link would open the picture in a browser, so ask Telegram to save the file itself.
+    document.addEventListener("click", function (e) {
+      var a = e.target && e.target.closest ? e.target.closest("a[data-download-image]") : null;
+      if (!a) return;
+      e.preventDefault();
+      post("web_app_request_file_download", { url: new URL(a.getAttribute("href"), location.href).href, file_name: a.getAttribute("data-download-name") || "image.jpg" });
+    }, true);
     function pad(name, d) { ["top", "bottom", "left", "right"].forEach(function (k) { if (typeof d[k] === "number") root.style.setProperty("--tg-" + name + "-" + k, d[k] + "px"); }); }
     handlers.safe_area_changed = function (d) { pad("safe", d); };
     handlers.content_safe_area_changed = function (d) { pad("content", d); };

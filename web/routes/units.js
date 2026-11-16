@@ -377,9 +377,14 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const theme = req.query.theme === "light" ? "light" : "dark";
     const unbranded = req.query.unbranded === "1";
     const code = encodeURIComponent(listing.code);
-    const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
-    const out = gate.allowed ? await Flyer.flyerUrlFor(pool, broker, listing, { theme, lang, unbranded }) : { error: "rate" };
-    const link = (t, u, label) => html`<a class="btn secondary${theme === t && unbranded === u ? " active" : ""}" href="/app/units/${code}/flyer?theme=${t}${u ? "&unbranded=1" : ""}">${label}</a>`;
+    // Nothing is made (no credit spent) until a style is picked: the first visit only shows the choices.
+    const make = req.query.make === "1";
+    let out = null;
+    if (make) {
+      const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
+      out = gate.allowed ? await Flyer.flyerUrlFor(pool, broker, listing, { theme, lang, unbranded }) : { error: "rate" };
+    }
+    const link = (t, u, label) => html`<a class="btn secondary${make && theme === t && unbranded === u ? " active" : ""}" href="/app/units/${code}/flyer?make=1&theme=${t}${u ? "&unbranded=1" : ""}">${label}</a>`;
     return page(req, res, {
       title: listing.code,
       nav: "units",
@@ -388,9 +393,9 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   <div class="row">
     ${link("dark", false, L(lang, "غامق", "Dark"))}${link("light", false, L(lang, "فاتح", "Light"))}${link("dark", true, L(lang, "غامق من غير بيانات الشركة", "Dark, no brand"))}${link("light", true, L(lang, "فاتح من غير بيانات الشركة", "Light, no brand"))}
   </div>
-  ${out.url
+  ${!out ? html`<p class="muted">${L(lang, "اختار الشكل. الفلاير بيتعمل لما تدوس على واحد.", "Pick a style. The flyer is made when you tap one.")}</p><a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a>` : out.url
     ? html`<img src="${out.url}" alt="" style="max-width:min(100%,380px);height:auto" data-flyer-image>
-  <div class="row"><button type="button" data-share-image="${out.url}" data-share-name="${listing.code}-flyer.jpg">📤 ${L(lang, "شارك الفلاير", "Share flyer")}</button> <a class="btn secondary" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
+  <div class="row"><button type="button" data-share-image="${out.url}" data-share-name="${listing.code}-flyer.jpg">📤 ${L(lang, "شارك الفلاير", "Share flyer")}</button> <a class="btn secondary" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener" data-download-image data-download-name="${listing.code}-flyer.jpg">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
   <a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></div>`
     : html`<p class="notice bad">${out.error === "busy" || out.error === "rate" ? L(lang, "الفلاير مشغول دلوقتي. جرب بعد شوية.", "The flyer maker is busy. Try again in a moment.") : L(lang, "معرفناش نعمل الفلاير. جرب تاني.", "The flyer could not be made. Try again.")}</p>`}
 </section>`
