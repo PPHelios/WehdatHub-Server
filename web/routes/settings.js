@@ -56,8 +56,7 @@ function notifyRow(k, policy, broker, lang, tgOn) {
     ["both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)"), tgOn],
     ["telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)"), tgOn],
     ["web", L(lang, "الموقع (ببلاش)", "Website (free)"), true],
-    ["app", L(lang, "التطبيق (ببلاش)", "Phone app (free)"), true],
-    ["whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"), true]
+    ["app", L(lang, "التطبيق (ببلاش)", "Phone app (free)"), true]
   ].filter(([, , show]) => show);
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
   ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`<label>${L(lang, "تشغيل", "On")} <select name="on_${k}" data-kind="${k}"${fixed("on") ? html` disabled` : ""}><option value="1"${eff.enabled ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${eff.enabled ? "" : html` selected`}>${L(lang, "مقفول", "Off")}</option></select></label>`}
@@ -101,8 +100,8 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   ${kinds.length ? html`  <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
   <p class="muted">${L(
     lang,
-    "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الشركة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
-    "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
+    "التنبيه بيوصل على القناة اللي اخترتها. لو تليجرام مش متوصل أو فشل، بيوصل على الموقع أو التطبيق. وكله بيتسجل في 🔔.",
+    "Each alert comes on the channel you choose. When Telegram is not linked or fails, it comes on the website or the app. All of them are kept in 🔔."
   )}</p>
   ${kinds.map((k) => notifyRow(k, policy, broker, lang, tgOn))}
 ` : ""}

@@ -5,9 +5,11 @@
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
+jest.mock("../../lib/telegram", () => require("../harness/fake-telegram"));
 jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
 jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
+const { resetConfig } = require("../../config");
 const { createHarness, closeHarness } = require("../harness/app");
 const { signIn } = require("../harness/web");
 const Leads = require("../../services/leads");
@@ -18,8 +20,17 @@ const Stages = require("../../domain/leadStages");
 jest.setTimeout(90000);
 
 let h;
+beforeAll(() => {
+  process.env.TELEGRAM_BOT_TOKEN = "123:test";
+  resetConfig();
+});
+afterAll(() => {
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  resetConfig();
+});
 beforeEach(async () => {
   h = await createHarness();
+  await h.tgLink("broker"); // WhatsApp is no alert channel: Telegram is the default once linked
 });
 afterAll(closeHarness);
 
@@ -33,8 +44,8 @@ const openWindow = (who, at) =>
   ]);
 const reminders = (who = "broker") =>
   h.query("SELECT title, body, status, lead_id, deliver_after, channel FROM notifications WHERE broker_id = $1 AND dedupe_key LIKE 'fu:%' ORDER BY id", [h.BROKERS[who].id]);
-const sentTo = (who) => h.WA.outbox.filter((m) => m.to === h.BROKERS[who].phone);
-const ids = (m) => (m.buttons || []).map((b) => b.id);
+const sentTo = (who) => h.TG.outbox.filter((m) => m.method === "sendMessage" && m.chatId === String(h.TG_IDS[who]));
+const ids = (m) => (m.keyboard ? m.keyboard.flat().map((b) => b.callback_data) : (m.buttons || []).map((b) => b.id)); // Telegram keyboard or WhatsApp buttons
 async function lead(who = "broker", phones = "01012345678", name = "Sara") {
   return (await Leads.captureLead(h.pool, await row(who), { phones, name })).lead;
 }
@@ -53,7 +64,7 @@ test("a date with no time means 10:00 Cairo; the reminder comes at 10:00, not be
   expect(await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 61 * 60000) })).toEqual({ reminded: 0, brokers: 0 });
   expect(await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 60 * 60000) })).toEqual({ reminded: 1, brokers: 1 });
   const [n] = await reminders();
-  expect(n).toMatchObject({ status: "sent", channel: "whatsapp", lead_id: l.id });
+  expect(n).toMatchObject({ status: "sent", channel: "telegram", lead_id: l.id });
   expect(n.title).toBe("📅 متابعة: Sara (L-0001)");
   expect(n.body).toContain("📝 ask about the budget");
   const wa = sentTo("broker").pop();
@@ -110,6 +121,8 @@ test("a viewing reminder carries the unit's compact line and its place", async (
 });
 
 test("Done and Postpone from WhatsApp: done offers the next step; postpone moves a day and reminds again", async () => {
+  // The taps are answered on the bot channel the person writes on (WhatsApp here), so this broker is not linked to Telegram.
+  await h.query("UPDATE brokers SET telegram_user_id = NULL, telegram_chat_id = NULL WHERE id = $1", [h.BROKERS.broker.id]);
   const l = await lead();
   const due = new Date(Date.now() + 30 * 60 * 1000); // booked for 30 minutes ahead: the hour-before reminder goes out at once
   await Leads.setFollowUp(h.pool, await row("broker"), l.id, { at: due });

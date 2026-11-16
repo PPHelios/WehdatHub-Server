@@ -174,7 +174,7 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
 function policyCard({ policy, viewer, lang, notice = null }) {
   const Policy = require("../../lib/notificationPolicy");
   const owner = isAgencyOwner(viewer);
-  const chOpts = [["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تليجرام والموقع", "Telegram and website")], ["telegram", L(lang, "تليجرام بس", "Telegram only")], ["web", L(lang, "الموقع", "Website")], ["whatsapp", L(lang, "واتساب", "WhatsApp")]];
+  const chOpts = [["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تليجرام والموقع", "Telegram and website")], ["telegram", L(lang, "تليجرام بس", "Telegram only")], ["web", L(lang, "الموقع", "Website")]];
   const freqOpts = [["", L(lang, "هو يختار", "They choose")], ["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة", "Hourly")], ["daily", L(lang, "يومياً ٩ الصبح", "Daily at 9")]];
   return html`<form method="post" action="/app/team/policy" class="card stack" data-notify-policy>
   <h2>🔔 ${L(lang, "الإشعارات للفريق كله", "Notifications for the whole team")}</h2>

@@ -14,13 +14,13 @@ const when = (d) => new Date(d).toISOString().slice(0, 16).replace("T", " ");
 
 const CHANNEL = {
   telegram: ["تليجرام", "Telegram"],
-  whatsapp: ["واتساب", "WhatsApp"],
+  whatsapp: ["رسالة (قديم)", "Message (old)"], // rows from before WhatsApp stopped being a notification channel
   webpush: ["إشعار الموقع", "Web push"],
   inbox: ["الصندوق بس", "Inbox only"]
 };
 const REASON = {
   chosen: ["اختيارك", "your choice"],
-  fallback: ["واتساب فشل", "WhatsApp failed"],
+  fallback: ["تليجرام فشل", "Telegram failed"],
   no_credits: ["الرصيد خلص", "no credits"],
   window_closed: ["نافذة الـ24 ساعة مقفولة", "24-hour window closed"],
   quiet_hours: ["ساعات الهدوء", "quiet hours"],

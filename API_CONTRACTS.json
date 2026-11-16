@@ -976,7 +976,6 @@
       "REMINDER_MINUTES": "Array",
       "inQuietHours": ["prefs", "now"],
       "quietEnd": ["prefs", "now"],
-      "isWindowOpen": ["pool", "broker", "now"],
       "messageFor": ["rows", "lang"],
       "deliverRows": ["pool", "broker", "rows", "params"],
       "notifyBroker": ["pool", "broker", "opts"],
@@ -996,10 +995,8 @@
       "removePushSubscription": ["pool", "broker", "endpoint"],
       "pushCount": ["pool", "broker"]
     },
-    "lib/channels/whatsapp.js": {
-      "name": "String",
-      "textOf": ["message"],
-      "send": ["broker", "message", "params"]
+    "lib/channels/text.js": {
+      "textOf": ["message"]
     },
     "lib/channels/webpush.js": {
       "name": "String",

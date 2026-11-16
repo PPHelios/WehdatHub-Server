@@ -1,12 +1,12 @@
 // tests/unit/channels.test.js — lib/channels/*: one interface; push payloads carry nothing personal
 "use strict";
 
-const WhatsApp = require("../../lib/channels/whatsapp");
+const Text = require("../../lib/channels/text");
 const WebPush = require("../../lib/channels/webpush");
 const Telegram = require("../../lib/channels/telegram");
 
 test("every channel has the same interface: name + send(broker, message, deps) → { ok }", async () => {
-  for (const ch of [WhatsApp, WebPush, Telegram]) {
+  for (const ch of [WebPush, Telegram]) {
     expect(typeof ch.name).toBe("string");
     expect(typeof ch.send).toBe("function");
     expect(ch.send.length).toBe(3);
@@ -31,7 +31,7 @@ test("push payload: exactly title, body and an /app/ URL; phone numbers scrubbed
   expect(JSON.parse(WebPush.payloadOf({ title: "x", url: "//evil.example/app/" })).url).toBe("/app/notifications");
 });
 
-test("WhatsApp text of a notification: title, body, the website link", () => {
-  expect(WhatsApp.textOf({ title: "🔔 T", body: "B", url: "/app/notifications" })).toBe("🔔 T\nB\n🌐 http://localhost:3000/app/notifications");
-  expect(WhatsApp.textOf({ title: "only" })).toBe("only");
+test("Text of a notification: title, body, the website link", () => {
+  expect(Text.textOf({ title: "🔔 T", body: "B", url: "/app/notifications" })).toBe("🔔 T\nB\n🌐 http://localhost:3000/app/notifications");
+  expect(Text.textOf({ title: "only" })).toBe("only");
 });
