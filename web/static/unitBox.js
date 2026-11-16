@@ -292,6 +292,8 @@
     }
   }
 
+  // Other pages (the import review and its Edit windows) wire the box of their own form.
+  window.UnitBox = { init: init };
   init(document.getElementById("unit-form") || document.getElementById("project-form"));
   // The form comes back whole after "fill from the message" (htmx swap): wire the new box.
   document.addEventListener("htmx:load", function (e) {

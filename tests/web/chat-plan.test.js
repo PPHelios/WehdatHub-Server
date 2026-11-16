@@ -50,14 +50,14 @@ const POSTS = [
 ];
 
 describe("chat import plan", () => {
-  test("the parser reads the posts, AI is asked only for the cells it left empty, and the code from the post is used", async () => {
+  test("the parser reads the posts with rules only (AI is never asked), and the code from the post is used", async () => {
     await h.insertListing({ code: "HP-1" });
     await h.insertListing({ code: "HP-2" });
     const { agent, csrf } = await signIn(h, "manager");
     const res = await plan(agent, csrf, POSTS);
     expect(res.status).toBe(200);
     expect(res.body.posts).toBe(3);
-    expect(aiCalls).toBeGreaterThan(0); // the compound is missing from the posts without a known place
+    expect(aiCalls).toBe(0); // rules only: a post missing its compound waits for the review's edit window
     const { payload } = await loadPlan(res.body.id);
     expect(payload.source).toBe("chat");
     const byRow = Object.fromEntries(payload.items.map((i) => [i.row, i]));
@@ -153,7 +153,7 @@ describe("editing a unit before saving keeps the photo choices", () => {
 });
 
 describe("rules only (no AI)", () => {
-  test("ai:false never calls AI: a post the parser cannot finish waits for the review; the page shows the switch with the credit cost", async () => {
+  test("AI is never called, even when asked: a post the parser cannot finish waits for the review; the page has no AI switch", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const off = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", ai: false, posts: POSTS });
     expect(off.status).toBe(200);
@@ -161,12 +161,12 @@ describe("rules only (no AI)", () => {
     expect(off.body.ai).toBe(0);
     const { payload } = await loadPlan(off.body.id);
     expect(payload.items.some((i) => i.kind === "invalid")).toBe(true); // the compound is missing: fixed in the review's edit window
-    const on = await plan(agent, csrf, POSTS);
-    expect(on.body.ai).toBeGreaterThan(0);
-    expect(aiCalls).toBeGreaterThan(0);
+    const on = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", ai: true, posts: POSTS });
+    expect(on.body.ai).toBe(0);
+    expect(aiCalls).toBe(0);
     const page = (await agent.get("/app/import")).text;
-    expect(page).toMatch(/data-cp-ai[\s>]/);
-    expect(page).toMatch(/data-ai-cost="\d+"/);
+    expect(page).not.toMatch(/data-cp-ai[\s>]/);
+    expect(page).not.toMatch(/data-ai-cost=/);
   });
 });
 
@@ -176,7 +176,7 @@ describe("the import report (web and app logs in one summary)", () => {
   test("parser coverage, AI agreement per cell, review corrections, step timings and errors, code checks and app events are summarised", async () => {
     await h.insertListing({ code: "HP-1" });
     const { agent, csrf } = await signIn(h, "manager");
-    // AI on: the parser misses the compound, AI fills it; where both read a cell they are compared.
+    // Rules only: the parser misses the compound, so those posts wait for the review.
     h.AI.respond((c) => (c.operation === "listing_extraction" ? { listing_type: "sale", property_type: "apartment", compound: "Hyde Park", area_value: 150, bedrooms: 3, price_value: 8600000 } : null));
     const id = (await plan(agent, csrf, POSTS)).body.id;
     // A step run in the browser, with and without an error, and a rules-only plan.
@@ -187,14 +187,111 @@ describe("the import report (web and app logs in one summary)", () => {
     await new Promise((r) => setTimeout(r, 300)); // the logs are written without waiting
     const r = await ChatImportReport.report(h.pool, { days: 1 });
     expect(r.parser.posts).toBe(6);
-    expect(r.parser.ai_used).toBeGreaterThan(0);
+    expect(r.parser.ai_used).toBe(0);
     expect(r.parser.rules_only).toBeGreaterThan(0);
     expect(r.parser.complete_pct).toBeGreaterThanOrEqual(0);
-    expect(r.ai_vs_parser.agree + r.ai_vs_parser.differ).toBeGreaterThan(0);
-    expect(r.plans.rules_only).toBe(1);
+    expect(r.plans.rules_only).toBe(2);
     expect(r.steps.map((s) => s.step).sort()).toEqual(expect.arrayContaining(["read_zip", "upload"]));
     expect(r.step_errors).toEqual([expect.objectContaining({ step: "upload", error_code: "storage", n: 1 })]);
     expect(r.codes[0]).toMatchObject({ channel: "web", calls: 1, codes: 2, update: 1, fresh: 1 });
     expect(r.review.applies).toBe(1);
+  });
+});
+
+describe("the Edit window is the standard unit form", () => {
+  const UNFINISHED = [{ sender: "Ali", at: "24/10/2026 10:15", text: "Villa 354m 3 bedrooms price:5000$ fully furnished" }];
+
+  test("the editor is made by the server (place box, sale/rent chips, finishing and furnishing dropdowns) and reads what the parser found", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await agent.post("/app/import/match/editor").set("X-CSRF-Token", csrf).send({ text: UNFINISHED[0].text });
+    expect(res.status).toBe(200);
+    expect(res.body.html).toContain("data-importeditor");
+    expect(res.body.html).toContain("data-ubox");
+    expect(res.body.html).toContain('name="c_finishing"');
+    expect(res.body.html).toMatch(/<option value="semi_furnished"/);
+    expect(res.body.html).toMatch(/name="c_furnishing"[\s\S]*?<option value="furnished" selected/);
+    expect(res.body.html).toMatch(/name="c_listing_type" value="sale"/);
+  });
+
+  test("edits made in the window go on top of the reading: summary, plan and a saved unit all use them", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const fields = { c_listing_type: "sale", c_property_type: "villa", compound: "Hyde Park", c_price_value: "9 مليون", c_area_value: "354", c_bedrooms: "3", c_finishing: "fully_finished", c_furnishing: "semi_furnished", c_owner_phone: "01012345678", feature: ["private_pool"] };
+    const sum = await agent.post("/app/import/match/summary").set("X-CSRF-Token", csrf).send({ posts: [{ text: UNFINISHED[0].text, fields }] });
+    expect(sum.body.posts[0].missing).toEqual([]);
+    expect(sum.body.posts[0].cells).toMatchObject({ compound: "Hyde Park", price_value: "9 مليون", finishing: "fully_finished", furnishing: "semi_furnished", listing_type: "sale" });
+    const res = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", posts: [{ ...UNFINISHED[0], fields }] });
+    expect(res.status).toBe(200);
+    const { payload } = await loadPlan(res.body.id);
+    const item = payload.items[0];
+    expect(item.kind).toBe("new");
+    expect(item.fields).toMatchObject({ compound: "Hyde Park", finishing: "fully_finished", furnishing: "semi_furnished", price_value: 9000000 });
+    // The review page's Edit window is the same form; saving it with the place and a dropdown re-plans the unit.
+    const page = (await agent.get(`/app/import/${res.body.id}`)).text;
+    expect(page).toContain("data-unit-edit-form");
+    expect(page).toContain("data-ubox");
+    const edit = await agent.post(`/app/import/${res.body.id}/edit/1`).set("X-CSRF-Token", csrf).type("form")
+      .send("compound=Hyde+Park&c_listing_type=rent&c_property_type=villa&c_price_value=90000&c_area_value=354&c_bedrooms=3&c_finishing=super_lux&c_furnishing=unfurnished&c_owner_phone=01012345678");
+    expect(edit.status).toBe(303);
+    const after = (await loadPlan(res.body.id)).payload.items[0];
+    expect(after.fields).toMatchObject({ listing_type: "rent", finishing: "super_lux", furnishing: "unfurnished" });
+  });
+
+  test("a unit missing its sale/rent shows the field in red and has no checkbox until it is edited", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", posts: [{ sender: "Ali", at: "x", text: "Villa Hyde Park 354m 3 bedrooms price:9 million" }] });
+    const page = (await agent.get(`/app/import/${res.body.id}?kind=invalid`)).text;
+    expect(page).toContain('data-card-kind="invalid"');
+    expect(page).toMatch(/ie-block missing" data-field="listing_type"/);
+    expect(page).not.toMatch(/name="rows" value="1"/);
+  });
+});
+
+describe("a new compound or area from the Edit window", () => {
+  test("a picked area becomes the unit's district, a new compound keeps its Arabic name and map link for the owner's approval", async () => {
+    const [area] = await h.query("SELECT id, name_en FROM areas WHERE parent_id IS NULL AND status = 'approved' ORDER BY name_en LIMIT 1");
+    expect(area).toBeTruthy();
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", posts: [{ sender: "Ali", at: "x", text: "villa for sale 354m 3 bedrooms price:9 million" }] });
+    const form = `compound=Brand+New+Compound&compound_new=1&compound_ar=${encodeURIComponent("كمبوند جديد")}&compound_pin=${encodeURIComponent("https://maps.google.com/?q=1,2")}&area_id=${area.id}` +
+      "&c_listing_type=sale&c_property_type=villa&c_price_value=9+million&c_area_value=354&c_bedrooms=3&c_owner_phone=01012345678";
+    const edit = await agent.post(`/app/import/${res.body.id}/edit/1`).set("X-CSRF-Token", csrf).type("form").send(form);
+    expect(edit.status).toBe(303);
+    const { payload } = await loadPlan(res.body.id);
+    expect(payload.rows[0].cells).toMatchObject({ compound: "Brand New Compound", district: area.name_en });
+    expect(payload.newPlaces["1"]).toEqual({ nameAr: "كمبوند جديد", pin: "https://maps.google.com/?q=1,2" });
+    const apply = await agent.post(`/app/import/${res.body.id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=1");
+    expect(apply.status).toBeLessThan(400);
+    const [unit] = await h.query("SELECT compound, area_id FROM listings WHERE compound = 'Brand New Compound' AND agency_id = $1", [h.AGENCY_A]);
+    expect(unit.area_id).toBe(area.id);
+    const [pending] = await h.query("SELECT name_ar, pin_link FROM place_names WHERE status = 'pending' AND name_en ILIKE 'Brand New Compound'");
+    expect(pending).toMatchObject({ name_ar: "كمبوند جديد", pin_link: "https://maps.google.com/?q=1,2" });
+  });
+});
+
+describe("mandatory fields are flagged and a unit missing one is held back", () => {
+  test("no owner phone: the unit is held back with the phone flagged on its card and in the Edit window; the preview lists it as missing", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const text = "villa for sale Hyde Park 354m 3 bedrooms price:9 million";
+    const sum = await agent.post("/app/import/match/summary").set("X-CSRF-Token", csrf).send({ posts: [{ text }] });
+    expect(sum.body.posts[0].missing).toContain("owner_phone");
+    const res = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", posts: [{ sender: "Ali", at: "x", text }] });
+    const { payload } = await loadPlan(res.body.id);
+    expect(payload.items[0]).toMatchObject({ kind: "invalid", needs: ["owner_phone"] });
+    const page = (await agent.get(`/app/import/${res.body.id}?kind=invalid`)).text;
+    expect(page).toMatch(/data-field="owner_phone"/);
+    expect(page).toMatch(/uc-field missing" data-field="owner_phone"/);
+    expect(page).toMatch(/ie-field missing req" data-field="owner_phone"/);
+    expect(page).not.toMatch(/name="rows" value="1"/);
+    // Typing the phone in the Edit window frees it.
+    const edit = await agent.post(`/app/import/${res.body.id}/edit/1`).set("X-CSRF-Token", csrf).type("form").send("compound=Hyde+Park&c_listing_type=sale&c_property_type=villa&c_price_value=9+million&c_area_value=354&c_bedrooms=3&c_owner_phone=01012345678");
+    expect(edit.status).toBe(303);
+    expect((await loadPlan(res.body.id)).payload.items[0].kind).toBe("new");
+  });
+
+  test("the mandatory list is the add/edit unit rules: bedrooms for an apartment or a villa, not for a shop; an owner phone always", () => {
+    const requiredMissing = (c) => require("../../services/imports").missingCells(c, "en");
+    expect(requiredMissing({ listing_type: "sale", property_type: "villa", compound: "X", price_value: "9 million", area_value: "300", owner_phone: "01012345678" })).toEqual(["bedrooms"]);
+    expect(requiredMissing({ listing_type: "rent", property_type: "shop", compound: "X", price_value: "20000", area_value: "50", owner_phone: "01012345678" })).toEqual([]);
+    expect(requiredMissing({ listing_type: "sale", property_type: "villa", compound: "X", price_value: "9 million", area_value: "300", bedrooms: "3" })).toEqual(["owner_phone"]);
   });
 });

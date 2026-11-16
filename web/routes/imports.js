@@ -21,6 +21,7 @@ const Session = require("../session");
 const { uploads } = require("../uploads");
 const { html, raw } = require("../html");
 const { tabs } = require("../views/tabs");
+const { importEditor, cellsFromForm } = require("../views/importEditor");
 const { stripMarkdown } = require("../views/units");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -107,6 +108,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   };
   const editor = (i) => {
     if (!canEdit) return "";
+    if (chat) return html`<button type="button" class="secondary${i.kind === "invalid" ? " bad" : ""}" data-edit-open="${i.row}">✏️ ${L(lang, "تعديل", "Edit")}</button>`;
     const fields = [...new Set([...(i.needs || []), ...columns])];
     // What the row is missing comes first and the form opens on it; the other columns follow.
     // An edit window per unit: opens over the page, saves the unit's fields and plans the import again. The current
@@ -117,10 +119,30 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   ${fields.map((k) => field(i, k))}
   <div class="row"><button type="submit" form="edit-${i.row}">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div></div></dialog>`;
   };
-  const editForms = canEdit
+  // A chat unit's Edit window: the standard unit controls (place search, chips, dropdowns). It is its own form, outside the apply form.
+  const chatDialogs = canEdit && chat
+    ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => {
+        const cells = cellsOf.get(i.row) || {};
+        const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
+        return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}"><form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}" class="stack" data-unit-edit-form>
+  <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
+  <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
+  ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
+  ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
+  <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
+</form></dialog>`;
+      })
+    : "";
+  const editForms = canEdit && !chat
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}"></form>`)
     : "";
   const MAXP = 15;
+  // Move one photo to the unit before / after this one in the chat (the choices of both units are kept by chatreview.js).
+  const moveToUnit = (i, k) => {
+    const at = movable.indexOf(i.row);
+    const btn = (dir, to, icon, label) => (to === undefined ? "" : html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/photo-move" formmethod="post" name="move" value="${i.row}:${k}:${dir}" data-photo-move title="${label}" aria-label="${label}">${icon}</button>`);
+    return html`<span class="row move-unit">${btn("prev", movable[at - 1], "⤴", L(lang, `انقلها لبوست ${movable[at - 1]}`, `Move to post ${movable[at - 1]}`))}${btn("next", movable[at + 1], "⤵", L(lang, `انقلها لبوست ${movable[at + 1]}`, `Move to post ${movable[at + 1]}`))}</span>`;
+  };
   // A chat post's photos: tick the ones to keep, and (for a unit that will be updated) the ones it has to remove, up to 15.
   const photosOf = (i) => {
     if (!chat) return "";
@@ -137,11 +159,64 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   <input type="hidden" name="picked_${i.row}" value="1" form="apply-form">
   <p>📷 ${L(lang, `${mine.length} صورة جديدة${have.length ? ` · الوحدة فيها ${have.length}` : ""} (الحد 15)`, `${mine.length} new photos${have.length ? ` · the unit has ${have.length}` : ""} (max 15)`)}</p>
   <p class="muted">${L(lang, "اسحب الصورة أو استخدم الأسهم لترتيبها: الأولى هي صورة الغلاف. علّم اللي تتحفظ (لحد 15).", "Drag a photo or use the arrows to order them: the first is the cover. Tick the ones to keep (up to 15).")}</p>
-  <ol class="photo-order photo-grid" data-sortable>${order.map((k, pos) => html`<li draggable="true"><label class="thumb"><input type="checkbox" form="apply-form" name="keep_${i.row}" value="${k}"${isOn(k, pos) ? raw(" checked") : ""}><img src="${mine[k].url}" alt="" width="96" height="96" loading="lazy">${mine[k].same_as ? html`<span class="warn">⚠️ ${mine[k].same_as}</span>` : ""}</label><span class="row move"><button type="button" class="secondary small" data-move="up" aria-label="${L(lang, "قبل", "Earlier")}">${lang === "en" ? "◀" : "▶"}</button><button type="button" class="secondary small" data-move="down" aria-label="${L(lang, "بعد", "Later")}">${lang === "en" ? "▶" : "◀"}</button></span></li>`)}</ol>
+  <ol class="photo-order photo-grid" data-sortable>${order.map((k, pos) => html`<li draggable="true"><label class="thumb"><input type="checkbox" form="apply-form" name="keep_${i.row}" value="${k}"${isOn(k, pos) ? raw(" checked") : ""}><img src="${mine[k].url}" alt="" width="96" height="96" loading="lazy">${mine[k].same_as ? html`<span class="warn">⚠️ ${mine[k].same_as}</span>` : ""}</label>${moveToUnit(i, k)}<span class="row move"><button type="button" class="secondary small" data-move="up" aria-label="${L(lang, "قبل", "Earlier")}">${lang === "en" ? "◀" : "▶"}</button><button type="button" class="secondary small" data-move="down" aria-label="${L(lang, "بعد", "Later")}">${lang === "en" ? "▶" : "◀"}</button></span></li>`)}</ol>
   ${have.length ? html`<details><summary>${L(lang, "صور الوحدة الحالية: علّم اللي تتشال", "The unit's current photos: tick the ones to remove")}</summary><div class="row thumbs">${have.map((x) => html`<label class="thumb"><input type="checkbox" form="apply-form" name="drop_${i.row}" value="${x.id}"${choice?.drop?.includes(x.id) ? raw(" checked") : ""}><img src="${x.url}" alt="" width="64" height="64" loading="lazy"><span class="muted">${L(lang, "شيل", "Remove")}</span></label>`)}</div></details>` : ""}
 </div>`;
   };
   const box = (i, on = true) => (applied ? "" : html`<input type="checkbox" name="rows" value="${i.row}"${on ? raw(" checked") : ""}>`);
+
+  // ---- WhatsApp posts: one organised card per unit ----------------------------------------------------------------
+  // The rows a photo can be moved between: the post before and after it in the chat (units that will be saved or fixed).
+  const movable = items.filter((i) => ["new", "changed", "review", "invalid"].includes(i.kind)).map((i) => i.row).sort((a, b) => a - b);
+  const MANDATORY = ["listing_type", "property_type", "compound", "price_value", "area_value", "owner_phone"];
+  const UC_GROUPS = [
+    { t: ["الوحدة", "Unit"], keys: ["listing_type", "property_type", "compound", "district", "address"] },
+    { t: ["السعر والمساحة", "Price and size"], keys: ["price_value", "area_value", "bedrooms", "bathrooms", "floor", "finishing", "delivery"] },
+    { t: ["الدفع", "Payment"], keys: ["down_payment_value", "remaining_amount", "installment_value", "installment_frequency"] },
+    { t: ["تواصل وملاحظات", "Contact and notes"], keys: ["owner_name", "owner_phone", "features", "notes"] }
+  ];
+  const UC_LABEL = { district: ["المنطقة", "District"], floor: ["الدور", "Floor"], finishing: ["التشطيب", "Finishing"], delivery: ["التسليم", "Delivery"], bathrooms: ["الحمامات", "Bathrooms"], remaining_amount: ["المتبقي", "Remaining"], installment_value: ["القسط", "Installment"], installment_frequency: ["دورية القسط", "Frequency"], features: ["المميزات", "Features"] };
+  const ucLabel = (k) => (UC_LABEL[k] || CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
+  const ucValue = (k, v) => (k === "listing_type" ? (v === "rent" ? L(lang, "إيجار", "Rent") : v === "sale" ? L(lang, "بيع", "Sale") : v) : v);
+  const chatCard = (i) => {
+    const cells = cellsOf.get(i.row) || {};
+    const bad = i.kind === "invalid";
+    const missing = new Set(bad ? [...(i.needs || []), ...Imports.missingCells(cells, lang)] : []);
+    const post = (imp.payload.posts || [])[i.row - 1] || {};
+    const title = [cells.property_type, ucValue("listing_type", cells.listing_type), cells.compound].filter(Boolean).join(" · ");
+    const known = new Set(UC_GROUPS.flatMap((g) => g.keys).concat("code"));
+    const groups = [...UC_GROUPS, { t: ["تانية", "Other"], keys: Object.keys(cells).filter((k) => !known.has(k)) }]
+      .map((g) => ({ ...g, keys: g.keys.filter((k) => MANDATORY.includes(k) || missing.has(k) || String(cells[k] ?? "").trim() !== "") }))
+      .filter((g) => g.keys.length);
+    const kindChip = L(lang, KIND_LABEL[i.kind][0], KIND_LABEL[i.kind][1]);
+    return html`<article class="unit-card${bad ? " is-bad" : ""}" data-row="${i.row}" data-card-kind="${i.kind}">
+  <header class="uc-head">
+    ${bad || applied ? "" : box(i)}
+    <div class="uc-title"><strong>${title || L(lang, "وحدة من غير بيانات", "Unit with no details")}</strong>
+      <span class="muted">${L(lang, "بوست", "Post")} ${i.row}${post.sender ? ` · ${post.sender}` : ""}${post.at ? ` · ${post.at}` : ""}</span></div>
+    <span class="chip${bad ? " bad" : ""}">${kindChip}</span>
+    <span class="uc-code${missing.has("code") ? " missing" : ""}">${i.code || L(lang, "(كود تلقائي)", "(auto code)")}</span>
+  </header>
+  ${bad ? html`<div class="uc-alert" role="alert" data-missing="${[...missing].join(",")}">⛔ <strong>${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Will not be added until the details are completed")}</strong>${i.reasons?.length ? html`<ul>${i.reasons.map((r) => html`<li>${r}</li>`)}</ul>` : ""}</div>` : ""}
+  <div class="uc-body">${groups.map((g) => html`<section class="uc-group"><h3>${L(lang, g.t[0], g.t[1])}</h3><dl class="uc-grid">${g.keys.map((k) => {
+    const v = String(cells[k] ?? "").trim();
+    const miss = missing.has(k) && !v;
+    const wrong = missing.has(k) && v;
+    return html`<div class="uc-field${miss || wrong ? " missing" : ""}" data-field="${k}"><dt>${ucLabel(k)}</dt><dd>${miss ? html`⚠️ ${L(lang, "ناقص", "Missing")}` : wrong ? html`⚠️ ${ucValue(k, v)}` : ucValue(k, v)}</dd></div>`;
+  })}</dl></section>`)}</div>
+  ${i.kind === "new" && i.warnings?.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}
+  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+  ${i.kind === "review"
+    ? html`<div class="stack" data-review-note><p class="warn">${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
+    <input name="code_${i.row}" form="apply-form" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div></div>`
+    : ""}
+  ${notesOf(i)}${photosOf(i)}
+  <footer class="uc-foot">${editor(i)}</footer>
+</article>`;
+  };
+  const chatList = (rows) => html`<div class="uc-list">${rows.map(chatCard)}</div>`;
 
   // Fix-many-rows-at-once (and the failed-rows download) are manager tools: data entry gets the plain review.
   const stats = !applied && sheetRows && !extra.dataEntry ? Imports.batchStats(imp.payload) : null;
@@ -161,11 +236,19 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     <p class="muted">${L(lang, "السعر اليومي مبيتاخدش أبداً، والنص الأصلي بيتحفظ في الملاحظات.", "A daily price is never used; the original text is kept in the notes.")}</p></form>`
     : ""}
   ${stats.unknown_types.length
-    ? html`<div class="stack" data-batch-form="type_map"><p>${L(lang, "أنواع مش معروفة. اختار نوع لكل كلمة مرة واحدة وتتطبق على كل الصفوف:", "Types the app does not know. Pick a type for each word once and it applies to every row:")}</p>
-    ${stats.unknown_types.map((u) => html`<form method="post" action="/app/import/${imp.id}/batch" class="row" data-type-word="${u.value}"><input type="hidden" name="action" value="type_map"><input type="hidden" name="from" value="${u.value}">
-      <strong>${u.value}</strong> <span class="muted">×${u.count}</span>
-      <select name="value" aria-label="${u.value}">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}"${(stats.remembered.types || {})[u.value] === k ? raw(" selected data-remembered") : ""}>${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select>
-      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`)}</div>`
+    ? html`<div class="stack" data-batch-form="type_map"><p>${L(lang, "كلمات في عمود النوع مش معروفة. اختار لكل كلمة: كمبوند، نوع وحدة، أو تجاهل، وتتطبق على كل الصفوف:", "Words in the type column the app does not know. Pick for each: a compound, a unit type or ignore, and it applies to every row:")}</p>
+    ${stats.unknown_types.map((u) => {
+      const place = (extra.typePlaces || {})[u.value] || null;
+      const picked = (stats.remembered.types || {})[u.value] || (place ? "compound" : "");
+      const mark = (k) => (picked === k ? raw(` selected${(stats.remembered.types || {})[u.value] === k ? " data-remembered" : ""}`) : "");
+      return html`<form method="post" action="/app/import/${imp.id}/batch" class="row" data-type-word="${u.value}"><input type="hidden" name="action" value="type_map"><input type="hidden" name="from" value="${u.value}">
+      <strong>${u.value}</strong> <span class="muted">×${u.count}</span>${place ? html` <span class="chip good" data-place-match="${place}">📍 ${L(lang, "كمبوند أو منطقة معروفة", "A known compound or area")}: ${place}</span>` : ""}
+      <select name="value" aria-label="${u.value}">
+        <optgroup label="${L(lang, "ده مش نوع وحدة", "Not a unit type")}"><option value="compound"${mark("compound")}>📍 ${L(lang, "ده كمبوند / مكان (استخدمه كمبوند)", "It is a compound / place (use it as the compound)")}</option><option value="ignore"${mark("ignore")}>🚫 ${L(lang, "تجاهله (يتحفظ في الملاحظات)", "Ignore it (kept in the notes)")}</option></optgroup>
+        <optgroup label="${L(lang, "نوع الوحدة", "Unit type")}">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}"${mark(k)}>${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</optgroup>
+      </select>
+      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`;
+    })}</div>`
     : ""}
   ${stats.status_hints.length
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="status_words"><input type="hidden" name="action" value="status_words">
@@ -210,7 +293,9 @@ ${query.batch ? html`<p class="card notice" role="status" data-batch-done>${L(la
 ${batch}
 ${kindNav}${tabsNav}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
-${section("review", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
+<button type="submit" hidden tabindex="-1" aria-hidden="true"></button><input type="hidden" name="back" value="${href({ page })}">
+${chat && !applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-all>${L(lang, "اختار الكل", "Select all")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button><span class="muted">${L(lang, "الوحدات الناقصة مش بتتضاف: عدّلها الأول.", "Units missing details are not added: edit them first.")}</span></p>` : ""}
+${section("review", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
   (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}
     <p class="warn" data-review-note>${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
     ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
@@ -218,20 +303,20 @@ ${section("review", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "ص�
     <input name="code_${i.row}" form="apply-form" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div>
     ${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("new", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
+${section("new", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
   (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("changed", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
+${section("changed", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
   (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
+${section("invalid", (rows) => chat ? chatList(rows) : html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
 ${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${where(i)} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير", "Same as in the app, nothing to change")}${notesOf(i)}</li>`)}</ul>`)}
 ${pager}
 ${!extra.dataEntry && (counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-failed-download><a class="secondary button" href="/app/import/${imp.id}/failed.xlsx" download>⬇️ ${L(lang, `نزّل الصفوف اللي مش هتتسجل (${(counts.invalid || 0) + (counts.forbidden || 0)}) إكسيل بعمود السبب`, `Download the rows that will not import (${(counts.invalid || 0) + (counts.forbidden || 0)}) as Excel, with a Reason column`)}</a></p>` : ""}
   ${applied ? "" : html`<div class="row"><button type="submit">✅ ${L(lang, paged ? "طبّق المختار في الصفحة دي" : "طبّق المختار", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
 </form>
-${editForms}`;
+${editForms}${chatDialogs}`;
 }
 
 function resultCard(r, lang, undoId = null) {
@@ -314,13 +399,12 @@ function register(web, { pool, page, assets }) {
     const err = (n) => (notice && tab === n ? notice : "");
     // The chat-export reader. "posts": the units are read from the posts (the WhatsApp import); "codes": photos go to units
     // already in the app by the code in the description. The date comes first; the order/gap settings sit under Advanced.
-    const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-ai-cost="${Credits.costOf("chat_post")}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
+    const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-summary-url="/app/import/match/summary" data-editor-url="/app/import/match/editor" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
   <h2>${mode === "posts" ? html`💬 ${L(lang, "استيراد وحدات من شات واتساب بالصور", "Import units from a WhatsApp chat, with photos")}` : html`📷 ${L(lang, "تطابق الصور مع وحدات موجودة", "Match photos to units already in the app")}`}</h2>
   <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيتحمل، فمفيش حد أقصى لحجمه. بنوزع كل صورة على بوستها، وإنت بتراجع وتعدّل وترتب الصور قبل أي حفظ. الفيديوهات مش بتتحمل. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its post, and you review, edit and order the photos before anything is saved. Videos are not uploaded. Only the photos you choose are saved.")}</p>
   <label>${L(lang, "من تاريخ", "From date")}<input type="date" data-cp-since value="${Chat.defaultSince()}"></label>
   <input type="file" accept=".zip,.txt,application/zip,text/plain" data-cp-file>
   <input type="hidden" data-cp-mode value="${mode}">
-  ${mode === "posts" ? html`<label class="row" data-cp-ai-box><input type="checkbox" data-cp-ai checked> ${L(lang, "استخدم الذكاء الاصطناعي لملء اللي ناقص (مش بيستخدم رصيد لو القراءة العادية كفت)", "Use AI to fill what is missing (no credits are used when the normal reader is enough)")}</label>` : ""}
   <details class="stack" data-cp-advanced><summary>${L(lang, "إعدادات متقدمة", "Advanced")}</summary>
     <label>${L(lang, "أقصى فاصل بين الصور والوصف", "Longest gap between photos and description")}<select data-cp-window>
       <option value="5">5 ${L(lang, "دقايق", "minutes")}</option><option value="10" selected>10 ${L(lang, "دقايق", "minutes")}</option><option value="30">30 ${L(lang, "دقيقة", "minutes")}</option>
@@ -335,7 +419,7 @@ function register(web, { pool, page, assets }) {
   <button type="button" data-cp-read>${L(lang, "اقرأ الملف", "Read the file")}</button>
   <div data-cp-out></div>
 </div>`;
-    const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
+    const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
     return html`<h1>${L(lang, "استيراد", "Import")}</h1>
 ${tabs("import_tab", [...(dataEntry ? [] : [
   [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-progress data-grid-url="/app/import/excel/grid">
@@ -361,7 +445,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     </form>
   </details>`],
   [html`<span class="ti">📷</span>${L(lang, "صور لوحدات موجودة", "Photos for existing units")}`, html`${err(2)}${cpBox("codes")}`]
-], { open: Math.max(0, tab - (dataEntry ? 1 : 0)), cls: "tiles" })}${cpScripts}`;
+], { open: Math.max(0, tab - (dataEntry ? 1 : 0)), cls: "tilebar" })}${cpScripts}`;
   };
 
   web.get("/import", (req, res) => importPage(req, res, importHub(req)));
@@ -555,9 +639,14 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
         const { rows } = await pool.query("SELECT id, listing_id, url FROM listing_images WHERE listing_id = ANY($1::uuid[]) AND agency_id = $2 AND url <> '' ORDER BY position, id", [ids, req.session.broker.agency_id]);
         for (const r of rows) existing.set(r.listing_id, [...(existing.get(r.listing_id) || []), { id: r.id, url: r.url }]);
       }
-      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { existing, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("chatreview.js")}"></script>`);
+      const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
+      const places = new Map();
+      const PlaceSuggest = require("../../services/placeSuggest");
+      for (const r of imp.payload.rows || []) if (r.cells?.compound) places.set(r.rowNumber, await PlaceSuggest.placeChip(pool, { compound: r.cells.compound }, lang).catch(() => null));
+      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { existing, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script>`);
     }
-    return importPage(req, res, imp.kind === "excel" ? html`${excelPlanPage(imp, lang, req.query || {}, { dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("chatreview.js")}"></script>` : groupPage(imp, lang));
+    const typePlaces = imp.kind === "excel" ? await Imports.typeWordPlaces(pool, Imports.batchStats(imp.payload).unknown_types.map((u) => u.value)) : {};
+    return importPage(req, res, imp.kind === "excel" ? html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("chatreview.js")}"></script>` : groupPage(imp, lang));
   });
 
   // Edit one row of a ready plan: the whole sheet is planned again with the changed cells (same rules as an upload).
@@ -565,8 +654,14 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     const lang = langOf(req);
     const cells = {};
     for (const [k, v] of Object.entries(req.body || {})) if (k.startsWith("c_") && typeof v === "string") cells[k.slice(2)] = v;
+    // The structured editor (chat units) also posts the unit box's own fields: place, feature chips.
+    const areas = req.body && req.body.compound !== undefined ? await require("../../services/areas").approvedAreas(pool).catch(() => []) : [];
+    if (req.body && req.body.compound !== undefined) Object.assign(cells, cellsFromForm(req.body, { areas }));
     const ok = await Imports.editExcelRow(pool, req.session.broker, req.params.id, Number(req.params.row), cells, { lang });
     if (!ok) return next();
+    // A new compound asked for in the window: its Arabic name and map link are kept for after the unit is saved.
+    const newPlace = require("../../domain/importEditorCells").newPlaceOf(req.body || {});
+    if (newPlace) await Imports.setNewPlace(pool, req.session.broker, req.params.id, Number(req.params.row), newPlace);
     // The photo ticks and order on the page when Save was pressed (sent along by chatreview.js) stay as they were.
     const row = Number(req.params.row);
     const many = (v) => [].concat(v === undefined ? [] : v).map(String);
@@ -574,6 +669,21 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       await Imports.setPhotoChoice(pool, req.session.broker, req.params.id, row, { order: many(req.body[`order_${row}`]), keep: many(req.body[`keep_${row}`]), drop: many(req.body[`drop_${row}`]) });
     }
     return res.redirect(303, `/app/import/${req.params.id}`);
+  });
+
+  // Move one photo to the unit before/after it. The ticks and order on the page come along so nothing is lost.
+  web.post("/import/:id/photo-move", importersOnly, async (req, res, next) => {
+    const m = /^(\d{1,4}):(\d{1,3}):(prev|next)$/.exec(String(req.body.move || ""));
+    if (!m) return next();
+    const many = (v) => [].concat(v === undefined ? [] : v).map(String);
+    for (const key of Object.keys(req.body || {})) {
+      const k = /^order_(\d{1,4})$/.exec(key);
+      if (k) await Imports.setPhotoChoice(pool, req.session.broker, req.params.id, Number(k[1]), { order: many(req.body[key]), keep: many(req.body[`keep_${k[1]}`]), drop: many(req.body[`drop_${k[1]}`]) });
+    }
+    const ok = await Imports.movePhoto(pool, req.session.broker, req.params.id, { row: Number(m[1]), index: Number(m[2]), dir: m[3] });
+    if (!ok) return next();
+    const back = String(req.body.back || "");
+    return res.redirect(303, back.startsWith(`/app/import/${req.params.id}`) ? back : `/app/import/${req.params.id}`);
   });
 
   // One decision for many rows (rent for the sheet, which price to read, a dollar rate): the sheet is planned again.

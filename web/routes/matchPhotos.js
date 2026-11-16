@@ -58,6 +58,46 @@ function register(web, { pool }) {
 
   // One photo onto the unit with this code: shrunk copy from the browser, normalised again here, stored, hashed.
   // answers { ok } | { dup: true } (the unit already has this picture) | { full: true } | { missing: true }
+  // The Edit window's form for one post: the same controls as the add/edit unit form, filled from what the parser read plus the
+  // person's earlier edits. Sent as ready HTML so the browser and the review page share one editor.
+  web.post("/import/match/editor", importersOnly, express.json({ limit: "100kb" }), async (req, res) => {
+    const lang = langOf(req);
+    if (!placesCache) placesCache = await ChatPlan.loadPlaces(pool).catch(() => null);
+    const ChatListing = require("../../domain/chatListing");
+    const Cells = require("../../domain/importEditorCells");
+    const { importEditor } = require("../views/importEditor");
+    const read = ChatListing.parsePost(String(req.body?.text || "").slice(0, 4000), placesCache, {});
+    const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
+    const cells = Cells.mergeEdits(read.cells, req.body?.fields || null, { areas });
+    const place = cells.compound ? await require("../../services/placeSuggest").placeChip(pool, { compound: cells.compound }, lang).catch(() => null) : null;
+    const missing = Imports.missingCells(cells, lang);
+    res.set("Cache-Control", "no-store");
+    return res.json({ html: String(importEditor({ cells, areas, place, lang, missing })) });
+  });
+
+  // A short read of each post (rules only, no AI, no credits): the cells the parser finds and the required ones it could not,
+  // so the preview shows a summary (type, price, rooms, finishing…) with what is missing, before anything is uploaded.
+  let placesCache = null;
+  web.post("/import/match/summary", importersOnly, express.json({ limit: "400kb" }), async (req, res) => {
+    // Each post is its text, or { text, fields }: the person's edits (the Edit window's form) on top of what the parser read.
+    const sent = (Array.isArray(req.body?.posts) ? req.body.posts : []).slice(0, 40).map((t) => (t && typeof t === "object" ? t : { text: t }));
+    if (!placesCache) placesCache = await ChatPlan.loadPlaces(pool).catch(() => null);
+    const ChatListing = require("../../domain/chatListing");
+    const Cells = require("../../domain/importEditorCells");
+    const areas = sent.some((t) => t.fields) ? await require("../../services/areas").approvedAreas(pool).catch(() => []) : [];
+    const out = sent.map((t) => {
+      try {
+        const r = ChatListing.parsePost(String(t.text || "").slice(0, 4000), placesCache, {});
+        const cells = Cells.mergeEdits(r.cells, t.fields || null, { areas });
+        return { cells, missing: Imports.missingCells(cells, langOf(req)) };
+      } catch {
+        return { cells: {}, missing: [] };
+      }
+    });
+    res.set("Cache-Control", "no-store");
+    return res.json({ posts: out });
+  });
+
   // The codes the posts of a freshly read zip write: which already belong to a unit (update, with its photo count), which are
   // free (new) and which are a unit the person may not change. One call for all posts, before anything is uploaded.
   web.post("/import/match/codes", importersOnly, express.json({ limit: "50kb" }), async (req, res) => {
@@ -198,12 +238,12 @@ function register(web, { pool }) {
     const sent = Array.isArray(req.body?.posts) ? req.body.posts : [];
     const posts = sent
       .slice(0, ChatPlan.MAX_POSTS)
-      .map((p) => ({ sender: String(p?.sender || "").slice(0, 80) || null, at: String(p?.at || "").slice(0, 40) || null, text: String(p?.text || "").slice(0, 4000) }))
+      .map((p) => ({ sender: String(p?.sender || "").slice(0, 80) || null, at: String(p?.at || "").slice(0, 40) || null, text: String(p?.text || "").slice(0, 4000), fields: p?.fields && typeof p.fields === "object" ? p.fields : null }))
       .filter((p) => p.text.trim().length >= 10);
     if (!posts.length) return res.status(422).json({ error: "no_posts" });
     try {
-      // "Rules only" (ai: false): the parser reads every post and AI is never asked, so nothing is spent; what it cannot read is fixed in the review.
-      const useAi = req.body?.ai !== false;
+      // The WhatsApp import is rules only: AI is never asked and no credits are spent. What the parser cannot read is completed in the Edit window.
+      const useAi = false;
       const out = await ChatPlan.planChat(pool, broker, posts, { AI: useAi ? AI : null, ctx: { pool, broker, agency: req.session.agency, lang }, lang, filename: String(req.body?.filename || "").slice(0, 120) || null });
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, rules_only: !useAi, ai: out.ai, ai_blocked: out.aiBlocked, counts: out.counts } });
       return res.json({ id: out.id, posts: out.posts, ai: out.ai, ...(out.aiBlocked ? { ai_blocked: out.aiBlocked, message: AiBlock.text(out.aiBlocked, lang) } : {}) });

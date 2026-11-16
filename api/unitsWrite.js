@@ -177,6 +177,26 @@ function register(api, { pool }) {
     }
   });
 
+  // A WhatsApp chat's posts read by the rules (no AI, no credits): the same reader and the same mandatory rules as the website's
+  // import, so the app's list can show a summary and what is missing before anything is added. fields: the add-unit form's fields.
+  api.post("/units/chat-read", async (req, res) => {
+    const lang = langOf(req);
+    const sent = (Array.isArray(req.body?.posts) ? req.body.posts : []).slice(0, 40).map((t) => String((t && typeof t === "object" ? t.text : t) || "").slice(0, 4000));
+    const places = await require("../services/chatPlan").loadPlaces(pool).catch(() => null);
+    const ChatListing = require("../domain/chatListing");
+    const Imports = require("../services/imports");
+    const posts = sent.map((text) => {
+      try {
+        const cells = ChatListing.parsePost(text, places, {}).cells;
+        return { fields: { ...Form.formFromUnit(Imports.fieldsOfCells(cells, lang)), code: cells.code || "" }, missing: Imports.missingCells(cells, lang) };
+      } catch {
+        return { fields: {}, missing: [] };
+      }
+    });
+    res.set("Cache-Control", "no-store");
+    return res.json({ posts });
+  });
+
   // What is still missing, warnings, and a duplicate, without saving.
   api.post("/units/review", async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });

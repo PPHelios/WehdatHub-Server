@@ -11,6 +11,7 @@ const Places = require("../domain/mapPlaces");
 const ChatListing = require("../domain/chatListing");
 const Imports = require("./imports");
 const ParseLog = require("./chatParseLog");
+const Cells = require("../domain/importEditorCells");
 
 const MAX_POSTS = 40;
 const AI_DEADLINE_MS = 40000;
@@ -35,7 +36,10 @@ async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = 
     logs[i] = { row: i + 1, text: p.text, read: r.read, missing: r.missing, parseMs: Date.now() - t0 };
     return r;
   });
-  const cells = parsed.map((r) => ({ ...r.cells }));
+  const areas = list.some((p) => p.fields) ? await require("./areas").approvedAreas(pool).catch(() => []) : [];
+  const cells = parsed.map((r, i) => Cells.mergeEdits(r.cells, list[i].fields || null, { areas }));
+  const newPlaces = {};
+  list.forEach((p, i) => { const np = p.fields && Cells.newPlaceOf(p.fields); if (np) newPlaces[i + 1] = np; });
   const first = Object.fromEntries(parsed.map((r, i) => [i + 1, { ...r.cells }]));
 
   // AI only where the parser left a required cell empty, two or three posts at a time, within a time budget.
@@ -78,7 +82,7 @@ async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = 
     pool,
     broker,
     "excel",
-    { ...plan, rows, columns, skipped: [], source: "chat", posts: list.map((p) => ({ sender: p.sender || null, at: p.at || null })), parsed: first, photos: {} },
+    { ...plan, rows, columns, skipped: [], source: "chat", posts: list.map((p) => ({ sender: p.sender || null, at: p.at || null })), parsed: first, photos: {}, newPlaces },
     { filename }
   );
   await ParseLog.posts(pool, broker, id, logs);

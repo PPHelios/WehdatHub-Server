@@ -1,7 +1,7 @@
 // domain/chatListing.js — A WhatsApp post (free Arabic, Franco or English text) → the same "cells" an Excel row holds
 // (code, compound, property_type, listing_type, price_value, area_value, ...), so one planner reads both (pure).
 // The parser only fills what it is sure of; anything it cannot read stays empty and is listed in `missing`, so the
-// caller can ask AI for just those posts and the quality log shows what the parser misses.
+// caller can show them in red for the person to complete (the WhatsApp import reads with rules only, no AI).
 "use strict";
 
 const { latin } = require("./chatParse");
@@ -11,6 +11,7 @@ const Places = require("./mapPlaces");
 
 const NUM = "\\d[\\d.,]*";
 const UNIT = "(?:مليون|ملايين|million|mil|m(?![a-z0-9²])|الف|ألف|k(?![a-z]))";
+const CUR = "(?:\\s*(?:\\$|usd\\b|us\\s*dollars?|dollars?|دولار))?";
 const MONEY = `${NUM}\\s*${UNIT}?(?:\\s*(?:و|and)\\s*(?:نص|نصف|ربع|${NUM}\\s*${UNIT}))?`;
 const ORDINAL = { الاول: 1, الأول: 1, اول: 1, التاني: 2, الثاني: 2, تاني: 2, التالت: 3, الثالث: 3, تالت: 3, الرابع: 4, رابع: 4, الخامس: 5, خامس: 5, السادس: 6, السابع: 7, الثامن: 8, التاسع: 9, العاشر: 10 };
 const COUNT_WORDS = { واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, ثلاث: 3, تلاته: 3, ثلاثه: 3, اربع: 4, أربع: 4, اربعه: 4, خمس: 5, خمسه: 5, ست: 6 };
@@ -43,10 +44,14 @@ function findCompound(text, places) {
 
 /** An area number that is not the land, garden or roof: the first "150 م" or "مساحة 150". */
 function findArea(text) {
-  const re = new RegExp(`(${NUM})\\s*(?:م2|م²|متر|م(?![\\u0621-\\u064A])|sqm|sq\\.?\\s*m|m2|m²)|(?:مساحة|مساحه|area|bua)\\s*[:\\-=]?\\s*(${NUM})`, "gi");
+  // The built-up area is the unit's area (a villa lists land and built-up apart).
+  const bua = new RegExp(`(?:build[\\s-]*up|built[\\s-]*up|bua|مباني|المباني)\\s*(?:area|مساحة)?\\s*[:\\-=]?\\s*(${NUM})`, "i").exec(text);
+  if (bua) return bua[1];
+  const re = new RegExp(`(${NUM})\\s*(?:م2|م²|متر|م(?![\\u0621-\\u064A])|m(?![a-z0-9²])|sqm|sq\\.?\\s*m|m2|m²)|(?:مساحة|مساحه|area|bua)\\s*[:\\-=]?\\s*(${NUM})`, "gi");
   for (const m of text.matchAll(re)) {
     const before = text.slice(Math.max(0, m.index - 14), m.index);
     if (!m[2] && /(ارض|أرض|land|garden|جاردن|حديقة|روف|roof|مسطح)/i.test(before)) continue;
+    if (m[2] && /(ارض|أرض|land|garden|جاردن|حديقة|روف|roof)\s*$/i.test(text.slice(Math.max(0, m.index - 8), m.index))) continue;
     return m[1] || m[2];
   }
   return null;
@@ -87,15 +92,27 @@ function parsePost(text, places = null, from = {}) {
   const inst = take(new RegExp(`(?:القسط|قسط|installment)\\s*[:\\-=]?\\s*(${MONEY})`, "i"));
   if (inst) set("installment_value", inst[1]);
 
+  // Several prices for different periods ("monthly 90k / yearly 1m", "90k شهري"): kept together in the price cell, like an
+  // Excel cell with several prices, so the same rule picks one (monthly first, then long-term; a daily price is never used).
+  const PERIOD = "(?:شهري|شهريا|monthly|per\\s*month|سنوي|سنويا|yearly|annual|per\\s*year|يومي|daily|per\\s*day|short\\s*term|long\\s*term|قصير|طويل)";
+  const periodRe = new RegExp(`(${PERIOD})\\s*[:\\-=]?\\s*(${MONEY}${CUR})|(${MONEY}${CUR})\\s*(?:ج\\S*|egp)?\\s*[/\\s]\\s*(${PERIOD})`, "gi");
+  const periodPrices = [...t.matchAll(periodRe)].map((m) => ({ at: m.index, len: m[0].length, text: m[1] ? `${m[1]} ${m[2]}` : `${m[4]} ${m[3]}` }));
+  if (periodPrices.length >= 2) {
+    set("price_value", periodPrices.map((x) => x.text.replace(/\s+/g, " ").trim()).join(" / "));
+    for (const x of periodPrices.slice().reverse()) t = t.slice(0, x.at) + " ".repeat(x.len) + t.slice(x.at + x.len);
+  }
+
   // Price: after a price word, else a figure with million/thousand, else a long plain number.
   const price =
-    take(new RegExp(`(?:السعر|سعر|بسعر|price|المطلوب|طالب|إجمالي|اجمالي|الإجمالي|الاجمالي|ايجار|إيجار|rent)\\s*[:\\-=]?\\s*(?:ب|ـ)?\\s*(${MONEY})`, "i")) ||
-    take(new RegExp(`(${NUM}\\s*(?:مليون|ملايين|million|mil|m(?![a-z0-9²])|الف|ألف))`, "i")) ||
-    take(/(?<![\d.,])(\d{1,3}(?:,\d{3}){2,}|\d{6,})(?![\d.,])/);
-  if (price) set("price_value", price[1]);
+    take(new RegExp(`(?:السعر|سعر|بسعر|price|المطلوب|طالب|إجمالي|اجمالي|الإجمالي|الاجمالي|ايجار|إيجار|rent)\\s*[:\\-=]?\\s*(?:ب|ـ)?\\s*(${MONEY}${CUR})`, "i")) ||
+    take(new RegExp(`(?<![\\d.,])(\\d{1,3}(?:,\\d{3}){2,}${CUR}|\\d{6,}${CUR})(?![\\d.,])`)) ||
+    take(new RegExp(`(${NUM}\\s*(?:مليون|ملايين|million|mil|m(?![a-z0-9²])|الف|ألف)${CUR})`, "i"));
+  if (price && !cells.price_value) set("price_value", price[1]);
 
   const area = findArea(t);
   if (area) set("area_value", area);
+  const land = new RegExp(`(?:land|ارض|أرض|الارض|الأرض)\\s*(?:area|مساحة)?\\s*[:\\-=]?\\s*(${NUM})`, "i").exec(t);
+  if (land && land[1] !== area) set("land_area", land[1]);
 
   // Bedrooms and bathrooms: "3 غرف", "غرفتين", "3 bedrooms"; "2 حمام", "حمامين".
   const beds = /(\d+)\s*(?:غرف|غرفه|غرفة|نوم|bed(?:room)?s?|br\b)/i.exec(t) || /(?:غرف|غرفه|غرفة)\s*(?:نوم)?\s*[:\-]?\s*(\d)/i.exec(t);
@@ -123,6 +140,10 @@ function parsePost(text, places = null, from = {}) {
   const sale = /(للبيع|(?<![\u0621-\u064A])بيع(?![\u0621-\u064A])|for sale|\bsale\b|resale|ريسيل)/i.test(full);
   if (rent && !sale) set("listing_type", "rent");
   else if (sale && !rent) set("listing_type", "sale");
+
+  // Furnishing, in the app's own four values (the add/edit form's dropdown).
+  const furn = SheetImport.furnishing(full);
+  if (furn) set("furnishing", furn);
 
   // Property type: the first word the app's own type list knows.
   for (const token of normalizeSearch(full).split(/[^\p{L}\p{N}]+/u)) {

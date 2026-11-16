@@ -38,6 +38,7 @@ const COLUMNS = [
   ["floor", /^(floor|الدور|دور)$/],
   ["delivery", /(delivery|التسليم|الاستلام|استلام)/],
   ["finishing", /(finishing|التشطيب|تشطيب)/],
+  ["furnishing", /(furnishing|furnished|الفرش|فرش|مفروش)/],
   ["orientation", /(orientation|الواجهه|واجهه)/],
   ["features", /(amenities|features|extras|المميزات|مميزات)/],
   ["district", /(district|city|area name|المنطقه|الحي|المدينه)/],
@@ -150,6 +151,17 @@ const FINISHING = [
 const finishing = (v) => {
   const t = normalizeSearch(v);
   return t ? FINISHING.find(([, re]) => re.test(t))?.[0] || null : null;
+};
+// The unit's furnishing: the app's own four values (the same ones the add/edit form offers), read from a key or a word.
+const FURNISHING = [
+  ["unfurnished", /(unfurnished|not furnished|بدون فرش|غير مفروش|من غير فرش)/],
+  ["semi_furnished", /(semi.?furnished|نص فرش|نصف فرش|نص مفروش|نصف مفروش)/],
+  ["kitchen_and_ac", /(kitchen.?and.?ac|kitchen|مطبخ)/],
+  ["furnished", /(furnish|مفروش|فرش)/]
+];
+const furnishing = (v) => {
+  const t = normalizeSearch(v);
+  return t ? FURNISHING.find(([, re]) => re.test(t))?.[0] || null : null;
 };
 const listingType = (v) => {
   const t = normalizeSearch(v);
@@ -320,6 +332,7 @@ function rowToDraft(input = {}) {
   }
   if (has("delivery")) Object.assign(draft, Delivery.parseDelivery(text(deliveryCell(cells.delivery), 60)));
   if (has("finishing")) draft.finishing = finishing(cells.finishing);
+  if (has("furnishing")) draft.furnishing = furnishing(cells.furnishing);
   if (has("features") || has("orientation")) {
     const words = [cells.features, cells.orientation]
       .filter((x) => !isEmpty(x))
@@ -362,4 +375,4 @@ function rowToDraft(input = {}) {
   return { code, status: has("status") ? status(cells.status) : null, draft, errors: [...new Set(errors)], derived: expanded.derived };
 }
 
-module.exports = { typeIn, statusHint, deliveryCell, COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, CURRENCY };
+module.exports = { typeIn, statusHint, deliveryCell, COLUMNS, REQUIRED, columnFor, rowToDraft, emptyRequired, money, propertyType, finishing, furnishing, CURRENCY };

@@ -304,6 +304,11 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
         items.push({ ...base, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)), needs: needsOf(ev.blockers) });
         continue;
       }
+      // A WhatsApp post that gives no owner phone cannot be saved as a new unit (every unit needs an owner contact): held for the Edit window.
+      if (source === "chat" && !require("../domain/phone").normalizePhone(p.draft.details?.owner_phone)) {
+        items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Owner phone is required" : "تليفون المالك مطلوب"], needs: ["owner_phone"] });
+        continue;
+      }
       if (p.status && p.status !== "active") ev.listing.status = p.status;
       const warnings = ev.warnings.map((w) => Rules.warningLine(w, lang));
       // A likely duplicate: an active unit in the agency, or an earlier row of this sheet (never a block, only a warning).
@@ -340,6 +345,36 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
 
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
   return remembered ? { items, counts, remembered } : { items, counts };
+}
+
+/**
+ * The cells a unit cannot be saved without, by the SAME rules as the add and edit unit forms: the field rules' blockers
+ * (sale or rent, type, place, price, area, bedrooms for an apartment or a villa, …) and an owner phone (createListing).
+ * Used by the WhatsApp import's preview, review cards and Edit window, so they never disagree with the unit form.
+ * @returns {string[]} cell keys (listing_type, property_type, compound, price_value, area_value, bedrooms, owner_phone, …)
+ */
+function readCells(cells = {}) {
+  const price = Mixed.installmentOf(cells.price_value) ? { value: cells.price_value, usd: false } : Mixed.cellPrice(cells.price_value);
+  const row = SheetImport.rowToDraft(price.value === cells.price_value ? cells : { ...cells, price_value: price.value });
+  if (price.usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
+  return row;
+}
+
+/** A unit's listing fields from a post's cells, the way the import plan composes them (the app turns them into its form). */
+function fieldsOfCells(cells = {}, lang = "ar") {
+  const row = readCells(cells);
+  return composeRow(null, JSON.parse(JSON.stringify(row.draft || {})), lang);
+}
+
+function missingCells(cells = {}, lang = "ar") {
+  const row = readCells(cells);
+  const out = new Set(row.errors.map((e) => ERROR_NEEDS[e]).filter(Boolean));
+  if (!row.errors.length || row.draft) {
+    const ev = Rules.evaluate(composeRow(null, JSON.parse(JSON.stringify(row.draft || {})), lang), { lang });
+    for (const k of needsOf(ev.blockers || [])) out.add(k);
+  }
+  if (!require("../domain/phone").normalizePhone(row.draft?.details?.owner_phone ?? cells.owner_phone)) out.add("owner_phone");
+  return [...out];
 }
 
 /** Saves a plan; returns its id. */
@@ -437,6 +472,8 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
     if (res.listing) {
       result.created.push(res.listing.code);
       result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
+      const np = (imp.payload.newPlaces || {})[String(item.row)];
+      if (np && item.fields?.compound) await require("../lib/placeNames").addDetails(pool, item.fields.compound, np).catch(() => {});
       await withPhotos(item, res.listing);
       return true;
     }
@@ -638,7 +675,27 @@ function unknownTypes(rows) {
   }
   return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([value, count]) => ({ value, count }));
 }
+/** What a word in the type column can also be: a place (the compound) or noise. */
+const TYPE_WORD_CHOICES = ["compound", "ignore"];
 const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "commercial", "land", "roof"];
+
+/**
+ * Which of the unknown type-column words are approved places (the source list: compounds, areas), so the review offers
+ * "this is a compound" first. → { word: place name }
+ */
+async function typeWordPlaces(pool, words = []) {
+  const out = {};
+  if (!words.length) return out;
+  const Places = require("../domain/mapPlaces");
+  const { rows } = await pool.query("SELECT id, name_en, name_ar, aliases, verified, area_id, subzone_id FROM map_places WHERE approved").catch(() => ({ rows: [] }));
+  const index = Places.buildIndex(rows);
+  for (const w of words) {
+    const id = index.get(Places.placeKey(w));
+    const row = id && rows.find((r) => r.id === id);
+    if (row) out[w] = row.name_en || row.name_ar;
+  }
+  return out;
+}
 
 /** How many rows each batch action would touch, for the review page. */
 function batchStats(payload) {
@@ -691,10 +748,21 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
       r.cells.price_value = v;
       touched++;
     }
-  } else if (action === "type_map" && TYPE_KEYS.includes(value) && typeKey(from)) {
+  } else if (action === "type_map" && (TYPE_KEYS.includes(value) || TYPE_WORD_CHOICES.includes(value)) && typeKey(from)) {
     for (const r of rows) {
       if (typeKey(r.cells.property_type) === typeKey(from) && !SheetImport.propertyType(r.cells.property_type)) {
-        r.cells.property_type = value;
+        const word = String(r.cells.property_type).replace(/\s+/g, " ").trim();
+        if (value === "compound") {
+          // The word in the type column is a place: the person says it is the unit's compound, so it replaces the tab-name guess.
+          r.cells.compound = word;
+          delete r.cells.property_type;
+        } else if (value === "ignore") {
+          // Not a type and not a place (a typo, a note): dropped from the type, kept in the notes.
+          r.cells.notes = [r.cells.notes, word].filter(Boolean).join(" · ");
+          delete r.cells.property_type;
+        } else {
+          r.cells.property_type = value;
+        }
         touched++;
       }
     }
@@ -863,7 +931,56 @@ async function setPhotoChoice(pool, broker, id, row, { order = [], keep = [], dr
   return rowCount > 0;
 }
 
+/**
+ * Moves one uploaded photo of a chat plan to the unit before or after it in the chat (the neighbouring row that is still
+ * to be saved or fixed). The photo choices of both rows follow it: the moved photo is added last and ticked on the new unit.
+ * @returns {Promise<boolean>} false when there is nothing to move to or the plan is not a ready chat plan
+ */
+async function movePhoto(pool, broker, id, { row, index, dir } = {}) {
+  const imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel" || imp.status !== "ready" || imp.payload?.source !== "chat") return false;
+  const p = imp.payload;
+  const rows = (p.items || []).filter((i) => ["new", "changed", "review", "invalid"].includes(i.kind)).map((i) => i.row).sort((a, b) => a - b);
+  const at = rows.indexOf(Number(row));
+  const to = at < 0 ? undefined : rows[at + (dir === "prev" ? -1 : 1)];
+  const photos = { ...(p.photos || {}) };
+  const from = [...(photos[String(row)] || [])];
+  if (to === undefined || !Number.isInteger(index) || index < 0 || index >= from.length) return false;
+  const [moved] = from.splice(index, 1);
+  const dest = [...(photos[String(to)] || []), moved];
+  photos[String(row)] = from;
+  photos[String(to)] = dest;
+  const choices = { ...(p.choices || {}) };
+  const shift = (list) => (list || []).filter((x) => x !== index).map((x) => (x > index ? x - 1 : x));
+  const a = choices[String(row)];
+  if (a) choices[String(row)] = { ...a, order: shift(a.order), keep: shift(a.keep) };
+  const b = choices[String(to)];
+  if (b) choices[String(to)] = { ...b, order: [...(b.order || []), dest.length - 1], keep: [...(b.keep || []), dest.length - 1] };
+  const { rowCount } = await pool.query(
+    `UPDATE web_imports SET payload = jsonb_set(jsonb_set(payload, '{photos}', $2::jsonb, true), '{choices}', $3::jsonb, true)
+      WHERE id = $1 AND agency_id = $4 AND broker_id = $5 AND status = 'ready' AND kind = 'excel'`,
+    [id, JSON.stringify(photos), JSON.stringify(choices), broker.agency_id, broker.id]
+  );
+  return rowCount > 0;
+}
+
+/** The Arabic name and map link asked for a new compound on a chat plan's row, kept in the plan until the unit is saved. */
+async function setNewPlace(pool, broker, id, row, { nameAr = "", pin = "" } = {}) {
+  const { rowCount } = await pool.query(
+    `UPDATE web_imports SET payload = jsonb_set(jsonb_set(payload, '{newPlaces}', COALESCE(payload->'newPlaces', '{}'::jsonb), true), ARRAY['newPlaces', $2::text], $3::jsonb, true)
+      WHERE id = $1 AND agency_id = $4 AND broker_id = $5 AND status = 'ready' AND kind = 'excel'`,
+    [id, String(Number(row)), JSON.stringify({ nameAr: String(nameAr).slice(0, 120), pin: String(pin).slice(0, 500) }), broker.agency_id, broker.id]
+  );
+  return rowCount > 0;
+}
+
 module.exports = {
+  fieldsOfCells,
+  typeWordPlaces,
+  TYPE_WORD_CHOICES,
+  missingCells,
+  setNewPlace,
+  movePhoto,
   setPhotoChoice,
   escapeRegex,
   escapeLike,

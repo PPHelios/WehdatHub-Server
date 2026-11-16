@@ -307,3 +307,29 @@ describe("unknown types and unreadable cells", () => {
     expect([(await unit("VR1")).property_type, (await unit("VR2")).property_type]).toEqual(["duplex", "duplex"]);
   });
 });
+
+describe("a word in the type column that is a place, or noise", () => {
+  test("it can be used as the compound, or ignored (kept in the notes), for every row at once; the page offers both before the unit types", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const data = [unitRow(1, "VR"), unitRow(2, "VR"), unitRow(3, "VR")];
+    data[0][2] = "Hyde Parkx";
+    data[1][2] = "hyde parkx";
+    data[2][2] = "3rd floor corner";
+    const r = await post(agent, csrf, { filename: "RENT.xlsx", tabs: [tab("Villette", data)] });
+    const page = await agent.get(r.body.url);
+    expect(page.text).toMatch(/<option value="compound"/);
+    expect(page.text).toMatch(/<option value="ignore"/);
+    expect(page.text.indexOf('value="compound"')).toBeLessThan(page.text.indexOf('value="apartment"'));
+    await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "hyde parkx", value: "compound" });
+    await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "type_map", from: "3rd floor corner", value: "ignore" });
+    const id = r.body.url.split("/").pop();
+    const [imp] = await h.query("SELECT payload FROM web_imports WHERE id = $1", [id]);
+    const cells = imp.payload.rows.map((x) => x.cells);
+    expect(cells[0].compound).toBe("Hyde Parkx");
+    expect(cells[0].property_type).toBeUndefined();
+    expect(cells[1].compound).toBe("hyde parkx");
+    expect(cells[2].property_type).toBeUndefined();
+    expect(cells[2].notes).toContain("3rd floor corner");
+    expect((await agent.get(r.body.url)).text).not.toMatch(/data-type-word=/);
+  });
+});
