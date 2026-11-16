@@ -98,6 +98,7 @@ test("a broker asks a manager about a lead with a note; the manager sees it and 
 test("a broker asks for secret details on a searched unit; the manager allows it and the broker can see them", async () => {
   const broker = await signIn("colleague");
   await open(broker, "/app/units/NH-A20");
+  await broker.locator("details.acc:has(form[action$='/access']) > summary").click(); // the agency-only box is a collapsed block
   await broker.locator("form[action$='/access'] button[type=submit]").click();
   await broker.waitForLoadState("networkidle");
 
@@ -107,6 +108,7 @@ test("a broker asks for secret details on a searched unit; the manager allows it
 
   const manager = await signIn("admin");
   await open(manager, "/app/units/NH-A20");
+  await manager.locator("details.acc:has(button[name=approve]) > summary").click();
   await manager.locator("button[name=approve][value='1']").first().click();
   await manager.waitForLoadState("networkidle");
 

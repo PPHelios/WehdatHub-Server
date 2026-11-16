@@ -131,9 +131,9 @@ function moreGroups(broker) {
 /** The flat list of the More page links (kept for callers that want one list). */
 const navFor = (broker) => moreGroups(broker).flatMap((g) => g.items.map((i) => ({ ...i, group: g.key })));
 
-// The bottom bar: five places. Brokers: Today · Search · + · Leads · Units; managers swap Units for Team.
-// Units stays one tap away for managers under More, and inside Search as "My units".
-const TAB_ROOTS = new Set(["/app", "/app/search", "/app/add", "/app/leads", "/app/units", "/app/team", "/app/more"]);
+// The bottom bar: five places per role (lib/navSpec.js), the centre one is the role's main shortcut.
+
+const TAB_ROOTS = new Set(["/app", "/app/search", "/app/add", "/app/leads", "/app/units", "/app/team", "/app/dashboard", "/app/more"]);
 
 /** Which bottom-bar place a page belongs to (by its path, else its nav key). */
 function tabOf(path, nav) {
@@ -144,6 +144,7 @@ function tabOf(path, nav) {
   if (/^\/app\/leads(\/|$)/.test(p)) return "leads";
   if (/^\/app\/units(\/|$)/.test(p)) return "units";
   if (/^\/app\/team(\/|$)/.test(p)) return "team";
+  if (/^\/app\/dashboard(\/|$)/.test(p)) return "dashboard";
   if (/^\/app\/owners(\/|$)/.test(p)) return "owners";
   if (/^\/app\/settings(\/|$)/.test(p)) return "settings";
   return nav === "search" ? "search" : nav === "leads" ? "leads" : nav === "units" ? "units" : "more";
@@ -181,7 +182,7 @@ function sideMenu(broker, tab, lang, { crm = false } = {}) {
   const link = (n, current) => html`<a href="${n.href}"${current ? raw(' aria-current="page"') : ""}>${icon(n.icon, 20)}<span>${en ? n.en : n.ar}</span></a>`;
   const home = nav.tabs.find((t) => t.key === "home" && t.web);
   const groups = nav.groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => i.web).map((i) => ({ key: i.key, href: i.web, ar: i.label.ar, en: i.label.en, icon: i.icon })) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => i.web && i.key !== "add").map((i) => ({ key: i.key, href: i.web, ar: i.label.ar, en: i.label.en, icon: i.icon })) }))
     .filter((g) => g.items.length);
   return html`<nav class="sidemenu" aria-label="${en ? "Menu" : "القائمة"}">
   ${crm ? "" : html`<a class="side-add" href="${broker && require("../lib/authz").isDataEntry(broker) ? "/app/units/new" : "/app/add"}">${icon("plus", 20)}<span>${en ? "Add" : "إضافة"}</span></a>`}

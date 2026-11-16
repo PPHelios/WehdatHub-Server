@@ -11,20 +11,26 @@ const itemsOf = (role, rights) => Nav.forBroker(who(role), { rights }).groups.fl
 const groupsOf = (role) => Nav.forBroker(who(role)).groups.map((g) => g.key);
 
 test("the bar per role matches the parity table", () => {
-  expect(barOf("broker")).toEqual(["home", "search", "add", "leads", "units"]);
-  expect(barOf("team_lead")).toEqual(["home", "search", "add", "leads", "team"]);
-  expect(barOf("manager")).toEqual(["home", "search", "add", "leads", "team"]);
-  expect(barOf("admin")).toEqual(["home", "search", "add", "leads", "team"]);
-  expect(barOf("owner")).toEqual(["home", "search", "add", "leads", "team"]);
+  expect(barOf("broker")).toEqual(["home", "leads", "search", "units", "more"]);
+  expect(barOf("team_lead")).toEqual(["home", "team", "search", "leads", "more"]);
+  expect(barOf("manager")).toEqual(["home", "team", "leads", "search", "more"]);
+  expect(barOf("admin")).toEqual(["home", "team", "leads", "search", "more"]);
+  expect(barOf("owner")).toEqual(["home", "team", "dashboard", "leads", "more"]);
   expect(barOf("data_entry")).toEqual(["search", "units", "add", "owners", "settings"]);
 });
 
-test("Add is the centre button on every bar", () => {
-  for (const role of ["broker", "team_lead", "manager", "owner", "data_entry"]) {
+test("the centre button is the role's main shortcut, and only data entry has Add on the bar", () => {
+  const centre = { broker: "search", team_lead: "search", manager: "leads", admin: "leads", owner: "dashboard", data_entry: "add" };
+  for (const [role, key] of Object.entries(centre)) {
     const tabs = Nav.forBroker(who(role)).tabs;
     expect(tabs).toHaveLength(5);
-    expect(tabs[2]).toMatchObject({ key: "add", fab: true });
+    expect(tabs[2]).toMatchObject({ key, fab: true });
+    expect(tabs.filter((t) => t.fab)).toHaveLength(1);
   }
+  for (const role of ["broker", "team_lead", "manager", "owner"]) {
+    expect(Nav.forBroker(who(role)).groups[0].items[0]).toMatchObject({ key: "add", web: "/app/add", onBar: false });
+  }
+  expect(itemsOf("data_entry")).not.toContain("add");
 });
 
 test("groups come in the spec order and a group with no items for the role is left out", () => {
@@ -70,6 +76,7 @@ test("the product owner (crm) has the tracking pages and its own account items o
     const nav = Nav.forBroker(who("owner"));
     expect(nav.role).toBe("crm");
     expect(nav.tabs.map((t) => t.key)).toEqual(["home", "owner", "board", "alerts", "settings"]);
+    expect(nav.tabs[2]).toMatchObject({ key: "board", fab: true });
     expect(nav.groups.map((g) => g.key)).toEqual(["account", "platform"]);
     expect(nav.groups.find((g) => g.key === "platform").items.map((i) => i.key)).toEqual(["owner", "ownermap", "ownerqueue", "ownerlibrary", "searchreview"]);
   } finally {

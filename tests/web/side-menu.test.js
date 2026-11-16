@@ -64,7 +64,7 @@ test("the More list groups leave out what is on the bottom bar and what the webs
 });
 
 test("the bottom bar comes from the spec", () => {
-  expect(Html.tabsFor(who("broker")).map((t) => t.key)).toEqual(["home", "search", "add", "leads", "units"]);
-  expect(Html.tabsFor(who("team_lead")).map((t) => t.key)).toEqual(["home", "search", "add", "leads", "team"]);
+  expect(Html.tabsFor(who("broker")).map((t) => t.key)).toEqual(["home", "leads", "search", "units", "more"]);
+  expect(Html.tabsFor(who("team_lead")).map((t) => t.key)).toEqual(["home", "team", "search", "leads", "more"]);
   expect(Html.tabsFor(who("data_entry")).map((t) => t.key)).toEqual(["search", "units", "add", "owners", "settings"]);
 });

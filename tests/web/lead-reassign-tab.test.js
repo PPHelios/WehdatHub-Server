@@ -29,7 +29,7 @@ test("the reassign tab is shown to managers only", async () => {
   expect(manager.status).toBe(200);
   expect(manager.text).toContain('id="lt-more"');
   expect(manager.text).toContain("Reassign");
-  expect(manager.text).not.toContain(">More<");
+  expect(manager.text.replace(/<nav class="tabbar[\s\S]*?<\/nav>/, "")).not.toContain(">More<"); // the bottom bar has its own More tab
 
   const { agent: b } = await signIn(h, "broker");
   const broker = await b.get(path);
