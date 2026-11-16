@@ -1073,3 +1073,17 @@ ol.photo-grid li, .thumbs .thumb { align-content: start; }
 section[data-kind] > h2 { margin-block: 0 12px; }
 section[data-kind] ul { padding-inline-start: 18px; margin: 0; }
 section[data-kind] li[data-row] { padding: 8px 0; border-block-end: 1px solid var(--line); }
+
+/* Review fixes (Haytham, 2026-11-16) */
+/* The status menu sits inside a display:contents form, so it needs its own anchor or it opens at the top of the page. */
+#unit-actions .status-menu, #unit-actions .more-menu { position: relative; }
+/* Controls over a photo take the card colours, so the arrow stays visible in dark mode. */
+.car-btn { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.pj-card .pj-badge { background: var(--card); color: var(--ink); }
+/* Unit card: everything starts on the same edge (right in Arabic, left in English); no centred chips. */
+.unitcard, .unitcard .uc-main { text-align: start; }
+.uc-top { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+.unitcard .uc-feat, .unitcard .tags { justify-content: flex-start; }
+.unitcard .uc-feat li, .unitcard .tags li { justify-content: flex-start; text-align: start; }
+.uc-main.has-thumb { align-items: start; }
+.uc-price { display: block; margin-block: 2px; }
