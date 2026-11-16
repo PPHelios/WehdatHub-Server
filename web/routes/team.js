@@ -222,6 +222,14 @@ ${tabs("team_tab", [
 ], { open: tab })}`;
 }
 
+/** The team lead's read-only team page. */
+function teamBoardPage(board, lang) {
+  return html`<h1>${L(lang, "الفريق", "Team")}</h1>
+<ul class="members">${board.map((m) => html`<li class="card"><h3>${m.name}${m.me ? html` <span class="chip">${L(lang, "أنت", "You")}</span>` : ""}${m.away ? html` <span class="chip">${L(lang, "غايب", "Away")}</span>` : ""}</h3>
+<p class="muted">${L(lang, `مفتوح ${m.open} · متأخر ${m.overdue} · النهارده ${m.soon}`, `Open ${m.open} · Overdue ${m.overdue} · Due today ${m.soon}`)}</p></li>`)}</ul>
+<p class="muted">${L(lang, "العدد بيشمل العملاء اللي تقدر تشوفهم بس.", "Counts cover only the leads you may see.")}</p>`;
+}
+
 function register(web, { pool, page }) {
   const forbidden = (req, res) => res.status(403).type("text/plain").send(errorText("forbidden", langOf(req)));
   const render = async (req, res, extra = {}, status = 200) => {
@@ -236,7 +244,13 @@ function register(web, { pool, page }) {
   };
   const bad = (code, lang) => html`<p class="card notice bad" role="alert">❌ ${errorText(code, lang)}</p>`;
 
-  web.get("/team", (req, res) => render(req, res));
+  // A team lead sees their own team, read only: who is on it and each person's open, overdue and due-today leads.
+  web.get("/team", async (req, res) => {
+    if (!require("../../lib/authz").isTeamLead(req.session.broker)) return render(req, res);
+    const lang = langOf(req);
+    const board = await Team.teamBoard(pool, req.session.broker);
+    return page(req, res, { title: L(lang, "الفريق", "Team"), nav: "settings", body: teamBoardPage(board, lang) });
+  });
 
   web.post("/team/invite", async (req, res) => {
     const lang = langOf(req);

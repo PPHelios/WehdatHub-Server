@@ -1536,6 +1536,7 @@
       "INVITE_ROLES": "Array",
       "ADD_ROLES": "Array",
       "listTeam": ["pool", "manager"],
+      "teamBoard": ["pool", "broker"],
       "startLinkFor": ["pool", "manager", "brokerId", "params"],
       "invite": ["pool", "manager", "input", "opts"],
       "deactivate": ["pool", "manager", "brokerId", "params"],

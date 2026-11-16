@@ -35,6 +35,42 @@ async function listTeam(pool, manager) {
 }
 
 /**
+ * The team board: each active member with open, overdue and due-today leads (counts only cover leads this person may see). A manager
+ * sees everyone, a team lead themselves and their own team; anyone else gets null. Used by the app (GET /team) and the website's Team page.
+ */
+async function teamBoard(pool, broker) {
+  const manager = isManager(broker);
+  if (!manager && String(broker?.role || "").toLowerCase() !== "team_lead") return null;
+  const Vis = require("../lib/visibility");
+  const members = (
+    await pool.query(
+      `SELECT id, name, role, away_until FROM brokers
+        WHERE agency_id = $1 AND is_active AND ($2::boolean OR id = $3 OR team_lead_id = $3)
+        ORDER BY (id = $3) DESC, name`,
+      [broker.agency_id, manager, broker.id]
+    )
+  ).rows;
+  const ids = members.map((m) => m.id);
+  const counts = new Map(
+    (
+      await pool.query(
+        `SELECT l.assigned_broker_id AS id,
+                count(*) FILTER (WHERE l.stage NOT IN ('won', 'lost'))::int AS open,
+                count(*) FILTER (WHERE l.follow_up_status = 'open' AND l.next_follow_up_at < now())::int AS overdue,
+                count(*) FILTER (WHERE l.follow_up_status = 'open' AND l.next_follow_up_at >= now() AND l.next_follow_up_at < now() + interval '1 day')::int AS soon
+           FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id = ANY($2::uuid[]) GROUP BY l.assigned_broker_id`,
+        [broker.agency_id, ids]
+      )
+    ).rows.map((r) => [r.id, r])
+  );
+  return members.map((m) => {
+    const c = counts.get(m.id) || {};
+    const away = m.away_until && new Date(m.away_until) > new Date();
+    return { id: m.id, name: m.name, role: m.role, me: m.id === broker.id, away: Boolean(away), open: c.open || 0, overdue: c.overdue || 0, soon: c.soon || 0 };
+  });
+}
+
+/**
  * A start link for one of the manager's brokers: { url, broker } or { error }. Never for someone already on Telegram
  * (tapping a link moves the account to whoever taps it) and never for a role above the manager's.
  */
@@ -169,4 +205,4 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
   return { ok: true };
 }
 
-module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText, changeRole, setTeamLeadRole, setTeam };
+module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, inviteText, changeRole, setTeamLeadRole, setTeam };
