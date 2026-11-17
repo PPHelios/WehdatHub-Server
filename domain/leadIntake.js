@@ -193,7 +193,46 @@ function normalizeLeadExtraction(raw) {
   };
 }
 
+const NAME_CUE = /(?:اسمه|اسمها|اسم العميل|الاسم|العميل|name|client)\s*[:\-]?\s*(\p{L}[\p{L}‌]*(?: \p{L}[\p{L}‌]*){0,2})/iu;
+const NAME_STOP = new Set(["عايز", "عايزه", "عايزة", "محتاج", "محتاجه", "يدور", "بيدور", "عاوز", "عاوزه", "شقه", "شقة", "فيلا", "في", "على", "من", "ده", "دى", "دي", "for", "wants", "looking", "needs", "is"]);
+
+/**
+ * A lead out of typed or transcribed text, by rules only (Parser consolidation, Phase 4): phones from findPhones, a name
+ * only when the text says it ("الاسم: ..." or a bare "name + number"), the request through the search parser (which reads
+ * money, rooms, floors and Franco through the shared readers), the kind from clear words. Anything unsure stays empty.
+ * Same shape as normalizeLeadExtraction.
+ */
+function readLeadText(raw) {
+  const original = String(raw || "").slice(0, 2000);
+  const phones = findPhones(original);
+  const noPhones = original.replace(/[+٠-٩\d][٠-٩\d\s().-]{6,}[٠-٩\d]/g, " ").replace(/\s+/g, " ").trim();
+  let name = null;
+  const cue = NAME_CUE.exec(noPhones);
+  const cut = (w) => { const out = []; for (const x of w.split(" ")) { if (NAME_STOP.has(x.toLowerCase())) break; out.push(x); } return out.join(" ") || null; };
+  if (cue) name = cut(cue[1].trim());
+  else if (phones.length) {
+    // The words written before the first number, when they are one to three plain words: "ليد أحمد سمير 0101…", "Ahmed Samir 0101…".
+    const first = original.search(/[+٠-٩\d][٠-٩\d\s().-]{6,}[٠-٩\d]/);
+    const head = (first > 0 ? original.slice(0, first) : "").replace(/^\s*(?:ليد|lead|عميل|client|ده|دي)\s+/iu, "").trim();
+    const until = cut(head);
+    if (until && /^\p{L}+(?: \p{L}+){0,2}$/u.test(until)) name = until;
+  }
+  const t = Q.fallbackParse(noPhones);
+  const g = t.filters;
+  const solid = g.listing_type || g.property_types.length || g.places.length || g.bedrooms_min !== null || g.price_max !== null || g.price_min !== null || g.area_min !== null || g.area_max !== null;
+  const request = solid ? { ...g, place_terms: g.place_terms.filter((w) => !/(الاسم|العميل|عميل|اسم|name|client|يبيع|يشتري|يأجر|عايز|محتاج)/i.test(w) && !(name && name.split(" ").some((n) => w.includes(n)))) } : null;
+  const s = noPhones.toLowerCase();
+  let kind = null;
+  if (/(يبيع|عايز ابيع|للبيع|شقته|وحدته|owner|seller)/.test(s) && /(يؤجر|يأجر|للايجار|للإيجار)/.test(s)) kind = "landlord";
+  else if (/(يبيع|عايز ابيع|عايزه يبيع|عايز يبيع|مالك|owner|wants to sell)/.test(s)) kind = "seller";
+  else if (/(يأجر شقته|يأجر وحدته|للايجار عنده|landlord)/.test(s)) kind = "landlord";
+  else if (/(يستأجر|عايز يأجر|عايز ايجار|مستأجر|tenant|rent a)/.test(s)) kind = "tenant";
+  else if (/(يشتري|عايز يشتري|مشتري|buyer|wants to buy|looking to buy)/.test(s)) kind = "buyer";
+  return { name: name ? name.slice(0, 120) : null, phones: phones.slice(0, MAX_CHOICES), kind: Stages.KINDS.includes(kind) ? kind : null, source: null, note: null, request };
+}
+
 module.exports = {
+  readLeadText,
   MAX_CHOICES,
   findPhones,
   parseContactCard,
