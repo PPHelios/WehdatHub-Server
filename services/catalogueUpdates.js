@@ -35,25 +35,9 @@ async function transcribe(voice, ctx) {
   return String((await AI.transcribeAudio(voice.buffer, voice.mimeType, ctx)) || "").trim();
 }
 
-/** The sentence → { action, ... } by rules, else one AI call; null when it is not a catalogue change. */
-async function read(text, { projects, today, lang, ctx }) {
-  const ruled = U.parseRules(text, today);
-  if (ruled) return ruled;
-  const fence = crypto.randomBytes(4).toString("hex").toUpperCase();
-  const res = await AI.generateWithCascade({
-    contents: [{ role: "user", parts: [{ text: U.buildPrompt(lang, fence, { projects, today }) }, { text: `${text}\n===${fence}===` }] }],
-    config: { temperature: 0.1, responseMimeType: "application/json" },
-    operationType: "catalogue_update",
-    ctx
-  });
-  let out = null;
-  try {
-    out = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
-  } catch {
-    return null;
-  }
-  const n = U.normalizeAi(out, today);
-  return n ? { ...n, words: U.clean(text) } : null;
+/** The sentence → { action, ... } by rules only (Parser consolidation, Phase 4: no AI call for text); null when it is not a catalogue change. */
+async function read(text, { today }) {
+  return U.parseRules(text, today) || null;
 }
 
 const UNIT_COLS = "id, code, developer_unit_code, status, price_value, project_id, phase_id, broker_id, agency_id, details, version, inventory_type, listing_type";
@@ -110,7 +94,7 @@ async function interpret(pool, actor, { text = "", voice = null, channel = "web"
   const projects = await Catalogue.listProjects(pool, actor);
   let said;
   try {
-    said = await read(words, { projects, today, lang, ctx });
+    said = await read(words, { today });
   } catch (err) {
     return bad(blocked(err) || "not_understood", { input: words, owner: isAgencyOwner(actor) });
   }

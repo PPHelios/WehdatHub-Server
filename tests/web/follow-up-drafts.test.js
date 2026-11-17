@@ -28,52 +28,49 @@ const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1",
 const to = (who, replies) => replies.filter((r) => r.to === h.BROKERS[who].phone);
 const ids = (r) => (r.buttons || []).map((b) => b.id);
 
-function fakeModel() {
-  FakeAI.respond((call) => {
-    if (call.operation !== "follow_up_draft") throw new Error(`unexpected ${call.operation}`);
-    const p = String(call.contents);
-    expect(p).toContain("Client first name: Sara");
-    expect(p).toContain("broker's note: liked the garden");
-    return { text: p.includes("يا باشا") ? "أهلاً يا سارة يا باشا، نحدد معاينة تانية؟" : "أهلاً يا سارة، نحدد معاينة تانية؟" };
-  });
-}
-
 async function lead(who = "broker") {
   const l = (await Leads.captureLead(h.pool, await row(who), { phones: ["01012345678"], name: "Sara Ali" })).lead;
   await Leads.addNote(h.pool, await row(who), l.id, "liked the garden");
   return l;
 }
 
-test("rules: facts from the record only, the reply read safely", () => {
+test("rules: facts from the record only; the template fills name, request, viewing and sign-off, never a price or date", () => {
   const facts = D.factsOf({ lead: { name: "Sara Ali", kind: "buyer", stage: "contacted" }, events: [{ kind: "follow_up_done", data: { kind: "viewing", note: "unit BD-1" }, created_at: "2026-10-20T10:00:00Z" }], broker: { name: "Mona" }, agencyName: "Alpha" });
   expect(facts).toContain("2026-10-20 viewing done: unit BD-1");
-  expect(D.prompt(facts, { lang: "ar", style: "يا باشا" })).toContain('"""يا باشا"""');
+  const lead = { name: "Sara Ali", kind: "buyer", stage: "contacted" };
+  const ar = D.template({ lead, events: [{ kind: "contacted", data: {}, created_at: "2026-10-20T10:00:00Z" }], requests: [{ filters: {} }], broker: { name: "Mona" }, agencyName: "Alpha", requestLine: () => "شقة في التجمع" });
+  expect(ar).toContain("أهلاً Sara");
+  expect(ar).toContain("شكراً على مكالمتنا");
+  expect(ar).toContain("شقة في التجمع");
+  expect(ar).toContain("Mona - Alpha");
+  const en = D.template({ lead, viewing: { code: "BD-1", compound: "Mivida" }, broker: { name: "Mona" }, lang: "en" });
+  expect(en).toContain("Hi Sara,");
+  expect(en).toContain("viewing of BD-1 in Mivida");
+  expect(en).toContain("another viewing");
+  expect(D.template({ lead: { name: "", stage: "lost" }, broker: {} })).toContain("أهلاً بحضرتك");
   expect(D.parse("nope")).toEqual({ error: "empty" });
 });
 
-test("drafts for own clients only, in the broker's tone; lead page shows it with a WhatsApp link", async () => {
+test("drafts for own clients only, from a template; lead page shows it with a WhatsApp link; no AI call", async () => {
   const l = await lead();
-  fakeModel();
   const out = await Drafts.draft(h.pool, await row("broker"), l.id);
-  expect(out.text).toBe("أهلاً يا سارة، نحدد معاينة تانية؟");
+  expect(out.text).toContain("أهلاً Sara");
   expect(out.wa).toContain("https://wa.me/201012345678?text=");
   expect((await Drafts.draft(h.pool, await row("colleague"), l.id)).error).toBe("not_found");
+  expect(FakeAI.calls ? FakeAI.calls.length : 0).toBe(0);
 
-  await Drafts.saveStyle(h.pool, await row("broker"), "يا باشا");
   const { agent, csrf } = await signIn(h, "broker");
-  expect((await agent.get("/app/settings")).text).toContain("يا باشا");
   const page = await agent.post("/app/leads/L-0001/draft").type("form").send({ _csrf: csrf });
   expect(page.status).toBe(200);
   expect(page.text).toContain("data-follow-up-draft");
-  expect(page.text).toContain("سارة يا باشا");
+  expect(page.text).toContain("Sara");
   expect(page.text).toContain("data-draft-send");
 });
 
 test("bot: Called offers ✍️ Draft message; the draft comes back for the client", async () => {
   await lead();
-  fakeModel();
   const called = to("broker", await h.tap("broker", "ld:called:L-0001"))[0];
   expect(ids(called)).toContain("ld:draft:L-0001");
   const draft = to("broker", await h.tap("broker", "ld:draft:L-0001"));
-  expect(draft.map((r) => r.text).join("\n")).toContain("أهلاً يا سارة، نحدد معاينة تانية؟");
+  expect(draft.map((r) => r.text).join(" ")).toContain("Sara");
 });

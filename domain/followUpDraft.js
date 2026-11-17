@@ -29,6 +29,31 @@ function factsOf({ lead, events = [], requests = [], viewing = null, broker, age
   return lines;
 }
 
+/**
+ * The message from a template, filled from the lead's own record (Parser consolidation, Phase 4: no AI call).
+ * Arabic or English; the broker edits it before sending. Never states a price, date or promise.
+ */
+function template({ lead, events = [], requests = [], viewing = null, broker = {}, agencyName = "", lang = "ar", requestLine = () => "" }) {
+  const en = lang === "en";
+  const name = firstName(lead?.name);
+  const kinds = events.map((e) => e.kind);
+  const viewed = Boolean(viewing) || events.some((e) => e.kind === "follow_up_done" && e.data?.kind === "viewing");
+  const called = kinds.includes("contacted") || events.some((e) => e.kind === "follow_up_done" && e.data?.kind !== "viewing");
+  const req = requests.length ? String(requestLine(requests[0].filters) || "").trim() : "";
+  const unit = viewing ? `${viewing.code || ""}${viewing.compound ? (en ? " in " : " في ") + viewing.compound : ""}`.trim() : "";
+  const lost = lead?.stage === "lost";
+  const open = en ? (name ? `Hi ${name},` : "Hello,") : name ? `أهلاً ${name}،` : "أهلاً بحضرتك،";
+  let ctx;
+  if (viewed) ctx = en ? `Thank you for your time at the viewing${unit ? ` of ${unit}` : ""}.` : `شكراً على وقتك في المعاينة${unit ? ` (${unit})` : ""}.`;
+  else if (called) ctx = en ? "Thank you for our call." : "شكراً على مكالمتنا.";
+  else if (lost) ctx = en ? "I wanted to check in in case you are still looking." : "حبيت أطمّن عليك لو لسه بتدور على وحدة.";
+  else ctx = en ? "I wanted to follow up with you." : "حبيت أتابع معاك.";
+  const ask = req ? (en ? `I am still working on what you asked for (${req}).` : `وأنا شغال على طلبك (${req}).`) : "";
+  const next = viewed ? (en ? "Would you like to arrange another viewing?" : "تحب نحدد معاينة تانية؟") : lead?.stage === "negotiation" ? (en ? "Shall we go over the details together?" : "تحب نكمل في التفاصيل سوا؟") : en ? "When is a good time to talk?" : "إمتى يناسبك نتكلم؟";
+  const sign = [broker.name, agencyName].filter(Boolean).join(en ? ", " : " - ");
+  return [`${open} ${ctx}`, ask, next, sign].filter(Boolean).join("\n").slice(0, MAX_TEXT);
+}
+
 function prompt(facts, { lang, style = "" }) {
   const sample = String(style || "").trim().slice(0, MAX_STYLE);
   return `Write the next WhatsApp message from an Egyptian real-estate broker to their client, right after their last call or viewing.
@@ -54,4 +79,4 @@ function parse(text) {
   }
 }
 
-module.exports = { MAX_TEXT, MAX_STYLE, firstName, factsOf, prompt, parse };
+module.exports = { MAX_TEXT, MAX_STYLE, firstName, factsOf, template, prompt, parse };

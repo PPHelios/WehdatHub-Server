@@ -114,14 +114,12 @@ describe("preview, apply, undo", () => {
     expect((await Updates.interpret(h.pool, await row("broker"), { text: "زيادة 5% على بادية" })).error).toBe("forbidden");
   });
 
-  test("other sentences go to one AI call (counted); its JSON is checked, never trusted blindly", async () => {
+  test("text is read by rules only: no AI call; what the rules cannot read is not understood", async () => {
     const { admin } = await seed();
-    h.AI.respond((call) => (call.operation === "catalogue_update" ? { action: "increase", project: "Badya", phase: null, codes: [], status: null, pct: 4, effective_on: "2026-13-40", price: null, plan: null } : null));
     const out = await Updates.interpret(h.pool, admin, { text: "المطور رافع الأسعار أربعة في المية في بادية", now: new Date("2026-10-26T10:00:00Z") });
-    expect(h.AI.calls.map((c) => c.operation)).toEqual(["catalogue_update"]);
     expect(out.update).toMatchObject({ action: "increase", payload: { pct: 4, effective_on: "2026-10-26", date_given: false } });
-    h.AI.respond(() => ({ action: "unknown" }));
     expect((await Updates.interpret(h.pool, admin, { text: "شكرا" })).error).toBe("not_understood");
+    expect(h.AI.calls.map((c) => c.operation)).toEqual([]);
   });
 });
 

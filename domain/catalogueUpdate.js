@@ -1,11 +1,12 @@
 // domain/catalogueUpdate.js — Smart quick updates to the catalogue (Release A, C4), pure: a manager's sentence ("7%
 // increase on Badya from next month", "B12-304 sold", "new plan 5% down 8 years on Badya") → one change. Plain
-// sentences are read by rules (no AI call); anything else goes to one AI call whose JSON is normalized here too.
+// sentences are read by rules; since Parser consolidation Phase 4 there is no AI call for text (buildPrompt and normalizeAi stay for reference).
 // Nothing is guessed: a missing project, code or number leaves the change incomplete and the card says what is missing.
 "use strict";
 
 const T = require("../lib/text");
 const { normalizeSearch } = require("./searchText");
+const { wordValue } = require("./read/numbers");
 
 const ACTIONS = ["increase", "status", "price", "plan"];
 const FREQUENCIES = ["monthly", "quarterly", "semi_annual", "annual"];
@@ -18,6 +19,15 @@ const MONTHS = [
 
 /** Lowercase, Latin digits, Arabic letter variants folded; keeps % . / - so numbers and codes survive. */
 function clean(text) {
+  const folded = cleanBase(text);
+  // "أربعة في المية" / "4 بالمية" → "4%": a percentage said in words (shared number words).
+  return folded.replace(/(\S+) (?:في ال|بال)(?:ميه|مايه|مائه)/g, (m, w) => {
+    const n = /^\d+(?:\.\d+)?$/.test(w) ? Number(w) : wordValue(w);
+    return n === null ? m : `${n}%`;
+  });
+}
+
+function cleanBase(text) {
   return String(text ?? "")
     .replace(/[‎‏‪-‮]/g, "")
     .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
@@ -71,8 +81,8 @@ function withYear(d, m, year, today) {
 }
 
 const PCT = /([+\-−]?\d+(?:\.\d+)?)\s*(?:%|في الميه|في الميا|بالميه|percent|pct)/;
-const UP = /(زياده|زود|يزيد|تزيد|رفع|ارفع|increase|raise|hike)/;
-const DOWN = /(تخفيض|خفض|نزل|ينزل|خصم|تقليل|cut|decrease|reduce|discount|lower)/;
+const UP = /(زياده|زود|يزيد|تزيد|رفع|ارفع|رافع|رافعين|زاد|زادت|ترفع|هيرفع|increase|raise|hike)/;
+const DOWN = /(تخفيض|خفض|نزل|ينزل|نازل|نزلوا|خصم|تقليل|cut|decrease|reduce|discount|lower)/;
 const PLAN = /(خطه|نظام|سيستم|plan|payment plan)/;
 const SOLD = /(اتباعت|اتباع|اتبعت|بيعت|مباعه|مباع|تم البيع|sold)/;
 const AVAILABLE = /(رجعت متاحه|متاحه تاني|لسه متاحه|متاحه|available|back on sale|unsold)/;
