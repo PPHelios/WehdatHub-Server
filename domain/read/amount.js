@@ -101,7 +101,7 @@ function scan(text) {
       num = numberFromDigits(g.d, mil);
       if (num === null) continue;
       // "الدور 5", "مساحة 150", "غرف 3": a small number after these words is a floor, an area or a count.
-      if (num < 1000 && COUNT_CUE_RE.test(before)) continue;
+      // (Skipped below, once we know no unit follows: "غرف 4 مليون" is a price.)
     } else if (g.w) {
       num = wordValue(g.w);
     } else if (g.f) {
@@ -137,6 +137,11 @@ function scan(text) {
         pos += um[0].length;
         rest = s.slice(pos);
       }
+    }
+
+    if (isDigits && !unit && num < 1000 && COUNT_CUE_RE.test(before)) {
+      TOKEN.lastIndex = pos;
+      continue;
     }
 
     // A single letter m / م is millions only when it is clearly money; otherwise it is metres.
