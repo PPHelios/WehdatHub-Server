@@ -140,7 +140,7 @@ function register(web, { pool, page }) {
           : L(lang, "نصيبك", "Your share");
     const periodName = { month: L(lang, "شهر", "Month"), week: L(lang, "أسبوع", "Week"), all: L(lang, "الكل", "All time") };
     const pager = total > PAGE
-      ? html`<p class="row" data-pager>${pageNo > 0 ? html`<a href="${link({ page: pageNo - 1 })}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} <span class="muted">${pageNo + 1} / ${Math.ceil(total / PAGE)}</span> ${pageNo < Math.ceil(total / PAGE) - 1 ? html`<a href="${link({ page: pageNo + 1 })}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
+      ? html`<p class="row" data-pager>${pageNo > 0 ? html`<a class="btn secondary small" href="${link({ page: pageNo - 1 })}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} <span class="muted">${pageNo + 1} / ${Math.ceil(total / PAGE)}</span> ${pageNo < Math.ceil(total / PAGE) - 1 ? html`<a class="btn secondary small" href="${link({ page: pageNo + 1 })}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
       : "";
 
     const filters = html`<form method="get" action="/app/commissions" class="card row" data-commission-filter>
@@ -159,7 +159,7 @@ function register(web, { pool, page }) {
     const periodNav = html`<nav class="row" data-commission-period>
   ${["month", "week", "all"].map((v) => html`<a class="btn ${v === range.period ? "" : "secondary"}" href="${link({ period: v, page: 0 })}">${periodName[v]}</a>`)}
   ${range.period !== "all"
-    ? html`<a href="${link({ at: range.prevAt, page: 0 })}">←</a> <span dir="ltr">${range.fromDay} – ${range.toDay}</span> <a href="${link({ at: range.nextAt, page: 0 })}">→</a>`
+    ? html`<a class="btn secondary" href="${link({ at: range.prevAt, page: 0 })}" aria-label="${L(lang, "السابق", "Previous")}">←</a> <span dir="ltr">${range.fromDay} – ${range.toDay}</span> <a class="btn secondary" href="${link({ at: range.nextAt, page: 0 })}" aria-label="${L(lang, "التالي", "Next")}">→</a>`
     : ""}
 </nav>`;
 
@@ -215,7 +215,7 @@ ${kind === "resale" ? resaleBody : developersBody}`
       title: st.developer.name,
       nav: "deals",
       body: html`<h1>📄 ${L(lang, "كشف عمولات", "Commission statement")}: ${st.developer.name}</h1>
-<p class="row"><a href="/app/commissions?kind=developers">${L(lang, "رجوع للعمولات", "Back to commissions")}</a> <a class="btn secondary" href="/app/commissions/developers/${st.developer.id}?format=xlsx" data-statement-xlsx>⬇️ Excel</a></p>
+<p class="row"><a class="btn secondary small" href="/app/commissions?kind=developers">${L(lang, "رجوع للعمولات", "Back to commissions")}</a> <a class="btn secondary" href="/app/commissions/developers/${st.developer.id}?format=xlsx" data-statement-xlsx>⬇️ Excel</a></p>
 <section class="card row" data-statement-totals="${st.totals.outstanding}">
   <span>${L(lang, "متوقع", "Expected")}: <strong>${money(st.totals.expected, lang)}</strong></span>
   <span>${L(lang, "اتدفع", "Paid")}: <strong>${money(st.totals.paid, lang)}</strong></span>
@@ -256,7 +256,7 @@ ${notice}
   ${form("expected", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" value="${c.expected_amount}">`, `✏️ ${L(lang, "عدّل المتوقع", "Correct the expected amount")}`)}
   ${c.status === "cancelled" ? form("reopen", "", L(lang, "رجّعها", "Reopen")) : c.status !== "paid" ? form("cancel", "", `❌ ${L(lang, "إلغاء", "Cancel")}`) : ""}
 </section>
-<p><a href="/app/commissions?kind=developers">${L(lang, "رجوع للعمولات", "Back to commissions")}</a>${c.developer_id ? html` · <a href="/app/commissions/developers/${c.developer_id}">${L(lang, "كشف المطور", "Developer statement")}</a>` : ""}</p>`
+<p><a class="btn secondary small" href="/app/commissions?kind=developers">${L(lang, "رجوع للعمولات", "Back to commissions")}</a>${c.developer_id ? html` <a class="btn secondary small" href="/app/commissions/developers/${c.developer_id}">${L(lang, "كشف المطور", "Developer statement")}</a>` : ""}</p>`
     }, status);
   };
 

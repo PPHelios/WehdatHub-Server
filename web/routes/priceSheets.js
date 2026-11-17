@@ -144,7 +144,7 @@ function previewPage(lang, project, sheet) {
   const errText = (e) => (ROW_ERRORS[e] || [e, e])[lang === "en" ? 1 : 0];
   const row = (e, extra = "") => html`<tr><td dir="ltr">${e.rowNumber ?? ""}</td><td dir="ltr">${e.dev_code || L(lang, "موديل", "Model")}</td><td>${typeLabel(e.property_type)}${e.bedrooms !== null && e.bedrooms !== undefined ? ` · ${e.bedrooms}` : ""}</td><td dir="ltr">${areaText(e)}</td>${extra}</tr>`;
   const live = sheet.status === "preview";
-  return html`<p><a href="${base}#prices">‹ ${project.name}</a></p>
+  return html`<p><a class="btn secondary small" href="${base}#prices">‹ ${project.name}</a></p>
 <h1>🏷️ ${L(lang, "معاينة شيت الأسعار", "Price sheet preview")}</h1>
 ${sheet.source === "ai" ? html`<p class="card notice" data-ai-sheet>🤖 ${L(lang, "الأسعار دي اتقرت بالذكاء الاصطناعي من الملف؛ راجعها مع الملف قبل التطبيق. رقم الصف = الصفحة × 1000 + الصف.", "These prices were read by AI from the file; check them against it before applying. Row number = page × 1000 + row.")}${sheet.summary?.ai?.failed?.length ? html` <strong>${L(lang, `صفحات متقرتش: ${sheet.summary.ai.failed.join("، ")}`, `Pages not read: ${sheet.summary.ai.failed.join(", ")}`)}</strong>` : ""}</p>` : ""}
 <p class="muted">${sheet.file_name || ""} · <span dir="ltr">${day(sheet.created_at)}</span>${live ? "" : html` · <strong>${sheet.status === "applied" ? L(lang, "اتطبق", "Applied") : L(lang, "اتلغى", "Discarded")}</strong>`}</p>

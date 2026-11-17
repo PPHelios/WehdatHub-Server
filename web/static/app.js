@@ -278,7 +278,8 @@
         .then(function (b) { return b ? new File([b], "photo-" + (i + 1) + ".jpg", { type: b.type || "image/jpeg" }) : null; });
     })).then(function (files) {
       files = files.filter(Boolean);
-      var data = { files: files, text: box.getAttribute("data-share-text") || "" };
+      var ta = box.querySelector("textarea[data-share-copy]");
+      var data = { files: files, text: (ta ? ta.value : box.getAttribute("data-share-text")) || "" };
       // Some apps (WhatsApp on Android) drop the text sent with photos, so the description is copied first: paste it after the photos.
       try { if (navigator.clipboard && data.text) navigator.clipboard.writeText(data.text).then(function () { say(document.documentElement.lang === "en" ? "Description copied: paste it under the photos if it is missing." : "الوصف اتنسخ: الصقه تحت الصور لو مش ظاهر."); }, function () {}); } catch (e) { /* the text is also on the page */ }
       if (!files.length) return say("No photos could be loaded.");
@@ -749,7 +750,7 @@
       return;
     }
     var b = e.target && e.target.closest ? e.target.closest("button[type=submit], button:not([type]), input[type=submit]") : null;
-    if (!b || !b.form || b.disabled || b.hasAttribute("data-no-lock") || b.hasAttribute("data-confirm") || b.form.hasAttribute("data-no-lock")) return;
+    if (!b || !b.form || b.disabled || b.hasAttribute("data-no-lock") || b.hasAttribute("data-confirm") || b.form.hasAttribute("data-confirm") || b.form.hasAttribute("data-no-lock")) return;
     if (b.form.getAttribute("target") || !b.form.checkValidity()) return;
     setTimeout(function () {
       if (b.disabled) return;
@@ -1164,6 +1165,59 @@
   }
   initSteps(document);
   document.addEventListener("htmx:load", function (e) { initSteps(e.target); });
+  // Settings tabs ([data-settings-nav]): one section at a time; a #hash inside a section opens that section's tab.
+  (function () {
+    var nav = document.querySelector("[data-settings-nav]");
+    if (!nav) return;
+    var tabs = nav.querySelectorAll("a[role=tab]");
+    function panelOf(id) {
+      var el = id && document.getElementById(id);
+      return el && el.closest ? el.closest("[data-settings-section]") : null;
+    }
+    function open(name) {
+      var found = false;
+      for (var i = 0; i < tabs.length; i++) {
+        var on = tabs[i].getAttribute("href") === "#" + name;
+        tabs[i].setAttribute("aria-selected", on ? "true" : "false");
+        found = found || on;
+      }
+      var panels = document.querySelectorAll("[data-settings-section]");
+      for (var j = 0; j < panels.length; j++) panels[j].hidden = found && panels[j].getAttribute("data-settings-section") !== name;
+    }
+    function fromHash() {
+      var p = panelOf(location.hash.slice(1));
+      open(p ? p.getAttribute("data-settings-section") : "me");
+      var t = location.hash && document.getElementById(location.hash.slice(1));
+      if (t && t.scrollIntoView) t.scrollIntoView();
+    }
+    nav.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest("a[role=tab]");
+      if (!a) return;
+      e.preventDefault();
+      open(a.getAttribute("href").slice(1));
+      if (history.replaceState) history.replaceState(null, "", a.getAttribute("href"));
+    });
+    window.addEventListener("hashchange", fromHash);
+    fromHash();
+  })();
+  // Notification rows: a kind switched off turns its channels and frequency off too; switching on brings back the earlier choice.
+  document.addEventListener("change", function (e) {
+    var sw = e.target;
+    if (!sw.matches || !sw.matches(".notify-row input[role=switch]")) return;
+    var row = sw.closest(".notify-row");
+    var ctl = row.querySelectorAll("input[type=checkbox][name^=ch_], select[name^=fq_]");
+    for (var i = 0; i < ctl.length; i++) {
+      var c = ctl[i];
+      if (c.hasAttribute("data-fixed")) continue;
+      if (!sw.checked) {
+        if (c.type === "checkbox") { if (c.checked) c.setAttribute("data-was", ""); else c.removeAttribute("data-was"); c.checked = false; }
+        c.disabled = true;
+      } else {
+        if (c.type === "checkbox") c.checked = c.hasAttribute("data-was");
+        c.disabled = false;
+      }
+    }
+  });
   // Folded settings ([data-fold]): each card's first heading opens and closes it. All start closed except the first,
   // the one a #hash points into, and any holding a notice or an error.
   function initFold(box) {
@@ -1643,3 +1697,35 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
 
+
+// Text boxes follow what is typed: Arabic sits at the right edge, English at the left, whatever the page's language.
+(function () {
+  "use strict";
+  function mark(root) {
+    var boxes = (root || document).querySelectorAll("textarea:not([dir]), input[type=text]:not([dir]), input[type=search]:not([dir])");
+    for (var i = 0; i < boxes.length; i++) boxes[i].setAttribute("dir", "auto");
+  }
+  document.addEventListener("DOMContentLoaded", function () { mark(document); });
+  document.addEventListener("htmx:afterSwap", function (e) { mark(e.target); });
+})();
+
+// A message about to be sent to a client: the broker can edit it and switch its language (the Arabic and English copies sit on the box).
+(function () {
+  "use strict";
+  document.addEventListener("change", function (e) {
+    var sel = e.target && e.target.matches && e.target.matches("[data-msg-lang]") ? e.target : null;
+    if (!sel) return;
+    var box = sel.closest("[data-msg-box], #share-media") || document;
+    var ta = box.querySelector("textarea[data-share-copy]");
+    var text = ta && ta.getAttribute("data-" + sel.value);
+    if (ta && text) ta.value = text;
+  });
+  // WhatsApp gets what is in the box at the moment of the tap.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest ? e.target.closest("[data-send-whatsapp]") : null;
+    if (!a) return;
+    var ta = (a.closest("[data-msg-box]") || document).querySelector("textarea[data-share-copy]");
+    var base = a.getAttribute("data-wa-base") || "https://wa.me/";
+    if (ta) a.href = base.split("?")[0] + "?text=" + encodeURIComponent(ta.value);
+  });
+})();

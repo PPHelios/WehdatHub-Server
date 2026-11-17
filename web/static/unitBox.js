@@ -213,6 +213,13 @@
           if (!d) return;
           if (d.place && !placeChip()) pickPlace(d.place);
           (d.features || []).forEach(function (f) { addFeature(f.key, f.label); });
+          // The two drop-downs fill from the message only while they are empty.
+          ["furnishing", "finishing"].forEach(function (n) {
+            var sel = form.querySelector('select[name="' + n + '"]');
+            if (!d[n] || !sel || sel.value) return;
+            sel.value = d[n];
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+          });
         });
     }
 

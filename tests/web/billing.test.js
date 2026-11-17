@@ -114,7 +114,7 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   await h.seedBroker("owner"); // plan payments are the agency owner's
   const a = await signIn(h, "admin"); // the CRM owner (OWNER_BROKER_IDS) for /app/owner
   const o = await signIn(h, "owner");
-  const page = await o.agent.get("/app/plan?lang=en");
+  const page = await o.agent.get("/app/usage?lang=en");
   expect(page.status).toBe(200);
   expect(page.text).toContain('data-source="pilot"');
   const pay = await o.agent.post("/app/plan/pay").type("form").send({ _csrf: o.csrf, kind: "plan", plan: "agency", months: "3" });
@@ -126,7 +126,7 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   expect((await o.agent.post("/app/plan/pay").type("form").send({ _csrf: o.csrf, kind: "plan", plan: "gold", months: "3" })).status).toBe(400);
 
   const b = await signIn(h, "broker");
-  expect((await b.agent.get("/app/plan")).status).toBe(200);
+  expect((await b.agent.get("/app/usage")).status).toBe(200);
   expect((await b.agent.post("/app/plan/pay").type("form").send({ _csrf: b.csrf, kind: "plan", plan: "solo", months: "1" })).status).toBe(403);
 
   const owner = await a.agent.get("/app/owner?lang=en");
@@ -154,6 +154,19 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ grants: 300, limit: 6800 });
   // Owner controls are 404 for everyone else.
   expect((await b.agent.post(`/app/owner/payments/${p.id}/cancel`).type("form").send({ _csrf: b.csrf })).status).toBe(404);
+});
+
+test("the plan lives on the Usage page: /app/plan redirects there, managers and the owner see it, brokers do not", async () => {
+  await h.seedBroker("owner");
+  const o = await signIn(h, "owner");
+  const old = await o.agent.get("/app/plan").redirects(0);
+  expect(old.status).toBe(303);
+  expect(old.headers.location).toBe("/app/usage#plan");
+  const page = await o.agent.get("/app/usage?lang=en");
+  expect(page.text).toContain('id="plan"');
+  expect(page.text).toContain("data-credit-table");
+  const b = await signIn(h, "broker");
+  expect((await b.agent.get("/app/usage?lang=en")).text).not.toContain('id="plan"');
 });
 
 test("sign-up: closed by default; open → waiting request (inactive admin) → approve starts the trial with a start link; reject", async () => {

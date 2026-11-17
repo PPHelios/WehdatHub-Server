@@ -51,7 +51,7 @@ ${out.items.length
   ? html`<ul class="results">${out.items.map(
       (it) => html`<li class="card" data-request="${it.id}">
   <p><strong>${summary(it)}</strong>${it.alerts ? " 🔔" : ""}</p>
-  <p class="muted small">${it.lead ? html`<a href="/app/leads/${it.lead.ref}" data-lead-link>👤 ${it.lead.ref} · ${Card.displayName({ name: it.lead.name, phone_e164: it.lead.phone_e164 }, lang)}</a>` : L(lang, "من غير عميل", "No client linked")}${broker.id && it.broker_name && req.query.all !== "0" ? ` · ${it.broker_name}` : ""} · ${day(it.fulfilled_at || it.created_at)}</p>
+  <p class="muted small">${it.lead ? html`<a class="btn secondary small" href="/app/leads/${it.lead.ref}" data-lead-link>👤 ${it.lead.ref} · ${Card.displayName({ name: it.lead.name, phone_e164: it.lead.phone_e164 }, lang)}</a>` : L(lang, "من غير عميل", "No client linked")}${broker.id && it.broker_name && req.query.all !== "0" ? ` · ${it.broker_name}` : ""} · ${day(it.fulfilled_at || it.created_at)}</p>
   <div class="row">
     ${tab === "pending" ? html`<a class="btn secondary" href="/app/search?f=${it.token}">🏠 ${it.matches} ${L(lang, "وحدة مناسبة", "fit now")}</a>` : html`<a class="btn secondary" href="/app/search?f=${it.token}">${L(lang, "ابحث تاني", "Search again")}</a>`}
     ${tab === "pending" ? html`<form method="post" action="/app/requests/${it.id}/fulfil" class="inline"><input type="hidden" name="_csrf" value="${csrf}"><button type="submit" class="secondary">✅ ${L(lang, "اتنفذ", "Mark fulfilled")}</button></form>` : ""}

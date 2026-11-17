@@ -13,7 +13,7 @@ const CACHE_MS = 60 * 1000;
 let cache = { at: 0, places: [], areas: [], zones: [], version: "" };
 
 /** The feature dictionary for the phone: strict synonyms (syn), as the unit box matches them. */
-const featureList = () => Features.FEATURES.map(({ key, ar, en, group, syn }) => ({ key, ar, en, group, syn }));
+const featureList = () => Features.FEATURES.filter((f) => !UnitBox.NOT_FOR_BOX.has(f.key)).map(({ key, ar, en, group, syn }) => ({ key, ar, en, group, syn }));
 
 async function lists(pool) {
   if (Date.now() - cache.at < CACHE_MS) return cache;
@@ -69,7 +69,7 @@ async function placeChip(pool, { compound, area_id, subzone_id } = {}, lang = "a
 async function boxResolve(pool, text, lang = "ar") {
   const l = await lists(pool);
   const r = UnitBox.resolve(text, l, lang);
-  return { place: withZones(r.place, l, lang), features: r.features.map((key) => ({ key, label: Features.featureLabel(key, lang) })) };
+  return { place: withZones(r.place, l, lang), features: r.features.map((key) => ({ key, label: Features.featureLabel(key, lang) })), furnishing: r.furnishing, finishing: r.finishing };
 }
 
 /** Up to `limit` suggestions for the text: [{kind, id, name_en, name_ar, path, via}]. */

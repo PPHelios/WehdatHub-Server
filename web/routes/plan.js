@@ -11,7 +11,6 @@ const Plans = require("../../domain/plans");
 const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
 const { html } = require("../html");
 const Credits = require("../../services/credits");
-const { creditTable } = require("../views/credits");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -78,21 +77,21 @@ function referralSection(r, lang) {
 </section>`;
 }
 
-function planPage({ a, actionsList = [], requests = [], limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
+/** The plan part of the Usage page (managers and the owner): plan in force, seats and units, payment, bundles, credit requests, invite code, payments. */
+function planSections({ a, requests = [], limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
   const p = a.plan;
-  return html`<h1>${L(lang, "الباقة", "Plan")}</h1>
+  return html`<div id="plan" class="stack">
+<h2>${L(lang, "الباقة", "Plan")}</h2>
 ${notice || ""}
 ${created ? paymentCard(created, payTo, lang) : ""}
 <section class="card" data-plan="${p.id}" data-source="${a.source}">
   <h2>${Plans.planName(p, lang)} · ${SOURCE[a.source][lang === "en" ? 1 : 0]}</h2>
   ${a.until ? html`<p>${L(lang, "لحد", "Until")} <span dir="ltr">${day(a.until)}</span></p>` : ""}
   <div class="grid">
-    ${meter([L(lang, "رصيد الذكاء الاصطناعي الشهر الحالي", "AI credits this month"), "credits"], a.credits.used, a.credits.limit)}
     ${meter([L(lang, "المستخدمين", "Users"), "seats"], a.seats.used, a.seats.limit)}
     ${meter([L(lang, "وحدات متاحة", "Available units"), "units"], a.units.used, a.units.limit)}
   </div>
   <p class="muted" data-credit-split>${L(lang, `الرصيد: ${num(a.credits.plan)} من الباقة` + (a.credits.bundles ? ` + ${num(a.credits.bundles)} باقات زيادة` : "") + (a.credits.grants ? ` + ${num(a.credits.grants)} هدية من صاحب التطبيق` : ""), `Credits: ${num(a.credits.plan)} from the plan` + (a.credits.bundles ? ` + ${num(a.credits.bundles)} from bundles` : "") + (a.credits.grants ? ` + ${num(a.credits.grants)} granted by the app owner` : ""))}</p>
-  ${creditTable(actionsList, lang)}
   <p class="muted">${L(lang, "لو الرصيد خلص، البحث والعملاء والوحدات بيفضلوا شغالين يدوي؛ اللي بيقف هو قراءة الفويس والوصف بالذكاء الاصطناعي لحد أول الشهر. بياناتك مش بتتمسح أبداً.", "When an allowance runs out, search, clients and units keep working by hand; only AI reading of voice notes and descriptions stops until the month turns. Your data is never deleted.")}</p>
 </section>
 ${manager
@@ -130,21 +129,27 @@ ${payments.length
   ? html`<section class="card"><h2>${L(lang, "المدفوعات", "Payments")}</h2><div class="scroll"><table><tbody>${payments.map(
       (x) => html`<tr data-ref="${x.reference}"><td dir="ltr">${x.reference}</td><td>${x.kind === "credit_bundle" ? L(lang, `رصيد زيادة ${num(Plans.bundleById(x.bundle_id)?.credits ?? 0)}`, `Extra credits ${num(Plans.bundleById(x.bundle_id)?.credits ?? 0)}`) : x.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : `${Plans.planName(Plans.planById(x.plan), lang)} × ${x.months}`}</td><td>${num(x.amount_egp)} ${L(lang, "ج.م", "EGP")}</td><td>${STATUS[x.status][lang === "en" ? 1 : 0]}</td><td dir="ltr">${day(x.created_at)}</td></tr>`
     )}</tbody></table></div></section>`
-  : ""}`;
+  : ""}
+</div>`;
+}
+
+/** What the Usage page needs for the plan part (managers and the owner only; anyone else gets an empty string). */
+async function sectionsFor(pool, req, extra = {}) {
+  const lang = langOf(req);
+  const broker = req.session.broker;
+  if (!isManager(broker)) return "";
+  const [a, payTo, limits, payments, requests, referral] = await Promise.all([
+    Billing.allowance(pool, broker.agency_id), Billing.payTo(pool), Billing.planLimits(pool),
+    Billing.paymentsOf(pool, broker.agency_id), Credits.requestsOf(pool, broker.agency_id), Referrals.summary(pool, broker.agency_id)
+  ]);
+  return planSections({ a, requests, limits, payments, payTo, lang, manager: isAgencyOwner(broker), referral, ...extra });
 }
 
 function register(web, { pool, page }) {
-  const render = async (req, res, extra = {}, status = 200) => {
-    const lang = langOf(req);
-    const broker = req.session.broker;
-    const [a, payTo, limits, actionsList] = await Promise.all([Billing.allowance(pool, broker.agency_id), Billing.payTo(pool), Billing.planLimits(pool), Credits.actions(pool)]);
-    const payments = isManager(broker) ? await Billing.paymentsOf(pool, broker.agency_id) : [];
-    const requests = isManager(broker) ? await Credits.requestsOf(pool, broker.agency_id) : [];
-    const referral = isManager(broker) ? await Referrals.summary(pool, broker.agency_id) : null;
-    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, actionsList, requests, limits, payments, payTo, lang, manager: isAgencyOwner(broker), referral, ...extra }) }, status);
-  };
+  const render = (req, res, extra = {}, status = 200) => require("./usage").renderUsage(pool, page, req, res, extra, status);
 
-  web.get("/plan", (req, res) => render(req, res));
+  // The plan lives on the Usage page now; old links and bookmarks land there.
+  web.get("/plan", (req, res) => res.redirect(303, "/app/usage#plan"));
 
   web.post("/plan/credit-request", async (req, res) => {
     const lang = langOf(req);
@@ -166,4 +171,4 @@ function register(web, { pool, page }) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, sectionsFor };

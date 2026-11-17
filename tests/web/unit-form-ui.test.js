@@ -25,12 +25,13 @@ const post = (agent, csrf, fields) => {
   return r;
 };
 
-test("the form has payment tabs and the photo preview hook", async () => {
+test("a new unit has no primary payment tab; the delivery fields hide when ready to move; photo preview hook", async () => {
   const { agent } = await signIn(h, "broker");
   const page = await agent.get("/app/units/new?lang=en");
-  expect(page.text).toContain('data-tabs="pay"');
-  expect(page.text).toContain('id="pay-tab-resale"');
-  expect(page.text).toContain('id="pay-tab-primary"');
+  expect(page.text).not.toContain('data-tabs="pay"');
+  expect(page.text).not.toContain('id="pay-tab-primary"');
+  expect(page.text).toMatch(/data-hide-if="is_ready=1"[^>]*>Delivery year/);
+  expect(page.text).toMatch(/data-hide-if="is_ready=1"[^>]*>Quarter/);
   expect(page.text).toContain("data-photo-tray");
   expect(page.text).toContain("data-photo-zip");
   expect(page.text).toContain("data-photo-preview");

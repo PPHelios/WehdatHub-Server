@@ -5,10 +5,17 @@
 const Team = require("../services/team");
 const Audit = require("../services/audit");
 
-const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, seats: 402 };
+const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, seats: 402, self: 409, active: 409, has_records: 409 };
 const fail = (res, error) => res.status(STATUS[error] || 422).json({ error });
 
 function register(api, { pool }) {
+  // Deactivated members (the app's "Deactivated" tab). Managers and the owner only.
+  api.get("/team/former", async (req, res) => {
+    const team = await Team.listTeam(pool, req.session.broker);
+    if (!team) return fail(res, "forbidden");
+    return res.json({ items: team.filter((b) => !b.is_active).map((b) => ({ id: b.id, name: b.name, role: b.role, deactivatedAt: b.deactivated_at })) });
+  });
+
   api.post("/team/invite", async (req, res) => {
     const r = await Team.invite(pool, req.session.broker, { name: req.body?.name, phone: req.body?.phone, role: req.body?.role, lang: req.body?.lang });
     if (r.error) return fail(res, r.error);
@@ -28,6 +35,23 @@ function register(api, { pool }) {
 
   api.post("/team/:id/deactivate", async (req, res) => {
     const r = await Team.deactivate(pool, req.session.broker, req.params.id);
+    return r.error ? fail(res, r.error) : res.json({ ok: true });
+  });
+
+  api.post("/team/:id/reactivate", async (req, res) => {
+    const r = await Team.reactivate(pool, req.session.broker, req.params.id);
+    return r.error ? fail(res, r.error) : res.json({ ok: true });
+  });
+
+  // Permanent delete of a deactivated member. Audited first: if the audit cannot be written, nothing is deleted.
+  api.post("/team/:id/delete", async (req, res) => {
+    const m = req.session.broker;
+    try {
+      await Audit.recordStrict(pool, { agencyId: m.agency_id, brokerId: m.id, action: "team_member_delete", targetType: "broker", targetId: req.params.id, payload: {} });
+    } catch {
+      return res.status(503).json({ error: "audit" });
+    }
+    const r = await Team.remove(pool, m, req.params.id);
     return r.error ? fail(res, r.error) : res.json({ ok: true });
   });
 }

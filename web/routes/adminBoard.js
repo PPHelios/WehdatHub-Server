@@ -27,7 +27,7 @@ const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar
 const num = (n) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const when = (iso) => (iso ? `${new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", hour12: false })} (Cairo)` : "—");
 const notFound = (req, res, page) =>
-  page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
+  page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a class="btn secondary small" href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
 
 const kv = (pairs, lang) => html`<table class="kv"><tbody>${pairs.map(([k, v]) => html`<tr><th>${k}</th><td>${num(v)}</td></tr>`)}</tbody></table>`;
 const table = (heads, rows, lang) => (rows.length
@@ -149,7 +149,7 @@ function register(web, { pool, page }) {
   <span class="muted small">${L(lang, "آخر تحديث", "Last updated")}: <time>${stored ? when(stored.computedAt) : L(lang, "أبدًا", "never")}</time></span></form>`;
     return page(req, res, {
       title: L(lang, "لوحة المالك", "Owner board"), nav: "owner",
-      body: html`<p><a href="/app/owner">← ${L(lang, "متابعة التطبيق", "App tracking")}</a></p>
+      body: html`<p><a class="btn secondary small" href="/app/owner">← ${L(lang, "متابعة التطبيق", "App tracking")}</a></p>
 ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "التبويبات", "Tabs")}">${nav}</nav>
 ${subnav ? html`<nav class="seg" aria-label="${L(lang, "الأقسام", "Sections")}" data-subnav>${subnav}</nav>` : ""}

@@ -89,6 +89,24 @@ test("new link for an unlinked broker; deactivate (not self) returns their leads
   expect((await h.query("SELECT is_active FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0].is_active).toBe(true);
 });
 
+test("a deactivated member can be reactivated or deleted for good; an active one and yourself cannot be deleted", async () => {
+  const a = await signIn(h, "admin");
+  const id = h.BROKERS.broker.id;
+  const post = (path) => a.agent.post(path).type("form").send({ _csrf: a.csrf, lang: "en" });
+  expect((await post(`/app/team/${id}/delete`)).text).toMatch(/deactivate them first/);
+  expect((await h.query("SELECT 1 FROM brokers WHERE id = $1", [id])).length).toBe(1);
+  await post(`/app/team/${id}/deactivate`);
+  const tab = await a.agent.get("/app/team?lang=en");
+  expect(tab.text).toMatch(/Deactivated \(1\)/);
+  expect((await post(`/app/team/${id}/reactivate`)).status).toBe(200);
+  expect((await h.query("SELECT is_active, deactivated_at FROM brokers WHERE id = $1", [id]))[0]).toEqual({ is_active: true, deactivated_at: null });
+  await post(`/app/team/${id}/deactivate`);
+  expect((await post(`/app/team/${id}/delete`)).status).toBe(200);
+  expect(await h.query("SELECT 1 FROM brokers WHERE id = $1", [id])).toEqual([]);
+  expect((await post(`/app/team/${h.BROKERS.admin.id}/delete`)).status).toBe(400);
+  expect((await post(`/app/team/${h.BROKERS.rival.id}/delete`)).status).toBe(400);
+});
+
 test("4.7: a manager can't deactivate, re-invite or take a link for an admin; no link for someone already on Telegram; links are rate-limited", async () => {
   await h.query("UPDATE brokers SET role = 'manager' WHERE id = $1", [h.BROKERS.colleague.id]);
   const m = await signIn(h, "colleague");

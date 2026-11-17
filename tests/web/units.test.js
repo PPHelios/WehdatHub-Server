@@ -98,7 +98,7 @@ describe("add a unit on the web", () => {
     const r = await agent.get("/app/units/new");
     expect(r.status).toBe(200);
     expect(r.text).toContain(`name="_csrf" value="${csrf}"`);
-    for (const name of ["listing_type", "property_type", "compound", "price_value", "area_value", "bedrooms", "is_ready", "delivery_year", "remaining_amount", "plan_down_1", "owner_name", "photos"]) {
+    for (const name of ["listing_type", "property_type", "compound", "price_value", "area_value", "bedrooms", "is_ready", "delivery_year", "remaining_amount", "owner_name", "photos"]) {
       expect(r.text).toContain(`name="${name}"`);
     }
     // The place and the features are one box (chips); what is typed in it is answered by /app/places/box.

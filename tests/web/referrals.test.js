@@ -47,15 +47,15 @@ const pay = async (manager, months = 1) => {
 
 test("managers get a stable invite code and link on /app/plan; brokers don't", async () => {
   const a = await signIn(h, "admin");
-  const page = await a.agent.get("/app/plan?lang=en");
+  const page = await a.agent.get("/app/usage?lang=en");
   const code = (page.text.match(/data-referral="([A-Z0-9]{6})"/) || [])[1];
   expect(code).toBeDefined();
   expect(page.text).toContain(`/app/signup?ref=${code}`);
   expect(page.text).toContain("https://wa.me/?text=");
-  expect((await a.agent.get("/app/plan?lang=en")).text).toContain(`data-referral="${code}"`);
+  expect((await a.agent.get("/app/usage?lang=en")).text).toContain(`data-referral="${code}"`);
   expect(await Referrals.codeOf(h.pool, h.AGENCY_A)).toBe(code);
   const b = await signIn(h, "broker");
-  expect((await b.agent.get("/app/plan")).text).not.toContain("data-referral=");
+  expect((await b.agent.get("/app/usage")).text).not.toContain("data-referral=");
 });
 
 test("sign-up with an invite code; the first payment gives both agencies a free month, once; credits wait for the next payment", async () => {
@@ -81,7 +81,7 @@ test("sign-up with an invite code; the first payment gives both agencies a free 
   expect((await h.query("SELECT referral_credit_months FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].referral_credit_months).toBe(1);
   expect(await h.query("SELECT 1 FROM notifications WHERE dedupe_key = $1", [`referral_ok:${nile.id}`])).not.toEqual([]);
   expect(await h.query("SELECT 1 FROM notifications WHERE title LIKE '%free month%' AND title LIKE $1", [`%${first.reference}%`])).not.toEqual([]);
-  const plan = await a.agent.get("/app/plan?lang=en");
+  const plan = await a.agent.get("/app/usage?lang=en");
   expect(plan.text).toContain("1 free month(s) that will be added");
   expect(plan.text).toContain("Nile Homes");
   expect(plan.text).toContain("free month earned");

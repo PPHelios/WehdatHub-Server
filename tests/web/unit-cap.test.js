@@ -74,7 +74,7 @@ test("owner edits the caps on /app/owner; the plan page shows the meter", async 
     const r = await agent.post("/app/owner/credit-plans").type("form").send(form);
     expect(r.status).toBe(200);
     expect((await Billing.planLimits(h.pool)).solo).toBe(200);
-    const plan = await agent.get("/app/plan?lang=en");
+    const plan = await agent.get("/app/usage?lang=en");
     expect(plan.text).toContain("Available units");
     const b = await signIn(h, "broker");
     expect((await b.agent.post("/app/owner/credit-plans").type("form").send({ _csrf: b.csrf })).status).toBe(404);

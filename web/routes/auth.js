@@ -80,14 +80,14 @@ function codeForm({ pre, next, phone, message = null, lang = "ar" }) {
     <label>${L(lang, "الكود (6 أرقام)", "Code (6 digits)")} <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required dir="ltr"></label>
     <button type="submit">${L(lang, "دخول", "Sign in")}</button>
   </form>
-  <p class="muted"><a href="/app/login">${L(lang, "ارجع وابعت رابط بدل كده", "Go back and send a link instead")}</a></p>
+  <p class="muted"><a class="btn secondary small" href="/app/login">${L(lang, "ارجع وابعت رابط بدل كده", "Go back and send a link instead")}</a></p>
 </div>`;
 }
 
 const expiredPage = (lang) => html`<div class="card notice bad">
   <h1>⌛ ${L(lang, "الرابط ده انتهى أو اتستخدم قبل كده", "This link has expired or was already used")}</h1>
   <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub bot for a new link.` : html`ابعت <strong>«دخول»</strong> لبوت WehdatHub عشان يوصلك رابط جديد.`}</p>
-  <p><a href="/app/login">${L(lang, "صفحة الدخول", "Sign-in page")}</a></p>
+  <p><a class="btn secondary small" href="/app/login">${L(lang, "صفحة الدخول", "Sign-in page")}</a></p>
 </div>`;
 
 function register(web, { pool, page }) {

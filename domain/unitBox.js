@@ -6,18 +6,24 @@
 const Features = require("./features");
 const A = require("./areas");
 const { placeKey, keysOf } = require("./mapPlaces");
+const { mapFurnishing, mapFinishing } = require("./furnishingStatus");
+const { normalizeSearch } = require("./searchText");
 
 // A place key shorter than this is not looked for inside free text: short names ("Oia", "June") are ordinary words too.
 const MIN_KEY = 4;
 const MAX_WORDS = 6;
 const RANK = { compound: 0, subzone: 1, area: 2 };
 
+// The box is for places and features only. Furnishing and finishing are chosen in their drop-downs on the next screen.
+const NOT_FOR_BOX = new Set(["furnished"]);
+const forBox = (f) => !NOT_FOR_BOX.has(f.key);
+
 /** Features whose label or a match word starts with (or holds) the typed text: [{kind: "feature", key, label}]. */
 function suggestFeatures(text, lang = "ar", limit = 6) {
   const q = Features.normalizeForMatch(text);
   if (q.length < 2) return [];
   const out = [];
-  for (const f of Features.FEATURES) {
+  for (const f of Features.FEATURES.filter(forBox)) {
     const words = [f.ar, f.en, ...f.syn].map(Features.normalizeForMatch).filter(Boolean);
     const score = words.some((w) => w === q) ? 3 : words.some((w) => w.startsWith(q) || w.split(" ").some((p) => p.startsWith(q))) ? 2 : words.some((w) => w.includes(q)) ? 1 : 0;
     if (score) out.push({ kind: "feature", key: f.key, label: lang === "en" ? f.en : f.ar, score });
@@ -57,10 +63,22 @@ function findPlace(text, { places = [], areas = [] }, lang = "ar") {
   return A.suggest(name, { places, areas }, 20, lang).find((s) => s.id === best.row.id) || null;
 }
 
-/** Text → { place, features }: what the box shows as chips for a pasted message. Nothing is invented. */
-function resolve(text, lists, lang = "ar") {
-  const s = String(text || "").slice(0, 4000);
-  return { place: findPlace(s, lists, lang), features: Features.matchFeatureKeys(s) };
+/** The furnishing a message states (drop-down value), or null. */
+function furnishingOf(text) {
+  return mapFurnishing(text);
 }
 
-module.exports = { suggestFeatures, findPlace, resolve };
+/** The finishing a message states, or null. "Semi furnished" is not "semi finished", and a bare "finished" word is needed. */
+function finishingOf(text) {
+  const t = ` ${normalizeSearch(text)} `.replace(/ (نص|نصف|semi|half)[ -]?(فرش|مفروش\S*|furnish\S*) /g, " ");
+  if (!/تشطيب|متشطب|finish|لوكس|lux|محار|\bcore\b|shell|طوب/.test(t)) return null;
+  return mapFinishing(t);
+}
+
+/** Text → { place, features, furnishing, finishing }: what a pasted message fills in the box and the two drop-downs. Nothing is invented. */
+function resolve(text, lists, lang = "ar") {
+  const s = String(text || "").slice(0, 4000);
+  return { place: findPlace(s, lists, lang), features: Features.matchFeatureKeys(s).filter((k) => !NOT_FOR_BOX.has(k)), furnishing: furnishingOf(s), finishing: finishingOf(s) };
+}
+
+module.exports = { suggestFeatures, findPlace, resolve, NOT_FOR_BOX };

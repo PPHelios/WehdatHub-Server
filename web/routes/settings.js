@@ -54,16 +54,19 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   const shownChannel = eff.channel || Notifications.prefsOf(broker, { telegramLinked: Boolean(broker.telegram_chat_id) }).channels[k];
   const lockNote = eff.locked ? html` <span class="muted small" data-locked-by="${eff.locked}">🔒 ${L(lang, `اتقفلت من ${by}`, `set by ${by}`)}</span>` : "";
   const fixed = (f) => eff.lockedFields.includes(f);
+  // The channels are check boxes: Telegram, website, phone app. "both" is stored when Telegram is on with the website or the app.
+  const chosen = new Set(shownChannel === "both" ? ["telegram", "web"] : [shownChannel]);
   const chOpts = [
-    ["both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)"), tgOn],
-    ["telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)"), tgOn],
-    ["web", L(lang, "الموقع (ببلاش)", "Website (free)"), true],
-    ["app", L(lang, "التطبيق (ببلاش)", "Phone app (free)"), true]
+    ["telegram", L(lang, "تليجرام", "Telegram"), tgOn],
+    ["web", L(lang, "الموقع", "Website"), true],
+    ["app", L(lang, "التطبيق", "Phone app"), true]
   ].filter(([, , show]) => show);
+  // A kind that is off shows every control off; the person's own channels come back when they turn it on again.
+  const chFixed = fixed("channel");
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
   ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`${switchField({ name: `on_${k}`, value: "1", send0: true, on: eff.enabled, lang, disabled: fixed("on"), label: L(lang, "تشغيل", "On"), sentence: L(lang, "شغّله عشان توصلك التنبيهات دي.", "Turn on to get these alerts.") })}`}
-  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${fixed("channel") || !eff.enabled ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
-  ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") || !eff.enabled ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
+  <fieldset class="choice" data-channels="${k}"><legend>${L(lang, "القناة", "Channel")}</legend><div class="row">${chOpts.map(([v, text]) => html`<label class="check"><input type="checkbox" name="ch_${k}" value="${v}" data-kind="${k}"${chFixed ? html` data-fixed` : ""}${eff.enabled && chosen.has(v) ? html` checked` : ""}${chFixed || !eff.enabled ? html` disabled` : ""}${eff.enabled ? "" : chosen.has(v) ? html` data-was` : ""}> ${text}</label>`)}</div></fieldset>
+  ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") ? html` data-fixed` : ""}${fixed("frequency") || !eff.enabled ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
 </div>`;
 }
 
@@ -82,18 +85,16 @@ function appearanceCard(lang) {
 /**
  * The Agency section (the owner, and managers where the owner allows): logo, unit code letters, currency rates, who sees
  * private details, brokers editing units, the credits caps, and the places for team notifications and AI use per person.
- * What only the owner may change is shown read only to a manager.
+ * A manager sees only what they may change: what is the owner's (logo, quota, data security, broker rights) is not shown.
  */
 async function agencySection({ pool, req, broker, lang, brandHtml }) {
-  const Credits = require("../../lib/credits");
   const Privacy = require("../../services/unitPrivacy");
   const Rights = require("../../services/unitRights");
   const UnitCode = require("../../domain/unitCode");
   const FxDomain = require("../../domain/fx");
   const { privacySection, brokerEditSection, leadScopeSection } = require("./dashboard");
   const owner = isAgencyOwner(broker);
-  const [state, ag, scope, brokersWrite, seeAllLeads] = await Promise.all([
-    Credits.check(pool, broker),
+  const [ag, scope, brokersWrite, seeAllLeads] = await Promise.all([
     pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id]).then((r) => r.rows[0] || {}),
     Privacy.scopeOf(pool, broker.agency_id),
     Rights.brokersMayWrite(pool, broker.agency_id),
@@ -105,17 +106,17 @@ async function agencySection({ pool, req, broker, lang, brandHtml }) {
   return html`<section id="agency" class="sect stack" data-settings-section="agency">
   <h1 class="sect-title">🏢 ${L(lang, "الشركة", "Agency")}</h1>
   ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
-  ${brandHtml}
-  ${capsForm({ lang, state, codePrefix, ret: "settings", id: "agency-caps" })}
+  ${owner ? brandHtml : ""}
+  ${capsForm({ lang, codePrefix, ret: "settings", id: "agency-caps" })}
   ${fxForm({ lang, rates, bad: req.query.fx === "bad", ret: "settings", id: "fx" })}
-  ${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
+  ${owner ? html`${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
   ${brokerEditSection(brokersWrite, lang, csrf, owner, "settings")}
-  ${leadScopeSection(seeAllLeads, lang, csrf, owner, "settings")}
+  ${leadScopeSection(seeAllLeads, lang, csrf, owner, "settings")}` : ""}
   <section class="card stack" id="agency-links">
     <h2>${L(lang, "أماكن تانية", "More agency settings")}</h2>
-    <p><a href="/app/team#notify-policy">🔔 ${L(lang, "تنبيهات الفريق (قناة وتكرار لكل تنبيه)", "Team notifications (channel and frequency for each alert)")}</a></p>
-    <p><a href="/app/usage#ai-limits" data-ai-usage-link>🤖 ${L(lang, "استهلاك الذكاء الاصطناعي لكل شخص", "AI use per person")}</a></p>
-    ${owner ? html`<p><a href="/app/usage/ai">🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي", "AI feature switches")}</a></p>` : ""}
+    <p><a class="btn secondary" href="/app/team#notify-policy">🔔 ${L(lang, "تنبيهات الفريق (قناة وتكرار لكل تنبيه)", "Team notifications (channel and frequency for each alert)")}</a></p>
+    <p><a class="btn secondary" href="/app/usage#ai-limits" data-ai-usage-link>🤖 ${L(lang, "استهلاك الذكاء الاصطناعي لكل شخص", "AI use per person")}</a></p>
+    ${owner ? html`<p><a class="btn secondary" href="/app/usage/ai">🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي", "AI feature switches")}</a></p>` : ""}
   </section>
 </section>`;
 }
@@ -130,7 +131,7 @@ async function planSection({ pool, broker, lang }) {
   <div class="card stack" data-plan-summary>
     <p><strong>${Plans.planName(a.plan, lang)}</strong></p>
     <p>${L(lang, `رصيد الذكاء الاصطناعي هذا الشهر: ${a.credits.used} من ${a.credits.limit}`, `AI credits this month: ${a.credits.used} of ${a.credits.limit}`)}</p>
-    <p><a class="btn secondary" href="/app/plan">${L(lang, "الباقة والدفع وطلب رصيد زيادة", "Plan, payments and more credits")}</a></p>
+    <p><a class="btn secondary" href="/app/usage#plan">${L(lang, "الباقة والدفع وطلب رصيد زيادة", "Plan, payments and more credits")}</a></p>
   </div>
 </section>`;
 }
@@ -151,16 +152,16 @@ function register(web, { pool, page }) {
     const kinds = Notifications.kindsFor(broker);
     const policy = require("../../lib/notificationPolicy").policyOf((await pool.query("SELECT notify_policy FROM agencies WHERE id = $1", [broker.agency_id])).rows[0]);
     const dataEntry = isDataEntry(broker) || crm;
-    const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
+    const agency = manager && isAgencyOwner(broker) ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
     const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. حمل PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ التحميل فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
     const passkeyNotice = { on: ["✅ اتفتحت. ضيف Passkey على الجهاز ده.", "✅ On. Add a passkey on this device."], off: ["اتقفلت، والـ Passkeys اتمسحت.", "Off; your passkeys were removed."], removed: ["الـ Passkey اتمسحت.", "Passkey removed."] }[req.query.passkey];
     const owner = isAgencyOwner(broker) && !crm;
-    const brandHtml = manager ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : "";
+    const brandHtml = manager && agency ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : "";
     const agencyHtml = manager ? await agencySection({ pool, req, broker, lang, brandHtml }) : "";
     const planHtml = owner ? await planSection({ pool, broker, lang }) : "";
     // One Settings area, three sections; a role sees the sections it may use.
     const sectionNav = manager || owner
-      ? html`<nav class="seg" aria-label="${L(lang, "أقسام الإعدادات", "Settings sections")}" data-settings-nav><a href="#me">${L(lang, "أنا", "Me")}</a>${manager ? html`<a href="#agency">${L(lang, "الشركة", "Agency")}</a>` : ""}${owner ? html`<a href="#plan">${L(lang, "الباقة والفواتير", "Plan and billing")}</a>` : ""}</nav>`
+      ? html`<nav class="tabnav" role="tablist" aria-label="${L(lang, "أقسام الإعدادات", "Settings sections")}" data-settings-nav><a href="#me" role="tab" aria-selected="true">${L(lang, "أنا", "Me")}</a>${manager ? html`<a href="#agency" role="tab" aria-selected="false">${L(lang, "الشركة", "Agency")}</a>` : ""}${owner ? html`<a href="#plan" role="tab" aria-selected="false">${L(lang, "الباقة والفواتير", "Plan and billing")}</a>` : ""}</nav>`
       : "";
     return page(req, res, {
       title: L(lang, "الإعدادات", "Settings"),
@@ -239,7 +240,13 @@ ${planHtml}`
   web.post("/settings", async (req, res) => {
     const { broker } = req.session;
     const channels = {};
-    for (const k of Notifications.kindsFor(broker)) channels[k] = req.body[`ch_${k}`];
+    // Check boxes (telegram, web, app) become the stored single value; nothing ticked (or locked) keeps the old choice.
+    for (const k of Notifications.kindsFor(broker)) {
+      const v = new Set([].concat(req.body[`ch_${k}`] ?? []).map(String));
+      const tg = v.has("telegram") || v.has("both");
+      const web = v.has("web") || v.has("both");
+      channels[k] = tg && (web || v.has("app")) ? "both" : tg ? "telegram" : v.has("app") ? "app" : web ? "web" : undefined;
+    }
     const on = {};
     const frequency = {};
     for (const k of Notifications.kindsFor(broker)) {
@@ -275,13 +282,13 @@ ${planHtml}`
 
   web.post("/settings/logo", uploadLogo, async (req, res) => {
     const out = await AgencyLogo.setLogo(pool, req.session.broker, (req.files?.logo || [])[0]);
-    if (out.error === "forbidden") return res.status(403).send("Managers only");
+    if (out.error === "forbidden") return res.status(403).send("Agency owner only");
     return res.redirect(303, `/app/settings?logo=${out.ok ? "saved" : out.error === "bad" ? "bad" : "failed"}#brand`);
   });
 
   web.post("/settings/logo/remove", async (req, res) => {
     const out = await AgencyLogo.removeLogo(pool, req.session.broker);
-    if (out.error === "forbidden") return res.status(403).send("Managers only");
+    if (out.error === "forbidden") return res.status(403).send("Agency owner only");
     return res.redirect(303, "/app/settings?logo=removed#brand");
   });
 

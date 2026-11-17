@@ -80,7 +80,7 @@ function aiLimitSections(lang, broker, lim, query = {}) {
       : html`<p data-ai-own-limit><strong>${L(lang, `حدك في الذكاء الاصطناعي: ${m.allowance} الشهر ده، استهلكت ${m.used}`, `Your AI limit: ${m.allowance} this month, used ${m.used}`)}</strong></p>
   <meter min="0" max="${m.allowance}" value="${Math.min(m.used, m.allowance)}"></meter>`
     : html`<p>${L(lang, `استهلكت ${m.used} الشهر ده، من رصيد الشركة المشترك.`, `You used ${m.used} this month, from the agency's shared pool.`)}</p>`}
-  <p><a href="/app/usage/log">${L(lang, "سجلي سطر بسطر", "My log, line by line")}</a></p>
+  <p><a class="btn secondary small" href="/app/usage/log">${L(lang, "سجلي سطر بسطر", "My log, line by line")}</a></p>
 </section>`;
   if (!manager) return mineCard;
   const can = lim.canEdit;
@@ -110,6 +110,34 @@ function aiLimitSections(lang, broker, lim, query = {}) {
     ? html`<form method="post" action="/app/usage/ai-limits/managers" class="stack" data-ai-managers-form>${switchField({ name: "allowed", on: lim.managerCanEdit, lang, label: L(lang, "المديرين يقدروا يغيّروا إعدادات الذكاء الاصطناعي", "Managers can change AI usage settings"), sentence: L(lang, "لما يكون شغّال، المدير يشوف الإعدادات دي ويقدر يغيّرها. لما يتقفل، يشوفها للقراءة بس.", "When on, managers see these settings and can change them. When off, they see them read only.") })}<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button></form>`
     : ""}
 </section>`;
+}
+
+/** The Usage page, which also carries the plan part for managers and the owner. `extra` (notice, created) comes from the plan forms. */
+async function renderUsage(pool, page, req, res, extra = {}, status = 200) {
+  const lang = langOf(req);
+  const { broker } = req.session;
+  const manager = isManager(broker);
+  const [ai, aiActions] = await Promise.all([Billing.allowance(pool, broker.agency_id), AiCredits.actions(pool)]);
+  const lim = await AiLimits.overview(pool, broker);
+  const planHtml = await require("./plan").sectionsFor(pool, req, extra);
+  return page(req, res, {
+    title: L(lang, "الاستهلاك", "Usage"),
+    nav: "settings",
+    body: html`<h1>${L(lang, "الاستهلاك", "Usage")}</h1>
+${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
+<section class="card" data-ai-credits="${ai.credits.used}" data-ai-credits-limit="${ai.credits.limit}">
+  <h2>🤖 ${L(lang, "رصيد الذكاء الاصطناعي (الشهر الحالي)", "AI credits (this month)")}</h2>
+  <meter min="0" max="${ai.credits.limit}" value="${Math.min(ai.credits.used, ai.credits.limit)}"></meter>
+  <p class="big"><strong>${ai.credits.used}</strong> / ${ai.credits.limit} · ${L(lang, `باقي ${Math.max(0, ai.credits.limit - ai.credits.used)}`, `${Math.max(0, ai.credits.limit - ai.credits.used)} left`)}</p>
+  <p class="row"><a class="btn secondary small" href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${manager ? html`<a class="btn secondary small" href="#plan">${L(lang, "الباقة والدفع ودعوة شركة", "Plan, payments and invite")}</a>` : ""}</p>
+  ${creditTable(aiActions, lang)}
+</section>
+${aiLimitSections(lang, broker, lim, req.query)}
+${planHtml}
+${manager ? html`<p class="card"><a class="btn secondary" href="/app/settings#agency" data-agency-settings-link>⚙️ ${L(lang, "إعدادات الشركة (الأسعار وحروف الأكواد) في صفحة الإعدادات", "Agency settings (rates, unit code letters) are on the Settings page")}</a></p>
+${isAgencyOwner(broker) ? html`<p class="card"><a class="btn secondary" href="/app/usage/ai" data-ai-switches-link>🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي (تشغيل وإيقاف)", "AI feature switches (on and off)")}</a></p>` : ""}
+<p class="card"><a class="btn secondary" href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>` : ""}`
+  }, status);
 }
 
 function register(web, { pool, page }) {
@@ -143,68 +171,7 @@ function register(web, { pool, page }) {
     });
   }
 
-  web.get("/usage", async (req, res) => {
-    const lang = langOf(req);
-    const { broker } = req.session;
-    const manager = isManager(broker);
-    const state = await Credits.check(pool, broker);
-    const [ai, aiActions] = await Promise.all([Billing.allowance(pool, broker.agency_id), AiCredits.actions(pool)]);
-    const mine = await Credits.usage(pool, broker.agency_id, { brokerId: broker.id });
-    const lim = await AiLimits.overview(pool, broker);
-    const agency = manager ? await Credits.usage(pool, broker.agency_id) : null;
-    const own = manager ? (await pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] : null;
-    const codePrefix = own ? own.code_prefix || UnitCode.prefixFrom(own.name) : "";
-    const rates = FxDomain.ratesFrom(own?.crm_settings?.fx);
-    // The dollar and euro rates, the credits caps and the unit code letters are on Settings now (web/views/agencySettings.js).
-    const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
-    const mineCard = html`<section class="card">
-  <h2>${L(lang, "رسايلي", "My messages")}</h2>
-  <p>${L(lang, `النهارده: ${mine.today} · الشهر الحالي: ${mine.total}`, `Today: ${mine.today} · This month: ${mine.total}`)}</p>
-  ${mine.actions.length
-    ? html`<table><thead><tr><th>${L(lang, "العملية", "Action")}</th><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "الشهر", "Month")}</th></tr></thead>
-  <tbody>${mine.actions.map((a) => html`<tr data-action="${a.action}"><td>${actionLabel(a.action, lang)}</td><td>${a.today}</td><td>${a.n}</td></tr>`)}</tbody></table>`
-    : html`<p class="muted">${L(lang, "مفيش رسايل الشهر الحالي.", "No messages this month.")}</p>`}
-  <p class="muted">${L(lang, "نصيحة: البحث الطويل والإضافة والاستيراد ببلاش على الموقع.", "Tip: long searches, adding units and imports are free on the website.")}</p>
-</section>`;
-    return page(req, res, {
-      title: L(lang, "الاستهلاك", "Usage"),
-      nav: "settings",
-      body: html`<h1>${L(lang, "الاستهلاك", "Usage")}</h1>
-${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
-<section class="card usage-hero" data-credits-used="${state.used}" data-credits-limit="${state.limit}" data-level="${state.level}">
-  <h2>${L(lang, "رصيد رسايل واتساب للشركة (الشهر الحالي)", "Agency WhatsApp credits (this month)")}</h2>
-  <meter class="${cls}" min="0" max="${state.limit}" low="${Math.round(state.limit * 0.8)}" high="${state.limit}" value="${Math.min(state.used, state.limit)}">${state.pct}%</meter>
-  <p class="big"><strong>${state.used}</strong> / ${state.limit} · ${L(lang, `باقي ${state.remaining}`, `${state.remaining} left`)} (${state.pct}%)</p>
-  <details class="how"><summary>${L(lang, "الرصيد بيتحسب إزاي؟", "How credits work")}</summary><p class="muted">${L(
-    lang,
-    "١ رصيد = ١ رسالة البوت يبعتها (ردود وتنبيهات). ببلاش: كل حاجة على الموقع، إشعارات الموقع، وعلامة «اتقرت». عند 100% التنبيهات بتوصل على الموقع والردود مستمرة؛ عند الحد الأقصى البوت بيبعت تنبيه واحد في اليوم وبعدها بيعلّم الرسايل مقروءة بس.",
-    "1 credit = 1 message the bot sends (replies and alerts). Free: everything on the website, website notifications and read ticks. At 100% alerts move to the website and replies continue; at the ceiling the bot sends one notice a day, then only marks messages as read."
-  )}</p></details>
-</section>
-<section class="card" data-ai-credits="${ai.credits.used}" data-ai-credits-limit="${ai.credits.limit}">
-  <h2>🤖 ${L(lang, "رصيد الذكاء الاصطناعي (الشهر الحالي)", "AI credits (this month)")}</h2>
-  <meter min="0" max="${ai.credits.limit}" value="${Math.min(ai.credits.used, ai.credits.limit)}"></meter>
-  <p class="big"><strong>${ai.credits.used}</strong> / ${ai.credits.limit} · ${L(lang, `باقي ${Math.max(0, ai.credits.limit - ai.credits.used)}`, `${Math.max(0, ai.credits.limit - ai.credits.used)} left`)}</p>
-  <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${isAgencyOwner(broker) ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : manager ? html` · <span class="muted">${L(lang, "لزيادة الرصيد كلّم مالك الشركة", "To add credits, ask your agency owner")}</span>` : ""}</p>
-  ${creditTable(aiActions, lang)}
-</section>
-${aiLimitSections(lang, broker, lim, req.query)}
-${manager
-  ? tabs("usage_tab", [
-      [L(lang, "أنا", "Me"), mineCard],
-      [L(lang, "الفريق", "Team"), html`<section class="card">
-  <h2>${L(lang, "كل البروكرز", "Every broker")}</h2>
-  <table><thead><tr><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "الشهر", "Month")}</th></tr></thead>
-  <tbody>${agency.brokers.map((b) => html`<tr data-broker="${b.id}"><td>${b.name}</td><td>${b.today}</td><td>${b.n}</td></tr>`)}</tbody></table>
-  <p class="muted">${L(lang, `روابط الدخول (مش محسوبة من الرصيد): ${agency.login}`, `Sign-in links (not counted in the credits): ${agency.login}`)}</p>
-</section>`],
-      [L(lang, "الإعدادات", "Settings"), html`<p class="card"><a href="/app/settings#agency" data-agency-settings-link>⚙️ ${L(lang, "إعدادات الشركة (الأسعار وحدود البروكرز وحروف الأكواد) في صفحة الإعدادات", "Agency settings (rates, broker caps, unit code letters) are on the Settings page")}</a></p>
-${isAgencyOwner(broker) ? html`<p class="card"><a href="/app/usage/ai" data-ai-switches-link>🎚️ ${L(lang, "مفاتيح ميزات الذكاء الاصطناعي (تشغيل وإيقاف)", "AI feature switches (on and off)")}</a></p>` : ""}
-<p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>`]
-    ], { open: req.query.saved === "1" ? 2 : 0 })
-  : mineCard}`
-    });
-  });
+  web.get("/usage", (req, res) => renderUsage(pool, page, req, res));
 
   // 🎚️ The agency owner's AI feature switches: one per feature, a master switch per tab.
   web.get("/usage/ai", async (req, res) => {
@@ -219,7 +186,7 @@ ${req.query.saved === "1" ? html`<p class="ok">${L(lang, "اتحفظ.", "Saved."
 ${sw.tabs.map((t) => html`<fieldset class="card stack" data-tab="${t.id}"><legend>${L(lang, t.ar, t.en)}</legend>${switchField({ name: `tab_${t.id}`, on: t.on, lang, label: L(lang, "الكل في التبويب ده", "This whole tab") })}
 ${t.features.map((f) => switchField({ name: `f_${f.key}`, on: f.on, lang, label: L(lang, f.ar, f.en) }))}</fieldset>`)}
 <button type="submit">${L(lang, "حفظ", "Save")}</button></form>
-<p><a href="/app/usage">${L(lang, "رجوع", "Back")}</a></p>` });
+<p><a class="btn secondary small" href="/app/usage">${L(lang, "رجوع", "Back")}</a></p>` });
   });
 
   web.post("/usage/ai", async (req, res) => {
@@ -257,15 +224,11 @@ ${t.features.map((f) => switchField({ name: `f_${f.key}`, on: f.on, lang, label:
   web.post("/usage/agency", async (req, res) => {
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).send("Managers only");
-    const monthly = parseInt(req.body.monthly, 10);
     // A prefix that isn't 1–4 Latin letters keeps the current one.
-    await pool.query(
-      `UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4, code_prefix = COALESCE($5, code_prefix) WHERE id = $1`,
-      [broker.agency_id, Number.isInteger(monthly) && monthly >= 0 && monthly <= 100000 ? monthly : null, optInt(req.body.daily_cap), optInt(req.body.weekly_cap), UnitCode.cleanPrefix(req.body.code_prefix)]
-    );
+    await pool.query("UPDATE agencies SET code_prefix = COALESCE($2, code_prefix) WHERE id = $1", [broker.agency_id, UnitCode.cleanPrefix(req.body.code_prefix)]);
     if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#agency-caps");
     return res.redirect(303, "/app/usage?saved=1");
   });
 }
 
-module.exports = { register };
+module.exports = { register, renderUsage };

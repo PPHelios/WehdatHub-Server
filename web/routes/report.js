@@ -47,7 +47,7 @@ function register(web, { pool, page }) {
     if (r.limited) return page(req, res, { title, body: form(lang, { from, text, error: L(lang, "بعت بلاغات كتير الساعة دي، حاول تاني بعد شوية.", "Too many reports this hour; try again later.") }) }, 429);
     return page(req, res, {
       title,
-      body: html`<div class="card notice"><h1>✅ ${L(lang, "وصلنا البلاغ", "Report sent")} #R${r.id}</h1><p>${L(lang, "شكراً! هنبص عليه في أقرب وقت.", "Thank you! We'll look into it soon.")}</p><p><a href="${from || "/app/"}">${L(lang, "ارجع", "Back")}</a></p></div>`
+      body: html`<div class="card notice"><h1>✅ ${L(lang, "وصلنا البلاغ", "Report sent")} #R${r.id}</h1><p>${L(lang, "شكراً! هنبص عليه في أقرب وقت.", "Thank you! We'll look into it soon.")}</p><p><a class="btn secondary small" href="${from || "/app/"}">${L(lang, "ارجع", "Back")}</a></p></div>`
     });
   });
 

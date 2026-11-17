@@ -29,7 +29,7 @@ const BROKER_PAGES = [
   ["unit", "/app/units/NH-A20"], ["unit-new", "/app/units/new"], ["unit-edit", "/app/units/NH-A20/edit"], ["leads", "/app/leads"],
   ["lead", "/app/leads/LEAD_REF"], ["lead-new", "/app/leads/new"], ["lead-import", "/app/leads/import"], ["deals", "/app/deals"],
   ["deal-new", "/app/deals/new"], ["import", "/app/import"], ["catalogue", "/app/catalogue"], ["commissions", "/app/commissions"],
-  ["notifications", "/app/notifications"], ["settings", "/app/settings"], ["plan", "/app/plan"], ["report", "/app/report"]
+  ["notifications", "/app/notifications"], ["settings", "/app/settings"], ["report", "/app/report"]
 ];
 const MANAGER_PAGES = [["dashboard", "/app/dashboard"], ["team", "/app/team"], ["usage", "/app/usage"], ["owner", "/app/owner"], ["sources", "/app/sources"]];
 

@@ -62,7 +62,7 @@ test("an agency broker still gets the agency bar and menu", async () => {
 test("settings for the CRM owner offer only app alerts, no logo and no client-message style", async () => {
   const crm = await signIn(h, "admin");
   const page = (await crm.agent.get("/app/settings?lang=en")).text;
-  expect([...page.matchAll(/data-kind="([a-z_]+)"/g)].map((m) => m[1])).toEqual(["system_alert"]);
+  expect([...page.matchAll(/data-notify="([a-z_]+)"/g)].map((m) => m[1])).toEqual(["system_alert"]);
   expect(page).not.toMatch(/Agency logo|id="quiet-line"|id="draft-style"/);
   expect(N.kindsFor({ id: h.BROKERS.admin.id, role: "admin" })).toEqual(["system_alert"]);
   expect(N.kindsFor({ id: h.BROKERS.broker.id, role: "broker" })).not.toContain("system_alert");

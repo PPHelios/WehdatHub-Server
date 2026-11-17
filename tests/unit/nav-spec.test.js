@@ -59,6 +59,13 @@ test("brokers, team leads, managers and the owner all get Leases, Projects and I
   for (const role of ["broker", "team_lead", "manager", "owner"]) for (const k of ["leases", "projects", "inbox"]) expect(itemsOf(role)).toContain(k);
 });
 
+test("Plan and Invite have no menu row: the plan lives on the Usage page (managers reach payments and the invite code from there)", () => {
+  for (const role of ["broker", "team_lead", "manager", "owner"]) {
+    expect(itemsOf(role)).toContain("usage");
+    for (const k of ["plan", "invite"]) expect(itemsOf(role)).not.toContain(k);
+  }
+});
+
 test("agency pages are for managers and the owner; a team lead gets Team only; usage is for every work role", () => {
   for (const role of ["manager", "owner"]) for (const k of ["dashboard", "sources", "winloss", "access", "team"]) expect(itemsOf(role)).toContain(k);
   expect(itemsOf("team_lead")).toContain("team");

@@ -1,15 +1,15 @@
-// services/agencyLogo.js — The agency logo (managers, the agency owner and admins): resized to a 512px PNG, stored, and linked on the agency.
+// services/agencyLogo.js — The agency logo (the agency owner only): resized to a 512px PNG, stored, and linked on the agency.
 // The website's Settings and the app both use this.
 "use strict";
 
 const crypto = require("crypto");
 const sharp = require("sharp");
 const Storage = require("../lib/supabase");
-const { isManager } = require("../lib/authz");
+const { isAgencyOwner } = require("../lib/authz");
 
 /** { ok, url } | { error: 'forbidden' | 'bad' | 'failed' }. `file` is { buffer } from the upload. */
 async function setLogo(pool, broker, file) {
-  if (!isManager(broker)) return { error: "forbidden" };
+  if (!isAgencyOwner(broker)) return { error: "forbidden" };
   let png = null;
   try {
     png = file ? await sharp(file.buffer, { failOn: "error" }).rotate().resize(512, 512, { fit: "inside", withoutEnlargement: true }).png().toBuffer() : null;
@@ -25,7 +25,7 @@ async function setLogo(pool, broker, file) {
 }
 
 async function removeLogo(pool, broker) {
-  if (!isManager(broker)) return { error: "forbidden" };
+  if (!isAgencyOwner(broker)) return { error: "forbidden" };
   await pool.query("UPDATE agencies SET logo_url = NULL WHERE id = $1", [broker.agency_id]);
   return { ok: true };
 }

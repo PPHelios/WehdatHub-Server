@@ -14,7 +14,7 @@ const day = (d) => new Date(d).toISOString().slice(0, 10);
 async function toManagers(pool, agencyId, { dedupeKey, title, body, now = new Date() }) {
   let n = 0;
   for (const m of await Notifications.managersOf(pool, agencyId)) {
-    await Notifications.notifyBroker(pool, m, { kind: "manager_alert", dedupeKey, title: title(m), body: body ? body(m) : "", url: "/app/plan", now });
+    await Notifications.notifyBroker(pool, m, { kind: "manager_alert", dedupeKey, title: title(m), body: body ? body(m) : "", url: "/app/usage#plan", now });
     n++;
   }
   return n;

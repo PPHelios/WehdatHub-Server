@@ -37,6 +37,8 @@ const ERRORS = {
   no_bot: ["بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME)."],
   rate: ["دعوات كتير النهارده؛ جرب بكرة.", "Too many invites today; try tomorrow."],
   seats: ["مقاعد الباقة كلها مستخدمة؛ رقّي الباقة من صفحة الباقة.", "Every seat on your plan is taken; upgrade from the Plan page."],
+  active: ["البروكر لسه شغال؛ أوقفه الأول.", "The broker is still active; deactivate them first."],
+  has_records: ["عنده صفقات أو وحدات؛ مينفعش يتمسح، سيبه موقوف.", "They have deals or listings, so they can't be deleted; leave them deactivated."],
   linked: ["البروكر مربوط بتيليجرام بالفعل.", "This broker is already on Telegram."],
   rank: ["الأدمن والمالك يتداروا من الأدمن أو المالك بس.", "Only an admin or owner can manage an admin or owner."],
   forbidden: ["للمديرين بس.", "Managers only."],
@@ -163,7 +165,7 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
     <div><dt>${L(lang, "سرعة الرد", "Speed to lead")}</dt><dd data-speed>${speedCell(speed.get(b.id), lang)}</dd></div>
   </dl>
   <div class="row m-actions">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
-  ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/invite"><input type="hidden" name="name" value="${b.name}"><input type="hidden" name="phone" value="${b.phone_number}"><input type="hidden" name="role" value="${["broker", "manager", "team_lead", "data_entry"].includes(b.role) ? b.role : "broker"}"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Bring back")}</button></form>`}</div>
+  ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/${b.id}/reactivate"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Reactivate")}</button></form><form method="post" action="/app/team/${b.id}/delete" data-confirm="${L(lang, "مسح نهائي ومينفعش يتراجع. متأكد؟", "Delete for good? This cannot be undone.")}"><button type="submit" class="secondary danger">🗑️ ${L(lang, "مسح نهائي", "Delete for good")}</button></form>`}</div>
   ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager"].includes(b.role) ? roleForm(b, lang) : ""}
   ${b.is_active && b.id !== viewer?.id && MANAGER_ROLES.includes(String(viewer?.role || "").toLowerCase()) ? teamLeadForm(b, lang, teamLeads) : ""}
   ${memberTools(b, lang, today)}
@@ -215,10 +217,11 @@ ${tabs("team_tab", [
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>
 </details>
-<ul class="members">${team.map((b) => memberCard(b, lang, speed, today, now, viewer, team.filter((t) => t.role === "team_lead" && t.is_active)))}</ul>
-<p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الحسابات مش بتتمسح؛ الموقوفين في الآخر، والأقدم في الآخر خالص.", "Deactivating signs them out at once and returns their leads to the managers. Accounts are never deleted; former brokers are listed last, the longest gone at the very end.")}</p>
+<ul class="members">${team.filter((b) => b.is_active).map((b) => memberCard(b, lang, speed, today, now, viewer, team.filter((t) => t.role === "team_lead" && t.is_active)))}</ul>
+<p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الموقوفين في تاب «الموقوفين»: تقدر ترجّعهم أو تمسحهم نهائي.", "Deactivating signs them out at once and returns their leads to the managers. Deactivated members are in the Deactivated tab, where you can bring them back or delete them for good.")}</p>
 <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>`],
-  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}${policyCard({ policy, viewer, lang })}`]
+  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}${policyCard({ policy, viewer, lang })}`],
+  [L(lang, `الموقوفين (${team.length - active})`, `Deactivated (${team.length - active})`), html`<ul class="members">${team.filter((b) => !b.is_active).map((b) => memberCard(b, lang, speed, today, now, viewer, []))}</ul>${team.length === active ? html`<p class="muted">${L(lang, "مفيش حد موقوف.", "Nobody is deactivated.")}</p>` : ""}`]
 ], { open: tab })}`;
 }
 
@@ -375,6 +378,29 @@ function register(web, { pool, page }) {
     await pool.query("UPDATE agencies SET notify_policy = $2::jsonb WHERE id = $1", [actor.agency_id, JSON.stringify(merged.policy)]);
     logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "notify_policy", metadata: { kinds: Object.keys(changes).length } });
     return render(req, res, { tab: 1, notice: html`<p class="card notice ok" role="status">✅ ${L(lang, "الإشعارات اتحفظت للفريق كله.", "Notifications saved for the whole team.")}</p>` });
+  });
+
+  web.post("/team/:id/reactivate", async (req, res) => {
+    const lang = langOf(req);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang), tab: 2 }, 404);
+    const r = await Team.reactivate(pool, req.session.broker, req.params.id);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang), tab: 2 }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} رجع للفريق.`, `${r.broker.name} is back on the team.`)}</p>` });
+  });
+
+  // Permanent delete of a deactivated member. Audited first; refused when they still own deals or listings.
+  web.post("/team/:id/delete", async (req, res) => {
+    const lang = langOf(req);
+    const m = req.session.broker;
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang), tab: 2 }, 404);
+    try {
+      await Audit.recordStrict(pool, { agencyId: m.agency_id, brokerId: m.id, action: "team_member_delete", targetType: "broker", targetId: req.params.id, payload: {} });
+    } catch {
+      return render(req, res, { notice: bad("audit", lang), tab: 2 }, 503);
+    }
+    const r = await Team.remove(pool, m, req.params.id);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang), tab: 2 }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
+    return render(req, res, { tab: 2, notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} اتمسح نهائي.`, `${r.broker.name} was deleted.`)}</p>` });
   });
 
   web.post("/team/:id/deactivate", async (req, res) => {

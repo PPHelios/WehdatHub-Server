@@ -91,7 +91,7 @@ ${msg ? html`<p class="${req.query.msg === "created" || req.query.msg === "saved
 ${searchBox(lang, "/app/owner/library", q, suggestions)}
 ${items.length ? html`<ul class="stack">${items.map((g) => html`<li class="card stack"><strong>${g.name}</strong> <span class="muted">${facts(g)}</span> <span class="muted">${g.published ? L(lang, "منشور", "Published") : L(lang, "مسودة", "Draft")}</span>
   ${g.facts ? html`<p>${g.facts}</p>` : ""}
-  <p class="row"><a href="/app/owner/library/${g.id}/edit">${L(lang, "تعديل", "Edit")}</a>
+  <p class="row"><a class="btn secondary small" href="/app/owner/library/${g.id}/edit">${L(lang, "تعديل", "Edit")}</a>
   <form method="post" action="/app/owner/library/${g.id}/${g.published ? "hide" : "publish"}"><button type="submit" class="${g.published ? "secondary " : ""}small">${g.published ? L(lang, "اخفِ", "Hide") : L(lang, "انشر", "Publish")}</button></form></p></li>`)}</ul>` : html`<p class="muted">${q ? L(lang, "مفيش مشروع بالاسم ده.", "No project matches that search.") : L(lang, "المكتبة فاضية لسه.", "The library is empty for now.")}</p>`}
 ${pager(lang, "/app/owner/library", q, pageNo, pages)}` });
   }));
@@ -107,7 +107,7 @@ ${pager(lang, "/app/owner/library", q, pageNo, pages)}` });
     return page(req, res, { title: L(lang, "تعديل المشروع", "Edit project"), nav: "ownerlibrary", body: html`<h1>✏️ ${g.name}</h1>
 <p class="muted">${L(lang, "التعديل مابينشرش المشروع. النشر والإخفاء من صفحة المكتبة.", "Editing does not publish. Publish or hide from the library page.")}</p>
 ${fieldsForm(lang, `/app/owner/library/${g.id}/edit`, g)}
-<p><a href="/app/owner/library">${L(lang, "رجوع للمكتبة", "Back to the library")}</a></p>` });
+<p><a class="btn secondary small" href="/app/owner/library">${L(lang, "رجوع للمكتبة", "Back to the library")}</a></p>` });
   }));
 
   web.post("/owner/library/:id/edit", guard(Dash.isOwner, async (req, res) => {

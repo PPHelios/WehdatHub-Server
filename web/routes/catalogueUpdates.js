@@ -59,7 +59,7 @@ function register(web, { pool, page }) {
       title: L(lang, "تحديث سريع للكتالوج", "Quick catalogue update"),
       nav: "catalogue",
       body: html`<h1>⚡ ${L(lang, "تحديث سريع للكتالوج", "Quick catalogue update")}</h1>
-<p><a href="/app/catalogue">${L(lang, "رجوع للكتالوج", "Back to the catalogue")}</a></p>
+<p><a class="btn secondary small" href="/app/catalogue">${L(lang, "رجوع للكتالوج", "Back to the catalogue")}</a></p>
 ${inputCard(lang, text)}
 ${result || html`<section id="cu-result"></section>`}
 ${recent.length ? html`<section class="card"><h2>${L(lang, "آخر التحديثات", "Recent updates")}</h2><ul>${recent.map((u) => html`<li data-recent-update="${u.id}"><a href="/app/catalogue/updates/${u.id}">${Updates.card(u, lang).title}</a> <span class="muted">· ${L(lang, ...STATUS[u.status])} · <span dir="ltr">${when(u.created_at)}</span>${u.created_by_name ? ` · ${u.created_by_name}` : ""}</span></li>`)}</ul></section>` : ""}`

@@ -167,81 +167,12 @@ describe("one notification, one channel (Q15): Telegram, website, app; WhatsApp 
 });
 
 describe("message credits", () => {
-  test("levels: ok → warn (80%) → limit (100%) → ceiling (110%)", async () => {
-    await h.query("UPDATE agencies SET wa_credits_monthly = 100 WHERE id = $1", [h.AGENCY_A]);
-    const b = await brokerRow("broker");
-    const lvl = async () => (await Credits.check(h.pool, b)).level;
-    expect(await lvl()).toBe("ok");
-    await used("colleague", 80);
-    expect(await lvl()).toBe("warn");
-    await used("colleague", 20);
-    expect(await lvl()).toBe("limit");
-    await used("colleague", 10);
-    expect(await lvl()).toBe("ceiling");
-    // Another agency is unaffected; failed and dropped sends never count.
-    expect((await Credits.check(h.pool, await brokerRow("rival"))).level).toBe("ok");
-    await h.query("UPDATE operation_logs SET status = 'failed'");
-    expect(await lvl()).toBe("ok");
-  });
-
-  test("a hint rides once per level on a reply already being sent; managers get one alert at 80%", async () => {
-    await h.query("UPDATE agencies SET wa_credits_monthly = 100 WHERE id = $1", [h.AGENCY_A]);
-    await used("colleague", 50);
-    const first = await h.text("broker", "مساعدة");
-    expect(first).toHaveLength(1);
-    expect(textOf(first)).toMatch(/نص رصيد رسايل واتساب/);
-    expect(textOf(await h.text("broker", "مساعدة"))).not.toMatch(/رصيد/);
-    await used("colleague", 30);
-    expect(textOf(await h.text("broker", "مساعدة"))).toMatch(/80%/);
-    const alerts = await h.query("SELECT broker_id, kind, dedupe_key FROM notifications WHERE kind = 'manager_alert'");
-    expect(alerts).toEqual([expect.objectContaining({ broker_id: h.BROKERS.admin.id, dedupe_key: expect.stringMatching(/^credits_warn:\d{4}-\d{2}:80$/) })]);
-  });
-
-  test("past the ceiling: one notice a day, then read ticks only (no fallback bubble)", async () => {
-    await h.query("UPDATE agencies SET wa_credits_monthly = 10 WHERE id = $1", [h.AGENCY_A]);
-    await used("colleague", 11);
-    const first = await h.text("broker", "مساعدة");
-    expect(first).toHaveLength(1);
-    expect(first[0].text).toMatch(/وصلنا للحد الشهري/);
-    const receiptsBefore = h.WA.receipts.length;
-    expect(await h.text("broker", "مساعدة")).toEqual([]);
-    expect(await h.text("broker", "شقة في التجمع")).toEqual([]);
-    expect(h.WA.receipts.length).toBeGreaterThan(receiptsBefore); // still marked as read
-    const inbox = await h.query("SELECT kind, dedupe_key FROM notifications WHERE broker_id = $1", [h.BROKERS.broker.id]);
-    expect(inbox).toEqual([expect.objectContaining({ kind: "credits", dedupe_key: expect.stringMatching(/^credits_ceiling:/) })]);
-  });
-
-  test("the global ceiling (all agencies on our number) stops everyone", async () => {
-    process.env.WA_GLOBAL_MONTHLY_CEILING = "15";
-    require("../../config").resetConfig();
-    try {
-      await used("rival", 15);
-      expect((await Credits.check(h.pool, await brokerRow("broker"))).level).toBe("ceiling");
-    } finally {
-      delete process.env.WA_GLOBAL_MONTHLY_CEILING;
-      require("../../config").resetConfig();
-    }
-  });
-
-  test("a per-broker daily cap stops that broker only", async () => {
-    await h.query("UPDATE agencies SET wa_broker_daily_cap = 3 WHERE id = $1", [h.AGENCY_A]);
-    await used("broker", 3);
-    expect((await Credits.check(h.pool, await brokerRow("broker"))).level).toBe("ceiling");
-    expect((await Credits.check(h.pool, await brokerRow("colleague"))).level).toBe("ok");
-  });
-
-  test("sign-in links are not counted in the credits and have their own ceiling", async () => {
-    await h.query("UPDATE agencies SET wa_credits_monthly = 5 WHERE id = $1", [h.AGENCY_A]);
-    await used("colleague", 5, "web_login_link");
-    const s = await Credits.check(h.pool, await brokerRow("broker"));
-    expect(s).toMatchObject({ used: 0, level: "ok", login: { used: 5, reached: false } });
-    expect(Credits.allowsSend(s, "web_login_link")).toBe(true);
-    await used("colleague", 195, "web_login_link");
-    expect(Credits.allowsSend(await Credits.check(h.pool, await brokerRow("broker")), "web_login_link")).toBe(false);
-    // «دخول» at the login ceiling gets no link (and no reply counted in the credits).
-    const r = await h.text("broker", "دخول");
-    expect(textOf(r)).not.toMatch(/\/app\/login\/confirm/);
-    expect(textOf(r)).toMatch(/روابط الدخول الشهرية للشركة خلصت/);
+  test("there is no message limit: the state is always ok, with no caps and no sign-in ceiling", async () => {
+    const Credits = require("../../lib/credits");
+    const state = await Credits.check(h.pool, await brokerRow("broker"));
+    expect(state).toMatchObject({ level: "ok", pct: 0, broker: { capped: false }, login: { reached: false } });
+    expect(Credits.allowsSend(state, "reply")).toBe(true);
+    expect(Credits.allowsSend(state, "web_login_link")).toBe(true);
   });
 
   test("every paid send counts with its action; the usage page shows the same numbers", async () => {
@@ -253,9 +184,9 @@ describe("message credits", () => {
     const { agent } = await signIn(h, "broker");
     const page = await agent.get("/app/usage");
     expect(page.status).toBe(200);
-    expect(page.text).toContain(`data-credits-used="${total}"`);
-    for (const l of logs) expect(page.text).toMatch(new RegExp(`data-action="${l.action}"><td>[^<]+</td><td>\\d+</td><td>${l.n}</td>`));
-    expect(page.text).not.toContain("data-broker="); // per-broker table is for managers
+    expect(page.text).not.toContain("data-credits-used"); // the WhatsApp credits card is gone (Telegram is free)
+    expect(total).toBeGreaterThan(0);
+    expect(page.text).not.toContain("data-broker="); // no per-broker message table any more
   });
 });
 
@@ -314,7 +245,9 @@ describe("website: inbox, log, settings, usage, push", () => {
     expect(b.notify_prefs.channels).toMatchObject({ match: "web", assignment: "web", follow_up: "web" });
     expect(b.notify_prefs.quiet).toEqual({ enabled: true, start: 23, end: 7 });
     const again = await me.agent.get("/app/settings");
-    expect(again.text).toMatch(/<select name="ch_match" data-kind="match"><option value="web" selected>Website \(free\)<\/option><option value="app">Phone app \(free\)<\/option>/);
+    expect(again.text).toMatch(/<input type="checkbox" name="ch_match" value="web" data-kind="match" checked> Website/);
+    expect(again.text).toMatch(/<input type="checkbox" name="ch_match" value="app" data-kind="match"> Phone app/);
+    expect(again.text).not.toMatch(/\(free\)/);
     expect(again.text).not.toMatch(/WhatsApp \(uses credits\)|value="whatsapp"/);
   });
 
@@ -343,19 +276,16 @@ describe("website: inbox, log, settings, usage, push", () => {
     expect(await h.query("SELECT * FROM push_subscriptions")).toEqual([]);
   });
 
-  test("usage: managers see every broker and set credits and caps; brokers can't", async () => {
-    await used("colleague", 7);
+  test("usage: only managers may post the agency form; it changes the code letters", async () => {
     const broker = await signIn(h, "broker");
-    expect((await broker.agent.post("/app/usage/agency").set("X-CSRF-Token", broker.csrf).type("form").send({ monthly: "9" })).status).toBe(403);
-    const admin = await signIn(h, "admin");
-    const page = await admin.agent.get("/app/usage");
-    expect(page.text).toMatch(new RegExp(`data-broker="${h.BROKERS.colleague.id}"><td>Broker Two</td><td>7</td><td>7</td>`));
-    const save = await admin.agent.post("/app/usage/agency").set("X-CSRF-Token", admin.csrf).type("form").send({ monthly: "6000", daily_cap: "", weekly_cap: "300" });
+    expect((await broker.agent.post("/app/usage/agency").set("X-CSRF-Token", broker.csrf).type("form").send({ code_prefix: "ZZ" })).status).toBe(403);
+    await h.seedBroker("owner");
+    const admin = await signIn(h, "owner");
+    const save = await admin.agent.post("/app/usage/agency").set("X-CSRF-Token", admin.csrf).type("form").send({ code_prefix: "ZZ" });
     expect(save.status).toBe(303);
-    expect(await h.query("SELECT wa_credits_monthly, wa_broker_daily_cap, wa_broker_weekly_cap FROM agencies WHERE id = $1", [h.AGENCY_A])).toEqual([
-      { wa_credits_monthly: 6000, wa_broker_daily_cap: null, wa_broker_weekly_cap: 300 }
-    ]);
+    expect(await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A])).toEqual([{ code_prefix: "ZZ" }]);
   });
+
 });
 
 describe("settings list only the kinds a role receives", () => {

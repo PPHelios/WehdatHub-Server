@@ -44,7 +44,7 @@ describe("sale and rent", () => {
     const html = view();
     expect(html).toMatch(/<label[^>]*data-show-if="listing_type=rent"[^>]*>Rent period/);
     expect(html).toMatch(/<section[^>]*data-step="3"[^>]*data-hide-if="listing_type=rent"/);
-    expect(html).toMatch(/data-tabs="pay"[^>]*data-hide-if="listing_type=rent"/);
+    expect(html).toMatch(/<section[^>]*data-step="3"[^>]*data-hide-if="listing_type=rent"[^>]*><h3 class="uf-sub">Payment/);
     expect(html).toContain('data-show-types="');
     expect(html).toMatch(/<label[^>]*data-show-types="[^"]*villa[^"]*"[^>]*>Land area/);
     expect(html).not.toMatch(/data-show-types="[^"]*\bapartment\b[^"]*"[^>]*>Land area/);

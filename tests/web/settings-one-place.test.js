@@ -57,9 +57,35 @@ test("Agency has the logo, code letters, rates, private details and the brokers 
   expect(owner).toMatch(/name="return" value="settings"/);
   expect(owner).not.toMatch(/name="scope" value="all" disabled/);
   const manager = await get("admin");
-  expect(manager).toMatch(/name="scope" value="all" disabled/);
-  expect(manager).toMatch(/role="switch" name="allowed" value="on" checked disabled|role="switch" name="allowed" value="on" disabled/);
+  // A manager sees only what they may change: no logo, quota, data security or broker switches.
+  for (const k of ['id="brand"', 'name="monthly"', 'name="daily_cap"', 'name="scope"', 'role="switch" name="allowed"']) expect(manager).not.toContain(k);
   expect(manager).toContain('name="code_prefix"'); // managers may set these
+  expect(manager).toContain("data-fx-rates");
+  expect(owner).toContain('id="brand"');
+  expect(owner).not.toContain('name="monthly"'); // the WhatsApp credits form is gone (Telegram is free)
+});
+
+test("Settings sections are tabs in the brand colour", async () => {
+  const text = await get("owner");
+  expect(text).toMatch(/role="tablist"/);
+  expect(text).toMatch(/<a href="#me" role="tab" aria-selected="true">/);
+});
+
+test("a manager's quota post changes the code letters only", async () => {
+  await h.query("UPDATE agencies SET wa_credits_monthly = 1000 WHERE id = $1", [h.AGENCY_A]);
+  const s = await signIn(h, "admin");
+  await s.agent.post("/app/usage/agency").type("form").send({ _csrf: s.csrf, monthly: "9000", code_prefix: "QQ" });
+  const [a] = await h.query("SELECT code_prefix, wa_credits_monthly FROM agencies WHERE id = $1", [h.AGENCY_A]);
+  expect(a).toMatchObject({ code_prefix: "QQ", wa_credits_monthly: 1000 });
+});
+
+test("a notification kind that is off shows its channels and frequency off", async () => {
+  await h.query("UPDATE brokers SET notify_prefs = $2::jsonb WHERE id = $1", [h.BROKERS.broker.id, JSON.stringify({ on: { match: false } })]);
+  const text = await get("broker");
+  const row = text.split('data-notify="match"')[1].split('data-notify="')[0];
+  expect(row).not.toMatch(/name="ch_match"[^>]* checked/);
+  expect(row).toMatch(/name="ch_match"[^>]* disabled/);
+  expect(row).toMatch(/name="fq_match"[^>]* disabled/);
 });
 
 test("the agency forms come back to Settings when asked to", async () => {
@@ -79,8 +105,8 @@ test("the agency forms come back to Settings when asked to", async () => {
   // Without the field they still go where they always did.
   r = await s.agent.post("/app/usage/agency").type("form").send({ _csrf: s.csrf, monthly: "5000" });
   expect(r.headers.location).toMatch(/^\/app\/usage\?saved=1/);
-  const [a] = await h.query("SELECT code_prefix, wa_credits_monthly FROM agencies WHERE id = $1", [h.AGENCY_A]);
-  expect(a).toMatchObject({ code_prefix: "ZZ", wa_credits_monthly: 5000 });
+  const [a] = await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]);
+  expect(a).toMatchObject({ code_prefix: "ZZ" });
 });
 
 test("a manager cannot change what only the owner may, even from Settings", async () => {

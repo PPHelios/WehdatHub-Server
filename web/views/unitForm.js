@@ -21,6 +21,7 @@ const req = (label) => (/\*/.test(String(label)) ? raw(' class="req"') : "");
 function ruleAttrs(rule) {
   if (!rule) return "";
   if (rule.showIf) return html` data-show-if="${rule.showIf}"`;
+  if (rule.hideIf) return html` data-hide-if="${rule.hideIf}"`;
   if (rule.types) return html` data-show-types="${rule.types.join(",")}"`;
   return "";
 }
@@ -121,6 +122,8 @@ function unitBox(v, areas, lang, place, opts = {}) {
  */
 function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null, areas = [], place = null, extraValues = null }) {
   if (extraValues) v = { ...v, ...extraValues };
+  // New primary units are not added; a unit that already is primary keeps its primary payment tab.
+  const isPrimary = v.market === "primary";
   const action = mode === "edit" ? `/app/units/${encodeURIComponent(code)}/edit` : "/app/units/new";
   // A new unit is added in 4 steps (app.js shows one at a time); editing, an error or a review shows everything.
   const stepped = mode === "new" && !error && !review && !duplicate;
@@ -170,15 +173,15 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
 
   <section class="card uf-card" data-step="3" id="uf-3" data-hide-if="listing_type=rent">${head(3, steps[2])}<div class="grid">
     <label class="check"><input type="checkbox" name="is_ready" value="1"${chk(v.is_ready)}>${L(lang, "استلام فوري", "Ready to move")}</label>
-    ${input("delivery_year", L(lang, "سنة التسليم", "Delivery year"), v.delivery_year, { type: "number", extra: ' min="2000" max="2100"' })}
-    ${select("delivery_quarter", L(lang, "الربع", "Quarter"), v.delivery_quarter, [["", "—"], ["1", "Q1"], ["2", "Q2"], ["3", "Q3"], ["4", "Q4"]])}
+    ${input("delivery_year", L(lang, "سنة التسليم", "Delivery year"), v.delivery_year, { type: "number", extra: ' min="2000" max="2100"', rule: { hideIf: "is_ready=1" } })}
+    ${select("delivery_quarter", L(lang, "الربع", "Quarter"), v.delivery_quarter, [["", "—"], ["1", "Q1"], ["2", "Q2"], ["3", "Q3"], ["4", "Q4"]], { rule: { hideIf: "is_ready=1" } })}
   </div></section>
 
-  <section class="card uf-card tabs" data-tabs="pay" data-step="3" data-hide-if="listing_type=rent"><h3 class="uf-sub">${L(lang, "الدفع", "Payment")}</h3>
-    <input type="radio" name="pay_tab" id="pay-tab-resale" class="tab-radio" value="resale"${chk(v.market !== "primary")}>
-    <input type="radio" name="pay_tab" id="pay-tab-primary" class="tab-radio" value="primary"${chk(v.market === "primary")}>
-    <div class="tab-bar" role="tablist"><label for="pay-tab-resale" role="tab">${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</label><label for="pay-tab-primary" role="tab">${L(lang, "برايمري", "Primary")}</label></div>
-    <div class="tab-panel panel-resale" role="tabpanel">
+  <section class="card uf-card${isPrimary ? " tabs" : ""}"${isPrimary ? raw(' data-tabs="pay"') : ""} data-step="3" data-hide-if="listing_type=rent"><h3 class="uf-sub">${L(lang, "الدفع", "Payment")}</h3>
+    ${isPrimary ? html`<input type="radio" name="pay_tab" id="pay-tab-resale" class="tab-radio" value="resale">
+    <input type="radio" name="pay_tab" id="pay-tab-primary" class="tab-radio" value="primary" checked>
+    <div class="tab-bar" role="tablist"><label for="pay-tab-resale" role="tab">${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</label><label for="pay-tab-primary" role="tab">${L(lang, "برايمري", "Primary")}</label></div>` : ""}
+    <div class="${isPrimary ? "tab-panel panel-resale" : ""}" role="tabpanel">
       <div class="grid">
       ${input("down_payment_value", L(lang, "المدفوع (الكاش المطلوب)", "Paid (cash required)"), v.down_payment_value, { extra: ' inputmode="decimal"' })}
       ${input("remaining_amount", L(lang, "المتبقي أقساط", "Remaining installments"), v.remaining_amount, { extra: ' inputmode="decimal"' })}
@@ -187,7 +190,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
       ${input("installments_end", L(lang, "آخر قسط", "Last installment"), v.installments_end, { type: "month" })}
       </div>
     </div>
-    <div class="tab-panel panel-primary" role="tabpanel">
+    ${isPrimary ? html`<div class="tab-panel panel-primary" role="tabpanel">
       <div class="grid">
       ${input("cash_price", L(lang, "سعر الكاش", "Cash price"), v.cash_price, { extra: ' inputmode="decimal"' })}
       ${input("maintenance_pct", L(lang, "الصيانة %", "Maintenance %"), v.maintenance_pct, { type: "number", extra: ' min="0" step="any"' })}
@@ -202,7 +205,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
       ${select(`plan_freq_${i}`, L(lang, "الدورية", "Frequency"), v[`plan_freq_${i}`], freqOptions(lang))}
     </div>`
       )}
-    </div>
+    </div>` : ""}
   </section>
 
   <section class="card uf-card" data-step="4" id="uf-4">${head(4, steps[3])}

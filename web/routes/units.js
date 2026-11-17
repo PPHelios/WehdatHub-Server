@@ -324,14 +324,22 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   });
 
   /** Share section: a new client link (public page) and the broker's earlier links with their opens. */
-  async function shareSection(broker, listing, lang, fresh = null) {
+  async function shareSection(broker, listing, lang, fresh = null, notice = null) {
     const links = await Share.linksFor(pool, broker, listing);
-    const copy = fresh ? `${Describe.clientCopy(listing, broker, { lang: fresh.lang })}\n\n🔗 ${fresh.url}` : null;
+    const copyIn = (l) => `${Describe.clientCopy(listing, broker, { lang: l })}
+
+🔗 ${fresh.url}`;
+    const waBase = fresh ? (fresh.recipientPhone && Phone.waMeUrl(fresh.recipientPhone, copyIn(fresh.lang))) || `https://wa.me/?text=${encodeURIComponent(copyIn(fresh.lang))}` : "";
     return html`<section class="card" id="share">
   <h2>🔗 ${L(lang, "رابط للعميل", "Link for a client")}</h2>
+  ${notice ? html`<p class="card notice" role="status">${notice}</p>` : ""}
   ${fresh
     ? html`<p class="share-url" data-share-url>${fresh.url}</p>
-  <p><a class="btn" href="${(fresh.recipientPhone && Phone.waMeUrl(fresh.recipientPhone, copy)) || `https://wa.me/?text=${encodeURIComponent(copy)}`}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>`
+  <div class="stack" data-msg-box>
+    <label class="stack">${L(lang, "الرسالة (تقدر تعدلها قبل الإرسال)", "The message (edit it before sending)")}<textarea rows="9" data-share-copy data-ar="${copyIn("ar")}" data-en="${copyIn("en")}">${copyIn(fresh.lang)}</textarea></label>
+    <label>${L(lang, "لغة الرسالة", "Message language")} <select data-msg-lang><option value="ar"${fresh.lang === "en" ? "" : raw(" selected")}>العربية</option><option value="en"${fresh.lang === "en" ? raw(" selected") : ""}>English</option></select></label>
+    <p><a class="btn" href="${waBase}" data-wa-base="${waBase}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
+  </div>`
     : ""}
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="stack" data-share-form>
     <label>${L(lang, "لمين؟ رقم العميل أو رقم العميل في النظام (L-0042). اختياري.", "To whom? Client's number or lead reference (L-0042). Optional.")}
@@ -363,7 +371,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1><p class="card notice bad" role="alert">❌ ${msg}</p>${await shareSection(broker, listing, lang)}` }, 400);
     }
     const fresh = await Share.createShareLink(pool, broker, listing, { channel: "web", lang: linkLang, recipient, source: "web", note: String(req.body.note || "").trim() || null });
-    return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1>${await shareSection(broker, listing, lang, { ...fresh, lang: linkLang })}<p><a href="/app/units/${encodeURIComponent(listing.code)}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>` });
+    return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1>${await shareSection(broker, listing, lang, { ...fresh, lang: linkLang })}<p><a class="btn secondary small" href="/app/units/${encodeURIComponent(listing.code)}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>` });
   });
 
   // Photos to a client in one tap: the browser's share sheet (navigator.share with files) opens WhatsApp with the
@@ -384,6 +392,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
       out = gate.allowed ? await Flyer.flyerUrlFor(pool, broker, listing, { theme, lang, unbranded }) : { error: "rate" };
     }
+    const flyerCredits = await require("../../services/credits").creditsFor(pool, "flyer");
     const link = (t, u, label) => html`<a class="btn secondary${make && theme === t && unbranded === u ? " active" : ""}" href="/app/units/${code}/flyer?make=1&theme=${t}${u ? "&unbranded=1" : ""}">${label}</a>`;
     return page(req, res, {
       title: listing.code,
@@ -393,8 +402,9 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   <div class="row">
     ${link("dark", false, L(lang, "غامق", "Dark"))}${link("light", false, L(lang, "فاتح", "Light"))}${link("dark", true, L(lang, "غامق من غير بيانات الشركة", "Dark, no brand"))}${link("light", true, L(lang, "فاتح من غير بيانات الشركة", "Light, no brand"))}
   </div>
-  ${!out ? html`<p class="muted">${L(lang, "اختار الشكل. الفلاير بيتعمل لما تدوس على واحد.", "Pick a style. The flyer is made when you tap one.")}</p><a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a>` : out.url
-    ? html`<img src="${out.url}" alt="" style="max-width:min(100%,380px);height:auto" data-flyer-image>
+  ${!out ? html`<p class="muted">${L(lang, "اختار الشكل. الفلاير بيتعمل لما تدوس على واحد.", "Pick a style. The flyer is made when you tap one.")}</p><p class="muted small" data-flyer-cost>${L(lang, `أول فلاير للوحدة (أو بعد صور جديدة) بياخد ${flyerCredits} رصيد ذكاء. الفلاير اللي اتعمل قبل كده بيتفتح ببلاش من الذاكرة.`, `The first flyer for a unit (or after new photos) uses ${flyerCredits} AI credits. A flyer made before opens free from the cache.`)}</p><a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a>` : out.url
+    ? html`<p class="muted small" data-flyer-cost>${out.cached ? L(lang, "من الذاكرة، ببلاش.", "From the cache, free.") : L(lang, `اتعمل دلوقتي. الصور اتتحسب ${flyerCredits} رصيد لو كانت أول مرة أو بعد صور جديدة.`, `Made just now. Photo ordering costs ${flyerCredits} AI credits when it is the first flyer or after new photos.`)}</p>
+  <a href="${out.url}" target="_blank" rel="noopener" data-no-lock><img src="${out.url}" alt="" style="max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain" data-flyer-image></a>
   <div class="row"><button type="button" data-share-image="${out.url}" data-share-name="${listing.code}-flyer.jpg">📤 ${L(lang, "شارك الفلاير", "Share flyer")}</button> <a class="btn secondary" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener" data-download-image data-download-name="${listing.code}-flyer.jpg">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
   <a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></div>`
     : html`<p class="notice bad">${out.error === "busy" || out.error === "rate" ? L(lang, "الفلاير مشغول دلوقتي. جرب بعد شوية.", "The flyer maker is busy. Try again in a moment.") : L(lang, "معرفناش نعمل الفلاير. جرب تاني.", "The flyer could not be made. Try again.")}</p>`}
@@ -410,6 +420,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const images = (await imagesOf(pool, listing)).slice(0, 10);
     const code = encodeURIComponent(listing.code);
     const text = Describe.clientCopy(listing, broker, { lang });
+    const copies = { ar: Describe.clientCopy(listing, broker, { lang: "ar" }), en: Describe.clientCopy(listing, broker, { lang: "en" }) };
     return page(req, res, {
       title: listing.code,
       nav: "units",
@@ -417,13 +428,14 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
 <section class="card stack" id="share-media" data-share-text="${text}">
   ${images.length
     ? html`<div class="photos">${images.map((i) => html`<img src="/app/units/${code}/photos/${i.id}" alt="" loading="lazy" data-share-photo>`)}</div>
-  <label class="stack">${L(lang, "وصف الوحدة (بيتبعت مع الصور، وبيتنسخ لو التطبيق شال النص)", "Unit description (sent with the photos, and copied in case the app drops the text)")}<textarea readonly rows="6" data-share-copy>${text}</textarea></label>
+  <label class="stack">${L(lang, "وصف الوحدة (بيتبعت مع الصور، وبيتنسخ لو التطبيق شال النص)", "Unit description (sent with the photos, and copied in case the app drops the text)")}<textarea rows="8" data-share-copy data-ar="${copies.ar}" data-en="${copies.en}">${text}</textarea></label>
+  <label>${L(lang, "لغة الرسالة", "Message language")} <select data-msg-lang><option value="ar"${lang === "en" ? "" : raw(" selected")}>العربية</option><option value="en"${lang === "en" ? raw(" selected") : ""}>English</option></select></label>
   <button type="button" data-share-media>📤 ${L(lang, `ابعت ${images.length} صور (واتساب أو أي تطبيق)`, `Send ${images.length} photos (WhatsApp or any app)`)}</button>
   <p class="muted" data-share-status></p>
   <p class="muted">${L(lang, "لو الزرار مش شغال على جهازك: اضغط على الصورة مطولاً واحفظها، أو ابعت رابط الوحدة.", "If the button doesn't work on this device: long-press a photo to save it, or send the unit link.")}</p>`
     : html`<p class="muted">${L(lang, "مفيش صور للوحدة دي.", "This unit has no photos.")}</p>`}
 </section>
-<p><a href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>`
+<p><a class="btn secondary small" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>`
     });
   });
 
@@ -593,13 +605,11 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       <details class="status-menu"><summary class="btn secondary">🔄 ${L(lang, "غيّر الحالة", "Change status")}</summary>
         <div class="status-options">${[["active", L(lang, "نشطة", "Active")], ["sold", L(lang, "مباعة", "Sold")], ["archived", L(lang, "مؤرشفة", "Archived")]].filter(([v]) => v !== listing.status).map(([v, t]) => html`<button type="submit" name="status" value="${v}" class="secondary">${t}</button>`)}</div></details></form>` : ""}
     ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
-    <details class="more-menu"><summary class="btn secondary">⋯ ${L(lang, "المزيد", "More")}</summary><div class="more-list">
-      ${listing.status === "active" ? html`<a class="btn secondary" href="#share">🔗 ${L(lang, "لينك للعميل", "Link for a client")}</a>` : ""}
+          ${listing.status === "active" ? html`<a class="btn secondary" href="#share">🔗 ${L(lang, "لينك للعميل", "Link for a client")}</a>` : ""}
       ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/flyer">🖼 ${L(lang, "الفلاير", "Flyer")}</a>` : ""}
       ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
       ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button></form>` : ""}
       ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
-    </div></details>
   </div>
 </article>
 <div class="unit-sections">

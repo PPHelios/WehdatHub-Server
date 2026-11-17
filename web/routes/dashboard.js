@@ -51,7 +51,7 @@ const minutes = (m, lang) => {
 };
 const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
 const notFound = (req, res, page) =>
-  page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
+  page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a class="btn secondary small" href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
 
 /** N6: this month's progress against each broker's target. */
 function targetsSection(rows, lang) {
@@ -76,7 +76,7 @@ function leaseEnds(rows, lang) {
 </section>`;
 }
 
-function agencyPage(d, lang) {
+function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0 } = {}) {
   const kpi = (label, value, attr) => html`<div class="kpi" data-kpi="${attr}"><span class="muted small">${label}</span><strong>${value}</strong></div>`;
   const q = d.brokerId ? `&broker=${d.brokerId}` : d.teamLeadId ? `&team=${d.teamLeadId}` : "";
   const todo = [
@@ -103,7 +103,8 @@ function agencyPage(d, lang) {
   ${kpi(L(lang, "العمولة", "Commission"), money(d.deals.commission, lang), "commission")}
   ${kpi(L(lang, "وحدات متاحة", "Active units"), d.units.active, "units")}
 </div>
-${todo.some(([, n]) => n)
+${tabs("dash_tab", [
+  [L(lang, "العملاء", "Leads"), html`${todo.some(([, n]) => n)
   ? html`<section class="card list" id="needs-action"><h2>${L(lang, "محتاج تتصرف", "Needs action")}</h2><ul class="rows">${todo.filter(([, n]) => n).map(
       ([k, n, label, href]) => html`<li data-kpi="${k}"><a class="listrow" href="${href}">${label}<b class="chip late">${n}</b></a></li>`
     )}</ul></section>`
@@ -120,10 +121,11 @@ ${d.weekly && d.weekly.some(Boolean)
 ${d.sources && d.sources.length
   ? html`<section class="card" id="top-sources"><h2>${L(lang, "أكتر مصادر العملاء", "Top lead sources")}</h2>
   <ul class="rows">${d.sources.map((x) => html`<li class="listrow">${x.source === "-" ? L(lang, "من غير مصدر", "No source") : Stages.sourceLabel(x.source, lang)}<b>${x.n}</b></li>`)}</ul>
-  <p class="row"><a href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> · <a href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>
+  <p class="row"><a class="btn secondary small" href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> <a class="btn secondary small" href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>
 </section>`
-  : html`<p class="row"><a href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> · <a href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>`}
-<section class="card" id="leaderboard">
+  : html`<p class="row"><a class="btn secondary small" href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> <a class="btn secondary small" href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>`}
+`],
+  [L(lang, "الفريق", "Team"), html`<section class="card" id="leaderboard">
   <h2>${L(lang, `ترتيب البروكرز (آخر ${d.days} يوم)`, `Leaderboard (last ${d.days} days)`)}</h2>
   ${d.board.length
     ? html`<ol class="board">${d.board.map(
@@ -140,7 +142,10 @@ ${d.sources && d.sources.length
       )}</ol>
   <p class="muted small">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = البروكر من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
     : html`<p class="muted">${L(lang, "مفيش نشاط في الفترة دي.", "No activity in this period.")}</p>`}
-</section>`;
+</section>${team}`],
+  [L(lang, "الذكاء الاصطناعي", "AI use"), html`${ai}`],
+  [L(lang, "الإعدادات", "Settings"), html`${settings}`]
+], { open })}`;
 }
 
 /** Data security for managers: who sees private unit details, and the Excel export of every unit. */
@@ -458,7 +463,7 @@ ${a.payments.length ? html`<section class="card list"><h2>${L(lang, "المدف�
   <p class="muted">${a.suspended_at ? L(lang, `اتوقفت ${day(a.suspended_at)}. الرجوع بيرجّع نفس البروكرز اللي كانوا شغالين.`, `Suspended ${day(a.suspended_at)}. Resuming brings back the same brokers.`) : L(lang, "كل البروكرز بيقفوا عن الشغل (البيانات بتفضل كما هي) لحد ما ترجعها.", "Every broker stops working (all data stays) until you resume it.")}</p>
   <form method="post" action="/app/owner/agencies/${a.id}/${a.suspended_at ? "resume" : "suspend"}" data-confirm="${a.suspended_at ? L(lang, "ترجع الشركة؟", "Resume this agency?") : L(lang, `توقف ${a.name}؟`, `Suspend ${a.name}?`)}">${hidden}<button type="submit" class="${a.suspended_at ? "" : "danger"}">${a.suspended_at ? L(lang, "رجّع الشركة", "Resume") : L(lang, "أوقف الشركة", "Suspend")}</button></form>
 </section>
-<p><a href="/app/owner/agencies/${a.id}/ai-log">${L(lang, "سجل الذكاء الاصطناعي", "AI log")}</a></p>`;
+<p><a class="btn secondary small" href="/app/owner/agencies/${a.id}/ai-log">${L(lang, "سجل الذكاء الاصطناعي", "AI log")}</a></p>`;
 }
 
 /** Owner: an announcement to every manager, and the owner's own action log. */
@@ -581,7 +586,12 @@ function register(web, { pool, page }) {
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
     const brokersWrite = await Rights.brokersMayWrite(pool, req.session.broker.agency_id);
     const [aiPeople, importReport] = await Promise.all([AiUserLimits.people(pool, req.session.broker.agency_id), ChatImportReport.report(pool, { days: Number(d.days) || 30, agencyId: req.session.broker.agency_id })]);
-    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${aiPeopleSection(aiPeople, lang)}${importSection(importReport, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${leadScopeSection(await require("../../services/leadScope").brokersSeeAll(pool, req.session.broker.agency_id), lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang, {
+      team: html`${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}`,
+      ai: html`${aiPeopleSection(aiPeople, lang) || html`<p class="muted">${L(lang, "مفيش استخدام.", "No AI use yet.")}</p>`}${importSection(importReport, lang)}`,
+      settings: html`${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${leadScopeSection(await require("../../services/leadScope").brokersSeeAll(pool, req.session.broker.agency_id), lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}`,
+      open: req.query.privacy ? 3 : 0
+    })}` });
   });
 
   // Who sees a unit's private details (services/unitPrivacy.js); the agency owner only.
@@ -636,7 +646,7 @@ function register(web, { pool, page }) {
     const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("بروكرز نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
     const [agencies, log, places] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;

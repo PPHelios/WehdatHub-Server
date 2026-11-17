@@ -43,13 +43,14 @@ test("the agency owner flips the switches", async () => {
   expect(got.body.switches).toEqual({ brokersMayWrite: false, dataEntryOwners: false });
 });
 
-test("logo: managers upload and remove it from the app; a broker cannot", async () => {
+test("logo: the agency owner uploads and removes it from the app; a manager or broker cannot", async () => {
   const sharp = require("sharp");
   const png = await sharp({ create: { width: 40, height: 40, channels: 3, background: "#336699" } }).png().toBuffer();
   const broker = await auth("broker");
-  const admin = await auth("admin");
+  const admin = await auth("owner");
   const up = (auth) => request(h.app.app).post("/api/v1/settings/logo").set(auth).attach("logo", png, { filename: "logo.png", contentType: "image/png" });
   expect((await up(broker)).status).toBe(403);
+  expect((await up(await auth("admin"))).status).toBe(403);
   const ok = await up(admin);
   expect(ok.status).toBe(200);
   expect((await h.query("SELECT logo_url FROM agencies WHERE id = $1", [h.BROKERS.admin.agency_id]))[0].logo_url).toBeTruthy();

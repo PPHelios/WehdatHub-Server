@@ -12,6 +12,7 @@
 
   function valueOf(form, name) {
     var el = form.querySelector('[name="' + name + '"]');
+    if (el && el.type === "checkbox") return el.checked ? el.value : "";
     return el ? el.value : "";
   }
   function matches(form, rule) {
@@ -127,7 +128,7 @@
     var run = function () { apply(form); };
     form.addEventListener("change", function (e) {
       var t = e.target;
-      if (t && t.name && (t.name === "listing_type" || t.name === "property_type")) run();
+      if (t && t.name && (t.name === "listing_type" || t.name === "property_type" || t.name === "is_ready")) run();
     });
     initDraft(form);
     run();

@@ -82,10 +82,14 @@ describe("plans, schedule and PDF", () => {
 });
 
 describe("agency logo", () => {
-  test("a manager uploads the logo; the client page shows it; brokers can't", async () => {
+  test("the agency owner uploads the logo; the client page shows it; managers and brokers can't", async () => {
     const { path } = await seed();
+    await h.seedBroker("owner");
     const png = await sharp({ create: { width: 900, height: 300, channels: 4, background: { r: 0, g: 80, b: 160, alpha: 1 } } }).png().toBuffer();
-    const { agent, csrf } = await signIn(h, "admin");
+    const m = await signIn(h, "admin");
+    expect((await m.agent.get("/app/settings")).text).not.toMatch(/id="brand"/);
+    expect((await m.agent.post("/app/settings/logo").field("_csrf", m.csrf).attach("logo", png, { filename: "l.png", contentType: "image/png" })).status).toBe(403);
+    const { agent, csrf } = await signIn(h, "owner");
     expect((await agent.get("/app/settings")).text).toMatch(/id="brand"/);
     const up = await agent.post("/app/settings/logo").field("_csrf", csrf).attach("logo", png, { filename: "logo.png", contentType: "image/png" });
     expect(up.headers.location).toMatch(/logo=saved/);

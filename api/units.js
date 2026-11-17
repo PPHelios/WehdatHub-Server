@@ -9,6 +9,7 @@ const Storage = require("../lib/supabase");
 const Deal = require("../domain/dealType");
 const Authz = require("../lib/authz");
 const Credits = require("../services/credits");
+const Describe = require("../domain/describe");
 const { logOperation } = require("../lib/db");
 const { normalizeCode } = require("../domain/searchQuery");
 const Share = require("../lib/shareLinks");
@@ -243,6 +244,14 @@ function register(api, { pool }) {
     const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: req.body?.lang === "en" || req.body?.lang === "ar" ? req.body.lang : broker.preferred_lang === "en" ? "en" : "ar", unbranded: req.body?.unbranded === true });
     if (out.error) return res.status(out.error === "busy" ? 503 : 502).json({ error: out.error });
     return res.json({ url: out.url });
+  });
+
+  // The client message for a unit in one language (the facts are written by the parser): the app shows it in a box to edit before sending.
+  api.get("/units/:code/message", async (req, res) => {
+    const { broker } = req.session;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
+    return res.json({ message: Describe.clientCopy(found, broker, { lang: req.query.lang === "en" ? "en" : "ar" }) });
   });
 
   // A client link for an active unit: the page shows photos and specs only, and the broker is alerted when it is opened.

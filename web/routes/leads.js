@@ -555,7 +555,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       title,
       nav: "leads",
       body: html`<h1>🕓 ${title}</h1>
-<p><a href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "← رجوع للعميل", "← Back to the lead")}</a></p>
+<p><a class="btn secondary small" href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "← رجوع للعميل", "← Back to the lead")}</a></p>
 <form method="get" action="${base}" class="row" data-history-filter>
   <label>${L(lang, "من", "From")} <input type="date" name="from" value="${fromDay || ""}"></label>
   <label>${L(lang, "لغاية", "To")} <input type="date" name="to" value="${toDay || ""}"></label>

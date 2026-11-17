@@ -103,3 +103,25 @@ describe("Delivery parsing", () => {
     expect(D.formatDelivery({})).toBeNull();
   });
 });
+
+describe("the unit box is for places and features only", () => {
+  const U = require("../../domain/unitBox");
+  test("furnished is not suggested or read as a chip: it is the furnishing drop-down's", () => {
+    expect(U.suggestFeatures("مفروش", "ar").map((x) => x.key)).not.toContain("furnished");
+    expect(U.resolve("شقة مفروشة ناصية", { places: [], areas: [] }).features).not.toContain("furnished");
+    expect(U.resolve("شقة مفروشة ناصية", { places: [], areas: [] }).features).toContain("corner");
+  });
+});
+
+describe("a pasted message fills the furnishing and finishing drop-downs", () => {
+  const U = require("../../domain/unitBox");
+  const r = (t) => U.resolve(t, { places: [], areas: [] });
+  test("states are read", () => {
+    expect(r("شقة مفروشة بالكامل تشطيب سوبر لوكس")).toMatchObject({ furnishing: "furnished", finishing: "super_lux" });
+    expect(r("apartment fully finished, semi furnished")).toMatchObject({ furnishing: "semi_furnished", finishing: "fully_finished" });
+  });
+  test("nothing stated, nothing set; semi furnished is not semi finished", () => {
+    expect(r("شقة 3 غرف")).toMatchObject({ furnishing: null, finishing: null });
+    expect(r("semi furnished flat").finishing).toBeNull();
+  });
+});

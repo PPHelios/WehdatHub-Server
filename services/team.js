@@ -137,6 +137,40 @@ async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
   return Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
 }
 
+/** Brings a deactivated broker back with the same role (a seat must be free). Their old leads stay with the managers. */
+async function reactivate(pool, manager, brokerId) {
+  if (!isManager(manager)) return { error: "forbidden" };
+  const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  const b = rows[0];
+  if (!b) return { error: "not_found" };
+  if (!mayActOn(manager, b.role)) return { error: "rank" };
+  if (b.is_active) return { ok: true, broker: b };
+  if (!(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
+  await pool.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
+  return { ok: true, broker: b };
+}
+
+/**
+ * Deletes a DEACTIVATED broker for good (never themselves, never a role above the actor's). A broker who still owns deals or
+ * listings cannot be erased (the database refuses); they stay deactivated: { error: "has_records" }.
+ */
+async function remove(pool, manager, brokerId) {
+  if (!isManager(manager)) return { error: "forbidden" };
+  if (brokerId === manager.id) return { error: "self" };
+  const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  const b = rows[0];
+  if (!b) return { error: "not_found" };
+  if (!mayActOn(manager, b.role)) return { error: "rank" };
+  if (b.is_active) return { error: "active" };
+  try {
+    await pool.query("DELETE FROM brokers WHERE id = $1 AND agency_id = $2 AND NOT is_active", [brokerId, manager.agency_id]);
+  } catch (e) {
+    if (e && e.code === "23503") return { error: "has_records" };
+    throw e;
+  }
+  return { ok: true, broker: b };
+}
+
 /** The message a manager sends a new broker from their own WhatsApp: what WehdatHub is and the start link. */
 function inviteText(broker, url, agencyName) {
   const en = broker.preferred_lang === "en";
@@ -205,4 +239,4 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
   return { ok: true };
 }
 
-module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, inviteText, changeRole, setTeamLeadRole, setTeam };
+module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };

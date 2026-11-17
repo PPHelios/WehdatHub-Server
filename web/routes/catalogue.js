@@ -388,7 +388,7 @@ ${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة
     [L(lang, "ملفات للعملاء", "Client files"), filesTab],
     [L(lang, "الوحدات", "Units"), unitsTab]
   ];
-return html`<p><a href="/app/catalogue">‹ ${L(lang, "الكتالوج", "Catalogue")}</a></p>
+return html`<p><a class="btn secondary small" href="/app/catalogue">‹ ${L(lang, "الكتالوج", "Catalogue")}</a></p>
 <h1>🏗️ ${lang === "en" ? p.name_en || p.name : p.name}</h1>
 ${notice || ""}
 ${tabs("proj-tabs", phaseTabs)}`;
@@ -458,7 +458,7 @@ function register(web, { pool, page, assets }) {
     const edit = Boolean(project);
     const base = edit ? `/app/catalogue/projects/${project.id}` : "/app/catalogue";
     const form = projectForm({ values: v, mode: edit ? "edit" : "new", action: edit ? base : "/app/catalogue/projects", lang, areas: l.areas, place, developer: dev, error: notice, cancelHref: base, sourceText: v.paste_text ?? (project ? project.source_text || "" : "") });
-    const body = html`<p><a href="${base}">‹ ${edit ? project.name : L(lang, "الكتالوج", "Catalogue")}</a></p><div class="uf-top"><h1>${edit ? L(lang, "تعديل المشروع", "Edit project") : L(lang, "مشروع جديد", "New project")}</h1></div>${form}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("projectForm.js")}"></script>`;
+    const body = html`<p><a class="btn secondary small" href="${base}">‹ ${edit ? project.name : L(lang, "الكتالوج", "Catalogue")}</a></p><div class="uf-top"><h1>${edit ? L(lang, "تعديل المشروع", "Edit project") : L(lang, "مشروع جديد", "New project")}</h1></div>${form}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("projectForm.js")}"></script>`;
     return page(req, res, { title: edit ? project.name : L(lang, "مشروع جديد", "New project"), nav: "catalogue", body }, status);
   };
   const showNew = (req, res, notice = null, status = 200) => showForm(req, res, { notice, status });
@@ -551,7 +551,7 @@ function register(web, { pool, page, assets }) {
     const projects = await Catalogue.listProjects(pool, actor, { developerId: d.id });
     return page(req, res, {
       title: d.name,
-      body: html`<p><a href="/app/catalogue">‹ ${L(lang, "الكتالوج", "Catalogue")}</a></p><h1>🏢 ${d.name}</h1>${notice || savedNotice(req) || ""}
+      body: html`<p><a class="btn secondary small" href="/app/catalogue">‹ ${L(lang, "الكتالوج", "Catalogue")}</a></p><h1>🏢 ${d.name}</h1>${notice || savedNotice(req) || ""}
 ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
 <section class="card"><h2>${L(lang, "مشاريعه", "Projects")}</h2>${projects.length ? html`<ul>${projects.map((p) => html`<li><a href="/app/catalogue/projects/${p.id}">${p.name}</a></li>`)}</ul>` : html`<p class="muted">—</p>`}</section>`
     }, status);
@@ -627,7 +627,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   ${files.length ? html`<div class="stack"><h2>${L(lang, "ملفات ولينكات", "Files and links")}</h2>
     <ul>${files.map((m) => html`<li><a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a> · ${label2(KIND, m.kind, lang)}</li>`)}</ul></div>` : ""}
   <p><a class="btn" href="/app/catalogue/projects/${p.id}/calculator">${L(lang, "احسب نظام سداد", "Calculate a payment plan")}</a></p>
-  <p><a href="/app/catalogue/projects/${p.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
+  <p><a class="btn secondary small" href="/app/catalogue/projects/${p.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
 </section>`;
     return page(req, res, { title: `${lang === "en" ? p.name_en || p.name : p.name} · ${L(lang, "عرض", "Presentation")}`, nav: "catalogue", body });
   });
@@ -677,7 +677,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     ${fees.length ? html`<fieldset><legend>${L(lang, "مصاريف اختيارية", "Optional fees")}</legend>${fees.map((f) => html`<label><input type="checkbox" name="fee${f.i}" value="1"${f.on ? " checked" : ""}> ${f.label}: ${money(f.amount)}</label>`)}</fieldset>` : ""}
     <noscript><button type="submit">${L(lang, "احسب", "Calculate")}</button></noscript>
   </form>
-  ${summary ? html`<p><a href="/app/catalogue/projects/${data.project.id}/calculator.xlsx?unit=${encodeURIComponent(unit.code)}&down=${down}&years=${years}&freq=${frequency}" data-excel-link>${L(lang, "حمّل الجدول (إكسيل)", "Download schedule (Excel)")}</a></p>` : ""}
+  ${summary ? html`<p><a class="btn secondary small" href="/app/catalogue/projects/${data.project.id}/calculator.xlsx?unit=${encodeURIComponent(unit.code)}&down=${down}&years=${years}&freq=${frequency}" data-excel-link>${L(lang, "حمّل الجدول (إكسيل)", "Download schedule (Excel)")}</a></p>` : ""}
   ${summary ? html`<div class="stack">
     <p><strong>${L(lang, "سعر الوحدة", "Unit price")}:</strong> ${money(price)}</p>
     <p><strong>${L(lang, "المقدم", "Down payment")}:</strong> <span data-out="down_payment">${money(summary.down_payment)}</span></p>
@@ -685,7 +685,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     ${extra ? html`<p><strong>${L(lang, "مصاريف اختيارية", "Optional fees")}:</strong> <span data-out="extra">${money(extra)}</span></p>` : ""}
     ${verdict.exception ? html`<p class="notice" role="status" data-out="warning">⚠️ ${L(lang, "النظام ده برا حدود المطور. محتاج مراجعة مدير.", "This plan is outside the developer's limits and needs a manager's review.")}</p>` : html`<p class="muted">${L(lang, "النظام داخل حدود المطور.", "Within the developer's limits.")}</p>`}
   </div>` : html`<p class="muted">${L(lang, "مفيش وحدات بسعر في المشروع.", "No priced units in this project.")}</p>`}
-  <p><a href="/app/catalogue/projects/${data.project.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
+  <p><a class="btn secondary small" href="/app/catalogue/projects/${data.project.id}">${L(lang, "رجوع للمشروع", "Back to project")}</a></p>
   <script src="/app/static/calculator.js" defer></script>
 </section>`;
     return page(req, res, { title: `${L(lang, "حاسبة", "Calculator")} · ${data.project.name}`, nav: "catalogue", body });
@@ -728,7 +728,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     if (!plan) return notFound(req, res);
     return page(req, res, {
       title: plan.name,
-      body: html`<p><a href="/app/catalogue/projects/${data.project.id}#plans">‹ ${data.project.name}</a></p><h1>💳 ${plan.name}</h1>${planForm(lang, data.project.id, data.phases, plan)}`
+      body: html`<p><a class="btn secondary small" href="/app/catalogue/projects/${data.project.id}#plans">‹ ${data.project.name}</a></p><h1>💳 ${plan.name}</h1>${planForm(lang, data.project.id, data.phases, plan)}`
     });
   });
   web.post("/catalogue/projects/:id/materials", write((req) => Catalogue.saveMaterial(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));

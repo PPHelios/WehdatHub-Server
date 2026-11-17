@@ -1,5 +1,5 @@
 // web/views/agencySettings.js — The agency's settings forms for the one Settings page (web/routes/settings.js): the dollar
-// and euro rates, and the monthly credits, broker caps and unit code letters. They post to the same routes as before
+// and euro rates, and the unit code letters. They post to the same routes as before
 // (/app/usage/fx, /app/usage/agency); `ret` makes those routes come back to Settings.
 "use strict";
 
@@ -20,13 +20,10 @@ function fxForm({ lang, rates = {}, bad = false, ret = null, id = null }) {
 </form>`;
 }
 
-/** Monthly bot credits, the daily and weekly cap per broker, and the unit code letters: { lang, state, codePrefix, ret, id }. */
-function capsForm({ lang, state, codePrefix = "", ret = null, id = null }) {
+/** The unit code letters: { lang, codePrefix, ret, id }. */
+function capsForm({ lang, codePrefix = "", ret = null, id = null }) {
   return html`<form method="post" action="/app/usage/agency" class="card stack" data-agency-caps${id ? html` id="${id}"` : ""}>${back(ret)}
-  <h2>${L(lang, "رصيد الشركة وحدود البروكرز وحروف الأكواد", "Agency credits, broker caps and unit code letters")}</h2>
-  <label>${L(lang, "الرصيد الشهري (رسايل)", "Monthly credits (messages)")} <input type="number" name="monthly" min="0" max="100000" value="${state.limit}"></label>
-  <label>${L(lang, "حد يومي لكل بروكر (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
-  <label>${L(lang, "حد أسبوعي لكل بروكر (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
+  <h2>${L(lang, "حروف أكواد الوحدات", "Unit code letters")}</h2>
   <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
   <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
