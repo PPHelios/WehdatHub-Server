@@ -5,6 +5,7 @@
 "use strict";
 
 const D = require("../domain/followUpDraft");
+const ParserLog = require("./parserLog");
 const Card = require("../domain/leadCard");
 const Phone = require("../domain/phone");
 const Leads = require("./leads");
@@ -24,6 +25,7 @@ async function draft(pool, broker, leadKey, { lang = "ar" } = {}) {
   // A template filled from the lead's own record: no AI call, nothing to run out (Parser consolidation, Phase 4).
   // The broker edits it before sending. Their tone sample (Settings) is kept but no longer used.
   const out = { text: D.template({ lead, events, requests, viewing, broker: { name: me[0]?.name || broker.name }, agencyName: me[0]?.agency_name, lang, requestLine: (f) => Card.requestSummary(f, lang) }) };
+  ParserLog.logParserRead(pool, { agency_id: broker.agency_id, broker_id: broker.id, parser: "follow_up_draft", kind: "template", result: { read: ["name", requests.length ? "request" : null, viewing ? "viewing" : null, events.length ? "events" : null].filter(Boolean), missing: [lead.name ? null : "name", requests.length ? null : "request"].filter(Boolean) } });
   if (out.error) return out;
   return { text: out.text, lead, wa: Phone.waMeUrl(lead.phone_e164, out.text) };
 }

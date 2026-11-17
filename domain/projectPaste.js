@@ -5,6 +5,8 @@
 //           years_max, discount_pct, bedrooms, property_types, offers, facts }
 "use strict";
 
+const { moneyPhrases } = require("./read/searchPrep");
+
 const { normalizeDigits } = require("../lib/text");
 const ProjectNotes = require("./projectNotes");
 
@@ -103,7 +105,7 @@ function singleOffer(text) {
 /** @param {string} input the pasted message */
 function read(input) {
   const text = normalizeDigits(String(input || "").slice(0, MAX_TEXT)).replace(/[‎‏‪-‮]/g, "");
-  const flat = text.replace(/\s+/g, " ");
+  const flat = moneyPhrases(text).replace(/\s+/g, " ");
   const developers = developerCandidates(text);
   const out = {
     name_candidates: nameCandidates(text, developers[0]),

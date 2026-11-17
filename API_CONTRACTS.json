@@ -1242,6 +1242,7 @@
       "deactivateBroker": ["pool", "params"]
     },
     "domain/leadIntake.js": {
+      "readLeadText": ["raw"],
       "MAX_CHOICES": "Number",
       "findPhones": ["text"],
       "parseContactCard": ["contacts"],
@@ -2221,6 +2222,7 @@
       "MAX_STYLE": "Number",
       "firstName": ["name"],
       "factsOf": ["params"],
+      "template": ["params"],
       "prompt": ["facts", "params"],
       "parse": ["text"]
     },

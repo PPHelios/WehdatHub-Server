@@ -16,6 +16,7 @@ const Commission = require("../domain/commission");
 const Catalogue = require("./catalogue");
 const PriceSheets = require("./priceSheets");
 const Vis = require("../lib/visibility");
+const ParserLog = require("./parserLog");
 
 const UNDO_HOURS = 24;
 const PREVIEW_HOURS = 24;
@@ -98,6 +99,7 @@ async function interpret(pool, actor, { text = "", voice = null, channel = "web"
   } catch (err) {
     return bad(blocked(err) || "not_understood", { input: words, owner: isAgencyOwner(actor) });
   }
+  ParserLog.logParserRead(pool, { agency_id: actor.agency_id, broker_id: actor.id, parser: "catalogue_update", kind: channel, text: words, result: { read: said ? [said.action] : [], missing: said ? [] : ["not_understood"] } });
   if (!said) return bad("not_understood", { input: words });
 
   const project = (said.project && U.findNamed(said.project, projects)) || U.findNamed(words, projects);

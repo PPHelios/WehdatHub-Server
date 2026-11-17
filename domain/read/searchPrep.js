@@ -70,4 +70,25 @@ function prepareSearchText(text) {
   return fr.changed ? out : original;
 }
 
-module.exports = { prepareSearchText };
+/**
+ * Colloquial amounts written out in the text's own letters: "٣ ونص مليون" → "3.5 مليون", "5 مليون الا ربع" → "4.75 مليون".
+ * Only sure readings are rewritten; the rest of the text is untouched. When folding would shift positions (diacritics,
+ * tatweel) the text comes back as it was. Used by readers that must keep the original letters (pasted launch messages).
+ */
+function moneyPhrases(text) {
+  const t = String(text ?? "");
+  if (norm(t).length !== t.length) return t;
+  return money(norm(t)) === norm(t) ? t : applySpans(t);
+}
+
+function applySpans(t) {
+  let out = t;
+  const all = readAmounts(t).filter((a) => a.sure && a.hadUnit && FRACTION_OR_EXTRA.test(` ${a.raw} `));
+  for (const a of all.reverse()) {
+    const m = a.value >= 1e6 ? `${+(a.value / 1e6).toFixed(3)} مليون` : `${+(a.value / 1e3).toFixed(3)} الف`;
+    out = out.slice(0, a.index) + m + out.slice(a.end);
+  }
+  return out;
+}
+
+module.exports = { prepareSearchText, moneyPhrases };
