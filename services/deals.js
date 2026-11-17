@@ -14,6 +14,25 @@ const Vis = require("../lib/visibility");
 const { scopeIds, inScopeSql, scopeAmountSql } = require("../lib/dealScope");
 
 const STATUSES = ["pending", "signed", "paid", "cancelled"];
+const ORDER = { pending: 0, signed: 1, paid: 2 };
+
+/**
+ * May this person move a deal from one status to another? Anyone who may edit the deal moves it forward (pending, signed, paid) and
+ * cancels it before it is paid. Going back (a paid or cancelled deal reopened, paid back to signed) is for managers only, and only
+ * with a confirmation; it is written to the audit log. Returns null when allowed, else the error code.
+ * @returns {null | "status_backwards" | "confirm_reopen"}
+ */
+function statusMoveError(actor, from, to, { confirm = false } = {}) {
+  if (from === to) return null;
+  if (ORDER[from] !== undefined && ORDER[to] !== undefined && ORDER[to] > ORDER[from]) return null;
+  if (to === "cancelled" && (from === "pending" || from === "signed")) return null;
+  if (!Authz.isManager(actor)) return "status_backwards";
+  return confirm ? null : "confirm_reopen";
+}
+/** The statuses this person may choose for a deal now (a manager may choose any, after a confirmation when it goes back). */
+function allowedStatuses(actor, from) {
+  return STATUSES.filter((s) => s === from || Authz.isManager(actor) || statusMoveError(actor, from, s) === null);
+}
 const STATUS_LABELS = {
   pending: ["⏳ لسه", "⏳ Pending"],
   signed: ["✍️ اتمضت", "✍️ Signed"],
@@ -294,6 +313,12 @@ async function updateDeal(pool, actor, key, change = {}, { version = null, now =
   const money = ["price", "mode", "pct", "amount", "external", "splits"].some((k) => change[k] !== undefined);
   if (money && !Authz.isManager(actor)) return { error: "forbidden" };
   if (change.status !== undefined && !STATUSES.includes(change.status)) return { error: "status" };
+  const moved = change.status !== undefined && change.status !== deal.status;
+  if (moved) {
+    const refused = statusMoveError(actor, deal.status, change.status, { confirm: change.confirmReopen === true || change.confirmReopen === "1" });
+    if (refused) return { error: refused };
+  }
+  const backwards = moved && !(ORDER[deal.status] !== undefined && ORDER[change.status] !== undefined && ORDER[change.status] > ORDER[deal.status]) && !(change.status === "cancelled" && (deal.status === "pending" || deal.status === "signed"));
 
   let computed = null;
   if (money) {
@@ -342,8 +367,11 @@ async function updateDeal(pool, actor, key, change = {}, { version = null, now =
       }
     }
     if (fields.status !== undefined) await require("./commissions").onDealChanged(client, upd.rows[0]);
+    if (backwards) {
+      await require("./audit").record(client, { agencyId: actor.agency_id, brokerId: actor.id, action: "deal_status_reopen", severity: "info", targetType: "deal", targetId: deal.id, payload: { ref: refLabel(deal.ref), from: deal.status, to: change.status } });
+    }
     return { ok: true, deal: upd.rows[0] };
   });
 }
 
-module.exports = { STATUSES, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, resaleCommissions, monthlyTotals, updateDeal };
+module.exports = { STATUSES, statusMoveError, allowedStatuses, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, resaleCommissions, monthlyTotals, updateDeal };

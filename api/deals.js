@@ -14,7 +14,7 @@ const Authz = require("../lib/authz");
 const { isId } = require("../lib/dealScope");
 
 const PAGE = 20;
-const CODE = { forbidden: 403, not_found: 404, conflict: 409 };
+const CODE = { forbidden: 403, not_found: 404, conflict: 409, status_backwards: 403, confirm_reopen: 409 };
 const fail = (res, r) => res.status(CODE[r.error] || 422).json({ error: r.error, ...(r.field ? { field: r.field } : {}) });
 
 function register(api, { pool }) {
@@ -24,7 +24,8 @@ function register(api, { pool }) {
     const n = Math.max(0, parseInt(req.query.page, 10) || 0);
     const b = req.session.broker;
     const [list, totals] = await Promise.all([Deals.listDeals(pool, b, { status: req.query.status, offset: n * PAGE }), Deals.monthlyTotals(pool, b)]);
-    res.json({ items: list.rows, more: list.more, totals, statuses: Deals.STATUSES });
+    // `allowed`: the statuses this person may choose for each deal now (forward, or cancel before paid; managers may reopen with a confirmation).
+    res.json({ items: list.rows.map((r) => ({ ...r, allowed: Deals.allowedStatuses(b, r.status) })), more: list.more, totals, statuses: Deals.STATUSES });
   });
 
   api.get("/deals/:ref", async (req, res) => {
@@ -63,7 +64,7 @@ function register(api, { pool }) {
     const b = req.session.broker;
     const deal = await Deals.getDeal(pool, b, req.params.ref);
     if (!deal) return res.status(404).json({ error: "not_found" });
-    const r = await Deals.updateDeal(pool, b, deal.id, { status: req.body?.status }, { version: req.body?.version ?? deal.version });
+    const r = await Deals.updateDeal(pool, b, deal.id, { status: req.body?.status, confirmReopen: req.body?.confirm === true || req.body?.confirm === "1" }, { version: req.body?.version ?? deal.version });
     return r.ok || r.unchanged ? res.json({ ok: true }) : r.conflict ? res.status(409).json({ error: "conflict" }) : fail(res, r);
   });
 
