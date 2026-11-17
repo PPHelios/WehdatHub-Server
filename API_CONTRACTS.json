@@ -2602,6 +2602,7 @@
       "ROLES": "Array",
       "CRM_ADMIN_PHONE": "String",
       "VIEW_OPEN": "Object",
+      "VIEW_API_OPEN": "Object",
       "viewPostAllowed": ["method", "path"],
       "canSwitch": ["broker", "env"],
       "canView": ["broker", "env"],
