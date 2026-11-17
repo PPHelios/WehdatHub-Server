@@ -34,9 +34,11 @@
     if (off) el.setAttribute("data-rule-off", ""); else el.removeAttribute("data-rule-off");
     if (!isStep || !form.hasAttribute("data-stepped")) el.hidden = off;
     var fields = el.querySelectorAll("input, select, textarea");
+    // A field with its own rule inside a section that is off stays disabled: the section decides (a rental has no delivery year).
+    var inside = !off && el.parentNode && el.parentNode.closest && el.parentNode.closest("[data-rule-off]");
     for (var i = 0; i < fields.length; i++) {
       if (off && !fields[i].disabled) { fields[i].disabled = true; fields[i].setAttribute("data-rule-disabled", ""); }
-      else if (!off && fields[i].hasAttribute("data-rule-disabled")) { fields[i].disabled = false; fields[i].removeAttribute("data-rule-disabled"); }
+      else if (!off && !inside && fields[i].hasAttribute("data-rule-disabled")) { fields[i].disabled = false; fields[i].removeAttribute("data-rule-disabled"); }
     }
   }
 
