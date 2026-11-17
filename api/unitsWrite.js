@@ -14,6 +14,7 @@ const Supabase = require("../lib/supabase");
 const RateLimit = require("../lib/rateLimit");
 const { normalizeImageBuffer, MAX_PHOTOS } = require("../lib/images");
 const { logOperation } = require("../lib/db");
+const ParserLog = require("../services/parserLog");
 const Rules = require("../domain/fieldRules");
 const Plans = require("../domain/plans");
 const FormChecks = require("../lib/formChecks");
@@ -169,6 +170,7 @@ function register(api, { pool }) {
       const extracted = await L.extractPropertyDetails(AI, { texts: text ? [text] : [], voice, lang, ctx: { pool, broker, agency: req.session.agency, lang } });
       const merged = L.composeFields({ existing: base, draft: extracted.fields, lang });
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "app_unit_extract", metadata: { voice: voice.length, text: Boolean(text) } });
+      if (text) ParserLog.logParserRead(pool, { agency_id: broker.agency_id, broker_id: broker.id, parser: "add_unit_text", kind: "app", text, result: ParserLog.readAlongside(text, extracted.fields) });
       return res.json({ fields: { ...Form.formFromUnit(merged), code: extracted.fields.code || "" } });
     } catch (err) {
       const why = AiBlock.kindOf(err);

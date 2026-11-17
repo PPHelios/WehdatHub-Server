@@ -165,7 +165,9 @@
       "cleanFeaturesList": ["features"],
       "detectCurrency": ["text"],
       "normalizePriceInput": ["str"],
-      "parseMoney": ["raw", "params"],
+      "parseMoney": ["raw", "opts"],
+      "parseMoneyLegacy": ["raw", "params"],
+      "parseEgyptianPriceLegacy": ["rawText", "opts"],
       "formatAbbreviatedPrice": ["val", "currency", "lang", "listingType"],
       "parseEgyptianPrice": ["rawText", "opts"],
       "parsePrice": ["raw", "params"],
@@ -619,7 +621,9 @@
       "FURNISHING_STATUSES": "Array",
       "FINISHING_STATUSES": "Array",
       "mapFurnishing": ["text"],
-      "mapFinishing": ["text"]
+      "mapFinishing": ["text"],
+      "mapFurnishingLegacy": ["text"],
+      "mapFinishingLegacy": ["text"]
     },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
@@ -2575,6 +2579,10 @@
       "run": ["pool", "params"],
       "summary": ["pool", "counts"],
       "auditJob": []
+    },
+    "services/parserLog.js": {
+      "readAlongside": ["text", "aiFields"],
+      "logParserRead": ["pool", "params"]
     },
     "services/searchLog.js": {
       "cleanText": ["text"],
