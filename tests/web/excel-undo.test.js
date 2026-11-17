@@ -43,8 +43,8 @@ describe("undo the last applied Excel import", () => {
     expect(confirm.text).toMatch(/data-undo-restore/);
 
     const done = await agent.post(`${second.body.url}/undo`).type("form").send({ _csrf: csrf });
-    expect(done.headers.location).toMatch(/\?undone=1#import-result$/);
-    expect((await unit("VR2")).status).toBe("deleted");
+    expect(done.headers.location).toMatch(/\?undone=1$/);
+    expect((await unit("VR2")).status).toBe("archived");
     expect(Number((await unit("VR5")).price_value)).toBe(25000);
     // The first import's unit stays: only the last import is undone.
     expect((await unit("VR1")).status).toBe("active");

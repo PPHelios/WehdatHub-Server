@@ -309,7 +309,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 ${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
-${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
+${query.batch ? html`<p class="card notice" role="status" data-batch-done>${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
 ${kindNav}${tabsNav}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
@@ -341,9 +341,9 @@ ${editForms}${chatDialogs}`;
 
 function resultCard(r, lang, undoId = null) {
   const line = (label, list) => (list && list.length ? html`<li>${label}: ${list.length} <span class="muted">${list.join("، ")}</span></li>` : "");
-  return html`<div class="card notice" data-result id="import-result" tabindex="-1">
+  return html`<div class="card notice" data-result>
   <h2>✅ ${L(lang, "اتطبق", "Applied")}</h2>
-  ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتمسحت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are deleted; changed units are back to their earlier values.")}</p>` : ""}
+  ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتأرشفت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are archived; changed units are back to their earlier values.")}</p>` : ""}
   ${undoId && !r.undone ? html`<p><a class="secondary button" href="/app/import/${undoId}/undo" data-undo-link>↩️ ${L(lang, "تراجع عن الاستيراد ده", "Undo this import")}</a></p>` : ""}
   <ul>
     ${line(L(lang, "اتضافت", "Created"), r.created)}
@@ -633,7 +633,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   <h1>${L(lang, "تراجع عن الاستيراد ده؟", "Undo this import?")}</h1>
   <p>${L(lang, "ده آخر استيراد اتطبق. التراجع ليه بس.", "This is the last import applied. Only this one can be undone.")}</p>
   <ul>
-    ${plan.archive.length ? html`<li data-undo-archive>${L(lang, `هنمسح ${plan.archive.length} وحدة اتضافت (بتتحسب من الباقة تاني بعد المسح): `, `Delete ${plan.archive.length} units it added (they stop counting against your plan): `)}<span class="muted">${names(plan.archive)}</span></li>` : ""}
+    ${plan.archive.length ? html`<li data-undo-archive>${L(lang, `هنأرشف ${plan.archive.length} وحدة اتضافت: `, `Archive ${plan.archive.length} units it added: `)}<span class="muted">${names(plan.archive)}</span></li>` : ""}
     ${plan.restore.length ? html`<li data-undo-restore>${L(lang, `هرجّع ${plan.restore.length} وحدة اتعدلت لقيمها القديمة: `, `Put back the earlier values of ${plan.restore.length} units it changed: `)}<span class="muted">${names(plan.restore)}</span></li>` : ""}
     ${plan.skipped.length ? html`<li data-undo-skipped>${L(lang, `${plan.skipped.length} وحدة متتلمسش: اتعدلت بعد الاستيراد أو اتشالت. مش هتتغير: `, `${plan.skipped.length} units are left alone: changed or removed since the import. They will not change: `)}<span class="muted">${plan.skipped.join("، ")}</span></li>` : ""}
   </ul>
@@ -648,7 +648,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   web.post("/import/:id/undo", managersOnly, async (req, res, next) => {
     const out = await Imports.undoExcel(pool, req.session.broker, req.params.id);
     if (!out) return next();
-    return res.redirect(303, `/app/import/${req.params.id}?undone=1#import-result`);
+    return res.redirect(303, `/app/import/${req.params.id}?undone=1`);
   });
 
   web.get("/import/:id", async (req, res, next) => {
@@ -737,7 +737,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     }
     const out = await Imports.batchExcel(pool, req.session.broker, req.params.id, { action: String(req.body.action || ""), value: String(req.body.value || ""), scope: req.body.scope === "all" ? "all" : "missing", from: String(req.body.from || "").slice(0, 80) }, { lang });
     if (!out) return next();
-    return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}#batch-done`);
+    return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}`);
   });
 
   web.post("/import/:id/apply", importersOnly, async (req, res, next) => {
@@ -766,7 +766,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "الاستيراد ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);
     }
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_apply", metadata: { kind: imp.kind, ...Object.fromEntries(Object.entries(result).map(([k, v]) => [k, v.length])) } });
-    return res.redirect(303, `/app/import/${imp.id}#import-result`);
+    return res.redirect(303, `/app/import/${imp.id}`);
   });
 
 }
