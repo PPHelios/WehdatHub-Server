@@ -68,8 +68,49 @@ function describe(row, lang) {
     case "brokers_see_all_leads":
       return m.allowed ? L("خلّى البروكرز يشوفوا كل العملاء", "Let brokers see all leads") : L("خلّى كل بروكر يشوف عملائه بس", "Made each broker see only their own leads");
     default:
-      return String(row.operation_type).replace(/^web /, "").replace(/_/g, " ");
+      return readableAction(row.operation_type, lang);
   }
+}
+
+// Plain sentences for the actions the audit log stores under their raw names ("web POST /team/invite", "web_login_telegram").
+const NAMED = {
+  web_login: ["سجّل دخول للموقع", "Signed in to the website"],
+  web_login_telegram: ["سجّل دخول للموقع من تيليجرام", "Signed in to the website from Telegram"],
+  web_login_code: ["سجّل دخول للموقع بكود", "Signed in to the website with a code"],
+  api_login_code: ["سجّل دخول للتطبيق بكود", "Signed in to the app with a code"],
+  api_login_code_request: ["طلب كود دخول للتطبيق", "Asked for an app sign-in code"],
+  test_role_switch: ["غيّر دور الاختبار", "Switched the test role"]
+};
+const WEB_POSTS = [
+  [/^\/settings\b/, "غيّر الإعدادات", "Changed settings"],
+  [/^\/usage\/ai-limits/, "غيّر حدود الذكاء", "Changed the AI limits"],
+  [/^\/usage\/ai\b/, "غيّر ميزات الذكاء", "Changed the AI features"],
+  [/^\/usage\/(fx|agency)/, "غيّر إعدادات الشركة", "Changed the agency settings"],
+  [/^\/team\/invite/, "ضاف عضو للفريق", "Added a team member"],
+  [/^\/team\/[^/]+\/(deactivate|delete)/, "أوقف أو مسح عضو من الفريق", "Deactivated or deleted a team member"],
+  [/^\/team\//, "غيّر في الفريق", "Changed something in the team"],
+  [/^\/owner\/map/, "غيّر في قايمة الأماكن", "Changed the places list"],
+  [/^\/owner\/searches/, "راجع طلبات البحث", "Reviewed the search queue"],
+  [/^\/catalogue\//, "غيّر في كتالوج المطورين", "Changed the developer catalogue"],
+  [/^\/deals\//, "غيّر صفقة", "Changed a deal"],
+  [/^\/leads\//, "غيّر عميل", "Changed a lead"],
+  [/^\/units\//, "غيّر وحدة", "Changed a unit"],
+  [/^\/import/, "استورد بيانات", "Imported data"]
+];
+function readableAction(action, lang) {
+  const raw = String(action || "");
+  const failed = /\sfailed$/.test(raw);
+  const base = raw.replace(/\sfailed$/, "");
+  const sentence = (ar, en) => (lang === "en" ? en : ar) + (failed ? (lang === "en" ? " (failed)" : " (فشل)") : "");
+  if (NAMED[base]) return sentence(NAMED[base][0], NAMED[base][1]);
+  const m = /^web (?:POST|PUT|PATCH|DELETE) (\/\S*)/.exec(base);
+  if (m) {
+    const hit = WEB_POSTS.find(([re]) => re.test(m[1]));
+    if (hit) return sentence(hit[1], hit[2]);
+    return sentence("عمل تغيير: " + m[1], "Made a change: " + m[1]);
+  }
+  const plain = base.replace(/^web /, "").replace(/_/g, " ");
+  return sentence(plain, plain);
 }
 
 /** One icon per kind of action, so a long log can be scanned. */
