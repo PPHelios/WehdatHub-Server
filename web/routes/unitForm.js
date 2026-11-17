@@ -22,6 +22,7 @@ const Privacy = require("../../services/unitPrivacy");
 const Leases = require("../../services/leases");
 const Rights = require("../../services/unitRights");
 const Plans = require("../../domain/plans");
+const FormChecks = require("../../lib/formChecks");
 const Form = require("../forms/unitForm");
 const Session = require("../session");
 const { uploads, PHOTO, VOICE_MANY } = require("../uploads");
@@ -147,7 +148,7 @@ function register(web, { pool, page, assets }) {
     const phone = String(d.owner_phone || "").trim();
     const item = (field, ar, en) => ({ field, label_ar: ar, label_en: en, label: L10n(lang, ar, en) });
     const out = [];
-    if (isNew && !require("../../domain/phone").normalizePhone(phone)) out.push(item("owner_phone", "تليفون المالك", "Owner phone"));
+    if (isNew && !require("../../domain/phone").normalizePhone(phone)) out.push(phone ? item("owner_phone", "تليفون المالك: مش موبايل مصري صحيح (01xxxxxxxxx)", "Owner phone: not a valid Egyptian mobile (01xxxxxxxxx)") : item("owner_phone", "تليفون المالك", "Owner phone"));
     if (!String(d.owner_name || "").trim() && (isNew || phone) && String(body.owner_name_from_phone || "") !== "1") out.push(item("owner_name", "اسم المالك (أو علّم \"استخدم التليفون كاسم\")", "Owner name (or tick \"use the phone as the name\")"));
     if (pinError(body, lang)) out.push(item("pin", "لوكيشن مش واضح", "Location is not clear"));
     if (!existing || listing.compound !== existing.compound) {
@@ -261,7 +262,7 @@ function register(web, { pool, page, assets }) {
     const current = existing ? (await imagesOf(pool, existing)).filter((i) => !removeIds.includes(i.id)).length : 0;
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length + Uploads.keysOf(req.body).length + pendingOf(req) });
-    ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: !existing, existing }))];
+    ev.blockers = FormChecks.explainInvalid([...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: !existing, existing }))], req.body, lang);
     ev.ok = ev.blockers.length === 0;
     const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
     const catalogue = ev.ok && !duplicate && !existing?.details?.catalogue
@@ -276,7 +277,7 @@ function register(web, { pool, page, assets }) {
     const lang = langOf(req);
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing: null, form, lang, photoCount: filesOf(req, "photos").length + Uploads.keysOf(req.body).length + pendingOf(req) });
-    ev.blockers = [...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: true }))];
+    ev.blockers = FormChecks.explainInvalid([...ev.blockers, ...(await extraBlockers(ev.listing, req.body, lang, { isNew: true }))], req.body, lang);
     // A code typed on step 1 that another unit already uses is refused at the first Next, not at the final save.
     if (form.code) {
       const used = await Store.findByCode(pool, req.session.broker.agency_id, form.code).catch(() => null);
