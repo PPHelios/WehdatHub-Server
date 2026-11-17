@@ -34,7 +34,7 @@ test("a typed owner phone that is not a mobile is Invalid in the preview, with t
   const r = await upload(agent, csrf, await workbook([HEAD, ["NH-1", "Hyde Park", "شقة", "بيع", "6 مليون", 110, 2, "123"], ["NH-2", "Hyde Park", "شقة", "بيع", "5 مليون", 100, 2, "01012345678"]]));
   expect(r.status).toBe(303);
   const page = await agent.get(`${r.headers.location}`);
-  expect(page.text).toMatch(/data-kind="invalid"[sS]*تليفون المالك مش موبايل مصري صحيح: «123»/);
+  expect(page.text).toMatch(/data-kind="invalid"[\s\S]*تليفون المالك مش موبايل مصري صحيح: «123»/);
   expect(page.text).toMatch(/data-kind="new"[\s\S]*NH-2/);
 });
 
