@@ -373,8 +373,11 @@ function groupPage(imp, lang) {
     return html`<div id="group-status" class="card notice bad" data-import-error="${imp.payload.error || "failed"}"><h1>⚠️ ${why}</h1><a href="/app/import">${L(lang, "رجوع", "Back")}</a></div>`;
   }
   const applied = imp.status !== "ready";
+  const undecided = !applied && results.some((r) => r && !r.error && !r.fields?.listing_type);
   return html`<div id="group-status"><h1>📥 ${L(lang, "استيراد من الجروب", "Group import")}</h1>
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
+${undecided ? html`<section class="card stack" data-group-listing-type><p>${L(lang, "في بوستات مش مكتوب فيها بيع ولا إيجار. اختار للكل:", "Some posts do not say sale or rent. Choose for all of them:")}</p>
+<form method="post" action="/app/import/${imp.id}/listing-type" class="row"><button type="submit" name="value" value="rent" class="secondary">${L(lang, "الكل إيجار", "All rent")}</button> <button type="submit" name="value" value="sale" class="secondary">${L(lang, "الكل بيع", "All sale")}</button></form></section>` : ""}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 <ol class="results">${posts.map((p, i) => {
     const r = results[i];
@@ -696,6 +699,13 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   });
 
   // One decision for many rows (rent for the sheet, which price to read, a dollar rate): the sheet is planned again.
+  web.post("/import/:id/listing-type", importersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const ok = await Imports.setGroupListingType(pool, req.session.broker, req.params.id, String(req.body.value || ""), { AI, ctx: { pool, broker: req.session.broker, agency: req.session.agency, lang }, lang });
+    if (!ok) return next();
+    return res.redirect(303, `/app/import/${req.params.id}`);
+  });
+
   web.post("/import/:id/batch", managersOnly, async (req, res, next) => {
     const lang = langOf(req);
     const out = await Imports.batchExcel(pool, req.session.broker, req.params.id, { action: String(req.body.action || ""), value: String(req.body.value || ""), scope: req.body.scope === "all" ? "all" : "missing", from: String(req.body.from || "").slice(0, 80) }, { lang });

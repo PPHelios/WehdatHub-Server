@@ -882,6 +882,7 @@
       "TYPE_KEYS": "Array",
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
+      "setGroupListingType": ["pool", "broker", "id", "value", "params"],
       "waitForGroupImport": ["id"],
       "applyGroup": ["pool", "broker", "id", "params"]
     },

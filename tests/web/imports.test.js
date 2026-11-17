@@ -280,6 +280,23 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/hx-trigger="every 2s"/);
   });
 
+  test("posts that do not say sale or rent: one tap 'All rent' fills them and reads every post again; no AI call", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const text = ["Code MIr1 Compound name : ميفيدا Unit type: apartment Area : 160m 3 bedrooms Price : 65000 EGP 01012345678", "Code MIr2 Compound name : ميفيدا Unit type: apartment Area : 180m 3 bedrooms Price : 70000 EGP 01012345679"].join("\n\n\n");
+    const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).field("text", text));
+    await Imports.waitForGroupImport(id);
+    let page = (await agent.get(`/app/import/${id}`)).text;
+    expect(page).toMatch(/data-group-listing-type/);
+    expect(page).toMatch(/data-post="0" data-state="incomplete"/);
+    const r = await agent.post(`/app/import/${id}/listing-type`).set("X-CSRF-Token", csrf).type("form").send("value=rent");
+    expect(r.status).toBe(303);
+    await Imports.waitForGroupImport(id);
+    page = (await agent.get(`/app/import/${id}`)).text;
+    expect(page).not.toMatch(/data-group-listing-type/);
+    expect(page).toMatch(/data-post="0" data-state="ok"/);
+    expect(h.AI.calls).toHaveLength(0);
+  });
+
   test("nothing that looks like a unit → told so, no AI call", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "صباح الخير\n\n\nمطلوب شقة في التجمع 3 غرف تحت 8 مليون");

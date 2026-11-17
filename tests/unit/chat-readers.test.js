@@ -54,3 +54,13 @@ describe("features and orientation written inline (Phase 6)", () => {
     expect(cells("شقة للبيع 120 متر السعر 5 مليون").features).toBeUndefined();
   });
 });
+
+describe("rent from a period price (Phase 6)", () => {
+  test("a price per period is a rent; an installment 'monthly' or a post that says sale is not", () => {
+    expect(cells("Code MIr597 Unit type: apartment Area : 160m 2 bedrooms Price : 130$ short / 2700$ long").listing_type).toBe("rent");
+    expect(cells("شقة 120 متر السعر 40 الف شهري").listing_type).toBe("rent");
+    expect(cells("شقة للبيع 120 متر السعر 4 مليون القسط 40 الف شهري").listing_type).toBe("sale");
+    expect(cells("شقة 120 متر السعر 4 مليون القسط 40 الف شهري").listing_type).toBeUndefined();
+    expect(cells("شقة 120 متر السعر 4 مليون").listing_type).toBeUndefined();
+  });
+});

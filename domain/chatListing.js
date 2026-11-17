@@ -100,7 +100,7 @@ function parsePost(text, places = null, from = {}) {
 
   // Several prices for different periods ("monthly 90k / yearly 1m", "90k شهري"): kept together in the price cell, like an
   // Excel cell with several prices, so the same rule picks one (monthly first, then long-term; a daily price is never used).
-  const PERIOD = "(?:شهري|شهريا|monthly|per\\s*month|سنوي|سنويا|yearly|annual|per\\s*year|يومي|daily|per\\s*day|short\\s*term|long\\s*term|قصير|طويل)";
+  const PERIOD = "(?:شهري|شهريا|monthly|per\\s*month|سنوي|سنويا|yearly|annual|per\\s*year|يومي|daily|per\\s*day|short(?:\\s*term)?|long(?:\\s*term)?|قصير|طويل)";
   const periodRe = new RegExp(`(${PERIOD})\\s*[:\\-=]?\\s*(${MONEY}${CUR})|(${MONEY}${CUR})\\s*(?:ج\\S*|egp)?\\s*[/\\s]\\s*(${PERIOD})`, "gi");
   const periodPrices = [...t.matchAll(periodRe)].map((m) => ({ at: m.index, len: m[0].length, text: m[1] ? `${m[1]} ${m[2]}` : `${m[4]} ${m[3]}` }));
   if (periodPrices.length >= 2) {
@@ -170,6 +170,10 @@ function parsePost(text, places = null, from = {}) {
   const sale = /(للبيع|(?<![\u0621-\u064A])بيع(?![\u0621-\u064A])|for sale|\bsale\b|resale|ريسيل)/i.test(full);
   if (rent && !sale) set("listing_type", "rent");
   else if (sale && !rent) set("listing_type", "sale");
+  // A price given per period ("130$ short / 2700$ long", "90k شهري") is a rent; a sale post never prices that way. A monthly
+  // figure beside an installment or down payment is a payment plan, not a rent, so those words rule it out.
+  const RENT_PERIOD = /(?:monthly|pers*month|شهري|شهريا|daily|pers*day|يومي|shorts*(?:term)?|longs*(?:term)?)/i;
+  if (!cells.listing_type && !rent && !sale && periodPrices.some((x) => RENT_PERIOD.test(x.text)) && !/(قسط|اقساط|أقساط|installment|مقدم|downs*payment)/i.test(full)) set("listing_type", "rent");
 
   // Furnishing, in the app's own four values (the add/edit form's dropdown).
   const furn = SheetImport.furnishing(full);
