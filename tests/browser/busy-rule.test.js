@@ -99,3 +99,16 @@ test("a background check marked data-no-lock (the lead form's duplicate-phone ch
   expect((await state("#a")).disabled).toBe(false);
   expect((await state("#b")).disabled).toBe(false);
 });
+
+test("a plain POST form is locked by the busy rule alone: every control disabled, the tapped button spins, restored when the call ends", async () => {
+  await page.route("http://t.test/", (r) => r.fulfill({ contentType: "text/html", body: `<!doctype html><body><form method="post" action="/save"><input id="f" value="x"><button id="go" type="submit">Save</button><button id="other" type="button">Other</button></form></body>` }));
+  await page.route("http://t.test/save", async (r) => { await new Promise((x) => setTimeout(x, 700)); r.fulfill({ status: 204 }); });
+  await page.goto("http://t.test/");
+  await page.addScriptTag({ path: path.join(__dirname, "..", "..", "web", "static", "busy.js") });
+  await page.click("#go", { noWaitAfter: true });
+  await page.waitForTimeout(250);
+  expect((await state("#f")).disabled).toBe(true);
+  expect((await state("#other")).disabled).toBe(true);
+  expect((await state("#go")).busy).toBe(true);
+  await page.waitForTimeout(1200);
+});

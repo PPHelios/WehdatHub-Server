@@ -29,6 +29,7 @@ const { isManager, isAgencyOwner, canEditLead } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
+const ErrorText = require("../../lib/errorText");
 const { html } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
@@ -367,11 +368,13 @@ ${tab === "portal" ? portalHtml : rows.length
       phone_required: L(lang, "الموبايل مطلوب.", "A phone number is required."),
       phone_invalid: L(lang, "رقم مش مظبوط.", "A phone number isn't valid."),
       too_many_phones: L(lang, "3 أرقام بالكتير.", "At most 3 numbers."),
+      name_too_long: L(lang, "الاسم طويل: 60 حرف بالكتير.", "The name is too long: 60 characters at most."),
+      notes_too_long: L(lang, "الملاحظات طويلة: 1000 حرف بالكتير.", "The notes are too long: 1,000 characters at most."),
       lawful_basis: L(lang, "اختار الأساس القانوني.", "Choose the lawful basis."),
       assignee: L(lang, "البروكر مش موجود.", "Unknown broker."),
       assignee_away: L(lang, "البروكر ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
       kind: L(lang, "النوع مش معروف.", "Unknown type.")
-    }[r.error] || r.error;
+    }[r.error] || ErrorText.ofOrGeneric(r.error, lang);
     return formPage(req, res, { values, error: `⚠️ ${why}` }, 422);
   });
 
@@ -636,7 +639,7 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
         request_empty: L(lang, "اختار فلتر واحد على الأقل (النوع، المكان أو السعر).", "Choose at least one filter (type, place or price)."),
         too_many_requests: L(lang, `الحد الأقصى ${LeadRequests.MAX_REQUESTS} طلبات للعميل؛ امسح واحد الأول.`, `At most ${LeadRequests.MAX_REQUESTS} requests per client; remove one first.`),
         too_many_requests_broker: L(lang, "وصلت للحد الأقصى: 30 طلب مفتوح. امسح طلب قديم الأول.", "You have 30 open requests, the maximum. Remove an old one first.")
-      }[r.error] || r.error;
+      }[r.error] || ErrorText.ofOrGeneric(r.error, lang);
       return leadPage(req, res, fresh, { status: 422, notice: `⚠️ ${why}` });
     });
   }

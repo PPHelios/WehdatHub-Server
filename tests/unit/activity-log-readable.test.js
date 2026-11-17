@@ -30,3 +30,17 @@ test("limit and rights changes are plain sentences, and an unknown action is rea
   expect(d("brokers_edit_units", { allowed: false })).toBe("Stopped brokers adding and editing units");
   expect(d("web some_thing", {})).toBe("some thing");
 });
+
+test("QA round 2 (item 41): raw audit action names read as plain sentences in both languages", () => {
+  const d = (a, lang = "en") => ActivityLog.describe({ operation_type: a, metadata: {} }, lang);
+  expect(d("web POST /team/invite")).toBe("Added a team member");
+  expect(d("web POST /team/invite", "ar")).toBe("ضاف عضو للفريق");
+  expect(d("web POST /settings")).toBe("Changed settings");
+  expect(d("web POST /owner/map/alias")).toBe("Changed the places list");
+  expect(d("web_login_telegram")).toBe("Signed in to the website from Telegram");
+  expect(d("web_login_code failed")).toBe("Signed in to the website with a code (failed)");
+  expect(d("api_login_code_request")).toBe("Asked for an app sign-in code");
+  // A path nobody described yet still reads as a sentence, not as a raw route.
+  expect(d("web POST /something/new")).toBe("Made a change: /something/new");
+  expect(d("web POST /something/new")).not.toMatch(/^web POST/);
+});

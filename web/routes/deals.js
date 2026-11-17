@@ -27,6 +27,8 @@ const ERRORS = {
   unit_not_found: ["كود الوحدة مش موجود.", "Unit code not found."],
   unit_not_active: ["الوحدة مش متاحة.", "The unit isn't active."],
   unit_not_yours: ["الوحدة مش بتاعتك؛ شيل علامة «اتباعت».", "The unit isn't yours; untick \"mark sold\"."],
+  status_backwards: ["الصفقة مينفعش ترجع لورا. المدير بس يقدر يفتحها من جديد.", "A deal cannot go back. Only a manager can reopen it."],
+  confirm_reopen: ["ده هيرجّع الصفقة لورا (وبيتسجل في سجل النشاط). علّم «أأكد» واحفظ تاني.", "This moves the deal back (and is written to the activity log). Tick \"I confirm\" and save again."],
   unit_conflict: ["الوحدة اتعدلت من مكان تاني؛ الصفقة متسجلتش. راجع وابعت تاني.", "The unit changed elsewhere; the deal wasn't saved. Check and send again."],
   price: ["اكتب السعر.", "Enter the price."],
   commission_missing: ["اكتب العمولة: نسبة (2%) أو مبلغ.", "Enter the commission: a % (2%) or an amount."],
@@ -42,7 +44,7 @@ const ERRORS = {
   status: ["حالة غير معروفة.", "Unknown status."],
   not_found: ["مش موجود.", "Not found."]
 };
-const errorText = (code, lang) => (ERRORS[code] || [code, code])[lang === "en" ? 1 : 0];
+const errorText = (code, lang) => (ERRORS[code] ? ERRORS[code][lang === "en" ? 1 : 0] : require("../../lib/errorText").ofOrGeneric(code, lang));
 
 async function colleagues(pool, broker) {
   const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [broker.agency_id]);
@@ -190,7 +192,8 @@ ${leasePrompt
 ${editable
   ? html`<section class="card" id="status"><h2>${L(lang, "الحالة", "Status")}</h2>
   <form method="post" action="/app/deals/${Deals.refLabel(deal.ref)}" class="row">${hidden}
-    <select name="status">${Deals.STATUSES.map((s) => html`<option value="${s}"${s === deal.status ? html` selected` : ""}>${Deals.statusLabel(s, lang)}</option>`)}</select>
+    <select name="status">${Deals.allowedStatuses(broker, deal.status).map((s) => html`<option value="${s}"${s === deal.status ? html` selected` : ""}>${Deals.statusLabel(s, lang)}</option>`)}</select>
+    ${manager ? html`<label class="row"><input type="checkbox" name="confirm_reopen" value="1"> ${L(lang, "أأكد (لو الصفقة هترجع لورا)", "I confirm (if the deal goes back)")}</label>` : ""}
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></section>`
   : ""}
@@ -219,6 +222,7 @@ ${manager
     if (!deal) return next();
     const change = {};
     if (req.body.status !== undefined) change.status = req.body.status;
+    if (req.body.confirm_reopen === "1") change.confirmReopen = true;
     if (req.body.commission !== undefined) {
       const c = correctionFrom(req.body);
       if (!c) return dealPage(req, res, deal, { notice: `⚠️ ${errorText("commission_missing", lang)}`, status: 422 });

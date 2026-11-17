@@ -17,7 +17,7 @@ const RateLimit = require("../../lib/rateLimit");
 const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Audit = require("../../services/audit");
-const { html } = require("../html");
+const { html, raw } = require("../html");
 const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -201,20 +201,20 @@ function policyCard({ policy, viewer, lang, notice = null }) {
 }
 
 /** tab: 0 the team (default), 1 the lead rules (opened after saving one). */
-function teamPage({ team, lang, rules, speed, routing, viewer = null, notice = null, link = null, tab = 0, now = new Date(), policy = {} }) {
+function teamPage({ team, lang, rules, speed, routing, viewer = null, notice = null, link = null, tab = 0, now = new Date(), policy = {}, invite = null }) {
   const today = cairoDay(now);
   const active = team.filter((b) => b.is_active).length;
   return html`<h1>${L(lang, "الفريق", "Team")}</h1>
 ${notice}
 ${link || ""}
 ${tabs("team_tab", [
-  [L(lang, `الفريق (${active})`, `Team (${active})`), html`<details class="card invite"${team.length <= 1 ? html` open` : ""}>
+  [L(lang, `الفريق (${active})`, `Team (${active})`), html`<details class="card invite"${team.length <= 1 || invite ? html` open` : ""}>
   <summary>➕ ${L(lang, "إضافة عضو", "Add member")}</summary>
   <form method="post" action="/app/team/invite" class="stack">
-  <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80"></label>
-  <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>
-  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="team_lead">${L(lang, "قائد فريق", "Team lead")}</option><option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
-  <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en">English</option></select></label>
+  <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80" value="${invite?.name || ""}"></label>
+  <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" value="${invite?.phone || ""}"></label>
+  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker"${invite?.role === "broker" ? raw(" selected") : ""}>${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="team_lead">${L(lang, "قائد فريق", "Team lead")}</option><option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
+  <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en"${invite?.lang === "en" ? raw(" selected") : ""}>English</option></select></label>
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>
 </details>
@@ -263,7 +263,7 @@ function register(web, { pool, page }) {
     const rl = await RateLimit.hit(pool, `team_invite:agency:${manager.agency_id}`, INVITES);
     if (!rl.allowed) return render(req, res, { notice: bad("rate", lang) }, 429);
     const r = await Team.invite(pool, manager, { name: req.body.name, phone: req.body.phone, role: req.body.role, lang: req.body.lang });
-    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang), invite: { name: String(req.body.name || "").slice(0, 80), phone: String(req.body.phone || "").slice(0, 20), role: req.body.role, lang: req.body.lang } }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     const notice = html`<p class="card notice ok" role="status">✅ ${r.created ? L(lang, `اتضاف ${r.broker.name}.`, `${r.broker.name} added.`) : L(lang, `${r.broker.name} رجع للفريق.`, `${r.broker.name} is back on the team.`)}${r.noBot ? html` ${errorText("no_bot", lang)}` : ""}</p>`;
     return render(req, res, { notice, link: r.url ? linkCard(r.broker, r.url, req.session.agency.name, lang) : null });
   });

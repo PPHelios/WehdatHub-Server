@@ -30,6 +30,7 @@ const FILES = {
   "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
   "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
   "chatreview.js": path.join(STATIC_DIR, "chatreview.js"),
+  "wordfields.js": path.join(STATIC_DIR, "wordfields.js"),
   "heic2any.js": require.resolve("heic2any/dist/heic2any.min.js"),
   // The add/edit unit form's photo tray (zip of one unit's photos, ticks, order).
   "unitPhotos.js": path.join(STATIC_DIR, "unitPhotos.js"),

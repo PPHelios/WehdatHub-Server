@@ -64,9 +64,9 @@ test("the Activity Log page lists audit rows and filters by action", async () =>
   await h.seedBroker("owner");
   const owner = await signIn(h, "owner");
   const all = (await owner.agent.get("/app/activity-log")).text;
-  expect(all).toContain("phases/:id/delete");
+  expect(all).toContain("كتالوج المطورين"); // shown as a plain sentence now (QA round 2, item 41); the filter still matches the raw action
   const filtered = (await owner.agent.get("/app/activity-log?action=catalogue")).text;
-  expect(filtered).toContain("phases/:id/delete");
+  expect(filtered).toContain("كتالوج المطورين");
   expect(filtered).not.toContain("private details");
 });
 

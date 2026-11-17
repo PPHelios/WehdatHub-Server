@@ -67,7 +67,7 @@ describe("one change for many rows", () => {
     let page = await agent.get(r.body.url);
     expect(page.text).toMatch(/data-kind="invalid"/);
     expect(page.text).toMatch(/data-batch-form="listing_type"/);
-    expect(page.text).toMatch(/<select form="edit-1" name="c_listing_type"/);
+    expect(page.text).toMatch(/name="c_listing_type"/); // the structured Edit window offers sale or rent
     // Edit one row only: it becomes ready.
     await agent.post(`${r.body.url}/edit/1`).type("form").send({ _csrf: csrf, c_listing_type: "sale" });
     page = await agent.get(r.body.url);

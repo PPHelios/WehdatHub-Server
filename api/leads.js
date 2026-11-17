@@ -45,7 +45,7 @@ function leadView(l) {
 }
 
 const ERRORS = {
-  phone_required: 422, phone_invalid: 422, too_many_phones: 422, lawful_basis: 422, kind: 422, assignee: 422, assignee_away: 422,
+  phone_required: 422, phone_invalid: 422, name_too_long: 422, notes_too_long: 422, too_many_phones: 422, lawful_basis: 422, kind: 422, assignee: 422, assignee_away: 422,
   lost_reason_required: 422, follow_up_time: 422, past: 422, note_empty: 422, note_too_long: 422, unknown_stage: 422, unit_not_found: 422,
   forbidden: 403, not_found: 404
 };

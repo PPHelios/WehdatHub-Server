@@ -49,7 +49,7 @@ function evaluate(fields, lang, photoCount) {
   const ev = Rules.evaluate(Form.composeFromForm({ existing: null, form, lang }), { lang, photoCount });
   return { form, ev };
 }
-const blockersOf = (ev) => ev.blockers.map((b) => ({ field: b.field, label: b.label }));
+const blockersOf = (ev, fields = null, lang = "ar") => FormChecks.explainInvalid(ev.blockers, fields, lang).map((b) => ({ field: b.field, label: b.label }));
 const warningsOf = (ev, lang) => ev.warnings.map((w) => ({ field: w.field, text: Rules.warningLine(w, lang) }));
 
 async function storePhotos(broker, files) {
@@ -210,7 +210,7 @@ function register(api, { pool }) {
     const existing = req.body?.code ? await Store.findByCode(pool, broker.agency_id, String(req.body.code)) : null;
     const { ev } = evaluate(fields, lang, photoCount);
     // What the save also refuses (owner phone and name; a compound that is not on the list) is listed here too.
-    const blockers = [...blockersOf(ev), ...FormChecks.ownerBlockers(ev.listing, fields, lang, { isNew: !existing }).map((b) => ({ field: b.field, label: b.label }))];
+    const blockers = [...blockersOf(ev, fields, lang), ...FormChecks.ownerBlockers(ev.listing, fields, lang, { isNew: !existing }).map((b) => ({ field: b.field, label: b.label }))];
     if (String(ev.listing.compound || "").trim() && !(fields.compound_new === true || fields.compound_new === "1") && (!existing || existing.compound !== ev.listing.compound)) {
       const r = await require("../services/compoundResolve").resolve(pool, ev.listing);
       if (r.compound_state === "needs_fix") blockers.push({ field: "compound", label: L10n(lang, "الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\".", "This compound is not on the list. Pick it, or mark it as new.") });
@@ -263,6 +263,7 @@ function register(api, { pool }) {
       if (!key.first) return { rollback: true, repeat: listing };
       const photoCount = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1", [listing.id])).rows[0].n;
       const ev = Rules.evaluate(Form.composeFromForm({ existing: listing, form, lang }), { lang, photoCount });
+      const tooLong = FormChecks.lengthBlockers(fieldsOf(req.body), lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
       if (!ev.ok) return { rollback: true, listing, ev };
       const patch = Edits.diffPatch(listing, ev.listing);
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
@@ -275,7 +276,7 @@ function register(api, { pool }) {
     if (out.missing) return res.status(404).json({ error: "not_found" });
     if (out.forbidden) return res.status(403).json({ error: "forbidden" });
     if (out.conflict) return res.status(409).json({ error: "conflict" });
-    if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev) });
+    if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev, fields, lang) });
     require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", total_duration_ms: Date.now() - t0, metadata: { columns: out.columns, save_key: Boolean(saveKey) } });
     return res.json({ code: out.saved.code, version: out.saved.version });
   });
@@ -353,7 +354,8 @@ function register(api, { pool }) {
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
     const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
     const { form, ev } = evaluate(fields, lang, files.length + keys.length);
-    if (!ev.ok) return res.status(422).json({ error: "incomplete", blockers: blockersOf(ev) });
+    const tooLong = FormChecks.lengthBlockers(fields, lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
+    if (!ev.ok) return res.status(422).json({ error: "incomplete", blockers: blockersOf(ev, fields, lang) });
     // An owner phone with no name is refused unless the broker says to use the phone as the name.
     const d = ev.listing.details || {};
     if (String(d.owner_phone || "").trim() && !String(d.owner_name || "").trim()) {

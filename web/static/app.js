@@ -699,18 +699,8 @@
     var uf = document.getElementById("unit-form");
     if (uf && window.whGateSave) window.whGateSave(uf); // the unit form's Save is re-decided by its gate, not reopened by the timer
   }
-  document.addEventListener("submit", function (e) {
-    var form = e.target;
-    if (e.defaultPrevented || !form || (form.getAttribute("method") || "").toLowerCase() !== "post") return;
-    if (form.hasAttribute("data-no-lock") || form.getAttribute("target")) return;
-    var tapped = e.submitter;
-    setTimeout(function () {
-      var buttons = form.querySelectorAll("button[type=submit], button:not([type])");
-      for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = true; buttons[i].setAttribute("data-locked", ""); }
-      if (tapped && tapped.classList) tapped.classList.add("busy");
-    }, 0);
-    setTimeout(unlock, 15000);
-  });
+  // A plain POST form is locked by busy.js (the one busy rule: the tapped button spins, every other control is disabled); this file no
+  // longer locks the same form a second way. What stays below: the tap lock for pages that handle their own form, and button links.
   window.addEventListener("pageshow", function () {
     unlock();
     var lk = document.querySelectorAll("a.btn.busy, a.btn.is-disabled");
