@@ -31,3 +31,11 @@ test("NCH golden queries do not error", () => {
   });
   assert.equal(failed.length, 0, `queries that threw: ${failed.map((r) => r.q).join(" | ")}`);
 });
+
+test("no unit newly drops out of its own queries (recall)", () => {
+  const Recall = require("./recall");
+  const base = new Set(require("./baseline/recall-baseline.json").excluded);
+  const now = Recall.run().misses.map((m) => m.key);
+  const fresh = now.filter((k) => !base.has(k));
+  assert.deepEqual(fresh.slice(0, 20), [], `${fresh.length} new misses, first: ${fresh.slice(0, 20).join(" ")}`);
+});
