@@ -210,3 +210,11 @@ test("QA 2026-11-17: inviting the phone of someone already active is refused, no
   const after = (await h.query("SELECT name, role FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
   expect(after).toEqual(before);
 });
+
+test("QA round 2: after a refused invite the typed name, phone and role stay in the form", async () => {
+  const a = await signIn(h, "admin");
+  const res = await a.agent.post("/app/team/invite").type("form").send({ _csrf: a.csrf, name: "Keep Me", phone: "123", role: "broker", lang: "en" });
+  expect(res.text).toMatch(/valid Egyptian mobile/);
+  expect(res.text).toMatch(/name="name"[^>]*value="Keep Me"/);
+  expect(res.text).toMatch(/name="phone"[^>]*value="123"/);
+});
