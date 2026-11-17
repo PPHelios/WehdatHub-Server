@@ -47,6 +47,13 @@ test("rules: facts from the record only; the template fills name, request, viewi
   expect(en).toContain("viewing of BD-1 in Mivida");
   expect(en).toContain("another viewing");
   expect(D.template({ lead: { name: "", stage: "lost" }, broker: {} })).toContain("أهلاً بحضرتك");
+  // The last line follows the stage; a won client is not told "I am still working on your request".
+  const at = (stage, extra = {}) => D.template({ lead: { name: "Sara", stage }, requests: [{ filters: {} }], requestLine: () => "apartment", broker: {}, lang: "en", ...extra });
+  expect(at("viewing")).toContain("confirm a time for the viewing");
+  expect(at("interested")).toContain("more options");
+  expect(at("won")).toContain("Congratulations");
+  expect(at("won")).not.toContain("still working");
+  expect(at("new")).toContain("good time to talk");
 });
 
 test("drafts for own clients only, from a template; lead page shows it with a WhatsApp link; no AI call", async () => {

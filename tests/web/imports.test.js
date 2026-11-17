@@ -297,6 +297,16 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect(h.AI.calls).toHaveLength(0);
   });
 
+  test("when the posts that do say agree, the review suggests that type for the rest (a suggestion, nothing is set)", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const text = ["Code S1 Compound name : ميفيدا Unit type: apartment للبيع Area : 160m 3 bedrooms Price : 6 مليون 01012345678", "Code S2 Compound name : ميفيدا Unit type: apartment Area : 180m 3 bedrooms Price : 7 مليون 01012345679"].join("\n\n\n");
+    const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).field("text", text));
+    await Imports.waitForGroupImport(id);
+    const page = (await agent.get(`/app/import/${id}`)).text;
+    expect(page).toMatch(/data-suggest="sale"/);
+    expect(page).toMatch(/data-post="1" data-state="incomplete"/);
+  });
+
   test("nothing that looks like a unit → told so, no AI call", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "صباح الخير\n\n\nمطلوب شقة في التجمع 3 غرف تحت 8 مليون");

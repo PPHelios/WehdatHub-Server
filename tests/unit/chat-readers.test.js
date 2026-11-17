@@ -64,3 +64,14 @@ describe("rent from a period price (Phase 6)", () => {
     expect(cells("شقة 120 متر السعر 4 مليون").listing_type).toBeUndefined();
   });
 });
+
+describe("real posts from the production log: plot size is not a price or a type (Phase 7)", () => {
+  test("'land area 420m' is the land, never 420 million; 'town house' with a land area is a townhouse", () => {
+    const v = cells("Code MIr46 Compound name : Mivida Unit type: standalone Area : land area 420m / build up 354m 3 bedrooms 3 bathrooms fully furnished");
+    expect(v.price_value).toBeUndefined();
+    expect(v).toMatchObject({ area_value: "354", land_area: "420", property_type: "villa" });
+    expect(cells("Code MIr40 Unit type: town house corner Area : land area 347m / build up 277m 4 bedrooms").property_type).toBe("townhouse");
+    expect(cells("Land 500 sqm for sale price 5m").property_type).toBe("land");
+    expect(cells("Available Code MIr23 4th floor Unit type : apartment Area : 154m 2 bedrooms Price :65k")).toMatchObject({ floor: "4", price_value: "65k", area_value: "154" });
+  });
+});

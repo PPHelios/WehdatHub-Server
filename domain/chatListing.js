@@ -108,6 +108,11 @@ function parsePost(text, places = null, from = {}) {
     for (const x of periodPrices.slice().reverse()) t = t.slice(0, x.at) + " ".repeat(x.len) + t.slice(x.at + x.len);
   }
 
+  // An area written with a Latin m ("land area 420m", "build up 354m") is never a price in millions: those spans are hidden from the
+  // price readers below and put back after.
+  const areaSpans = [...t.matchAll(/(?:land|build[\s-]*up|built[\s-]*up|bua|area|مساحة|مساحه|ارض|أرض|مباني)\s*(?:area|مساحة)?\s*[:\-=]?\s*\d[\d.,]*\s*(?:m2|m²|m|sqm|متر)?(?![a-z\d])/gi)].map((m) => ({ at: m.index, text: m[0] }));
+  for (const x of areaSpans) t = t.slice(0, x.at) + " ".repeat(x.text.length) + t.slice(x.at + x.text.length);
+
   // The shared amount reader sees the whole phrase ("22 مليون الا ربع", "5 مليون و 200", "3 مليون و 750 الف").
   const amounts = readAmounts(t).filter((a) => a.sure && a.hadUnit);
   // Price: after a price word, else a figure with million/thousand, else a long plain number.
@@ -124,6 +129,7 @@ function parsePost(text, places = null, from = {}) {
     set("price_value", String(amounts[0].value)); // "مليون ونص", "ٍ٣ ونص مليون": phrasing the patterns above do not catch
   }
 
+  for (const x of areaSpans) if (t.slice(x.at, x.at + x.text.length).trim() === "") t = t.slice(0, x.at) + x.text + t.slice(x.at + x.text.length);
   const area = findArea(t) || (() => {
     const r = readArea(t);
     return r.sure ? (r.built ?? r.plain) : null;
@@ -180,9 +186,14 @@ function parsePost(text, places = null, from = {}) {
   if (furn) set("furnishing", furn);
 
   // Property type: the first word the app's own type list knows.
-  for (const token of normalizeSearch(full).split(/[^\p{L}\p{N}]+/u)) {
+  // "land area 420m" is the plot size, not the unit type.
+  const forType = normalizeSearch(full).replace(/\b(?:land|ارض|الارض)\s*(?:area|مساحه)\s*[:\-=]?\s*\d+/g, " ");
+  const typeWords = forType.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  for (let i = 0; i < typeWords.length; i++) {
+    const token = typeWords[i];
     if (token.length < 3) continue;
-    const key = SheetImport.typeIn(token);
+    // "town house", "twin house": two words that are one type.
+    const key = (typeWords[i + 1] && SheetImport.typeIn(token + typeWords[i + 1])) || SheetImport.typeIn(token);
     if (key) {
       set("property_type", key);
       break;
