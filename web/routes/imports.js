@@ -120,6 +120,12 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   <div class="row"><button type="submit" form="edit-${i.row}">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div></div></dialog>`;
   };
   // A chat unit's Edit window: the standard unit controls (place search, chips, dropdowns). It is its own form, outside the apply form.
+  // The message as it was sent, to compare with what was read (the plan keeps the whole post; older plans keep the first 600 letters).
+  const originalOf = (i) => String((imp.payload.posts || [])[i.row - 1]?.text || (cellsOf.get(i.row) || {}).description || "").trim();
+  const originalBox = (i, open) => {
+    const text = originalOf(i);
+    return text ? html`<details class="ie-original" data-original="${i.row}"${open ? raw(" open") : ""}><summary>💬 ${L(lang, "الرسالة الأصلية", "Original message")}</summary><p dir="auto">${text}</p></details>` : "";
+  };
   const chatDialogs = canEdit && chat
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => {
         const cells = cellsOf.get(i.row) || {};
@@ -128,6 +134,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
   <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
   ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
+  ${originalBox(i, true)}
   ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
   <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
 </form></dialog>`;
@@ -204,6 +211,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     const wrong = missing.has(k) && v;
     return html`<div class="uc-field${miss || wrong ? " missing" : ""}" data-field="${k}"><dt>${ucLabel(k)}</dt><dd>${miss ? html`⚠️ ${L(lang, "ناقص", "Missing")}` : wrong ? html`⚠️ ${ucValue(k, v)}` : ucValue(k, v)}</dd></div>`;
   })}</dl></section>`)}</div>
+  ${originalBox(i, false)}
   ${i.kind === "new" && i.warnings?.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}
   ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
   ${i.kind === "review"

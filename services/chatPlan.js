@@ -82,7 +82,7 @@ async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = 
     pool,
     broker,
     "excel",
-    { ...plan, rows, columns, skipped: [], source: "chat", posts: list.map((p) => ({ sender: p.sender || null, at: p.at || null })), parsed: first, photos: {}, newPlaces },
+    { ...plan, rows, columns, skipped: [], source: "chat", posts: list.map((p) => ({ sender: p.sender || null, at: p.at || null, text: String(p.text || '').slice(0, 4000) })), parsed: first, photos: {}, newPlaces },
     { filename }
   );
   await ParseLog.posts(pool, broker, id, logs);

@@ -127,5 +127,5 @@ test("the owner's Plan section shows the plan and credits with the link to pay",
   const text = await get("owner");
   expect(text).toMatch(/data-plan-summary/);
   expect(text).toMatch(/AI credits this month: \d+ of \d+/);
-  expect(text).toMatch(/href="\/app\/plan"/);
+  expect(text).toMatch(/href="\/app\/usage#plan"/);
 });

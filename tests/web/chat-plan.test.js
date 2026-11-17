@@ -295,3 +295,20 @@ describe("mandatory fields are flagged and a unit missing one is held back", () 
     expect(requiredMissing({ listing_type: "sale", property_type: "villa", compound: "X", price_value: "9 million", area_value: "300", bedrooms: "3" })).toEqual(["owner_phone"]);
   });
 });
+
+describe("the original message stays visible", () => {
+  test("the whole post is kept in the plan and shown on the card and in the Edit window (for comparing with what was read)", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const tail = "نهاية الرسالة الأصلية بعد 700 حرف";
+    const text = `villa for sale Hyde Park 354m 3 bedrooms price:9 million 01012345678 ${"وصف طويل ".repeat(90)}${tail}`;
+    const res = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", posts: [{ sender: "Ali", at: "x", text }] });
+    expect(res.status).toBe(200);
+    expect((await loadPlan(res.body.id)).payload.posts[0].text).toBe(text);
+    const page = (await agent.get(`/app/import/${res.body.id}`)).text;
+    // On the card (collapsed) and in the Edit window (open), the full text, tail included.
+    const boxes = [...page.matchAll(/<details class="ie-original" data-original="1"( open)?>[\s\S]*?<\/details>/g)];
+    expect(boxes).toHaveLength(2);
+    expect(boxes.every((m) => m[0].includes(tail))).toBe(true);
+    expect(boxes.filter((m) => m[1]).length).toBe(1);
+  });
+});

@@ -21,7 +21,7 @@
       aiUpTo: "ذكاء اصطناعي: حتى", aiCredits: "رصيد", aiOffLabel: "من غير ذكاء اصطناعي: قراءة بالقواعد بس", 
       codeChecking: "بنراجع الأكواد…", codeNew: "وحدة جديدة", codeUpdate: "تحديث للوحدة", codeHas: "فيها صور", codeTaken: "الكود ده لوحدة مش من حقك تعدلها", codeDup: "نفس الكود في بوست", codeFail: "مقدرناش نراجع الأكواد دلوقتي: هتتراجع في المراجعة.",
       videos: "فيديو اتتخطى (مش بيتحمل)", videosTotal: "فيديو أو ملف اتتخطى ومش هيتحمل", pickNote: "اختار 15 صورة بس: أول 15 معلّمين، والباقي علّمه بإيدك. استخدم ◀ ▶ لترتيب الصور.", stageRead: "قراءة الملف", stageMatch: "توزيع الصور على البوستات", stagePosts: "قراءة بيانات الوحدات", stageUpload: "تحميل الصور", leaveWarn: "لو قفلت الصفحة التحميل هيقف.",
-      verify: "راجع الصور", swap: "بدّل الصور مع الوحدة اللي بعدها", full15: "الوحدة وصلت 15 صورة. شيل علامة صورة تانية أو شيل صورة قديمة.", oldPhotos: "صور الوحدة الحالية: علّم اللي تتشال", removeFail: "مقدرناش نشيل الصور القديمة", heicFail: "صور HEIC متحولتش", converted: "صور اتحولت من HEIC", aiOff: "الذكاء الاصطناعي مش متاح: القراءة بالقواعد بس.", errors: "أخطاء", planFail: "مقدرناش نقرا البوستات. جرب تاني.", edit: "تعديل", editDone: "تم", description: "الوصف", summaryLoading: "جاري قراءة بيانات الوحدة…", missingField: "ناقص", missingNote: "بيانات ناقصة: اضغط تعديل وكملها، وإلا الوحدة مش هتتضاف."
+      verify: "راجع الصور", swap: "بدّل الصور مع الوحدة اللي بعدها", full15: "الوحدة وصلت 15 صورة. شيل علامة صورة تانية أو شيل صورة قديمة.", oldPhotos: "صور الوحدة الحالية: علّم اللي تتشال", removeFail: "مقدرناش نشيل الصور القديمة", heicFail: "صور HEIC متحولتش", converted: "صور اتحولت من HEIC", aiOff: "الذكاء الاصطناعي مش متاح: القراءة بالقواعد بس.", errors: "أخطاء", planFail: "مقدرناش نقرا البوستات. جرب تاني.", edit: "تعديل", editDone: "تم", description: "الوصف", original: "الرسالة الأصلية", summaryLoading: "جاري قراءة بيانات الوحدة…", missingField: "ناقص", missingNote: "بيانات ناقصة: اضغط تعديل وكملها، وإلا الوحدة مش هتتضاف."
     },
     en: {
       pick: "Choose the zip file first.", reading: "Reading the file…", noChat: "No chat text (.txt) inside the zip.", badZip: "That is not a readable zip.", encrypted: "The zip is password-protected.",
@@ -35,7 +35,7 @@
       aiUpTo: "AI: up to", aiCredits: "credits", aiOffLabel: "no AI: rules only", 
       codeChecking: "Checking the codes…", codeNew: "New unit", codeUpdate: "Updates unit", codeHas: "already has photos", codeTaken: "Code belongs to a unit you can't change", codeDup: "Same code as post", codeFail: "Could not check the codes now: they are checked again in the review.",
       videos: "videos skipped (not uploaded)", videosTotal: "videos or files skipped and not uploaded", pickNote: "Choose 15 photos only: the first 15 are ticked, tick the others by hand. Use ◀ ▶ to put the photos in order.", stageRead: "Reading the file", stageMatch: "Placing photos on posts", stagePosts: "Reading the units", stageUpload: "Uploading photos", leaveWarn: "Closing this page stops the upload.",
-      verify: "Verify photos", swap: "Swap photos with the next unit", full15: "The unit is at 15 photos. Untick another photo or remove an old one.", oldPhotos: "The unit's current photos: tick the ones to remove", removeFail: "Could not remove the old photos", heicFail: "HEIC photos that could not be converted", converted: "photos converted from HEIC", aiOff: "AI is not available: read with the rules only.", errors: "Errors", planFail: "Could not read the posts. Try again.", edit: "Edit", editDone: "Done", description: "Description", summaryLoading: "Reading the unit details…", missingField: "Missing", missingNote: "Details missing: press Edit and complete them, or the unit will not be added."
+      verify: "Verify photos", swap: "Swap photos with the next unit", full15: "The unit is at 15 photos. Untick another photo or remove an old one.", oldPhotos: "The unit's current photos: tick the ones to remove", removeFail: "Could not remove the old photos", heicFail: "HEIC photos that could not be converted", converted: "photos converted from HEIC", aiOff: "AI is not available: read with the rules only.", errors: "Errors", planFail: "Could not read the posts. Try again.", edit: "Edit", editDone: "Done", description: "Description", original: "Original message", summaryLoading: "Reading the unit details…", missingField: "Missing", missingNote: "Details missing: press Edit and complete them, or the unit will not be added."
     }
   }[lang];
 
@@ -356,7 +356,7 @@
       el("div", { class: "stack" }, [
         el("h2", { text: "✏️ " + TEXT.edit + " · " + TEXT.post + " " + (c.k + 1) }),
         form,
-        el("details", { class: "uc-desc" }, [el("summary", { text: TEXT.description }), el("p", { class: "muted", text: textOf(c.x) })]),
+        el("details", { class: "ie-original", open: true, "data-cp-original": c.id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: textOf(c.x) })]),
         c.refs.length ? el("p", { class: "muted", "data-cp-count": c.id, text: picked + " / " + MAXP + " " + TEXT.photos }) : null,
         c.refs.length > MAXP ? el("p", { class: "warn", text: TEXT.pickNote }) : null,
         c.refs.length ? thumbs(c.refs, 0, c.slots, c.id) : el("p", { class: "muted", text: "0 " + TEXT.photos }),
@@ -409,6 +409,7 @@
             editBtn
           ]),
           x.text ? summaryBox(x) : null,
+          x.text ? el("details", { class: "ie-original", "data-cp-original": id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: textOf(x) })]) : null,
           warnings,
           refs.length ? miniStrip(refs, slots) : null
         ]));

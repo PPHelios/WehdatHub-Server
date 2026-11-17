@@ -1202,3 +1202,8 @@ progress.pbar::-webkit-progress-value { background: var(--brand); border-radius:
 progress.pbar::-moz-progress-bar { background: var(--brand); border-radius: 999px; }
 .xi-progress { text-align: center; }
 .xi-progress p { margin: 0; }
+
+/* The original message, to compare with what was read */
+.ie-original { border: 1px solid var(--line); border-radius: 12px; background: var(--soft); padding: 8px 12px; }
+.ie-original > summary { cursor: pointer; font-weight: 700; }
+.ie-original > p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }

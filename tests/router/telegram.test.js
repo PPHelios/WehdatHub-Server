@@ -215,7 +215,10 @@ describe("notifications on Telegram (step 2)", () => {
     const { signIn } = require("../harness/web");
     const me = await signIn(h, "broker");
     const page = await me.agent.get("/app/settings");
-    expect(page.text).toMatch(/<select name="ch_match" data-kind="match"><option value="both" selected>/);
+    // Channels are check boxes now: a person linked to Telegram sees Telegram offered, ticked together with the website.
+    expect(page.text).toMatch(/<fieldset class="choice" data-channels="match">/);
+    expect(page.text).toMatch(/name="ch_match" value="telegram"[^>]*checked/);
+    expect(page.text).toMatch(/name="ch_match" value="web"[^>]*checked/);
   });
 });
 
