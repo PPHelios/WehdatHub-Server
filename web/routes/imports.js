@@ -121,7 +121,8 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   };
   // A chat unit's Edit window: the standard unit controls (place search, chips, dropdowns). It is its own form, outside the apply form.
   // The message as it was sent, to compare with what was read (the plan keeps the whole post; older plans keep the first 600 letters).
-  const originalOf = (i) => String((imp.payload.posts || [])[i.row - 1]?.text || (cellsOf.get(i.row) || {}).description || "").trim();
+  // `orig` is the message exactly as written (Arabic digits, blank lines); `text` is the cleaned copy the reader used.
+  const originalOf = (i) => { const p = (imp.payload.posts || [])[i.row - 1] || {}; return String(p.orig || p.text || (cellsOf.get(i.row) || {}).description || "").trim(); };
   const originalBox = (i, open) => {
     const text = originalOf(i);
     return text ? html`<details class="ie-original" data-original="${i.row}"${open ? raw(" open") : ""}><summary>💬 ${L(lang, "الرسالة الأصلية", "Original message")}</summary><p dir="auto">${text}</p></details>` : "";

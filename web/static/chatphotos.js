@@ -213,6 +213,8 @@
   async function previewOf(blob, name) { return isHeic(name) ? (await toJpeg(blob, name)) : blob; }
 
   var textOf = function (x) { return x.text; };
+  // The message exactly as it was written in WhatsApp (shown to compare with what was read).
+  var origOf = function (x) { return x.orig || x.text; };
   // The person's Edit-window form for a post (null until edited): it goes on top of what the reader found, here and at upload.
   var fieldsOf = function (x) { return state.fields[String(x.i)] || null; };
   var sumKey = function (x) { return textOf(x) + "|#|" + JSON.stringify(fieldsOf(x)); };
@@ -356,7 +358,7 @@
       el("div", { class: "stack" }, [
         el("h2", { text: "✏️ " + TEXT.edit + " · " + TEXT.post + " " + (c.k + 1) }),
         form,
-        el("details", { class: "ie-original", open: true, "data-cp-original": c.id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: textOf(c.x) })]),
+        el("details", { class: "ie-original", open: true, "data-cp-original": c.id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: origOf(c.x) })]),
         c.refs.length ? el("p", { class: "muted", "data-cp-count": c.id, text: picked + " / " + MAXP + " " + TEXT.photos }) : null,
         c.refs.length > MAXP ? el("p", { class: "warn", text: TEXT.pickNote }) : null,
         c.refs.length ? thumbs(c.refs, 0, c.slots, c.id) : el("p", { class: "muted", text: "0 " + TEXT.photos }),
@@ -395,7 +397,6 @@
       var info = refs.length + " " + TEXT.photos + (existing[id] ? " · " + TEXT.existing + " (" + existing[id] + ")" : "") + (x.over ? " · " + x.over + " " + TEXT.overCap : "") + (refs.length > slots ? " · " + slots + " / " + MAXP : "") + (x.videos ? " · 🎞 " + x.videos + " " + TEXT.videos : "");
       var editBtn = gallery ? el("button", { type: "button", class: "secondary small", "data-cp-edit": id, text: "✏️ " + TEXT.edit, on: { click: function () { state.modal = id; render(); } } }) : null;
       var warnings = el("div", { class: "row uc-warns" }, [
-        badge,
         x.verify ? el("span", { class: "warn", "data-cp-verify": id, text: "⚠️ " + TEXT.verify }) : null,
         x.verify && list[k + 1] ? el("button", { type: "button", class: "secondary small", "data-cp-swap": id, text: "⇄ " + TEXT.swap, on: { click: function () { swapWithNext(list, k); } } }) : null
       ]);
@@ -404,12 +405,12 @@
         ol.appendChild(el("li", { class: "card unit-card", "data-cp-unit": id }, [
           el("div", { class: "uc-head" }, [
             el("input", { type: "checkbox", "data-cp-pick": id, checked: !state.skipped[id], on: { change: function (ev) { state.skipped[id] = !ev.target.checked; refreshApply(); } } }),
-            el("div", { class: "uc-title" }, [el("strong", { text: title }), el("span", { class: "muted", text: info })]),
+            el("div", { class: "uc-title" }, [badge, el("strong", { text: title }), el("span", { class: "muted", text: info })]),
             x.code ? el("span", { class: "uc-code", text: x.code }) : null,
             editBtn
           ]),
           x.text ? summaryBox(x) : null,
-          x.text ? el("details", { class: "ie-original", "data-cp-original": id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: textOf(x) })]) : null,
+          x.text ? el("details", { class: "ie-original", "data-cp-original": id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: origOf(x) })]) : null,
           warnings,
           refs.length ? miniStrip(refs, slots) : null
         ]));
@@ -632,7 +633,7 @@
       await stage(TEXT.stagePosts + " (" + chosen.length + ")", 35);
       try {
         j0 = await timed("plan", async function () {
-          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: textOf(x), fields: fieldsOf(x) }; }) }) });
+          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: textOf(x), orig: origOf(x), fields: fieldsOf(x) }; }) }) });
           var j = await r0.json().catch(function () { return {}; });
           if (!r0.ok || !j.id) { var e = new Error(j.message || (r0.status === 422 ? TEXT.noPosts : TEXT.planFail)); e.code = j.error || "http_" + r0.status; throw e; }
           return j;

@@ -68,25 +68,33 @@ function parseWithAttachments(text) {
     if (m) {
       const first = m[4].trim();
       const file = first.match(ATTACHED);
-      if (DIVIDER.test(first)) out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: "", files: [], divider: true });
-      else out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: file ? "" : first, files: file ? [(file[1] || file[2]).trim()] : [] });
+      // `orig`: the message as it was written (Arabic digits, spacing and blank lines kept); `text` is the cleaned copy the readers use.
+      const rt = raw.trim();
+      const rawFirst = rt.slice(rt.length - m[4].length).trim();
+      if (DIVIDER.test(first)) out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: "", orig: "", files: [], divider: true });
+      else out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: file ? "" : first, orig: file ? "" : rawFirst, files: file ? [(file[1] || file[2]).trim()] : [] });
     } else if (HEAD.test(line.trim())) {
-      out.push({ sender: null, at: null, text: "", files: [], system: true });
+      out.push({ sender: null, at: null, text: "", orig: "", files: [], system: true });
+    } else if (out.length && !line.trim()) {
+      // A blank line inside a message is kept in its original text (trailing ones are trimmed at the end).
+      const last = out[out.length - 1];
+      if (last.orig && !last.divider && !last.system) last.orig += "\n";
     } else if (out.length && line.trim()) {
       let last = out[out.length - 1];
       if (DIVIDER.test(line.trim())) {
         // A separator line inside a message (a forward's own divider): a boundary, then the rest is a new part of that message.
-        if (!last.divider) out.push({ sender: last.sender, at: last.at, text: "", files: [], divider: true });
+        if (!last.divider) out.push({ sender: last.sender, at: last.at, text: "", orig: "", files: [], divider: true });
         continue;
       }
       if (last.divider) {
-        out.push({ sender: last.sender, at: last.at, text: line.trim(), files: [] });
+        out.push({ sender: last.sender, at: last.at, text: line.trim(), orig: raw.trim(), files: [] });
         continue;
       }
       last.text = last.text ? `${last.text}\n${line.trim()}` : line.trim();
+      last.orig = last.orig ? `${last.orig}\n${raw.trimEnd()}` : raw.trim();
     }
   }
-  return out.filter((m) => !m.system && (m.divider || m.files.length || (m.text && !SKIP.test(m.text.trim())))).map((m, i) => ({ ...m, i }));
+  return out.filter((m) => !m.system && (m.divider || m.files.length || (m.text && !SKIP.test(m.text.trim())))).map((m, i) => ({ ...m, orig: String(m.orig || "").replace(/\s+$/, ""), i }));
 }
 
 const PRICE = /(\d[\d.,]*\s*(?:مليون|ألف|الف|million|k\b|m\b|ج|جنيه|egp))|(?:السعر|سعر|price|مقدم|المقدم|down payment|اجمالي|إجمالي)/i;

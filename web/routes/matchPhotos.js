@@ -238,7 +238,7 @@ function register(web, { pool }) {
     const sent = Array.isArray(req.body?.posts) ? req.body.posts : [];
     const posts = sent
       .slice(0, ChatPlan.MAX_POSTS)
-      .map((p) => ({ sender: String(p?.sender || "").slice(0, 80) || null, at: String(p?.at || "").slice(0, 40) || null, text: String(p?.text || "").slice(0, 4000), fields: p?.fields && typeof p.fields === "object" ? p.fields : null }))
+      .map((p) => ({ sender: String(p?.sender || "").slice(0, 80) || null, at: String(p?.at || "").slice(0, 40) || null, text: String(p?.text || "").slice(0, 4000), orig: String(p?.orig || "").slice(0, 4000), fields: p?.fields && typeof p.fields === "object" ? p.fields : null }))
       .filter((p) => p.text.trim().length >= 10);
     if (!posts.length) return res.status(422).json({ error: "no_posts" });
     try {

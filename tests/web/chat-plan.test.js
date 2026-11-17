@@ -312,3 +312,18 @@ describe("the original message stays visible", () => {
     expect(boxes.filter((m) => m[1]).length).toBe(1);
   });
 });
+
+describe("the message exactly as written", () => {
+  test("the reader keeps the original lines (Arabic digits, blank lines, spacing) next to the cleaned text, and the plan shows the original", async () => {
+    const P = require("../../domain/chatParse");
+    const chat = "24/10/2026, 10:15 - Ali: Available\nCode MIr23\n\n   السعر ٦٥ الف  \nArea : ١٥٤m";
+    const [m] = P.parseWithAttachments(chat);
+    expect(m.text).toBe("Available\nCode MIr23\nالسعر 65 الف\nArea : 154m");
+    expect(m.orig).toBe("Available\nCode MIr23\n\n   السعر ٦٥ الف\nArea : ١٥٤m");
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await agent.post("/app/import/match/plan").set("X-CSRF-Token", csrf).send({ filename: "chat.zip", posts: [{ sender: "Ali", at: "x", text: "villa for sale Hyde Park 354m 3 bedrooms price:9 million 01012345678", orig: "villa for sale Hyde Park ٣٥٤m\n\n3 bedrooms price:9 million 01012345678" }] });
+    expect((await loadPlan(res.body.id)).payload.posts[0].orig).toContain("٣٥٤m\n\n3 bedrooms");
+    const page = (await agent.get(`/app/import/${res.body.id}`)).text;
+    expect(page).toMatch(/data-original="1"[^>]*>[\s\S]*?٣٥٤m/);
+  });
+});

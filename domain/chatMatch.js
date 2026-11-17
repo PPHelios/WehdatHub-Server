@@ -277,7 +277,7 @@
       result.noPhotos = (codes || []).filter((c) => !used.has(c) || !result.units.find((u) => u.code === c).files.length);
     } else {
       // A post keeps up to MAX_PICK photos so the person can choose which 15 go to the unit (the first 15 are the default).
-      const posts = byAnchor.map((a) => ({ i: a.m.i, t: a.t, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), code: postCode(a.m.text), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, MAX_PICK), over: Math.max(0, withFiles(a).length - MAX_PICK), videos: 0, verify: Boolean(a.verify) }));
+      const posts = byAnchor.map((a) => ({ i: a.m.i, t: a.t, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), orig: String(a.m.orig || a.m.text).slice(0, 4000), code: postCode(a.m.text), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, MAX_PICK), over: Math.max(0, withFiles(a).length - MAX_PICK), videos: 0, verify: Boolean(a.verify) }));
       // Each skipped video goes to the nearest post of the same sender within the time window (else it is only in the total).
       for (const s of skips) {
         let best = null;
