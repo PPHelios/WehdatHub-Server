@@ -26,7 +26,11 @@ function samePlace(a, b) {
   const pb = placeKey(b);
   if (!pa || !pb) return false;
   // A unit read by rules carries the place's English name beside its Arabic one: either name may match.
-  if (pa.compound) return [a.compound, a.compound_en].some((x) => x && normalizeSearch(x) === normalizeSearch(b.compound || ""));
+  // Either side may carry the Arabic and the English name ("Mivida" typed, "ميفيدا" stored): any name of one equals any name of the other.
+  if (pa.compound) {
+    const theirs = [b.compound, b.compound_en].filter(Boolean).map((x) => normalizeSearch(x));
+    return [a.compound, a.compound_en].some((x) => x && theirs.includes(normalizeSearch(x)));
+  }
   return [b.district, b.city, b.location].some((v) => v && normalizeSearch(v) === pa.district);
 }
 
