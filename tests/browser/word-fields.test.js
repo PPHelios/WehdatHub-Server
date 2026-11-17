@@ -24,8 +24,9 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   page = await browser.newPage();
+  await page.route("http://t.test/", (r) => r.fulfill({ contentType: "text/html", body: PAGE }));
   await page.route("**/app/places/suggest*", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [{ kind: "compound", label: "ميفيدا", name_en: "Mivida", name_ar: "ميفيدا", path: "القاهرة الجديدة" }, { kind: "area", label: "التجمع", name_en: "Tagamoa" }] }) }));
-  await page.setContent(PAGE);
+  await page.goto("http://t.test/");
   await page.addScriptTag({ path: path.join(__dirname, "..", "..", "web", "static", "wordfields.js") });
 });
 afterEach(async () => page.close());
