@@ -625,6 +625,11 @@
       "mapFurnishingLegacy": ["text"],
       "mapFinishingLegacy": ["text"]
     },
+    "domain/parserReport.js": {
+      "summarizeReads": ["reads"],
+      "summarizeSearch": ["rows"],
+      "renderReport": ["params"]
+    },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
       "vocabularyRows": [],
