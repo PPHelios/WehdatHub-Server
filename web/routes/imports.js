@@ -97,6 +97,9 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const notesOf = (i) => (i.notes?.length ? html`<div class="warn muted" data-notes="${i.row}">${i.notes.join(" · ")}</div>` : "");
   // Editing is per row: a small form outside the apply form (forms cannot nest), its inputs joined by the form attribute.
   const canEdit = !applied && Array.isArray(sheetRows) && Array.isArray(columns) && columns.length > 0;
+  // The structured Edit window (place search with suggestions and chips, dropdowns) is used for chat units and, when the page was given
+  // the approved areas, for Excel rows too, so a compound is picked from the list instead of typed.
+  const structured = canEdit && (chat || Array.isArray(extra.areas));
   const cellsOf = new Map((sheetRows || []).filter((r) => slice.some((i) => i.row === r.rowNumber)).map((r) => [r.rowNumber, r.cells]));
   const labelOf = (k) => (CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
   const field = (i, k) => {
@@ -108,7 +111,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   };
   const editor = (i) => {
     if (!canEdit) return "";
-    if (chat) return html`<button type="button" class="secondary${i.kind === "invalid" ? " bad" : ""}" data-edit-open="${i.row}">✏️ ${L(lang, "تعديل", "Edit")}</button>`;
+    if (structured) return html`<button type="button" class="secondary${i.kind === "invalid" ? " bad" : ""}" data-edit-open="${i.row}">✏️ ${L(lang, "تعديل", "Edit")}</button>`;
     const fields = [...new Set([...(i.needs || []), ...columns])];
     // What the row is missing comes first and the form opens on it; the other columns follow.
     // An edit window per unit: opens over the page, saves the unit's fields and plans the import again. The current
@@ -127,7 +130,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     const text = originalOf(i);
     return text ? html`<details class="ie-original" data-original="${i.row}"${open ? raw(" open") : ""}><summary>💬 ${L(lang, "الرسالة الأصلية", "Original message")}</summary><p dir="auto">${text}</p></details>` : "";
   };
-  const chatDialogs = canEdit && chat
+  const chatDialogs = structured
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => {
         const cells = cellsOf.get(i.row) || {};
         const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
@@ -135,13 +138,13 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
   <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
   ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
-  ${originalBox(i, true)}
+  ${chat ? originalBox(i, true) : ""}
   ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
   <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
 </form></dialog>`;
       })
     : "";
-  const editForms = canEdit && !chat
+  const editForms = canEdit && !structured
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}"></form>`)
     : "";
   const MAXP = 15;
@@ -245,18 +248,26 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     <p class="muted">${L(lang, "السعر اليومي مبيتاخدش أبداً، والنص الأصلي بيتحفظ في الملاحظات.", "A daily price is never used; the original text is kept in the notes.")}</p></form>`
     : ""}
   ${stats.unknown_types.length
-    ? html`<div class="stack" data-batch-form="type_map"><p>${L(lang, "كلمات في عمود النوع مش معروفة. اختار لكل كلمة: كمبوند، نوع وحدة، أو تجاهل، وتتطبق على كل الصفوف:", "Words in the type column the app does not know. Pick for each: a compound, a unit type or ignore, and it applies to every row:")}</p>
-    ${stats.unknown_types.map((u) => {
+    ? html`<div class="stack" data-batch-form="type_map"><p>${L(lang, "كلمات في عمود النوع مش معروفة. مش كلها كمبوند أو نوع وحدة: اختار الخانة اللي تروحلها كل كلمة وقيمتها، وتتطبق على كل الصفوف:", "Words in the type column the app does not know. Not every word is a compound or a unit type: pick the field each one belongs to and its value, and it applies to every row:")}</p>
+    ${stats.unknown_types.map((u, n) => {
       const place = (extra.typePlaces || {})[u.value] || null;
-      const picked = (stats.remembered.types || {})[u.value] || (place ? "compound" : "");
-      const mark = (k) => (picked === k ? raw(` selected${(stats.remembered.types || {})[u.value] === k ? " data-remembered" : ""}`) : "");
-      return html`<form method="post" action="/app/import/${imp.id}/batch" class="row" data-type-word="${u.value}"><input type="hidden" name="action" value="type_map"><input type="hidden" name="from" value="${u.value}">
-      <strong>${u.value}</strong> <span class="muted">×${u.count}</span>${place ? html` <span class="chip good" data-place-match="${place}">📍 ${L(lang, "كمبوند أو منطقة معروفة", "A known compound or area")}: ${place}</span>` : ""}
-      <select name="value" aria-label="${u.value}">
-        <optgroup label="${L(lang, "ده مش نوع وحدة", "Not a unit type")}"><option value="compound"${mark("compound")}>📍 ${L(lang, "ده كمبوند / مكان (استخدمه كمبوند)", "It is a compound / place (use it as the compound)")}</option><option value="ignore"${mark("ignore")}>🚫 ${L(lang, "تجاهله (يتحفظ في الملاحظات)", "Ignore it (kept in the notes)")}</option></optgroup>
-        <optgroup label="${L(lang, "نوع الوحدة", "Unit type")}">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}"${mark(k)}>${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</optgroup>
-      </select>
-      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></form>`;
+      const remembered = Imports.parseWordChoice((stats.remembered.types || {})[u.value]);
+      const sug = remembered || Imports.suggestWordField(u.value, place);
+      const fieldNames = { type: ["نوع الوحدة", "Unit type"], compound: ["📍 كمبوند / مكان", "📍 Compound / place"], floor: ["الدور", "Floor"], finishing: ["التشطيب", "Finishing"], furnishing: ["الفرش", "Furnishing"], features: ["مميزات", "Features"], notes: ["ملاحظات (يتحفظ في الملاحظات)", "Notes (kept in the notes)"], ignore: ["🚫 تجاهله", "🚫 Ignore it"] };
+      const chosen = sug.field;
+      const mem = remembered ? " data-remembered" : ""; // an earlier choice shows as a pre-selected suggestion, never applied on its own
+      const val = (f) => (chosen === f ? sug.payload : "");
+      return html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-type-word="${u.value}" data-word-form><input type="hidden" name="action" value="type_map"><input type="hidden" name="from" value="${u.value}">
+      <div class="row"><strong>${u.value}</strong> <span class="muted">×${u.count}</span>${place ? html` <span class="chip good" data-place-match="${place}">📍 ${L(lang, "كمبوند أو منطقة معروفة", "A known compound or area")}: ${place}</span>` : ""}</div>
+      <div class="row">
+      <label>${L(lang, "الخانة", "Field")}<select name="field" data-word-field aria-label="${u.value}">${Imports.WORD_FIELDS.map((f) => html`<option value="${f}"${chosen === f ? raw(" selected" + mem) : ""}>${L(lang, fieldNames[f][0], fieldNames[f][1])}</option>`)}</select></label>
+      <label data-word-val="type">${L(lang, "النوع", "Type")}<select name="v_type">${Imports.TYPE_KEYS.map((k) => html`<option value="${k}"${val("type") === k ? raw(" selected" + mem) : ""}>${(Describe.TYPE_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
+      <label data-word-val="compound">${L(lang, "الكمبوند (ابحث واختار)", "Compound (search and pick)")}<input name="v_compound" list="wp-${n}" value="${val("compound") || place || u.value}" autocomplete="off" data-place-search maxlength="120"><datalist id="wp-${n}"></datalist></label>
+      <label data-word-val="floor">${L(lang, "الدور (0 = أرضي)", "Floor (0 = ground)")}<input name="v_floor" value="${val("floor")}" maxlength="20" inputmode="numeric"></label>
+      <label data-word-val="finishing">${L(lang, "التشطيب", "Finishing")}<select name="v_finishing">${Imports.FINISHING_KEYS.map((k) => html`<option value="${k}"${val("finishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FINISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
+      <label data-word-val="furnishing">${L(lang, "الفرش", "Furnishing")}<select name="v_furnishing">${Imports.FURNISHING_KEYS.map((k) => html`<option value="${k}"${val("furnishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FURNISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
+      <label data-word-val="features">${L(lang, "الميزة", "Feature")}<input name="v_features" value="${val("features") || u.value}" maxlength="120"></label>
+      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></div></form>`;
     })}</div>`
     : ""}
   ${stats.status_hints.length
@@ -661,7 +672,15 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { existing, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script>`);
     }
     const typePlaces = imp.kind === "excel" ? await Imports.typeWordPlaces(pool, Imports.batchStats(imp.payload).unknown_types.map((u) => u.value)) : {};
-    return importPage(req, res, imp.kind === "excel" ? html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("chatreview.js")}"></script>` : groupPage(imp, lang));
+    if (imp.kind === "excel") {
+      // Excel rows use the same Edit window as the WhatsApp import: the compound is searched in the list (suggestions, chips), not typed.
+      const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
+      const places = new Map();
+      const PlaceSuggest = require("../../services/placeSuggest");
+      for (const r of imp.payload.rows || []) if (r.cells?.compound) places.set(r.rowNumber, await PlaceSuggest.placeChip(pool, { compound: r.cells.compound }, lang).catch(() => null));
+      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script><script src="${assets.url("wordfields.js")}"></script>`);
+    }
+    return importPage(req, res, groupPage(imp, lang));
   });
 
   // Edit one row of a ready plan: the whole sheet is planned again with the changed cells (same rules as an upload).
@@ -711,6 +730,11 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
 
   web.post("/import/:id/batch", managersOnly, async (req, res, next) => {
     const lang = langOf(req);
+    // An unknown word's choice arrives as a field and its value; the service reads "field:value" (a bare type key, compound or ignore as before).
+    if (req.body && req.body.action === "type_map" && req.body.field && req.body.value === undefined) {
+      const f = String(req.body.field);
+      req.body.value = f === "notes" || f === "ignore" ? f : f === "type" ? String(req.body.v_type || "") : f + ":" + String(req.body["v_" + f] || "");
+    }
     const out = await Imports.batchExcel(pool, req.session.broker, req.params.id, { action: String(req.body.action || ""), value: String(req.body.value || ""), scope: req.body.scope === "all" ? "all" : "missing", from: String(req.body.from || "").slice(0, 80) }, { lang });
     if (!out) return next();
     return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}`);

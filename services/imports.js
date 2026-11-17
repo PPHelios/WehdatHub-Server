@@ -121,6 +121,9 @@ const NOTE = {
   compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
   phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري"),
   dollar: (usd, lang) => (lang === "en" ? `Priced in dollars: saved as $${usd}, not converted` : `السعر بالدولار: اتسجل ${usd}$ من غير تحويل`),
+  compoundUnknown: (name, near, lang) => (lang === "en"
+    ? `Compound "${name}" is not on the list.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""} Open Edit to pick it from the list, or save it as a new compound.`
+    : `الكمبوند "${name}" مش في القائمة.${near.length ? ` قصدك: ${near.join("، ")}؟` : ""} افتح تعديل واختاره من القائمة، أو احفظه ككمبوند جديد.`),
   dupDb: (code, lang) => (lang === "en" ? `Looks like your existing unit ${code}` : `شكلها نفس وحدتك ${code}`),
   dupRow: (row, lang) => (lang === "en" ? `Looks like row ${row} in this sheet` : `شكلها نفس الصف ${row} في الشيت`),
   codeMade: (lang) => (lang === "en" ? "No code in the sheet: numbered in the sheet's own pattern" : "مفيش كود في الشيت: اتعمل بنفس نمط أكواد الشيت"),
@@ -229,6 +232,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
   const byCode = new Map(found.map((l) => [l.code_norm, l]));
   const known = await knownCompounds(pool, broker.agency_id);
   const seen = new Set();
+  const compoundCheck = new Map(); // compound key → { unknown, near } (one lookup per distinct name)
   const items = [];
   const sheetNew = [];
   // Rows that had text but no known column are shown with their reason, never dropped.
@@ -322,6 +326,24 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
       }
       if (p.status && p.status !== "active") ev.listing.status = p.status;
       const warnings = ev.warnings.map((w) => Rules.warningLine(w, lang));
+      // A compound that is not on the approved list is a warning, never a block: the person can open Edit and pick it from the
+      // list (suggestions, chips), or save it as a new compound. The add form asks the same question.
+      let unknownCompound = false;
+      const typedCompound = String(ev.listing.compound || "").trim();
+      if (typedCompound) {
+        const key = compoundKey(typedCompound);
+        if (!compoundCheck.has(key)) {
+          const CR = require("./compoundResolve");
+          const r = await CR.resolve(pool, { compound: typedCompound }).catch(() => null);
+          const unknown = Boolean(r && r.compound_state === "needs_fix");
+          compoundCheck.set(key, { unknown, near: unknown ? ((await CR.suggest(pool, typedCompound, 3).catch(() => [])) || []).map((x) => (typeof x === "string" ? x : x.name || x.name_ar || "")).filter(Boolean) : [] });
+        }
+        const c = compoundCheck.get(key);
+        if (c.unknown) {
+          unknownCompound = true;
+          warnings.push(NOTE.compoundUnknown(typedCompound, c.near, lang));
+        }
+      }
       // A likely duplicate: an active unit in the agency, or an earlier row of this sheet (never a block, only a warning).
       const dup = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
       if (dup) warnings.push(NOTE.dupDb(dup, lang));
@@ -348,7 +370,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
         const twin = sheetNew.find((o) => Dup.sameUnit(ev.listing, o.fields));
         if (twin) warnings.push(NOTE.dupRow(twin.row, lang));
       }
-      const item = { ...base, kind: "new", fields: ev.listing, warnings };
+      const item = { ...base, kind: "new", fields: ev.listing, warnings, ...(unknownCompound ? { unknown_compound: true } : {}) };
       sheetNew.push(item);
       items.push(item);
     }
@@ -688,6 +710,37 @@ function unknownTypes(rows) {
 }
 /** What a word in the type column can also be: a place (the compound) or noise. */
 const TYPE_WORD_CHOICES = ["compound", "ignore"];
+// What an unknown word in the type column can be: not only a compound or a unit type. "field:value" carries the value
+// (a compound name from the place search, a floor, a finishing key, ...); "notes" and "ignore" keep the word in the notes.
+const WORD_FIELDS = ["type", "compound", "floor", "finishing", "furnishing", "features", "notes", "ignore"];
+const FINISHING_KEYS = Object.keys(Describe.FINISHING_LABELS);
+const FURNISHING_KEYS = Object.keys(Describe.FURNISHING_LABELS);
+/** "floor:3" → { field: "floor", payload: "3" }; a bare type key, "compound" or "ignore" is read as before; null when not valid. */
+function parseWordChoice(value) {
+  const v = String(value ?? "");
+  if (TYPE_KEYS.includes(v)) return { field: "type", payload: v };
+  if (TYPE_WORD_CHOICES.includes(v) || v === "notes") return { field: v, payload: "" };
+  const i = v.indexOf(":");
+  if (i < 1) return null;
+  const field = v.slice(0, i);
+  const payload = v.slice(i + 1).replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!WORD_FIELDS.includes(field) || field === "notes" || field === "ignore") return null;
+  if (field === "type") return TYPE_KEYS.includes(payload) ? { field, payload } : null;
+  if (field === "finishing") return FINISHING_KEYS.includes(payload) ? { field, payload } : null;
+  if (field === "furnishing") return FURNISHING_KEYS.includes(payload) ? { field, payload } : null;
+  return { field, payload };
+}
+/** The field an unknown word most likely is, to pre-pick the dropdown: a known place, a floor, a finishing or furnishing word, else notes. */
+function suggestWordField(word, place = null) {
+  const w = String(word ?? "").replace(/\s+/g, " ").trim();
+  if (place) return { field: "compound", payload: place };
+  if (/(^|\s)(\d{1,2}(st|nd|rd|th)?\s*floor|floor\s*\d{1,2}|الدور|دور)(\s|$)/i.test(w)) return { field: "floor", payload: (w.match(/\d{1,2}/) || [""])[0] };
+  const fin = SheetImport.finishing(w);
+  if (fin) return { field: "finishing", payload: fin };
+  const fur = SheetImport.furnishing(w);
+  if (fur) return { field: "furnishing", payload: fur };
+  return { field: "notes", payload: "" };
+}
 const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "commercial", "land", "roof"];
 
 /**
@@ -759,20 +812,28 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
       r.cells.price_value = v;
       touched++;
     }
-  } else if (action === "type_map" && (TYPE_KEYS.includes(value) || TYPE_WORD_CHOICES.includes(value)) && typeKey(from)) {
+  } else if (action === "type_map" && parseWordChoice(value) && typeKey(from)) {
+    const choice = parseWordChoice(value);
     for (const r of rows) {
       if (typeKey(r.cells.property_type) === typeKey(from) && !SheetImport.propertyType(r.cells.property_type)) {
         const word = String(r.cells.property_type).replace(/\s+/g, " ").trim();
-        if (value === "compound") {
-          // The word in the type column is a place: the person says it is the unit's compound, so it replaces the tab-name guess.
-          r.cells.compound = word;
+        if (choice.field === "compound") {
+          // The word in the type column is a place: the person says it is the unit's compound (as typed, or the one picked from the
+          // place search), so it replaces the tab-name guess.
+          r.cells.compound = choice.payload || word;
           delete r.cells.property_type;
-        } else if (value === "ignore") {
+        } else if (choice.field === "notes" || choice.field === "ignore") {
           // Not a type and not a place (a typo, a note): dropped from the type, kept in the notes.
           r.cells.notes = [r.cells.notes, word].filter(Boolean).join(" · ");
           delete r.cells.property_type;
+        } else if (choice.field === "floor" || choice.field === "finishing" || choice.field === "furnishing") {
+          r.cells[choice.field] = choice.payload || word;
+          delete r.cells.property_type;
+        } else if (choice.field === "features") {
+          r.cells.features = [r.cells.features, choice.payload || word].filter(Boolean).join("، ");
+          delete r.cells.property_type;
         } else {
-          r.cells.property_type = value;
+          r.cells.property_type = choice.payload;
         }
         touched++;
       }
@@ -1016,6 +1077,11 @@ module.exports = {
   fieldsOfCells,
   typeWordPlaces,
   TYPE_WORD_CHOICES,
+  WORD_FIELDS,
+  FINISHING_KEYS,
+  FURNISHING_KEYS,
+  parseWordChoice,
+  suggestWordField,
   missingCells,
   setNewPlace,
   movePhoto,

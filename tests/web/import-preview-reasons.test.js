@@ -44,3 +44,15 @@ test("a row without a price says Price is missing", async () => {
   const page = await agent.get(`${r.headers.location}`);
   expect(page.text).toMatch(/السعر ناقص/);
 });
+
+test("a compound that is not on the list is a warning on a New row (not a block) with the Edit window offering the place search", async () => {
+  const { agent, csrf } = await signIn(h, "manager");
+  const r = await upload(agent, csrf, await workbook([HEAD, ["NH-9", "Mivdia Typo Place", "شقة", "بيع", "5 مليون", 100, 2, "01012345678"]]));
+  expect(r.status).toBe(303);
+  const page = await agent.get(r.headers.location);
+  expect(page.text).toMatch(/data-kind="new"/);
+  expect(page.text).toMatch(/مش في القائمة/);
+  expect(page.text).not.toMatch(/data-kind="invalid"/);
+  // The Edit window is the structured editor: the same place search with suggestions and chips as the WhatsApp import.
+  expect(page.text).toMatch(/data-importeditor/);
+});

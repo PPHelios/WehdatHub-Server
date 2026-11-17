@@ -139,7 +139,8 @@ describe("Excel diff import", () => {
     const id = importId(res);
     const page = await agent.get(res.headers.location);
     expect(page.text).toMatch(/id="edit-5"/); // the invalid row (BAD-1) is editable
-    expect(page.text).toMatch(/form="edit-2"/); // so is a changed row
+    expect(page.text).toMatch(/id="edit-2"/); // so is a changed row (its Edit window is the structured editor: place search, chips)
+    expect(page.text).toMatch(/data-importeditor/);
     expect(page.text).not.toMatch(/id="edit-3"/); // an unchanged one is not
 
     // still invalid: the price is missing
