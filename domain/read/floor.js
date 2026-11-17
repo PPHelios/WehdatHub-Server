@@ -39,7 +39,9 @@ function readFloor(text) {
   const found = new Set();
   for (const m of s.matchAll(new RegExp(`${S}${FLOOR_WORD} ?(?:ال)?(${ORD_ALT})${E}`, "gu"))) found.add(ORD[m[1]]);
   for (const m of s.matchAll(new RegExp(`${S}(?:ال)?(${ORD_ALT}) ${FLOOR_WORD}${E}`, "gu"))) found.add(ORD[m[1]]);
-  for (const m of s.matchAll(new RegExp(`${S}${FLOOR_WORD} ?[:=]? ?(\\d{1,2})${E}`, "gu"))) found.add(Number(m[1]));
+  // "دور 3 غرف" is three rooms, not the third floor.
+  const NOT_FLOOR_NUM = "(?! ?(?:غرف|غرفه|اوض|اوضه|نوم|bed|br(?![\\p{L}])|rooms?|حمام|متر|م2|م(?![\\p{L}])|sqm|m2|bath|k(?![\\p{L}])|الف|مليون))";
+  for (const m of s.matchAll(new RegExp(`${S}${FLOOR_WORD} ?[:=]? ?(\\d{1,2})${E}${NOT_FLOOR_NUM}`, "gu"))) found.add(Number(m[1]));
   for (const m of s.matchAll(new RegExp(`${S}(\\d{1,2})(?:st|nd|rd|th)? ${FLOOR_WORD}${E}`, "gu"))) found.add(Number(m[1]));
   // Only an ordinal, e.g. the whole cell says "الرابع"
   const only = new RegExp(`^ ?(?:ال)?(${ORD_ALT}) ?$`, "u").exec(s);

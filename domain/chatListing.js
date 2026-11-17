@@ -7,6 +7,11 @@
 const { latin } = require("./chatParse");
 const { normalizeSearch } = require("./searchText");
 const SheetImport = require("./sheetImport");
+const { readAmounts } = require("./read/amount");
+const { readRooms } = require("./read/rooms");
+const { readArea } = require("./read/area");
+const { readFloor } = require("./read/floor");
+const { norm } = require("./read/numbers");
 const Places = require("./mapPlaces");
 
 const NUM = "\\d[\\d.,]*";
@@ -102,14 +107,26 @@ function parsePost(text, places = null, from = {}) {
     for (const x of periodPrices.slice().reverse()) t = t.slice(0, x.at) + " ".repeat(x.len) + t.slice(x.at + x.len);
   }
 
+  // The shared amount reader sees the whole phrase ("22 مليون الا ربع", "5 مليون و 200", "3 مليون و 750 الف").
+  const amounts = readAmounts(t).filter((a) => a.sure && a.hadUnit);
   // Price: after a price word, else a figure with million/thousand, else a long plain number.
   const price =
     take(new RegExp(`(?:السعر|سعر|بسعر|price|المطلوب|طالب|إجمالي|اجمالي|الإجمالي|الاجمالي|ايجار|إيجار|rent)\\s*[:\\-=]?\\s*(?:ب|ـ)?\\s*(${MONEY}${CUR})`, "i")) ||
     take(new RegExp(`(?<![\\d.,])(\\d{1,3}(?:,\\d{3}){2,}${CUR}|\\d{6,}${CUR})(?![\\d.,])`)) ||
     take(new RegExp(`(${NUM}\\s*(?:مليون|ملايين|million|mil|m(?![a-z0-9²])|الف|ألف)${CUR})`, "i"));
-  if (price && !cells.price_value) set("price_value", price[1]);
+  if (price && !cells.price_value) {
+    // The captured text can be the front of a longer amount: the reader's value wins when its phrase starts with it.
+    const got = norm(price[1]).trim();
+    const longer = got && amounts.find((a) => norm(a.raw).startsWith(got) && norm(a.raw).length > got.length);
+    set("price_value", longer ? String(longer.value) : price[1]);
+  } else if (!price && !cells.price_value && amounts.length === 1) {
+    set("price_value", String(amounts[0].value)); // "مليون ونص", "ٍ٣ ونص مليون": phrasing the patterns above do not catch
+  }
 
-  const area = findArea(t);
+  const area = findArea(t) || (() => {
+    const r = readArea(t);
+    return r.sure ? (r.built ?? r.plain) : null;
+  })();
   if (area) set("area_value", area);
   const land = new RegExp(`(?:land|ارض|أرض|الارض|الأرض)\\s*(?:area|مساحة)?\\s*[:\\-=]?\\s*(${NUM})`, "i").exec(t);
   if (land && land[1] !== area) set("land_area", land[1]);
@@ -126,11 +143,23 @@ function parsePost(text, places = null, from = {}) {
   if (baths) set("bathrooms", baths[1]);
   else if (/حمامين|حمامان/.test(t)) set("bathrooms", 2);
 
+  // Bedrooms and bathrooms the patterns above missed ("تلات اوض", "غرفة وصالة", "bedrooms: 3"), when the reader is sure.
+  const rr = readRooms(t);
+  if (rr.sure && rr.bedroomsMax === null) {
+    if (!cells.bedrooms && rr.bedrooms) set("bedrooms", rr.bedrooms);
+    if (!cells.bathrooms && rr.bathrooms) set("bathrooms", rr.bathrooms);
+  }
+
   const floor = /(?:الدور|دور|floor)\s*[:\-]?\s*(ارضي|أرضي|الارضي|ground|\d+|[ء-ي]+)/i.exec(t);
   if (floor) {
     const w = floor[1];
     set("floor", /^\d+$/.test(w) || /(ارضي|أرضي|ground)/i.test(w) ? w : ORDINAL[w] || null);
   }
+
+  // The shared floor reader wins when it is sure ("3 غرف تاني دور" is the second floor, not the third).
+  const fl = readFloor(original);
+  if (fl.sure && fl.floor !== null) set("floor", fl.ground ? "ارضي" : String(fl.floor));
+  else if (!fl.sure) delete cells.floor;
 
   const delivery = /(?:استلام|تسليم|delivery)\s*[:\-]?\s*([^\n،,.;]{2,30}?)(?=\s+(?:تشطيب|finishing|السعر|سعر|مساحة)|\s*[\n،,.;]|\s*$)/i.exec(t);
   if (delivery) set("delivery", delivery[1]);
