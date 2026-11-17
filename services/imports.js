@@ -96,7 +96,9 @@ function composeRow(existing, draft, lang) {
   return composed;
 }
 
-const reasonOf = (b, lang) => (lang === "en" ? b.label_en : b.label_ar);
+// A simple missing field reads "Price is missing" (not just "Price"); a rule with its own sentence keeps it.
+const SIMPLE_MISSING = new Set(["price_value", "monthly_rent", "area_value", "bua", "bedrooms", "location", "listing_type", "property_type"]);
+const reasonOf = (b, lang) => (SIMPLE_MISSING.has(b.field) ? (lang === "en" ? `${b.label_en} is missing` : `${b.label_ar} ناقص`) : lang === "en" ? b.label_en : b.label_ar);
 // The sheet cell that fixes each thing the rules ask for, so the edit form offers exactly what is missing.
 const NEEDS = { listing_type: "listing_type", property_type: "property_type", location: "compound", area_value: "area_value", bua: "area_value", bedrooms: "bedrooms", monthly_rent: "price_value", price_value: "price_value", resale_two_of_three: "price_value", installments_question: "down_payment_value", primary_plan: "price_value" };
 const needsOf = (blockers) => [...new Set(blockers.map((b) => NEEDS[b.field]).filter(Boolean))];
@@ -305,9 +307,17 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
         items.push({ ...base, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)), needs: needsOf(ev.blockers) });
         continue;
       }
-      // A WhatsApp post that gives no owner phone cannot be saved as a new unit (every unit needs an owner contact): held for the Edit window.
-      if (source === "chat" && !require("../domain/phone").normalizePhone(p.draft.details?.owner_phone)) {
-        items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Owner phone is required" : "تليفون المالك مطلوب"], needs: ["owner_phone"] });
+      // A new unit needs a valid owner phone (every unit needs an owner contact), whatever the source: held for the Edit window,
+      // and said here, so the preview and the apply agree (QA 2026-11-17: a bad phone was listed as New, then not applied).
+      const ownerPhone = p.draft.details?.owner_phone;
+      const typedPhone = String(ownerPhone ?? p.cells?.owner_phone ?? "").trim();
+      // A typed number that is not a mobile is always a problem; an empty phone only blocks a WhatsApp post (an Excel sheet may leave it empty).
+      if (!require("../domain/phone").normalizePhone(ownerPhone) && (typedPhone || source === "chat")) {
+        const typed = typedPhone;
+        const reason = typed
+          ? lang === "en" ? `Owner phone is not a valid Egyptian mobile: «${typed.slice(0, 40)}»` : `تليفون المالك مش موبايل مصري صحيح: «${typed.slice(0, 40)}»`
+          : lang === "en" ? "Owner phone is required" : "تليفون المالك مطلوب";
+        items.push({ ...base, kind: "invalid", reasons: [reason], needs: ["owner_phone"] });
         continue;
       }
       if (p.status && p.status !== "active") ev.listing.status = p.status;
