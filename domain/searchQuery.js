@@ -382,7 +382,7 @@ function fuzzyTypes(hay, found) {
     if (!w || /\d/.test(w) || w.length < 4 || STOP.has(w)) continue;
     // After "in" / "at" a word is a place name, not a typo of a property type ("في فيلدا" is a place, not a villa).
     if (i > 0 && /^(في|فى|ب|ف|in|at)$/.test(words[i - 1])) continue;
-    const limit = w.length >= 5 ? 2 : 1;
+    const limit = w.length >= 7 ? 2 : 1;
     let best = null;
     let tie = false;
     for (const m of SINGLE_TYPE_TERMS) {

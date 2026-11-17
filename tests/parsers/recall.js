@@ -45,7 +45,9 @@ function excludedBy(f, u) {
   const bad = [];
   if (f.listing_type && f.listing_type !== u.listing_type) bad.push("listing_type");
   if (f.property_types?.length && u.property_type !== "unknown" && !f.property_types.includes(u.property_type)) bad.push("property_types");
-  if (u.bedrooms != null) {
+  // Same as the SQL in services/search.js: a "studio" reading (0 bedrooms) keeps every studio-type unit, whatever bedrooms it records.
+  const studioRead = f.bedrooms_min === 0 && f.bedrooms_max === 0 && u.property_type === "studio";
+  if (u.bedrooms != null && !studioRead) {
     if (f.bedrooms_min != null && u.bedrooms < f.bedrooms_min) bad.push("bedrooms_min");
     if (f.bedrooms_max != null && u.bedrooms > f.bedrooms_max) bad.push("bedrooms_max");
   }
