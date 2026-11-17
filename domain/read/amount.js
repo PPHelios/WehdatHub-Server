@@ -148,7 +148,9 @@ function scan(text) {
     if (unit && /^(m|م)$/i.test(unit)) {
       const decimal = isDigits && num % 1 !== 0;
       const cue = PRICE_CUE_RE.test(before);
-      if (!cue && !decimal && num >= 20) {
+      // Latin "m" after 20-99 is more likely a price ("apartment 20m") than metres, but not sure; "م" and 100+ are metres.
+      const latinMillion = /^m$/i.test(unit) && num < 100;
+      if (!cue && !decimal && num >= 20 && !latinMillion) {
         TOKEN.lastIndex = pos;
         continue;
       }

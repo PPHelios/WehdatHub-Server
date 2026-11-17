@@ -120,3 +120,13 @@ describe("readWhole and the cell readers that use it", () => {
     expect(Deal.parseMoney("abc")).toBeNull();
   });
 });
+
+describe("amount reader: every case in tests/parsers/money-cases.json", () => {
+  const cases = require("../parsers/money-cases.json");
+  test.each(cases.map((c) => [c.text, c.value]))("%s", (text, value) => expect(readAmount(text)?.value).toBe(value));
+  test("Latin m after 20-99 is a price but not sure; 100+ and Arabic م are metres", () => {
+    expect(readAmount("20m")).toMatchObject({ value: 20000000, sure: false });
+    expect(readAmount("150m")).toBeNull();
+    expect(readAmount("60م")).toBeNull();
+  });
+});
