@@ -76,7 +76,11 @@ const visibleStep = (pg) => pg.evaluate(() => {
 /** Taps Next and waits for the next step; fails with what the page showed if the step does not move. */
 async function next(pg, label) {
   const from = await visibleStep(pg);
-  await pg.locator("#unit-form button[type=button]", { hasText: /^(Next|التالي)$/ }).first().click();
+  const nextBtn = pg.locator("#unit-form button[type=button]", { hasText: /^(Next|التالي)$/ }).first();
+  await nextBtn.click();
+  // A look-alike unit is a warning with a link; tapping Next again accepts it (the same unit in Arabic and English is now recognised).
+  const warned = await pg.waitForFunction(() => { const e = document.querySelector("#unit-form .step-err:not([hidden])"); return !!e && /looks like|شكلها نفس/.test(e.textContent || ""); }, null, { timeout: 4000 }).then(() => true, () => false);
+  if (warned) await nextBtn.click();
   try {
     await pg.waitForFunction((f) => {
       const s = [...document.querySelectorAll("#unit-form [data-step]")].find((n) => !n.hidden);
