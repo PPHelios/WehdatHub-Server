@@ -39,7 +39,7 @@ const ERRORS = {
 
 function meter(label, used, limit) {
   const pct = limit > 0 ? Math.min(100, Math.round((used * 100) / limit)) : 100;
-  return html`<div class="card tile" data-meter="${label[1].toLowerCase()}"><div class="muted">${label[0]}</div><strong>${num(used)} / ${num(limit)}</strong><progress max="100" value="${pct}">${pct}%</progress></div>`;
+  return html`<div class="card tile" data-meter="${label[1].toLowerCase()}"><div class="muted">${label[0]}</div><strong>${num(used)} / ${Number(limit) >= Plans.UNLIMITED ? "∞" : num(limit)}</strong><progress max="100" value="${pct}">${pct}%</progress></div>`;
 }
 
 function paymentCard(p, payTo, lang) {
@@ -89,7 +89,7 @@ ${created ? paymentCard(created, payTo, lang) : ""}
   ${a.until ? html`<p>${L(lang, "لحد", "Until")} <span dir="ltr">${day(a.until)}</span></p>` : ""}
   <div class="grid">
     ${meter([L(lang, "المستخدمين", "Users"), "seats"], a.seats.used, a.seats.limit)}
-    ${meter([L(lang, "وحدات متاحة", "Available units"), "units"], a.units.used, a.units.limit)}
+    ${meter([L(lang, "الوحدات (المتاحة والمؤرشفة)", "Units (available and archived)"), "units"], a.units.used, a.units.limit)}
   </div>
   <p class="muted" data-credit-split>${L(lang, `الرصيد: ${num(a.credits.plan)} من الباقة` + (a.credits.bundles ? ` + ${num(a.credits.bundles)} باقات زيادة` : "") + (a.credits.grants ? ` + ${num(a.credits.grants)} هدية من صاحب التطبيق` : ""), `Credits: ${num(a.credits.plan)} from the plan` + (a.credits.bundles ? ` + ${num(a.credits.bundles)} from bundles` : "") + (a.credits.grants ? ` + ${num(a.credits.grants)} granted by the app owner` : ""))}</p>
   <p class="muted">${L(lang, "لو الرصيد خلص، البحث والعملاء والوحدات بيفضلوا شغالين يدوي؛ اللي بيقف هو قراءة الفويس والوصف بالذكاء الاصطناعي لحد أول الشهر. بياناتك مش بتتمسح أبداً.", "When an allowance runs out, search, clients and units keep working by hand; only AI reading of voice notes and descriptions stops until the month turns. Your data is never deleted.")}</p>
@@ -99,7 +99,7 @@ ${manager
   <h2>${L(lang, "اختار باقة", "Choose a plan")}</h2>
   <div class="plancards">${Plans.PLANS.map(
     (x) => html`<label class="plancard"><input type="radio" name="plan" value="${x.id}" ${x.id === (a.source === "paid" ? p.id : "office") ? "checked" : ""}><strong>${Plans.planName(x, lang)}</strong><span class="price">${num(x.priceEgp)} <small>${L(lang, "ج.م/شهر", "EGP/month")}</small></span>
-      <ul><li>${x.seats} ${L(lang, "مستخدم", "users")}</li><li>${num(x.credits)} ${L(lang, "رصيد ذكاء اصطناعي في الشهر", "AI credits a month")}</li><li>${num(limits[x.id] ?? x.units)} ${L(lang, "وحدة متاحة", "available units")}</li></ul></label>`
+      <ul><li>${x.seats} ${L(lang, "مستخدم", "users")}</li><li>${num(x.credits)} ${L(lang, "رصيد ذكاء اصطناعي في الشهر", "AI credits a month")}</li><li>${(limits[x.id] ?? x.units) >= Plans.UNLIMITED ? L(lang, "وحدات بلا حد", "Unlimited units") : `${num(limits[x.id] ?? x.units)} ${L(lang, "وحدة", "units")}`}</li></ul></label>`
   )}</div>
   <label>${L(lang, "المدة", "Period")} <select name="months">${Billing.MONTHS.map((m) => html`<option value="${m}">${m === 1 ? L(lang, "شهر", "1 month") : L(lang, `${m} شهور`, `${m} months`)}</option>`)}</select></label>
   <input type="hidden" name="kind" value="plan">

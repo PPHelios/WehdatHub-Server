@@ -121,7 +121,7 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   expect(pay.status).toBe(200);
   const ref = (pay.text.match(/data-payment="(WH-[A-Z0-9]{6})"/) || [])[1];
   expect(ref).toBeDefined();
-  expect(pay.text).toContain("6,270 EGP");
+  expect(pay.text).toContain("8,970 EGP");
   expect(pay.text).toContain("wehdat@instapay");
   expect((await o.agent.post("/app/plan/pay").type("form").send({ _csrf: o.csrf, kind: "plan", plan: "gold", months: "3" })).status).toBe(400);
 
@@ -145,13 +145,13 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   const [vp] = await h.query("SELECT id, amount_egp FROM payments WHERE kind = 'credit_bundle'");
   expect(Number(vp.amount_egp)).toBe(175);
   await Billing.confirmPayment(h.pool, vp.id);
-  expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ plan: 6000, bundles: 500, limit: 6500 });
+  expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ plan: 10000, bundles: 500, limit: 10500 });
   // A manager asks for more credits; the owner approves and the grant joins this month's pool.
   expect((await o.agent.post("/app/plan/credit-request").type("form").send({ _csrf: o.csrf, credits: "300", note: "busy month" })).status).toBe(200);
   const [rq] = await h.query("SELECT id, status FROM credit_requests");
   expect(rq.status).toBe("pending");
   expect(await Credits.decideRequest(h.pool, rq.id, { approve: true })).toMatchObject({ ok: true });
-  expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ grants: 300, limit: 6800 });
+  expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ grants: 300, limit: 10800 });
   // Owner controls are 404 for everyone else.
   expect((await b.agent.post(`/app/owner/payments/${p.id}/cancel`).type("form").send({ _csrf: b.csrf })).status).toBe(404);
 });

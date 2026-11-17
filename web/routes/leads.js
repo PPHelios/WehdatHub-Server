@@ -237,7 +237,7 @@ ${rows.length
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
-      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row">${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
+      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row">${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "تحميل من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
 ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
 ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">

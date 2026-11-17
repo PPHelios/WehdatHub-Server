@@ -59,7 +59,7 @@ const who = (i, lang) => `${i.name || L(lang, "بدون اسم", "No name")} · 
 function formBody(req, { error = null } = {}) {
   const lang = langOf(req);
   const manager = isManager(req.session.broker);
-  return html`<h1>📥 ${L(lang, "استيراد عملاء من ملف", "Import clients from a file")}</h1>
+  return html`<h1>📥 ${L(lang, "تحميل عملاء من ملف", "Import clients from a file")}</h1>
 ${error ? html`<p class="card notice bad" role="alert">⚠️ ${error}</p>` : ""}
 <form method="post" action="/app/leads/import" enctype="multipart/form-data" class="card stack" data-progress>
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
@@ -91,7 +91,7 @@ function planBody(imp, req) {
   const { counts } = imp.payload;
   const warn = (i) => (i.warnings?.length ? html`<div class="warn muted">${i.warnings.map((w) => LeadImport.warningLabel(w, lang)).join(" · ")}</div>` : "");
   const n = (counts.new || 0) + (counts.merge || 0);
-  return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
+  return html`<h1>📥 ${L(lang, "مراجعة التحميل", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 <p class="muted" data-counts>${ORDER.filter((k) => counts[k]).map((k) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1]).split(" (")[0]}: ${counts[k]}`).join(" · ")}</p>
 ${section(imp, "new", lang, (i) => html`${who(i, lang)} · ${Stages.kindLabel(i.fields.kind, lang)}${i.fields.stage && i.fields.stage !== "new" ? ` · ${Stages.stageLabel(i.fields.stage, lang)}` : ""}${i.assignee_name ? ` · 🧑‍💼 ${i.assignee_name}` : ""}${warn(i)}`)}
 ${section(imp, "merge", lang, (i) => html`${Card.refLabel(i.ref)} · ${who(i, lang)}${i.fills.length ? ` · ${L(lang, "هيتكمّل:", "Fills:")} ${i.fills.map((f) => L(lang, FILL_LABEL[f][0], FILL_LABEL[f][1])).join("، ")}` : ` · ${L(lang, "مفيش جديد", "Nothing new")}`}${warn(i)}`)}
@@ -103,7 +103,7 @@ ${n
   ? html`<form method="post" action="/app/leads/import/${imp.id}/apply" class="card stack">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <p>${L(lang, `هيتضاف ${counts.new || 0} عميل جديد ويتحدّث ${counts.merge || 0}. الباقي مش هيتلمس.`, `${counts.new || 0} new leads will be added and ${counts.merge || 0} updated. The rest is left alone.`)}</p>
-  <button type="submit">✅ ${L(lang, "استورد", "Import")}</button>
+  <button type="submit">✅ ${L(lang, "حمّل", "Import")}</button>
 </form>`
   : html`<p class="card">${L(lang, "مفيش صفوف ينفع تتضاف.", "No rows can be imported.")} <a href="/app/leads/import">${L(lang, "ملف تاني", "Another file")}</a></p>`}`;
 }
@@ -111,7 +111,7 @@ ${n
 function progressBody(imp, lang) {
   const r = imp.result || { done: 0, total: 0 };
   return html`<div id="lead-import" class="card stack" hx-get="/app/leads/import/${imp.id}" hx-trigger="every 2s" hx-select="#lead-import" hx-swap="outerHTML">
-  <h1>⏳ ${L(lang, "جاري الاستيراد", "Importing")}</h1>
+  <h1>⏳ ${L(lang, "جاري التحميل", "Importing")}</h1>
   <progress max="${r.total || 1}" value="${r.done}"></progress>
   <p data-progress>${r.done} / ${r.total}</p>
 </div>`;
@@ -121,7 +121,7 @@ function resultBody(imp, lang) {
   const r = imp.result || {};
   const line = (label, n) => (n ? html`<li>${label}: ${n}</li>` : "");
   return html`<div id="lead-import" class="card notice" data-result>
-  <h1>${imp.status === "failed" ? `❌ ${L(lang, "الاستيراد وقف", "The import stopped")}` : `✅ ${L(lang, "اتستورد", "Imported")}`}</h1>
+  <h1>${imp.status === "failed" ? `❌ ${L(lang, "التحميل وقف", "The import stopped")}` : `✅ ${L(lang, "اتحمّل", "Imported")}`}</h1>
   <ul>
     ${line(L(lang, "عملاء جداد", "New leads"), r.created)}
     ${line(L(lang, "اتحدّثوا", "Updated"), r.merged)}
@@ -135,7 +135,7 @@ function resultBody(imp, lang) {
 }
 
 function register(web, { pool, page }) {
-  const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "استيراد عملاء", "Import clients"), nav: "leads", body }, status);
+  const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "تحميل عملاء", "Import clients"), nav: "leads", body }, status);
 
   web.get("/leads/import", (req, res) => importPage(req, res, formBody(req)));
 
@@ -166,7 +166,7 @@ function register(web, { pool, page }) {
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
     if (!gate.allowed) return importPage(req, res, formBody(req, { error: L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.") }), 429);
     if (req.body.confirm !== "1" || !Stages.LAWFUL_BASES.includes(req.body.basis)) {
-      return importPage(req, res, formBody(req, { error: L(lang, "لازم تختار الأساس القانوني وتأكده قبل الاستيراد.", "Pick the lawful basis and confirm it before importing.") }), 422);
+      return importPage(req, res, formBody(req, { error: L(lang, "لازم تختار الأساس القانوني وتأكده قبل التحميل.", "Pick the lawful basis and confirm it before importing.") }), 422);
     }
     const file = (req.files?.file || [])[0];
     let table;
@@ -204,7 +204,7 @@ function register(web, { pool, page }) {
     const imp = await Imports.loadImport(pool, broker, req.params.id);
     if (!imp || imp.kind !== "leads") return next();
     if (!(await LeadImports.startApply(pool, broker, imp.id))) {
-      return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "الاستيراد ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/leads/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);
+      return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "التحميل ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/leads/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);
     }
     return res.redirect(303, `/app/leads/import/${imp.id}`);
   });

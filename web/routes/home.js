@@ -68,8 +68,8 @@ ${groups.map((g) => {
   ${tile("/app/units/new", "mic", en ? "Add a unit" : "إضافة وحدة", en ? "Speak, paste a description, or fill the form" : "سجّل فويس، الصق الوصف، أو املأ الفورم")}
   ${tile("/app/leads/new", "leads", en ? "New lead" : "عميل جديد", en ? "Paste the client's message or type it" : "الصق رسالة العميل أو اكتبها")}
   ${tile("/app/deals/new", "deal", en ? "Record a deal" : "سجّل صفقة", en ? "Unit, client and commission" : "الوحدة والعميل والعمولة")}
-  ${tile("/app/import", "import", en ? "Import units" : "استيراد وحدات", en ? "Excel sheet, group posts or chat export" : "شيت إكسيل، بوستات الجروبات أو تصدير الشات", "desktop-only")}
-  ${tile("/app/leads/import", "import", en ? "Import leads" : "استيراد عملاء", en ? "CSV or Excel from Facebook or your sheet" : "ملف من فيسبوك أو شيتك", "desktop-only")}
+  ${tile("/app/import", "import", en ? "Import units" : "تحميل وحدات", en ? "Excel sheet, group posts or chat export" : "شيت إكسيل، بوستات الجروبات أو تصدير الشات", "desktop-only")}
+  ${tile("/app/leads/import", "import", en ? "Import leads" : "تحميل عملاء", en ? "CSV or Excel from Facebook or your sheet" : "ملف من فيسبوك أو شيتك", "desktop-only")}
 </div>`
     });
   });

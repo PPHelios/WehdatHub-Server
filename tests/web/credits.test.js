@@ -19,13 +19,15 @@ afterEach(async () => {
 });
 
 describe("AI credit pool (053)", () => {
-  test("seeds the plans with 400 credits per seat on the paid plans and Solo at 199 EGP", async () => {
+  test("seeds the 2026 plan table (migration 126)", async () => {
     const plans = await Credits.plans(h.pool);
     const byId = Object.fromEntries(plans.map((p) => [p.id, p]));
-    expect(byId.solo).toMatchObject({ price_egp: 199, seats: 1, credits: 400 });
-    expect(byId.office).toMatchObject({ price_egp: 830, seats: 5, credits: 2000 });
-    expect(byId.agency).toMatchObject({ price_egp: 2090, seats: 15, credits: 6000 });
-    expect(byId.free).toMatchObject({ price_egp: 0, credits: 80 });
+    expect(byId.solo).toMatchObject({ price_egp: 199, seats: 1, units: 1000, credits: 400 });
+    expect(byId.team).toMatchObject({ price_egp: 599, seats: 5, units: 5000, credits: 2000 });
+    expect(byId.office).toMatchObject({ price_egp: 1790, seats: 15, units: 1000000, credits: 6000 });
+    expect(byId.agency).toMatchObject({ price_egp: 2990, seats: 25, units: 1000000, credits: 10000 });
+    expect(byId.enterprise).toMatchObject({ seats: 50, credits: 20000, active: false });
+    expect(byId.free).toMatchObject({ price_egp: 0, units: 50, credits: 80 });
   });
 
   test("seeds the three extra bundles", async () => {
@@ -70,13 +72,13 @@ describe("owner page: plans and credits", () => {
     expect(page.text).toContain("data-credit-bundles");
     expect(page.text).toContain("data-credit-actions");
 
-    const form = { _csrf: csrf, new_id: "team", new_name_ar: "فريق", new_name_en: "Team", new_price: "1200", new_seats: "8", new_units: "900", new_credits: "3200" };
+    const form = { _csrf: csrf, new_id: "boutique", new_name_ar: "فريق", new_name_en: "Team", new_price: "1200", new_seats: "8", new_units: "900", new_credits: "3200" };
     for (const p of await Credits.plans(h.pool)) Object.assign(form, { [`p_${p.id}_name_ar`]: p.name_ar, [`p_${p.id}_name_en`]: p.name_en, [`p_${p.id}_price`]: p.id === "solo" ? 249 : p.price_egp, [`p_${p.id}_seats`]: p.seats, [`p_${p.id}_units`]: p.units, [`p_${p.id}_credits`]: p.credits, [`p_${p.id}_active`]: "on" });
     expect((await agent.post("/app/owner/credit-plans").type("form").send(form)).status).toBe(200);
     const byId = Object.fromEntries((await Credits.plans(h.pool)).map((p) => [p.id, p]));
     expect(byId.solo.price_egp).toBe(249);
-    expect(byId.team).toMatchObject({ price_egp: 1200, seats: 8, credits: 3200 });
-    expect(require("../../domain/plans").planById("team")).toBeTruthy();
+    expect(byId.boutique).toMatchObject({ price_egp: 1200, seats: 8, credits: 3200 });
+    expect(require("../../domain/plans").planById("boutique")).toBeTruthy();
     // A bad number is refused and nothing else changes.
     const bad = await agent.post("/app/owner/credit-plans").type("form").send({ ...form, p_solo_price: "abc" });
     expect(bad.status).toBe(400);

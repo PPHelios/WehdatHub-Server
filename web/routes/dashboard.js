@@ -567,14 +567,14 @@ function importSection(r, lang) {
   if (!r || !r.parser.posts) return "";
   const pc = (v) => (v === null || v === undefined ? "—" : `${v}%`);
   return html`<section class="card" data-import-report>
-  <h2>📥 ${L(lang, "استيراد واتساب", "WhatsApp import")}</h2>
+  <h2>📥 ${L(lang, "تحميل واتساب", "WhatsApp import")}</h2>
   <table class="kv"><tbody>
     <tr><th>${L(lang, "بوستات اتقرت", "Posts read")}</th><td>${r.parser.posts}</td></tr>
     <tr><th>${L(lang, "القارئ العادي كفى", "Read without AI")}</th><td>${pc(r.parser.complete_pct)}</td></tr>
     <tr><th>${L(lang, "اتستخدم الذكاء", "AI used")}</th><td>${pc(r.parser.ai_used_pct)}</td></tr>
     <tr><th>${L(lang, "صفوف اتعدلت في المراجعة", "Rows edited in review")}</th><td>${pc(r.review.edited_pct)}</td></tr>
   </tbody></table>
-  <p><a class="secondary button small" href="/app/import">${L(lang, "استيراد جديد", "New import")}</a></p>
+  <p><a class="secondary button small" href="/app/import">${L(lang, "تحميل جديد", "New import")}</a></p>
 </section>`;
 }
 

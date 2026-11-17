@@ -1,4 +1,4 @@
-// tests/web/unit-cap.test.js — The plan's cap on available units: sold and archived units don't count, a new unit past
+// tests/web/unit-cap.test.js — The plan's cap on available units: archived units count, sold ones don't, a new unit past
 // the cap isn't saved (web form, price-sheet apply, import) and the broker is told to upgrade; the owner edits the caps.
 "use strict";
 
@@ -30,19 +30,18 @@ const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1",
 const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", price_value: "9 مليون", area_value: "150", bedrooms: "3", bathrooms: "2", finishing: "fully_finished" };
 
 test("defaults per plan, owner overrides, and what counts", async () => {
-  expect(Plans.planById("free").units).toBe(25);
-  expect(await Billing.planLimits(h.pool)).toEqual({ solo: 300, office: 1500, agency: 5000, free: 25 });
+  expect(Plans.planById("free").units).toBe(50);
+  expect(await Billing.planLimits(h.pool)).toEqual({ solo: 1000, team: 5000, office: 1000000, agency: 1000000, free: 50 });
   await setCap("office", 2);
   await h.insertListing({ code: "CAP-1" });
   await h.insertListing({ code: "CAP-2", status: "sold" });
   await h.insertListing({ code: "CAP-3", status: "archived" });
   const a = await Billing.allowance(h.pool, h.BROKERS.broker.agency_id);
-  expect(a.units).toEqual({ used: 1, limit: 2 });
-  expect((await Billing.unitCapacity(h.pool, h.BROKERS.broker.agency_id)).ok).toBe(true);
-  expect((await Billing.unitCapacity(h.pool, h.BROKERS.broker.agency_id, { adding: 2 })).ok).toBe(false);
+  expect(a.units).toEqual({ used: 2, limit: 2 });
+  expect((await Billing.unitCapacity(h.pool, h.BROKERS.broker.agency_id)).ok).toBe(false);
 });
 
-test("a unit past the cap is refused with the upgrade message; archiving makes room", async () => {
+test("a unit past the cap is refused with the upgrade message; archiving does not make room, deleting does", async () => {
   await setCap("office", 1);
   await h.insertListing({ code: "CAP-1" });
   const { agent, csrf } = await signIn(h, "broker");
@@ -50,7 +49,7 @@ test("a unit past the cap is refused with the upgrade message; archiving makes r
   expect(r.status).toBe(403);
   expect(r.text).toContain("وصلت للحد الأقصى");
   expect((await h.query("SELECT count(*)::int AS n FROM listings WHERE agency_id = $1", [h.BROKERS.broker.agency_id]))[0].n).toBe(1);
-  await h.query("UPDATE listings SET status = 'archived' WHERE code = 'CAP-1'");
+  await h.query("UPDATE listings SET status = 'deleted', deleted_at = now() WHERE code = 'CAP-1'");
   const ok = await agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("listing_type", "sale").field("market", "resale").field("property_type", "apartment").field("compound", "Hyde Park").field("price_value", "9 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("finishing", "fully_finished").field("owner_name", "Mr Owner").field("owner_phone", "01012345678");
   expect(ok.status).toBe(303);
 });
@@ -60,7 +59,7 @@ test("createListing reports the cap and plan; English text", async () => {
   await h.insertListing({ code: "CAP-1" });
   const res = await Store.createListing(h.pool, await row("broker"), { fields: { listing_type: "sale", property_type: "apartment", price_value: 5e6, area_value: 100, details: { owner_name: "Mr Owner", owner_phone: "01012345678" } }, code: null, lang: "en" });
   expect(res.limit).toMatchObject({ used: 1, limit: 1 });
-  expect(Plans.unitLimitText(res.limit, "en")).toContain("Office plan holds 1 available units");
+  expect(Plans.unitLimitText(res.limit, "en")).toContain("Office plan holds 1 units");
 });
 
 test("owner edits the caps on /app/owner; the plan page shows the meter", async () => {
@@ -75,7 +74,7 @@ test("owner edits the caps on /app/owner; the plan page shows the meter", async 
     expect(r.status).toBe(200);
     expect((await Billing.planLimits(h.pool)).solo).toBe(200);
     const plan = await agent.get("/app/usage?lang=en");
-    expect(plan.text).toContain("Available units");
+    expect(plan.text).toContain("Units (available and archived)");
     const b = await signIn(h, "broker");
     expect((await b.agent.post("/app/owner/credit-plans").type("form").send({ _csrf: b.csrf })).status).toBe(404);
   } finally {

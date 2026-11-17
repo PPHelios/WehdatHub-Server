@@ -150,7 +150,7 @@ async function notifyOnce(pool, broker, id, result, assigned, now) {
     await Notifications.notifyBroker(pool, m, {
       kind: "manager_alert",
       dedupeKey: `lead_import:${id}`,
-      title: L(m, `📥 ${broker.name || "—"} استورد ${result.created} عميل جديد`, `📥 ${broker.name || "—"} imported ${result.created} new leads`),
+      title: L(m, `📥 ${broker.name || "—"} حمّل ${result.created} عميل جديد`, `📥 ${broker.name || "—"} imported ${result.created} new leads`),
       body: L(m, `اتحدّث: ${result.merged} · مع زملاء: ${result.colleague}`, `Updated: ${result.merged} · With colleagues: ${result.colleague}`),
       url: "/app/leads",
       now

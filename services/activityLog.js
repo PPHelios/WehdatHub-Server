@@ -95,7 +95,7 @@ const WEB_POSTS = [
   [/^\/deals\//, "غيّر صفقة", "Changed a deal"],
   [/^\/leads\//, "غيّر عميل", "Changed a lead"],
   [/^\/units\//, "غيّر وحدة", "Changed a unit"],
-  [/^\/import/, "استورد بيانات", "Imported data"]
+  [/^\/import/, "حمّل بيانات", "Imported data"]
 ];
 function readableAction(action, lang) {
   const raw = String(action || "");
