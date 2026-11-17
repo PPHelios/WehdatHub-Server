@@ -8,6 +8,7 @@ const Fx = require("./fx");
 const Features = require("./features");
 const Places = require("./places");
 const { TYPE_TERMS } = require("./vocabulary");
+const { prepareSearchText } = require("./read/searchPrep");
 const { normalizeSearch, foldLetters } = require("./searchText");
 const { mapFurnishing, mapFinishing } = require("./furnishingStatus");
 const { PROPERTY_TYPES } = require("./fieldRules");
@@ -382,7 +383,7 @@ function fuzzyTypes(hay, found) {
     if (!w || /\d/.test(w) || w.length < 4 || STOP.has(w)) continue;
     // After "in" / "at" a word is a place name, not a typo of a property type ("في فيلدا" is a place, not a villa).
     if (i > 0 && /^(في|فى|ب|ف|in|at)$/.test(words[i - 1])) continue;
-    const limit = w.length >= 5 ? 2 : 1;
+    const limit = w.length >= 7 ? 2 : 1;
     let best = null;
     let tie = false;
     for (const m of SINGLE_TYPE_TERMS) {
@@ -468,7 +469,7 @@ function applyAliases(hay) {
 }
 
 function fallbackParse(text) {
-  const raw = foldLetters(String(text || "").trim());
+  const raw = foldLetters(prepareSearchText(String(text || "").trim()));
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
   const egpWord = / (جنيه|جنيها|egp|pound|pounds|le) /.test(` ${normalizeSearch(raw)} `);
   const f = emptyFilters();

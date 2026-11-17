@@ -83,3 +83,39 @@ describe("AC only and kitchen only are searchable statuses", () => {
     expect(f.finishing).toEqual(["semi_finished"]);
   });
 });
+
+describe("shared furnishing and finishing readers (Parser consolidation, Phase 1)", () => {
+  const { readFurnishing } = require("../../domain/read/furnishing");
+  const { readFinishing } = require("../../domain/read/finishing");
+  test.each([
+    ["مش مفروشة", "unfurnished"],
+    ["شقة غير مفروشة", "unfurnished"],
+    ["not furnished", "unfurnished"],
+    ["بدون فرش", "unfurnished"],
+    ["فاضية", "unfurnished"],
+    ["سيمي فرنشد", "semi_furnished"],
+    ["نص مفروشة", "semi_furnished"],
+    ["semi furnished", "semi_furnished"],
+    ["مفروشة", "furnished"],
+    ["fully furnished", "furnished"],
+    ["مفروشة مع مطبخ وتكييف", "furnished"],
+    ["مطبخ وتكييف", "kitchen_and_ac"],
+  ])("furnishing %s", (t, v) => expect(readFurnishing(t).value).toBe(v));
+  test("conflicting furnishing words are not sure", () => expect(readFurnishing("مفروش او فاضي")).toEqual({ value: null, sure: false }));
+  test.each([
+    ["سيمي فينشد", "semi_finished"],
+    ["نص تشطيب", "semi_finished"],
+    ["كور اند شيل", "core_and_shell"],
+    ["كور آند شل", "core_and_shell"],
+    ["على المحارة", "core_and_shell"],
+    ["بدون تشطيب", "core_and_shell"],
+    ["مش متشطبة", "core_and_shell"],
+    ["تشطيب كامل", "fully_finished"],
+    ["فول فينش", "fully_finished"],
+    ["تشطيب سوبر لوكس", "super_lux"],
+    ["الترا سوبر لوكس", "ultra_super_lux"],
+    ["semi furnished", null],
+    ["لوكس", null],
+    ["تشطيب", null],
+  ])("finishing %s", (t, v) => expect(readFinishing(t).value).toBe(v));
+});

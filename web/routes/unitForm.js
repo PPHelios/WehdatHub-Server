@@ -14,6 +14,7 @@ const Supabase = require("../../lib/supabase");
 const RateLimit = require("../../lib/rateLimit");
 const { normalizeImageBuffer, MAX_PHOTOS } = require("../../lib/images");
 const { logOperation } = require("../../lib/db");
+const ParserLog = require("../../services/parserLog");
 const Rules = require("../../domain/fieldRules");
 const Card = require("../../domain/leadCard");
 const Leads = require("../../services/leads");
@@ -238,6 +239,8 @@ function register(web, { pool, page, assets }) {
       const merged = L.composeFields({ existing: base, draft: extracted.fields, lang });
       const code = mode === "edit" ? existing.code : form.code || extracted.fields.code || "";
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_unit_extract", metadata: { voice: voice.length, text: Boolean(text) } });
+      // The rules-only reader reads the same text; per-field agreement goes to the log (field names only).
+      if (text) ParserLog.logParserRead(pool, { agency_id: broker.agency_id, broker_id: broker.id, parser: "add_unit_text", kind: "web", text, result: ParserLog.readAlongside(text, extracted.fields) });
       return send(200, { ...Form.formFromUnit(merged), code }, { notice: L10n(lang, "✨ اتملت البيانات من الوصف. راجعها قبل الحفظ.", "✨ Filled from your description. Check before saving.") });
     } catch (err) {
       console.warn("Web extraction failed:", err.message);

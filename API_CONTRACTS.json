@@ -165,7 +165,9 @@
       "cleanFeaturesList": ["features"],
       "detectCurrency": ["text"],
       "normalizePriceInput": ["str"],
-      "parseMoney": ["raw", "params"],
+      "parseMoney": ["raw", "opts"],
+      "parseMoneyLegacy": ["raw", "params"],
+      "parseEgyptianPriceLegacy": ["rawText", "opts"],
       "formatAbbreviatedPrice": ["val", "currency", "lang", "listingType"],
       "parseEgyptianPrice": ["rawText", "opts"],
       "parsePrice": ["raw", "params"],
@@ -619,7 +621,14 @@
       "FURNISHING_STATUSES": "Array",
       "FINISHING_STATUSES": "Array",
       "mapFurnishing": ["text"],
-      "mapFinishing": ["text"]
+      "mapFinishing": ["text"],
+      "mapFurnishingLegacy": ["text"],
+      "mapFinishingLegacy": ["text"]
+    },
+    "domain/parserReport.js": {
+      "summarizeReads": ["reads"],
+      "summarizeSearch": ["rows"],
+      "renderReport": ["params"]
     },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
@@ -873,6 +882,7 @@
       "TYPE_KEYS": "Array",
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
+      "setGroupListingType": ["pool", "broker", "id", "value", "params"],
       "waitForGroupImport": ["id"],
       "applyGroup": ["pool", "broker", "id", "params"]
     },
@@ -1238,6 +1248,9 @@
       "deactivateBroker": ["pool", "params"]
     },
     "domain/leadIntake.js": {
+      "readLeadText": ["raw"],
+      "readLeadForm": ["raw"],
+      "looksLikePortalLead": ["raw"],
       "MAX_CHOICES": "Number",
       "findPhones": ["text"],
       "parseContactCard": ["contacts"],
@@ -2214,15 +2227,11 @@
     },
     "domain/followUpDraft.js": {
       "MAX_TEXT": "Number",
-      "MAX_STYLE": "Number",
       "firstName": ["name"],
-      "factsOf": ["params"],
-      "prompt": ["facts", "params"],
-      "parse": ["text"]
+      "template": ["params"]
     },
     "services/followUpDrafts.js": {
-      "draft": ["pool", "broker", "leadKey", "params"],
-      "saveStyle": ["pool", "broker", "text"]
+      "draft": ["pool", "broker", "leadKey", "params"]
     },
     "domain/leases.js": {
       "END_DAYS": "Array",
@@ -2575,6 +2584,10 @@
       "run": ["pool", "params"],
       "summary": ["pool", "counts"],
       "auditJob": []
+    },
+    "services/parserLog.js": {
+      "readAlongside": ["text", "aiFields"],
+      "logParserRead": ["pool", "params"]
     },
     "services/searchLog.js": {
       "cleanText": ["text"],

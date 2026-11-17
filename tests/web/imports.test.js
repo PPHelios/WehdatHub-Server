@@ -235,7 +235,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
     scripted();
     const { agent, csrf } = await signIn(h, "manager");
-    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون 01012345678", "شقة في هايد بارك 150م 3 غرف السعر 8.5 مليون 01012345678", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
+    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون 01012345678", "شقة للبيع في هايد بارك 150م 3 غرف السعر 8.5 مليون 01012345678", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", text);
     expect(r.status).toBe(303);
     const id = importId(r);
@@ -269,15 +269,42 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect(Describe.brokerCard(l)).toMatch(/Ahmed Broker/);
   });
 
-  test("while posts are read the page polls; the AI quota running out is reported per post", async () => {
-    h.AI.respond(() => Object.assign(new Error("quota"), { code: "AGENCY_QUOTA_EXCEEDED" }));
+  test("while posts are read the page polls; posts are read by rules, no AI call", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "شقة للبيع في ميفيدا 200 متر 3 غرف السعر 12 مليون");
     const id = importId(r);
     await Imports.waitForGroupImport(id);
-    expect((await agent.get(`/app/import/${id}`)).text).toMatch(/data-state="error"[\s\S]*وصلت لحد النهارده/);
+    expect(h.AI.calls).toHaveLength(0);
+    expect((await agent.get(`/app/import/${id}`)).text).toMatch(/data-state="(ok|incomplete)"/);
     await h.query("UPDATE web_imports SET status = 'processing' WHERE id = $1", [id]);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/hx-trigger="every 2s"/);
+  });
+
+  test("posts that do not say sale or rent: one tap 'All rent' fills them and reads every post again; no AI call", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const text = ["Code MIr1 Compound name : ميفيدا Unit type: apartment Area : 160m 3 bedrooms Price : 65000 EGP 01012345678", "Code MIr2 Compound name : ميفيدا Unit type: apartment Area : 180m 3 bedrooms Price : 70000 EGP 01012345679"].join("\n\n\n");
+    const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).field("text", text));
+    await Imports.waitForGroupImport(id);
+    let page = (await agent.get(`/app/import/${id}`)).text;
+    expect(page).toMatch(/data-group-listing-type/);
+    expect(page).toMatch(/data-post="0" data-state="incomplete"/);
+    const r = await agent.post(`/app/import/${id}/listing-type`).set("X-CSRF-Token", csrf).type("form").send("value=rent");
+    expect(r.status).toBe(303);
+    await Imports.waitForGroupImport(id);
+    page = (await agent.get(`/app/import/${id}`)).text;
+    expect(page).not.toMatch(/data-group-listing-type/);
+    expect(page).toMatch(/data-post="0" data-state="ok"/);
+    expect(h.AI.calls).toHaveLength(0);
+  });
+
+  test("when the posts that do say agree, the review suggests that type for the rest (a suggestion, nothing is set)", async () => {
+    const { agent, csrf } = await signIn(h, "manager");
+    const text = ["Code S1 Compound name : ميفيدا Unit type: apartment للبيع Area : 160m 3 bedrooms Price : 6 مليون 01012345678", "Code S2 Compound name : ميفيدا Unit type: apartment Area : 180m 3 bedrooms Price : 7 مليون 01012345679"].join("\n\n\n");
+    const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).field("text", text));
+    await Imports.waitForGroupImport(id);
+    const page = (await agent.get(`/app/import/${id}`)).text;
+    expect(page).toMatch(/data-suggest="sale"/);
+    expect(page).toMatch(/data-post="1" data-state="incomplete"/);
   });
 
   test("nothing that looks like a unit → told so, no AI call", async () => {

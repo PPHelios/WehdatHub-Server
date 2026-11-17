@@ -28,10 +28,10 @@ const api = () => request(h.app.app);
 
 test("a broker saves their own settings but not the owner switches", async () => {
   const a = await auth("broker");
-  expect((await api().post("/api/v1/settings").set(a).send({ quietLine: false, draftStyle: "Short and warm" })).status).toBe(200);
+  expect((await api().post("/api/v1/settings").set(a).send({ quietLine: false })).status).toBe(200);
   const got = await api().get("/api/v1/settings").set(a);
   expect(got.body.quietLine).toBe(false);
-  expect(got.body.draftStyle).toBe("Short and warm");
+  expect(got.body.draftStyle).toBeUndefined();
   expect(got.body.switches).toBeNull();
   expect((await api().post("/api/v1/settings").set(a).send({ switches: { brokersMayWrite: false } })).status).toBe(403);
 });

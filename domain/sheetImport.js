@@ -4,6 +4,9 @@
 "use strict";
 
 const Features = require("./features");
+const Amount = require("./read/amount");
+const { readFinishing } = require("./read/finishing");
+const { readFurnishing } = require("./read/furnishing");
 const Mixed = require("./sheetMixed");
 const Delivery = require("./delivery");
 const { TYPE_TERMS } = require("./vocabulary");
@@ -82,7 +85,8 @@ function money(v) {
   if (typeof v === "number") return v > 0 ? v : null;
   const s = digits(v).toLowerCase().replace(/egp|le|ج\.?م|جنيه/g, "").trim();
   const m = s.match(/^([\d.,]+)\s*(m|mn|million|مليون|k|الف|ألف|thousand)?$/);
-  if (!m) return null;
+  // Wider phrasing ("٣ ونص مليون", "5 مليون الا ربع"): the shared reader, only when it is sure (empty beats wrong).
+  if (!m) return Amount.readWhole(String(v));
   const n = Number(m[1].replace(/,/g, ""));
   if (!Number.isFinite(n) || n <= 0) return null;
   const unit = m[2] || "";
@@ -150,7 +154,13 @@ const FINISHING = [
 ];
 const finishing = (v) => {
   const t = normalizeSearch(v);
-  return t ? FINISHING.find(([, re]) => re.test(t))?.[0] || null : null;
+  if (!t) return null;
+  // The shared reader first ("سيمي فينشد", "كور اند شيل", "مش متشطبة"); the old words only when it says nothing and is not unsure.
+  const r = readFinishing(v);
+  if (r.value) return r.value;
+  if (!r.sure) return null;
+  const furnWord = /(فرش|مفروش|furnish)/.test(t);
+  return FINISHING.find(([key, re]) => !(furnWord && key === "semi_finished") && re.test(t))?.[0] || null;
 };
 // The unit's furnishing: the app's own four values (the same ones the add/edit form offers), read from a key or a word.
 const FURNISHING = [
@@ -161,7 +171,13 @@ const FURNISHING = [
 ];
 const furnishing = (v) => {
   const t = normalizeSearch(v);
-  return t ? FURNISHING.find(([, re]) => re.test(t))?.[0] || null : null;
+  if (!t) return null;
+  // The shared reader first: "مش مفروشة" is unfurnished, "سيمي فرنشد" is semi-furnished; unsure stays empty (Rule B).
+  const r = readFurnishing(v);
+  if (!r.sure) return null;
+  if (r.value === "kitchen_only") return "kitchen_and_ac";
+  if (r.value && r.value !== "ac_only") return r.value;
+  return FURNISHING.find(([, re]) => re.test(t))?.[0] || null;
 };
 const listingType = (v) => {
   const t = normalizeSearch(v);

@@ -8,6 +8,7 @@ const Stages = require("./leadStages");
 const Card = require("./leadCard");
 const Q = require("./searchQuery");
 const ChatExport = require("./chatExport");
+const { normalizeSearch } = require("./searchText");
 
 const MAX_CHOICES = 10;
 
@@ -81,7 +82,7 @@ const UNIT_CODE = /(?:كود|الكود|code)\s*[:#]?\s*[A-Za-z0-9][A-Za-z0-9_\-
 /** A client's message: a phone, and no unit code or unit shape (a forwarded unit post stays a listing). */
 function looksLikeLead(text) {
   const t = String(text || "");
-  return findPhones(t).length > 0 && !UNIT_CODE.test(t) && !ChatExport.looksLikeListing(t);
+  return (findPhones(t).length > 0 && !UNIT_CODE.test(t) && !ChatExport.looksLikeListing(t)) || looksLikePortalLead(t);
 }
 
 /** Nothing but a phone number (typed or forwarded): "who is calling?". */
@@ -193,7 +194,107 @@ function normalizeLeadExtraction(raw) {
   };
 }
 
+/* ---------------------------------------------------------------------- */
+/* A lead message written from a template (a portal enquiry, a form, a Meta lead) */
+/* ---------------------------------------------------------------------- */
+
+const FORM_LABELS = [
+  ["link", /^(property link|listing link|ad link|link|url|property url|listing url|رابط العقار|رابط الاعلان|رابط|لينك)$/],
+  ["email", /^(e ?mail|email address|البريد|ايميل|البريد الالكتروني)$/],
+  ["message", /^(message|enquiry|inquiry|comment|comments|الرساله|رساله|تعليق)$/],
+  ["reference", /^(reference|ref|property reference|listing reference|ref no|الكود|كود)$/]
+];
+const PORTALS = [
+  [/bayut|بيوت/i, "Bayut"],
+  [/property\s*finder|propertyfinder|بروبرتي فايندر/i, "Property Finder"],
+  [/dubizzle|olx|دوبيزل|اوليكس|أوليكس/i, "OLX-Dubizzle"],
+  [/\bnawy\b|نوي|نوّي/i, "Nawy"],
+  [/aqarmap|عقار ماب/i, "Aqarmap"],
+  [/instagram|انستجرام|إنستجرام/i, "Instagram"],
+  [/facebook|فيسبوك|فيس بوك/i, "Facebook"]
+];
+const ENQUIRY = /(new\s+(?:enquiry|inquiry|lead)|enquirer|inquirer|lead details|عميل جديد|استفسار جديد|طلب جديد|تفاصيل العميل)/i;
+
+/**
+ * A message laid out as "Label: value" lines, read through the same header names the lead spreadsheet import knows
+ * (name, phone, source, budget, rooms, area, notes) plus the portal ones (link, email, message). The text before the
+ * first label ("Hi Kenzy, you have a new enquiry on Bayut") is never taken as the client. Returns null when it is not
+ * laid out that way. { name, phones, source, note, request (the words of the request cells), labels }
+ */
+function readLeadForm(raw) {
+  const LeadImport = require("./leadImport");
+  const text = String(raw || "").replace(/[‎‏‪-‮]/g, "").slice(0, 3000);
+  const cells = {};
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*[*_•\-–]*\s*([^:：\n]{2,40}?)\s*[*_]*\s*[:：]\s*(\S.*?)\s*[*_]*\s*$/.exec(line);
+    if (!m) continue;
+    const h = normalizeSearch(m[1].replace(/_+/g, " "));
+    let key = FORM_LABELS.find(([, re]) => re.test(h))?.[0] || LeadImport.columnFor(h);
+    if (!key || key in cells) continue;
+    cells[key] = m[2].trim();
+  }
+  const labels = Object.keys(cells);
+  if (!labels.length) return null;
+  const portal = PORTALS.find(([re]) => re.test(text))?.[1] || null;
+  const asked = LeadImport.canonicalSource(cells.source || "") || portal || (cells.platform ? LeadImport.platformSource(cells.platform) : null);
+  const name = cells.name && /\p{L}/u.test(cells.name) && !/^[+\d\s().-]+$/.test(cells.name) ? cells.name.replace(/\s+/g, " ").slice(0, 120) : null;
+  const phones = [...new Set([cells.phone, cells.phone2].flatMap((v) => (v ? findPhones(v) : [])))];
+  const notes = [cells.link && `${asked || "Portal"}: ${cells.link}`, cells.reference && `Ref ${cells.reference}`, cells.message, cells.email && `Email ${cells.email}`, cells.notes, cells.campaign && `Campaign ${cells.campaign}`].filter(Boolean).join(" · ").slice(0, 300) || null;
+  const request = ["property_type", "listing_type", "location", "bedrooms", "budget"].map((k) => (cells[k] ? (k === "bedrooms" ? `${cells[k]} غرف` : cells[k]) : null)).filter(Boolean).join(" ");
+  return { name, phones, source: asked, note: notes, request, labels, portal, enquiry: ENQUIRY.test(text) };
+}
+
+/** A forwarded enquiry that carries a name (or a number) from a known portal or an "enquiry" heading, even with no number in it. */
+function looksLikePortalLead(raw) {
+  const f = readLeadForm(raw);
+  return Boolean(f && (f.name || f.phones.length) && (f.portal || f.enquiry || f.source) && !UNIT_CODE.test(String(raw || "")));
+}
+
+const NAME_CUE =/(?:اسمه|اسمها|اسم العميل|الاسم|العميل|name|client)\s*[:\-]?\s*(\p{L}[\p{L}‌]*(?: \p{L}[\p{L}‌]*){0,2})/iu;
+const NAME_STOP = new Set(["عايز", "عايزه", "عايزة", "محتاج", "محتاجه", "يدور", "بيدور", "عاوز", "عاوزه", "شقه", "شقة", "فيلا", "في", "على", "من", "ده", "دى", "دي", "for", "wants", "looking", "needs", "is"]);
+
+/**
+ * A lead out of typed or transcribed text, by rules only (Parser consolidation, Phase 4): phones from findPhones, a name
+ * only when the text says it ("الاسم: ..." or a bare "name + number"), the request through the search parser (which reads
+ * money, rooms, floors and Franco through the shared readers), the kind from clear words. Anything unsure stays empty.
+ * Same shape as normalizeLeadExtraction.
+ */
+function readLeadText(raw) {
+  const original = String(raw || "").slice(0, 2000).replace(/https?:\/\/\S+/gi, " ");
+  const form = readLeadForm(raw);
+  const phones = form?.phones.length ? form.phones : findPhones(original);
+  const noPhones = original.replace(/[+٠-٩\d][٠-٩\d\s().-]{6,}[٠-٩\d]/g, " ").replace(/\s+/g, " ").trim();
+  let name = null;
+  const cue = NAME_CUE.exec(noPhones);
+  const cut = (w) => { const out = []; for (const x of w.split(" ")) { if (NAME_STOP.has(x.toLowerCase())) break; out.push(x); } return out.join(" ") || null; };
+  if (form?.name) name = form.name;
+  else if (form) name = null; // a template without a stated name: the greeting is never the client
+  else if (cue) name = cut(cue[1].trim());
+  else if (phones.length) {
+    // The words written before the first number, when they are one to three plain words: "ليد أحمد سمير 0101…", "Ahmed Samir 0101…".
+    const first = original.search(/[+٠-٩\d][٠-٩\d\s().-]{6,}[٠-٩\d]/);
+    const head = (first > 0 ? original.slice(0, first) : "").replace(/^\s*(?:ليد|lead|عميل|client|ده|دي)\s+/iu, "").trim();
+    const until = cut(head);
+    if (until && /^\p{L}+(?: \p{L}+){0,2}$/u.test(until)) name = until;
+  }
+  const t = Q.fallbackParse(form ? form.request : noPhones);
+  const g = t.filters;
+  const solid = g.listing_type || g.property_types.length || g.places.length || g.bedrooms_min !== null || g.price_max !== null || g.price_min !== null || g.area_min !== null || g.area_max !== null;
+  const request = solid ? { ...g, place_terms: g.place_terms.filter((w) => !/(الاسم|العميل|عميل|اسم|name|client|يبيع|يشتري|يأجر|عايز|محتاج)/i.test(w) && !(name && name.split(" ").some((n) => w.includes(n)))) } : null;
+  const s = (form ? form.note || "" : noPhones).toLowerCase();
+  let kind = null;
+  if (/(يبيع|عايز ابيع|للبيع|شقته|وحدته|owner|seller)/.test(s) && /(يؤجر|يأجر|للايجار|للإيجار)/.test(s)) kind = "landlord";
+  else if (/(يبيع|عايز ابيع|عايزه يبيع|عايز يبيع|مالك|owner|wants to sell)/.test(s)) kind = "seller";
+  else if (/(يأجر شقته|يأجر وحدته|للايجار عنده|landlord)/.test(s)) kind = "landlord";
+  else if (/(يستأجر|عايز يأجر|عايز ايجار|مستأجر|tenant|rent a)/.test(s)) kind = "tenant";
+  else if (/(يشتري|عايز يشتري|مشتري|buyer|wants to buy|looking to buy)/.test(s)) kind = "buyer";
+  return { name: name ? name.slice(0, 120) : null, phones: phones.slice(0, MAX_CHOICES), kind: Stages.KINDS.includes(kind) ? kind : null, source: form?.source || null, note: form?.note || null, request };
+}
+
 module.exports = {
+  readLeadText,
+  readLeadForm,
+  looksLikePortalLead,
   MAX_CHOICES,
   findPhones,
   parseContactCard,

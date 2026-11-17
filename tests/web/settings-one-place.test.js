@@ -48,7 +48,7 @@ test("Me has language, the theme buttons, notifications, quiet hours and passkey
   expect(text).toMatch(/name="lang"/);
   expect(text).toMatch(/data-theme-set="dark"/);
   expect(text).toMatch(/name="quiet_start"/);
-  expect(text).toMatch(/id="draft-style"/);
+  expect(text).not.toMatch(/id="draft-style"/);
 });
 
 test("Agency has the logo, code letters, rates, private details and the brokers switch, each owner-only one read only for a manager", async () => {

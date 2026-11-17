@@ -14,6 +14,7 @@ const Describe = require("../domain/describe");
 const Features = require("../domain/features");
 const Delivery = require("../domain/delivery");
 const SheetImport = require("../domain/sheetImport");
+const ChatListing = require("../domain/chatListing");
 const Mixed = require("../domain/sheetMixed");
 const SheetGrid = require("../lib/sheetGrid");
 const Dup = require("../domain/unitDuplicate");
@@ -816,6 +817,8 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
   const results = new Array(posts.length).fill(null);
   const limit = U.createLimiter(2);
   let stopped = null;
+  const places = await require("./chatPlan").loadPlaces(pool).catch(() => null);
+  const defaults = imp.payload.defaults || {};
   const save = (status = "processing") =>
     pool.query("UPDATE web_imports SET payload = jsonb_set(payload, '{results}', $2::jsonb), status = $3 WHERE id = $1", [id, JSON.stringify(results), status]);
 
@@ -827,7 +830,17 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
           return;
         }
         try {
-          const ex = await L.extractPropertyDetails(AI, { texts: [post.text], lang, ctx });
+          // Rules only (Parser consolidation, Phase 6): the same post reader the chat import uses; what it cannot read stays empty and shows as missing.
+          const read = ChatListing.parsePost(post.text, places, post);
+          // The price the same way an Excel cell is read: several prices pick the long-term or monthly one, dollars stay dollars.
+          const price = Mixed.installmentOf(read.cells.price_value) ? { value: read.cells.price_value, usd: false } : Mixed.cellPrice(read.cells.price_value);
+          const ex = { fields: SheetImport.rowToDraft(price.value === read.cells.price_value ? read.cells : { ...read.cells, price_value: price.value }).draft || {} };
+          if (price.usd) ex.fields.details = { ...(ex.fields.details || {}), currency: "USD" };
+          // "All rent" / "All sale" from the review page fills only posts that did not say.
+          if (!ex.fields.listing_type && defaults.listing_type) ex.fields.listing_type = defaults.listing_type;
+          // The compound's English name too, so the duplicate check matches "هايد بارك" with "Hyde Park".
+          const place = read.cells.compound && places?.rows.find((p) => p.name_ar === read.cells.compound || p.name_en === read.cells.compound);
+          if (place?.name_en) ex.fields.details = { ...(ex.fields.details || {}), compound_en: place.name_en };
           const composed = L.composeFields({ draft: ex.fields, lang });
           // A phone in the post is the owner's contact: every unit needs one before it is saved.
           const ownerPhone = (String(post.text).match(/(?:\+?20)?0?1[0125]\d{8}/) || [])[0] || null;
@@ -876,6 +889,21 @@ async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", fil
     .finally(() => {
       jobs.delete(id);
     });
+  jobs.set(id, job);
+  return id;
+}
+
+/** The review page's "all rent" / "all sale": posts that did not say get it, and every post is read again (photos stay). */
+async function setGroupListingType(pool, broker, id, value, { AI, ctx, lang = "ar" } = {}) {
+  if (!["rent", "sale"].includes(value)) return null;
+  const { rows } = await pool.query(
+    "UPDATE web_imports SET payload = jsonb_set(payload, '{defaults}', $4::jsonb), status = 'processing' WHERE id = $1 AND agency_id = $2 AND broker_id = $3 AND kind = 'group' AND status = 'ready' AND expires_at > NOW() RETURNING id",
+    [id, broker.agency_id, broker.id, JSON.stringify({ listing_type: value })]
+  );
+  if (!rows[0]) return null;
+  const job = processGroup(pool, broker, id, { AI, ctx, lang })
+    .catch(async () => { await pool.query("UPDATE web_imports SET status = 'failed' WHERE id = $1", [id]).catch(() => {}); })
+    .finally(() => jobs.delete(id));
   jobs.set(id, job);
   return id;
 }
@@ -998,6 +1026,7 @@ module.exports = {
   TYPE_KEYS,
   findDuplicate,
   startGroupImport,
+  setGroupListingType,
   waitForGroupImport,
   applyGroup
 };

@@ -3,6 +3,9 @@
 // text states it, and a price in another currency is reported, never converted.
 "use strict";
 
+const { readRooms } = require("./read/rooms");
+const { readArea } = require("./read/area");
+
 const AR = "٠١٢٣٤٥٦٧٨٩";
 const digits = (s) => String(s).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d)));
 const clean = (v) => digits(v).replace(/[\\|;،]+/g, " / ").replace(/\s+/g, " ").trim();
@@ -22,6 +25,15 @@ function areas(raw) {
   if (!bua && !land) {
     const plain = new RegExp(`${NUM}\\s*${SQM}`).exec(s);
     if (plain) out.area_value = num(plain[1]);
+  }
+  // Wider phrasing ("مساحة 150"): the shared reader fills only what the old rules left empty, and only when sure.
+  if (out.area_value === undefined && out.land_area === undefined) {
+    const r = readArea(raw);
+    if (r.sure) {
+      const built = r.built ?? r.plain;
+      if (built !== null) out.area_value = built;
+      if (r.land !== null) out.land_area = r.land;
+    }
   }
   return out;
 }
@@ -43,6 +55,13 @@ function rooms(raw) {
   const bath = new RegExp(`(?:bathrooms?|baths?|ba|حمام(?:ات)?)\\s*[:=]\\s*(\\d{1,2})`).exec(s) || new RegExp(`(\\d{1,2})\\s*${BATH}`).exec(s);
   if (bath) out.bathrooms = Number(bath[1]);
   else if (/(حمامين)/.test(s)) out.bathrooms = 2;
+  if (out.bedrooms === undefined || out.bathrooms === undefined) {
+    const r = readRooms(raw);
+    if (r.sure && r.bedroomsMax === null) {
+      if (out.bedrooms === undefined && r.bedrooms !== null) out.bedrooms = r.bedrooms;
+      if (out.bathrooms === undefined && r.bathrooms !== null) out.bathrooms = r.bathrooms;
+    }
+  }
   if (out.bedrooms > 20) delete out.bedrooms;
   if (out.bathrooms > 20) delete out.bathrooms;
   return out;
@@ -144,9 +163,16 @@ function cellPrice(raw) {
     const v = pickPrice(text, "long") ?? pickPrice(text, "first");
     return { value: v ?? raw, usd: false };
   }
-  const egp = pickPrice(text, "long");
+  // The EGP prices only: a part written in dollars is never read as pounds ("short 130$ / long 2700$" is dollars).
+  const parts = clean(text).split(/\s*(?:\/|;|\+)\s*/);
+  const egpParts = parts.filter((p) => !FOREIGN.test(p));
+  const egp = egpParts.length ? pickPrice(egpParts.join(" / "), "long") : null;
   if (egp) return { value: egp, usd: false };
-  const seg = clean(text).split(/\s*(?:\/|;|\+)\s*/).find((p) => FOREIGN.test(p));
+  // Only dollars stay dollars; a euro or any other currency is reported to the person, never read as dollars.
+  const dollarParts = parts.filter((p) => /(\$|usd|us\s*dollars?|dollars?|دولار)/i.test(p));
+  const pick = dollarParts.length ? pickPrice(dollarParts.join(" / "), "long") ?? pickPrice(dollarParts.join(" / "), "first") : null;
+  if (pick) return { value: pick, usd: true };
+  const seg = parts.find((p) => FOREIGN.test(p));
   const d = seg ? dollars(seg) : null;
   return d !== null ? { value: d, usd: true } : { value: raw, usd: false };
 }

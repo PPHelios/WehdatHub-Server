@@ -40,7 +40,7 @@ function register(api, { pool }) {
       if (Policy.FREQUENCIES.includes(row.frequency)) frequency[k] = row.frequency;
     }
     const quiet = body.quiet && typeof body.quiet === "object" ? body.quiet : {};
-    const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id, draft_style, quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
+    const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id, quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
     await Notifications.savePrefs(pool, { ...broker, notify_prefs: rows[0]?.notify_prefs || {}, telegram_chat_id: rows[0]?.telegram_chat_id || null }, {
       channels,
       on,

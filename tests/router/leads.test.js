@@ -75,71 +75,70 @@ describe("contact cards and bare numbers (no AI)", () => {
   });
 });
 
-describe("«ليد» / lead intake (one AI call, confirm before saving)", () => {
+describe("«ليد» / lead intake (rules only for text, confirm before saving)", () => {
   test("«ليد» + text → I understood → Confirm saves with the request", async () => {
-    h.AI.respond((c) => (c.operation === "lead_extraction" ? extraction({ request: { listing_type: "sale", property_types: ["villa"], locations: ["التجمع"], price_max: 9000000 } }) : null));
     const understood = one("broker", await h.text("broker", "ليد أحمد سمير 01012345678 عايز فيلا في التجمع لحد 9 مليون"));
-    expect(understood.text).toContain("Ahmed Samir");
+    expect(understood.text).toContain("أحمد سمير");
     expect(understood.text).toContain("0101 234 5678");
     expect(understood.text).toContain("9 مليون");
     expect(await leads()).toHaveLength(0);
     const saved = one("broker", await h.tap("broker", tapId("broker", [understood], "ld:ok:")));
     expect(saved.text).toContain("✅");
     expect(saved.text).toContain("L-0001");
-    expect(aiCalls("lead_extraction")).toBe(1);
+    expect(aiCalls("lead_extraction")).toBe(0);
+    expect(h.AI.calls).toHaveLength(0);
     const [lead] = await leads();
     const events = await h.query("SELECT kind, data FROM lead_events WHERE lead_id = $1 ORDER BY id", [lead.id]);
     expect(events.map((e) => e.kind)).toEqual(["created", "request_set"]);
     expect(events[1].data.filters.price_max).toBe(9000000);
-    // The prompt fences the client's words.
-    const prompt = JSON.stringify(h.AI.calls.find((c) => c.operation === "lead_extraction").contents);
-    expect(prompt).toMatch(/===[0-9A-F]{8}===/);
+  });
+
+  test("colloquial money in a lead: ونص and الا ربع are read by the shared reader", async () => {
+    const understood = one("broker", await h.text("broker", "ليد منى علي 01012345678 عايزة شقة 3 غرف في التجمع تحت 5 مليون ونص"));
+    await h.tap("broker", tapId("broker", [understood], "ld:ok:"));
+    const [lead] = await leads();
+    const events = await h.query("SELECT kind, data FROM lead_events WHERE lead_id = $1 ORDER BY id", [lead.id]);
+    expect(events.find((e) => e.kind === "request_set").data.filters.price_max).toBe(5500000);
+    expect(h.AI.calls).toHaveLength(0);
   });
 
   test("lead alone opens a draft; the next forward is read; Edit re-reads with the correction; Cancel saves nothing", async () => {
-    let n = 0;
-    h.AI.respond((c) => (c.operation === "lead_extraction" ? extraction(++n === 1 ? {} : { kind: "tenant" }) : null));
     expect(one("broker", await h.text("broker", "lead")).text).toMatch(/forward|فوروارد/);
     const first = one("broker", await h.text("broker", "Ahmed Samir 01012345678 wants an apartment"));
     expect(first.text).toContain("Ahmed Samir");
     expect(one("broker", await h.tap("broker", tapId("broker", [first], "ld:edit:"))).text).toMatch(/التصحيح|correction/);
     const second = one("broker", await h.text("broker", "مستأجر"));
     expect(second.text).toMatch(/مستأجر/);
-    expect(JSON.stringify(h.AI.calls[1].contents)).toContain("مستأجر");
     expect(one("broker", await h.tap("broker", tapId("broker", [second], "ld:no:"))).text).toMatch(/اتلغى/);
     expect(await leads()).toHaveLength(0);
+    expect(h.AI.calls).toHaveLength(0);
   });
 
-  test("a voice note «ليد …» is the same intake as the text", async () => {
-    h.AI.respond((c) => (c.operation === "transcribe" ? "ليد أحمد سمير صفر واحد صفر واحد" : c.operation === "lead_extraction" ? extraction() : null));
+  test("a voice note «ليد …»: the AI only turns it into words; the lead is read by rules", async () => {
+    h.AI.respond((c) => (c.operation === "transcribe" ? "ليد أحمد سمير 01012345678" : null));
     const understood = one("broker", await h.voice("broker"));
-    expect(understood.text).toContain("Ahmed Samir");
+    expect(understood.text).toContain("أحمد سمير");
     expect(ids(understood).some((x) => x.startsWith("ld:ok:"))).toBe(true);
     expect(aiCalls("transcribe")).toBe(1);
-    expect(aiCalls("lead_extraction")).toBe(1);
+    expect(aiCalls("lead_extraction")).toBe(0);
   });
 
-  test("several phones → which one?; no phone → send the number, then confirm without another AI call", async () => {
-    h.AI.respond(() => extraction({ phones: ["01012345678", "01112345678"] }));
+  test("several phones → which one?; no phone → send the number, then confirm", async () => {
     const list = one("broker", await h.text("broker", "ليد احمد 01012345678 او 01112345678"));
     expect(list.type).toBe("list");
     const pick = one("broker", await h.pick("broker", ids(list)[1]));
     expect(pick.text).toContain("0111 234 5678");
     expect(pick.text).not.toContain("0101 234 5678");
 
-    h.AI.respond(() => extraction({ phones: [] }));
     const ask = one("colleague", await h.text("colleague", "ليد أحمد عايز شقة"));
     expect(ask.text).toMatch(/رقم العميل/);
-    const calls = h.AI.calls.length;
     const confirm = one("colleague", await h.text("colleague", "رقمه 01212345678"));
     expect(confirm.text).toContain("0121 234 5678");
-    expect(confirm.text).toContain("Ahmed Samir");
-    expect(h.AI.calls.length).toBe(calls);
+    expect(h.AI.calls).toHaveLength(0);
   });
 
   test("Q2: confirming a colleague's client tells the broker their manager knows; the owner hears nothing", async () => {
     await h.tap("broker", tapId("broker", await contact("broker", "Sara", "01012345678"), "ld:save:"));
-    h.AI.respond(() => extraction({ name: "Sara again" }));
     const understood = await h.text("colleague", "ليد سارة 01012345678");
     const res = await h.tap("colleague", tapId("colleague", understood, "ld:ok:"));
     expect(one("colleague", res).text).toMatch(/زميل/);
@@ -149,13 +148,11 @@ describe("«ليد» / lead intake (one AI call, confirm before saving)", () => 
     expect((await leads())[0].name).toBe("Sara");
   });
 
-  test("the AI down: save the number alone", async () => {
+  test("no AI is involved, so there is no AI-down case: the number and what the text says are kept", async () => {
     h.AI.respond(() => new Error("model down"));
     const offer = one("broker", await h.text("broker", "ليد أحمد 01012345678 عايز شقة"));
     expect(offer.text).toContain("0101 234 5678");
-    const saved = one("broker", await h.tap("broker", tapId("broker", [offer], "ld:save:")));
-    expect(saved.text).toContain("L-0001");
-    expect((await leads())[0].name).toBeNull();
+    expect(h.AI.calls).toHaveLength(0);
   });
 });
 
@@ -166,7 +163,8 @@ describe("forwards and units", () => {
     expect(ids(offer).map((x) => x.split(":")[1])).toEqual(["read", "search"]);
     expect(h.AI.calls).toHaveLength(0);
     const understood = one("broker", await h.tap("broker", tapId("broker", [offer], "ld:read:")));
-    expect(understood.text).toContain("Ahmed Samir");
+    expect(understood.text).toContain("0101 234 5678");
+    expect(understood.text).toContain("التجمع");
     const offer2 = await h.send("broker", { type: "text", text: { body: "عميلة اسمها منى 01112345678 عايزة فيلا" } });
     await h.tap("broker", tapId("broker", offer2, "ld:search:"));
     expect(aiCalls("search_parse")).toBe(1);
@@ -239,13 +237,12 @@ describe("the card buttons and undo", () => {
   });
 
   test("a seller lead's first card offers Add their unit; it opens a draft with the owner prefilled", async () => {
-    h.AI.respond(() => extraction({ name: "Owner Omar", kind: "seller" }));
     const understood = await h.text("broker", "ليد عمر عايز يبيع شقته 01012345678");
     const card = one("broker", await h.tap("broker", tapId("broker", understood, "ld:ok:")));
     expect(ids(card)).toContain("ld:unit:L-0001");
-    expect(one("broker", await h.tap("broker", "ld:unit:L-0001")).text).toMatch(/Owner Omar/);
+    expect(one("broker", await h.tap("broker", "ld:unit:L-0001")).text).toMatch(/عمر/);
     const draft = await h.session("broker", "draft");
-    expect(draft.prefill.details).toEqual({ owner_name: "Owner Omar", owner_phone: "0101 234 5678" });
+    expect(draft.prefill.details).toEqual({ owner_name: "عمر", owner_phone: "0101 234 5678" });
     // Later cards show Stage again.
     expect(ids(one("broker", await h.text("broker", "L-0001")))).toContain("ld:stage:L-0001");
   });
@@ -298,5 +295,22 @@ describe("commands in both languages", () => {
     await h.text("broker", "ليد");
     await h.text("broker", "إلغاء");
     expect(await h.session("broker", "lead_draft")).toBeNull();
+  });
+});
+
+describe("a forwarded portal enquiry with no number (Phase 6: templates are read by rules)", () => {
+  test("offered as a client, the number is asked for, the card shows the source and name, Confirm saves it; no AI call", async () => {
+    const msg = "Hi Kenzy Emad,\nYou have received a new enquiry on Bayut.\nEnquirer Details:\nName: Khaled El-Sawy\nProperty Link: https://www.bayut.eg/pm/503956661/2662e7a7-7689-4a1c-9803-42d7977cf71a";
+    const offer = one("broker", await h.text("broker", msg));
+    expect(offer.text).toContain("Khaled El-Sawy");
+    const ask = one("broker", await h.tap("broker", tapId("broker", [offer], "ld:read:")));
+    expect(ask.text).toMatch(/Khaled El-Sawy/);
+    const confirm = one("broker", await h.text("broker", "01012345678"));
+    expect(confirm.text).toContain("Khaled El-Sawy");
+    expect(confirm.text).toContain("Bayut");
+    await h.tap("broker", tapId("broker", [confirm], "ld:ok:"));
+    const [lead] = await leads();
+    expect(lead).toMatchObject({ name: "Khaled El-Sawy", source: "Bayut", phones: ["+201012345678"] });
+    expect(h.AI.calls).toHaveLength(0);
   });
 });

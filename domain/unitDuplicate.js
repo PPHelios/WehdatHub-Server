@@ -25,7 +25,8 @@ function samePlace(a, b) {
   const pa = placeKey(a);
   const pb = placeKey(b);
   if (!pa || !pb) return false;
-  if (pa.compound) return normalizeSearch(b.compound || "") === pa.compound;
+  // A unit read by rules carries the place's English name beside its Arabic one: either name may match.
+  if (pa.compound) return [a.compound, a.compound_en].some((x) => x && normalizeSearch(x) === normalizeSearch(b.compound || ""));
   return [b.district, b.city, b.location].some((v) => v && normalizeSearch(v) === pa.district);
 }
 

@@ -72,11 +72,11 @@ test("bot hints come once per kind", async () => {
 test("hint is added to the lead card the first time a lead is saved over Telegram", async () => {
   await h.tgLink("broker");
   const offer = await h.tgText("broker", "ليد 01011112222");
-  const save = JSON.stringify(offer).match(/ld:save:[0-9a-f]+/)[0];
+  const save = JSON.stringify(offer).match(/ld:ok:[0-9a-f]+/)[0];
   const first = await h.tgTap("broker", save);
   expect(JSON.stringify(first)).toMatch(/أول عميل اتسجل/);
   const offer2 = await h.tgText("broker", "ليد 01033334444");
-  const second = await h.tgTap("broker", JSON.stringify(offer2).match(/ld:save:[0-9a-f]+/)[0]);
+  const second = await h.tgTap("broker", JSON.stringify(offer2).match(/ld:ok:[0-9a-f]+/)[0]);
   expect(JSON.stringify(second)).not.toMatch(/أول عميل اتسجل/);
 });
 

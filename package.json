@@ -11,12 +11,12 @@
     "schema:export": "node --env-file=.env scripts/export-schema.js",
     "schema:reference": "node scripts/schema-reference.js",
     "eval:ai": "node --env-file=.env scripts/eval-ai.js",
-    "test:unit": "node --test tests/e2e.test.js",
+    "test:unit": "node --test tests/e2e.test.js tests/parsers/regression.test.js",
     "test:contracts": "jest tests/contract-guard.test.js --runInBand",
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
-    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB --testPathIgnorePatterns /node_modules/ tests/e2e.test.js tests/browser/ tests/heavy/",
-    "test:fast": "node --test tests/e2e.test.js && node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB tests/parity tests/contract-guard tests/visibility-guard tests/safeguards tests/api tests/unit tests/web/unit tests/web/search tests/web/data-entry",
+    "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB --testPathIgnorePatterns /node_modules/ tests/e2e.test.js tests/browser/ tests/heavy/ tests/parsers/",
+    "test:fast": "node --test tests/e2e.test.js tests/parsers/regression.test.js && node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB tests/parity tests/contract-guard tests/visibility-guard tests/safeguards tests/api tests/unit tests/web/unit tests/web/search tests/web/data-entry",
     "test:heavy": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/heavy",
     "test:main-paths": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/main-paths.test.js' --testPathIgnorePatterns /node_modules/",
     "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
@@ -24,7 +24,8 @@
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
     "migrate": "node --env-file=.env scripts/migrate.js",
     "onboard": "node --env-file=.env scripts/onboard.js",
-    "flyer:samples": "node scripts/render-flyer-samples.js"
+    "flyer:samples": "node scripts/render-flyer-samples.js",
+    "test:parsers": "node --test tests/parsers/regression.test.js"
   },
   "jest": {
     "testEnvironment": "node",
@@ -37,7 +38,8 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "<rootDir>/tests/e2e.test.js",
-      "<rootDir>/tests/browser/"
+      "<rootDir>/tests/browser/",
+      "<rootDir>/tests/parsers/"
     ]
   },
   "engines": {

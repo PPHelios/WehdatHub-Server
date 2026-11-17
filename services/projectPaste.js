@@ -5,6 +5,7 @@
 "use strict";
 
 const Paste = require("../domain/projectPaste");
+const ParserLog = require("./parserLog");
 const Names = require("../domain/projectNames");
 const { normalizeSearch } = require("../domain/searchText");
 const Suggest = require("./placeSuggest");
@@ -30,7 +31,9 @@ function knownDeveloper(text, developers) {
  */
 async function read(pool, actor, text, lang = "ar") {
   const src = String(text || "").trim().slice(0, 8000);
+  const t0 = Date.now();
   const parsed = Paste.read(src);
+  ParserLog.logParserRead(pool, { agency_id: actor.agency_id, broker_id: actor.id, parser: "project_paste", kind: "text", text: src, result: { ms: Date.now() - t0, read: Object.keys(parsed).filter((k) => parsed[k] !== null && !(Array.isArray(parsed[k]) && !parsed[k].length) && typeof parsed[k] !== "object"), missing: ["price_from", "delivery_year", "area_acres"].filter((k) => parsed[k] == null) } });
   const [{ rows: developers }, { rows: projects }, box] = await Promise.all([
     pool.query("SELECT id, name, name_en FROM developers WHERE agency_id = $1", [actor.agency_id]),
     pool.query("SELECT id, name, name_en FROM projects WHERE agency_id = $1", [actor.agency_id]),

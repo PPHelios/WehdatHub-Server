@@ -25,8 +25,8 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h) => `${String(h).padStart(2, "0")}:00`;
 
 async function loadBroker(pool, broker) {
-  const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id, draft_style, quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
-  return { ...broker, notify_prefs: rows[0]?.notify_prefs || {}, telegram_chat_id: rows[0]?.telegram_chat_id || null, draft_style: rows[0]?.draft_style || null, quiet_line: rows[0]?.quiet_line !== false };
+  const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id, quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
+  return { ...broker, notify_prefs: rows[0]?.notify_prefs || {}, telegram_chat_id: rows[0]?.telegram_chat_id || null, quiet_line: rows[0]?.quiet_line !== false };
 }
 
 /** Managers: the agency's logo (shown on client pages and payment-schedule PDFs). */
@@ -204,12 +204,6 @@ ${dataEntry ? "" : html`<form method="post" action="/app/settings/quiet-line" cl
   <label class="check"><input type="checkbox" name="on" value="1"${broker.quiet_line !== false ? html` checked` : ""}> ${L(lang, "في تنبيه الوحدات المناسبة، قولي لو العميل بقاله 60 يوم أو أكتر من غير مكالمة", "In match alerts, tell me when I haven't spoken to the client for 60 days or more")}</label>
   <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
 </form>`}
-${dataEntry ? "" : html`<form method="post" action="/app/settings/draft-style" class="card stack" id="draft-style">
-  <h2>✍️ ${L(lang, "أسلوبك في رسايل العملاء", "Your style for client messages")}</h2>
-  <p class="muted">${L(lang, "اختياري: الصق رسالة أو اتنين من اللي بتبعتها للعملاء، ورسايل المتابعة اللي البوت بيكتبها هتبقى بنفس أسلوبك.", "Optional: paste one or two messages you send to clients, and the follow-up drafts will sound like you.")}</p>
-  <textarea name="style" rows="3" maxlength="600">${broker.draft_style || ""}</textarea>
-  <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
-</form>`}
 ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await Passkeys.list(pool, broker), lang, notice: passkeyNotice ? L(lang, ...passkeyNotice) : null })}
 <section class="card" id="push" data-vapid="${key}" data-push-count="${pushes}">
   <h2>📲 ${L(lang, "إشعارات الموقع على الجهاز ده", "Website notifications on this device")}</h2>
@@ -273,11 +267,6 @@ ${planHtml}`
     const { broker } = req.session;
     await pool.query("UPDATE brokers SET quiet_line = $3 WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id, req.body.on === "1"]);
     return res.redirect(303, "/app/settings?saved=1#quiet-line");
-  });
-
-  web.post("/settings/draft-style", async (req, res) => {
-    await require("../../services/followUpDrafts").saveStyle(pool, req.session.broker, req.body.style);
-    return res.redirect(303, "/app/settings?saved=1#draft-style");
   });
 
   web.post("/settings/logo", uploadLogo, async (req, res) => {
