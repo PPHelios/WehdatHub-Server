@@ -570,7 +570,7 @@ async function attachChatPhotos(pool, broker, listing, photos, choice, result) {
   return chosen.map((c) => c.url);
 }
 
-/* Undo: only the agency's last applied Excel import. Units it added are archived (never deleted); units it changed get the
+/* Undo: only the agency's last applied Excel import. Units it added are deleted like any unit (10 days in Recently deleted, then gone; they stop counting against the plan at once); units it changed get the
    values they had before. A unit edited since the import is skipped and listed, never overwritten. */
 
 /** The agency's last applied Excel import that was not undone yet; null when there is none. */
@@ -591,7 +591,7 @@ async function undoPreview(pool, agencyId, imp) {
   const skipped = [];
   for (const m of log.made) {
     const { rows } = await pool.query("SELECT version, status FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [m.id, agencyId]);
-    if (rows[0] && Number(rows[0].version) === Number(m.version) && rows[0].status !== "archived") archive.push(m);
+    if (rows[0] && Number(rows[0].version) === Number(m.version) && rows[0].status !== "deleted") archive.push(m);
     else skipped.push(m.code);
   }
   for (const c of log.changed) {
@@ -622,8 +622,8 @@ async function undoExcel(pool, broker, id) {
   const out = { archived: [], restored: [], skipped: [...plan.skipped] };
   for (const m of plan.archive) {
     const { rowCount } = await pool.query(
-      "UPDATE listings SET status = 'archived', version = version + 1 WHERE id = $1 AND agency_id = $2 AND version = $3",
-      [m.id, broker.agency_id, m.version]
+      "UPDATE listings SET status = 'deleted', deleted_at = now(), deleted_by = $4, version = version + 1, updated_at = now() WHERE id = $1 AND agency_id = $2 AND version = $3",
+      [m.id, broker.agency_id, m.version, broker.id]
     );
     if (rowCount) out.archived.push(m.code);
     else out.skipped.push(m.code);
