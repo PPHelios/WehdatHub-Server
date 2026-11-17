@@ -6,6 +6,13 @@
 
 // Longest phrases first. Keys are lower case, digits inside words are Franco letters (3=ع, 7=ح, 5=خ, 2=ء, 6=ط, 9=ق).
 const PHRASES = [
+  ["ghorfa morabeya", "غرفه مربيه"],
+  ["ghorfa morabbya", "غرفه مربيه"],
+  ["ghorfa morabia", "غرفه مربيه"],
+  ["ghorfet morabeya", "غرفه مربيه"],
+  ["ghurfa morabeya", "غرفه مربيه"],
+  ["oda morabeya", "غرفه مربيه"],
+  ["ghorfa nanny", "غرفه مربيه"],
   ["el tagamo3 el khames", "التجمع الخامس"],
   ["tagamo3 el khames", "التجمع الخامس"],
   ["tagamoa el khames", "التجمع الخامس"],

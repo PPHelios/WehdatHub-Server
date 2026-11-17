@@ -8,6 +8,7 @@ const Fx = require("./fx");
 const Features = require("./features");
 const Places = require("./places");
 const { TYPE_TERMS } = require("./vocabulary");
+const { prepareSearchText } = require("./read/searchPrep");
 const { normalizeSearch, foldLetters } = require("./searchText");
 const { mapFurnishing, mapFinishing } = require("./furnishingStatus");
 const { PROPERTY_TYPES } = require("./fieldRules");
@@ -468,7 +469,7 @@ function applyAliases(hay) {
 }
 
 function fallbackParse(text) {
-  const raw = foldLetters(String(text || "").trim());
+  const raw = foldLetters(prepareSearchText(String(text || "").trim()));
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
   const egpWord = / (جنيه|جنيها|egp|pound|pounds|le) /.test(` ${normalizeSearch(raw)} `);
   const f = emptyFilters();
