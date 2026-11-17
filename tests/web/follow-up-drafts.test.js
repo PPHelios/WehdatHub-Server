@@ -1,6 +1,6 @@
 // tests/web/follow-up-drafts.test.js — Release B N2: after a call or viewing, the next WhatsApp message to the client
-// is drafted from the lead's own record (name, request, notes, the call or viewing) in the broker's tone (their sample
-// in Settings). On the bot it comes after "Called" / "Follow-up done" with Send on WhatsApp; on the lead page with a
+// is drafted from the lead's own record (name, request, notes, the call or viewing) (a template, no AI).
+// On the bot it comes after "Called" / "Follow-up done" with Send on WhatsApp; on the lead page with a
 // wa.me link to the client's number. A colleague's client can't be drafted for.
 "use strict";
 
@@ -35,8 +35,7 @@ async function lead(who = "broker") {
 }
 
 test("rules: facts from the record only; the template fills name, request, viewing and sign-off, never a price or date", () => {
-  const facts = D.factsOf({ lead: { name: "Sara Ali", kind: "buyer", stage: "contacted" }, events: [{ kind: "follow_up_done", data: { kind: "viewing", note: "unit BD-1" }, created_at: "2026-10-20T10:00:00Z" }], broker: { name: "Mona" }, agencyName: "Alpha" });
-  expect(facts).toContain("2026-10-20 viewing done: unit BD-1");
+  
   const lead = { name: "Sara Ali", kind: "buyer", stage: "contacted" };
   const ar = D.template({ lead, events: [{ kind: "contacted", data: {}, created_at: "2026-10-20T10:00:00Z" }], requests: [{ filters: {} }], broker: { name: "Mona" }, agencyName: "Alpha", requestLine: () => "شقة في التجمع" });
   expect(ar).toContain("أهلاً Sara");
@@ -48,7 +47,6 @@ test("rules: facts from the record only; the template fills name, request, viewi
   expect(en).toContain("viewing of BD-1 in Mivida");
   expect(en).toContain("another viewing");
   expect(D.template({ lead: { name: "", stage: "lost" }, broker: {} })).toContain("أهلاً بحضرتك");
-  expect(D.parse("nope")).toEqual({ error: "empty" });
 });
 
 test("drafts for own clients only, from a template; lead page shows it with a WhatsApp link; no AI call", async () => {

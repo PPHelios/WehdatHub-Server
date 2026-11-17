@@ -14,6 +14,7 @@ const Describe = require("../domain/describe");
 const Features = require("../domain/features");
 const Delivery = require("../domain/delivery");
 const SheetImport = require("../domain/sheetImport");
+const ChatListing = require("../domain/chatListing");
 const Mixed = require("../domain/sheetMixed");
 const SheetGrid = require("../lib/sheetGrid");
 const Dup = require("../domain/unitDuplicate");
@@ -816,6 +817,7 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
   const results = new Array(posts.length).fill(null);
   const limit = U.createLimiter(2);
   let stopped = null;
+  const places = await require("./chatPlan").loadPlaces(pool).catch(() => null);
   const save = (status = "processing") =>
     pool.query("UPDATE web_imports SET payload = jsonb_set(payload, '{results}', $2::jsonb), status = $3 WHERE id = $1", [id, JSON.stringify(results), status]);
 
@@ -827,7 +829,12 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
           return;
         }
         try {
-          const ex = await L.extractPropertyDetails(AI, { texts: [post.text], lang, ctx });
+          // Rules only (Parser consolidation, Phase 6): the same post reader the chat import uses; what it cannot read stays empty and shows as missing.
+          const read = ChatListing.parsePost(post.text, places, post);
+          const ex = { fields: SheetImport.rowToDraft(read.cells).draft || {} };
+          // The compound's English name too, so the duplicate check matches "هايد بارك" with "Hyde Park".
+          const place = read.cells.compound && places?.rows.find((p) => p.name_ar === read.cells.compound || p.name_en === read.cells.compound);
+          if (place?.name_en) ex.fields.details = { ...(ex.fields.details || {}), compound_en: place.name_en };
           const composed = L.composeFields({ draft: ex.fields, lang });
           // A phone in the post is the owner's contact: every unit needs one before it is saved.
           const ownerPhone = (String(post.text).match(/(?:\+?20)?0?1[0125]\d{8}/) || [])[0] || null;

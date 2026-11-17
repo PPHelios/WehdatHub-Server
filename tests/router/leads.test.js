@@ -297,3 +297,20 @@ describe("commands in both languages", () => {
     expect(await h.session("broker", "lead_draft")).toBeNull();
   });
 });
+
+describe("a forwarded portal enquiry with no number (Phase 6: templates are read by rules)", () => {
+  test("offered as a client, the number is asked for, the card shows the source and name, Confirm saves it; no AI call", async () => {
+    const msg = "Hi Kenzy Emad,\nYou have received a new enquiry on Bayut.\nEnquirer Details:\nName: Khaled El-Sawy\nProperty Link: https://www.bayut.eg/pm/503956661/2662e7a7-7689-4a1c-9803-42d7977cf71a";
+    const offer = one("broker", await h.text("broker", msg));
+    expect(offer.text).toContain("Khaled El-Sawy");
+    const ask = one("broker", await h.tap("broker", tapId("broker", [offer], "ld:read:")));
+    expect(ask.text).toMatch(/Khaled El-Sawy/);
+    const confirm = one("broker", await h.text("broker", "01012345678"));
+    expect(confirm.text).toContain("Khaled El-Sawy");
+    expect(confirm.text).toContain("Bayut");
+    await h.tap("broker", tapId("broker", [confirm], "ld:ok:"));
+    const [lead] = await leads();
+    expect(lead).toMatchObject({ name: "Khaled El-Sawy", source: "Bayut", phones: ["+201012345678"] });
+    expect(h.AI.calls).toHaveLength(0);
+  });
+});

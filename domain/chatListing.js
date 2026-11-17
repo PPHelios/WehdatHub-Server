@@ -13,6 +13,7 @@ const { readArea } = require("./read/area");
 const { readFloor } = require("./read/floor");
 const { norm } = require("./read/numbers");
 const Places = require("./mapPlaces");
+const Features = require("./features");
 
 const NUM = "\\d[\\d.,]*";
 const UNIT = "(?:مليون|ملايين|million|mil|m(?![a-z0-9²])|الف|ألف|k(?![a-z]))";
@@ -186,6 +187,16 @@ function parsePost(text, places = null, from = {}) {
 
   const compound = findCompound(original, places);
   if (compound) set("compound", compound);
+
+  // Features and orientation written inline ("3 غرف بحري"): one word, or two together, that the app's own feature list knows.
+  const featureWords = [];
+  const toks = original.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  for (let i = 0; i < toks.length; i++) {
+    for (const w of [toks[i], toks[i + 1] ? `${toks[i]} ${toks[i + 1]}` : null]) {
+      if (w && w.length >= 3 && Features.classifyFeatures([w]).keys.length) { featureWords.push(w); break; }
+    }
+  }
+  if (featureWords.length) set("features", [...new Set(featureWords)].join("، "));
 
   // The text goes in as the description: the shared row reader finds finishing and features in it, like for Excel.
   set("description", original.slice(0, 600));

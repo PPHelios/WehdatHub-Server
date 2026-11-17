@@ -1,12 +1,8 @@
 // services/chatPlan.js — WhatsApp chat posts → an import plan, through the same planner Excel uses (services/imports.js).
-// The parser reads every post first; AI is asked only for a post the parser could not read enough, and only for the
-// cells that are still empty. The plan is an "excel" import with source "chat", so the review, row editing, batch fixes,
+// The parser reads every post (rules only, no AI). The plan is an "excel" import with source "chat", so the review, row editing, batch fixes,
 // duplicate and same-unit checks, apply and undo are one code path for both.
 "use strict";
 
-const L = require("../lib/listing");
-const AiBlock = require("../lib/aiBlock");
-const U = require("../lib/util");
 const Places = require("../domain/mapPlaces");
 const ChatListing = require("../domain/chatListing");
 const Imports = require("./imports");
@@ -14,7 +10,6 @@ const ParseLog = require("./chatParseLog");
 const Cells = require("../domain/importEditorCells");
 
 const MAX_POSTS = 40;
-const AI_DEADLINE_MS = 40000;
 
 /** The approved places, indexed for finding a compound inside a post. */
 async function loadPlaces(pool) {
@@ -26,14 +21,14 @@ async function loadPlaces(pool) {
  * @param {Array<{ sender?: string, at?: string, text: string }>} posts at most 40
  * @returns {Promise<{ id: string, posts: number, ai: number, aiBlocked: string|null, counts: object }>}
  */
-async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = null } = {}) {
+async function planChat(pool, broker, posts, { lang = "ar", filename = null } = {}) {
   const list = posts.slice(0, MAX_POSTS);
   const places = await loadPlaces(pool).catch(() => null);
   const logs = [];
   const parsed = list.map((p, i) => {
     const t0 = Date.now();
     const r = ChatListing.parsePost(p.text, places, p);
-    logs[i] = { row: i + 1, text: p.text, read: r.read, missing: r.missing, parseMs: Date.now() - t0 };
+    logs[i] = { row: i + 1, text: p.text, read: r.read, missing: r.missing, parseMs: Date.now() - t0, ...(r.missing.length ? { aiSkipped: "rules_only" } : {}) };
     return r;
   });
   const areas = list.some((p) => p.fields) ? await require("./areas").approvedAreas(pool).catch(() => []) : [];
@@ -42,38 +37,9 @@ async function planChat(pool, broker, posts, { AI, ctx, lang = "ar", filename = 
   list.forEach((p, i) => { const np = p.fields && Cells.newPlaceOf(p.fields); if (np) newPlaces[i + 1] = np; });
   const first = Object.fromEntries(parsed.map((r, i) => [i + 1, { ...r.cells }]));
 
-  // AI only where the parser left a required cell empty, two or three posts at a time, within a time budget.
-  const until = Date.now() + AI_DEADLINE_MS;
-  const limit = U.createLimiter(3);
-  let blocked = null;
-  let aiCalls = 0;
-  await Promise.all(
-    parsed.map((r, i) =>
-      limit(async () => {
-        if (!r.missing.length) return;
-        if (!AI) return void (logs[i].aiSkipped = "rules_only");
-        if (blocked) return void (logs[i].aiSkipped = blocked);
-        if (Date.now() > until) return void (logs[i].aiSkipped = "time");
-        const t0 = Date.now();
-        aiCalls++;
-        logs[i].aiUsed = true;
-        try {
-          const ex = await L.extractPropertyDetails(AI, { texts: [list[i].text], lang, ctx });
-          const filled = ChatListing.fillFromAi(cells[i], ex.fields);
-          // Where both read the same cell: did they agree? (cell names only) This is how the parser's quality against AI is measured.
-          logs[i].aiVsParser = ChatListing.compareWithAi(parsed[i].cells, ex.fields);
-          cells[i] = filled.cells;
-          logs[i].aiFilled = filled.filled;
-          logs[i].model = ex.modelUsed || null;
-        } catch (err) {
-          const why = AiBlock.kindOf(err);
-          if (why !== "ai") blocked = why;
-          logs[i].aiError = why;
-        }
-        logs[i].aiMs = Date.now() - t0;
-      })
-    )
-  );
+  // Rules only (Parser consolidation, Phase 6): no AI call. What the parser cannot read stays empty and is completed in the Edit window.
+  const aiCalls = 0;
+  const blocked = null;
 
   const rows = cells.map((c, i) => ({ rowNumber: i + 1, cells: c }));
   const plan = await Imports.planExcel(pool, broker, { rows, skipped: [] }, { lang, source: "chat" });

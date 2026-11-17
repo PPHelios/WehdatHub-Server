@@ -1248,6 +1248,8 @@
     },
     "domain/leadIntake.js": {
       "readLeadText": ["raw"],
+      "readLeadForm": ["raw"],
+      "looksLikePortalLead": ["raw"],
       "MAX_CHOICES": "Number",
       "findPhones": ["text"],
       "parseContactCard": ["contacts"],
@@ -2224,16 +2226,11 @@
     },
     "domain/followUpDraft.js": {
       "MAX_TEXT": "Number",
-      "MAX_STYLE": "Number",
       "firstName": ["name"],
-      "factsOf": ["params"],
-      "template": ["params"],
-      "prompt": ["facts", "params"],
-      "parse": ["text"]
+      "template": ["params"]
     },
     "services/followUpDrafts.js": {
-      "draft": ["pool", "broker", "leadKey", "params"],
-      "saveStyle": ["pool", "broker", "text"]
+      "draft": ["pool", "broker", "leadKey", "params"]
     },
     "domain/leases.js": {
       "END_DAYS": "Array",

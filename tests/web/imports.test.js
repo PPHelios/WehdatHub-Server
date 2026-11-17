@@ -235,7 +235,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
     scripted();
     const { agent, csrf } = await signIn(h, "manager");
-    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون 01012345678", "شقة في هايد بارك 150م 3 غرف السعر 8.5 مليون 01012345678", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
+    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون 01012345678", "شقة للبيع في هايد بارك 150م 3 غرف السعر 8.5 مليون 01012345678", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", text);
     expect(r.status).toBe(303);
     const id = importId(r);
@@ -269,13 +269,13 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect(Describe.brokerCard(l)).toMatch(/Ahmed Broker/);
   });
 
-  test("while posts are read the page polls; the AI quota running out is reported per post", async () => {
-    h.AI.respond(() => Object.assign(new Error("quota"), { code: "AGENCY_QUOTA_EXCEEDED" }));
+  test("while posts are read the page polls; posts are read by rules, no AI call", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "شقة للبيع في ميفيدا 200 متر 3 غرف السعر 12 مليون");
     const id = importId(r);
     await Imports.waitForGroupImport(id);
-    expect((await agent.get(`/app/import/${id}`)).text).toMatch(/data-state="error"[\s\S]*وصلت لحد النهارده/);
+    expect(h.AI.calls).toHaveLength(0);
+    expect((await agent.get(`/app/import/${id}`)).text).toMatch(/data-state="(ok|incomplete)"/);
     await h.query("UPDATE web_imports SET status = 'processing' WHERE id = $1", [id]);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/hx-trigger="every 2s"/);
   });

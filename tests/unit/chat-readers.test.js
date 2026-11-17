@@ -47,3 +47,10 @@ describe("Excel finishing and furnishing cells", () => {
     ["سوبر لوكس", "super_lux"],
   ])("finishing %s", (t, v) => expect(S.finishing(t)).toBe(v));
 });
+
+describe("features and orientation written inline (Phase 6)", () => {
+  test("a word the app's feature list knows is kept in the features cell; plain posts get none", () => {
+    expect(cells("شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون").features).toBe("بحري");
+    expect(cells("شقة للبيع 120 متر السعر 5 مليون").features).toBeUndefined();
+  });
+});
