@@ -2,6 +2,8 @@
 // primary. Pure: the SQL for each one is a fixed string (no user text inside).
 "use strict";
 
+const Amount = require("./read/amount");
+
 const DEALS = ["rent", "resale_cash", "resale_installments", "primary"];
 
 const LABELS = {
@@ -36,7 +38,7 @@ const label = (deal, lang = "ar") => (LABELS[deal] ? LABELS[deal][lang === "en" 
 /** "5m", "250k", "5,000,000" -> a number, or null. */
 function parseMoney(text) {
   const m = String(text || "").toLowerCase().replace(/[,\s]/g, "").match(/^(\d+(?:\.\d+)?)([mk]?)$/);
-  if (!m) return null;
+  if (!m) return Amount.readWhole(String(text || ""));
   const n = Number(m[1]) * (m[2] === "m" ? 1e6 : m[2] === "k" ? 1e3 : 1);
   return Number.isFinite(n) && n > 0 ? n : null;
 }

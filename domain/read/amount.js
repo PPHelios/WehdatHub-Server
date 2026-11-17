@@ -230,4 +230,15 @@ function readAmount(text) {
   return { value, hadUnit, unitWord, sure, currency };
 }
 
-module.exports = { readAmount, readAmounts };
+// The text is ONE amount and nothing else (a cell like "٣ ونص مليون جنيه"): its value, else null. Used by cell readers.
+function readWhole(text) {
+  const all = readAmounts(text);
+  if (all.length !== 1 || !all[0].sure || !all[0].hadUnit) return null;
+  const a = all[0];
+  const s = norm(text);
+  const left = (s.slice(0, a.index) + " " + s.slice(a.end)).replace(/[\s.,:;()\-]+/g, " ").trim();
+  const words = left ? left.split(" ") : [];
+  return words.every((w) => MONEY_TRAIL.has(w) || /^(egp|le|usd|\$)$/.test(w)) ? a.value : null;
+}
+
+module.exports = { readAmount, readAmounts, readWhole };

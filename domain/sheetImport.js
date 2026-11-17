@@ -4,6 +4,7 @@
 "use strict";
 
 const Features = require("./features");
+const Amount = require("./read/amount");
 const Mixed = require("./sheetMixed");
 const Delivery = require("./delivery");
 const { TYPE_TERMS } = require("./vocabulary");
@@ -82,7 +83,8 @@ function money(v) {
   if (typeof v === "number") return v > 0 ? v : null;
   const s = digits(v).toLowerCase().replace(/egp|le|ج\.?م|جنيه/g, "").trim();
   const m = s.match(/^([\d.,]+)\s*(m|mn|million|مليون|k|الف|ألف|thousand)?$/);
-  if (!m) return null;
+  // Wider phrasing ("٣ ونص مليون", "5 مليون الا ربع"): the shared reader, only when it is sure (empty beats wrong).
+  if (!m) return Amount.readWhole(String(v));
   const n = Number(m[1].replace(/,/g, ""));
   if (!Number.isFinite(n) || n <= 0) return null;
   const unit = m[2] || "";

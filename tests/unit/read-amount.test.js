@@ -92,3 +92,31 @@ describe("numbers helpers", () => {
     expect(wordValue("بيت")).toBeNull();
   });
 });
+
+describe("readWhole and the cell readers that use it", () => {
+  const { readWhole } = require("../../domain/read/amount");
+  const Sheet = require("../../domain/sheetImport");
+  const Deal = require("../../domain/dealType");
+  test("a cell that is one amount", () => {
+    expect(readWhole("٣ ونص مليون جنيه")).toBe(3500000);
+    expect(readWhole("5 مليون الا ربع")).toBe(4750000);
+  });
+  test("a cell with more than an amount is not read", () => {
+    expect(readWhole("شقة 3 مليون")).toBeNull();
+    expect(readWhole("3 مليون و 5 مليون")).toBeNull();
+  });
+  test("Excel money(): old readings stay, wider phrasing is added, unsure stays empty", () => {
+    expect(Sheet.money("8.5 مليون")).toBe(8500000);
+    expect(Sheet.money("8,500,000")).toBe(8500000);
+    expect(Sheet.money(8500000)).toBe(8500000);
+    expect(Sheet.money("٣ ونص مليون")).toBe(3500000);
+    expect(Sheet.money("سعر حلو")).toBeNull();
+    expect(Sheet.money("3500000 4000000")).toBeNull();
+  });
+  test("dealType.parseMoney: old readings stay, wider phrasing is added", () => {
+    expect(Deal.parseMoney("5m")).toBe(5000000);
+    expect(Deal.parseMoney("250k")).toBe(250000);
+    expect(Deal.parseMoney("٣ ونص مليون")).toBe(3500000);
+    expect(Deal.parseMoney("abc")).toBeNull();
+  });
+});
