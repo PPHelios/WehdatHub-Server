@@ -20,6 +20,7 @@ const LeadScope = require("./leadScope");
 const MAX_PHONES = 3;
 const UNDO_MS = 10 * 60 * 1000;
 const NOTE_MAX = 1000;
+const NAME_MAX = 60;
 const PAGE = 20;
 const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -156,6 +157,9 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
   if (parsed.error) return { outcome: "invalid", error: parsed.error, notified: [] };
   const kind = input.kind || "buyer";
   if (!Stages.KINDS.includes(kind)) return { outcome: "invalid", error: "kind", notified: [] };
+  // Too long is refused, never cut silently (QA 2026-11-17).
+  if (String(input.name ?? "").trim().length > NAME_MAX) return { outcome: "invalid", error: "name_too_long", notified: [] };
+  if (String(input.notes ?? "").trim().length > NOTE_MAX) return { outcome: "invalid", error: "notes_too_long", notified: [] };
   const basis = input.lawfulBasis || "client_request";
   if (!Stages.LAWFUL_BASES.includes(basis)) return { outcome: "invalid", error: "lawful_basis", notified: [] };
   const stage = input.stage || "new";
@@ -205,7 +209,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
                 assigned_at = CASE WHEN $9 THEN $6 ELSE assigned_at END,
                 last_activity_at = $6, updated_at = $6, version = version + 1
           WHERE id = $1 AND agency_id = $2 RETURNING *`,
-        [existing.id, actor.agency_id, added, cleanText(input.name, 120), claim ? actor.id : existing.assigned_broker_id, now.toISOString(), cleanText(input.source, 60), cleanText(input.notes, 4000), claim]
+        [existing.id, actor.agency_id, added, cleanText(input.name, NAME_MAX), claim ? actor.id : existing.assigned_broker_id, now.toISOString(), cleanText(input.source, 60), cleanText(input.notes, NOTE_MAX), claim]
       );
       await addEvent(client, existing, actor.id, "inquiry", { source: cleanText(input.source, 60) }, now);
       if (added.length) await addEvent(client, existing, actor.id, "merged", { added: added.length }, now);

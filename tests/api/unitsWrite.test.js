@@ -111,3 +111,14 @@ test("review: an unknown compound needs its area (blocker area_id); picking one 
     expect(ok.body.place.area_id).toBe(area.id);
   }
 });
+
+test("QA round 2: notes longer than 1,000 characters are refused with the maximum, in the review and on save", async () => {
+  const long = { ...FIELDS, code: "LONG-1", notes: "n".repeat(1001) };
+  const review = await post("/units/review").send({ fields: long, photoCount: 0 });
+  expect(review.body.ok).toBe(false);
+  expect(review.body.blockers.find((b) => b.field === "notes").label).toMatch(/1000/);
+  const save = await post("/units").field("fields", JSON.stringify(long));
+  expect(save.status).toBe(422);
+  expect(save.body.blockers.some((b) => b.field === "notes")).toBe(true);
+  expect(await h.query("SELECT 1 FROM listings WHERE code = 'LONG-1'")).toHaveLength(0);
+});

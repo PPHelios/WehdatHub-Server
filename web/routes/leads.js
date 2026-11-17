@@ -367,6 +367,8 @@ ${tab === "portal" ? portalHtml : rows.length
       phone_required: L(lang, "الموبايل مطلوب.", "A phone number is required."),
       phone_invalid: L(lang, "رقم مش مظبوط.", "A phone number isn't valid."),
       too_many_phones: L(lang, "3 أرقام بالكتير.", "At most 3 numbers."),
+      name_too_long: L(lang, "الاسم طويل: 60 حرف بالكتير.", "The name is too long: 60 characters at most."),
+      notes_too_long: L(lang, "الملاحظات طويلة: 1000 حرف بالكتير.", "The notes are too long: 1,000 characters at most."),
       lawful_basis: L(lang, "اختار الأساس القانوني.", "Choose the lawful basis."),
       assignee: L(lang, "البروكر مش موجود.", "Unknown broker."),
       assignee_away: L(lang, "البروكر ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),

@@ -356,6 +356,7 @@ function register(web, { pool, page, assets }) {
       traceRefusal(pool, req, { reason: `create_refused_${status}`, listingCode: form.code || null, blockers: ev.blockers.map((b) => b.field) });
       return formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     };
+    const tooLong = FormChecks.lengthBlockers(req.body, lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
     if (warnTickMissing(ev, req.body)) return again(422, WARN_TICK_TEXT(lang));
     const nameError = ownerNameError(ev.listing, req.body, lang);
@@ -469,6 +470,7 @@ function register(web, { pool, page, assets }) {
       const { rows } = await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1 AND NOT (id = ANY($2::uuid[]))", [listing.id, removeIds]);
       const photoCount = rows[0].n + photos.urls.length + keys.length + (checkOnly ? pendingOf(req) : 0);
       const ev = evaluate({ existing: listing, form, lang, photoCount });
+      const tooLong = FormChecks.lengthBlockers(req.body, lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
       if (!ev.ok) return { rollback: true, listing, ev };
       if (warnTickMissing(ev, req.body)) return { rollback: true, listing, ev, leadError: WARN_TICK_TEXT(lang) };
       const nameError = ownerNameError(ev.listing, req.body, lang);

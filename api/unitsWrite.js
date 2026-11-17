@@ -263,6 +263,7 @@ function register(api, { pool }) {
       if (!key.first) return { rollback: true, repeat: listing };
       const photoCount = (await client.query("SELECT count(*)::int AS n FROM listing_images WHERE listing_id = $1", [listing.id])).rows[0].n;
       const ev = Rules.evaluate(Form.composeFromForm({ existing: listing, form, lang }), { lang, photoCount });
+      const tooLong = FormChecks.lengthBlockers(fieldsOf(req.body), lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
       if (!ev.ok) return { rollback: true, listing, ev };
       const patch = Edits.diffPatch(listing, ev.listing);
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
@@ -353,6 +354,7 @@ function register(api, { pool }) {
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
     const keys = Uploads.keysOf(req.body).slice(0, Math.max(0, MAX_PHOTOS - files.length));
     const { form, ev } = evaluate(fields, lang, files.length + keys.length);
+    const tooLong = FormChecks.lengthBlockers(fields, lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
     if (!ev.ok) return res.status(422).json({ error: "incomplete", blockers: blockersOf(ev, fields, lang) });
     // An owner phone with no name is refused unless the broker says to use the phone as the name.
     const d = ev.listing.details || {};

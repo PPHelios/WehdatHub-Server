@@ -45,3 +45,19 @@ test("the duplicate-phone check runs in the background and never locks the page 
   expect(checks.length).toBeGreaterThanOrEqual(2);
   for (const tag of checks) expect(tag).toMatch(/data-no-lock/);
 });
+
+test("QA round 2: a lead name over 60 characters or notes over 1,000 are refused with a message, not cut", async () => {
+  const Leads2 = require("../../services/leads");
+  const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+  const longName = await Leads2.captureLead(h.pool, admin, { phones: "01012345601", name: "x".repeat(61) });
+  expect(longName.error).toBe("name_too_long");
+  const longNotes = await Leads2.captureLead(h.pool, admin, { phones: "01012345602", name: "ok", notes: "n".repeat(1001) });
+  expect(longNotes.error).toBe("notes_too_long");
+  const fine = await Leads2.captureLead(h.pool, admin, { phones: "01012345603", name: "x".repeat(60), notes: "n".repeat(1000) });
+  expect(fine.outcome).toBe("created");
+  expect(await h.query("SELECT 1 FROM leads WHERE phone_e164 IN ('+201012345601','+201012345602')")).toHaveLength(0);
+  const a = await signIn(h, "admin");
+  const res = await a.agent.post("/app/leads/new").type("form").send({ _csrf: a.csrf, name: "y".repeat(61), phone1: "01012345604", lawful_basis: "client_request" });
+  expect(res.status).toBe(422);
+  expect(res.text).toMatch(/too long|طويل/);
+});
