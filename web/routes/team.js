@@ -31,6 +31,7 @@ const ERRORS = {
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
   role: ["الدور مش مظبوط.", "The role isn't valid."],
   phone_taken: ["الرقم ده مسجل مع شركة تانية.", "This number is registered with another agency."],
+  already_member: ["الرقم ده موجود بالفعل في الفريق. افتح البروكر من القايمة لو عايز تغيّر حاجة.", "This number is already on your team. Open them in the list to change anything."],
   not_found: ["البروكر مش موجود.", "Broker not found."],
   inactive: ["البروكر موقوف؛ رجّعه الأول.", "The broker is deactivated; bring them back first."],
   self: ["مينفعش توقف نفسك.", "You can't deactivate yourself."],

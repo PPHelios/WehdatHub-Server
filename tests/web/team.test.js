@@ -201,3 +201,12 @@ test("Add member: a manager can add a team lead; the form says Add member and of
   const [b] = await h.query("SELECT role, agency_id, is_active FROM brokers WHERE phone_normalized = '201099887755'");
   expect(b).toMatchObject({ role: "team_lead", agency_id: h.AGENCY_A, is_active: true });
 });
+
+test("QA 2026-11-17: inviting the phone of someone already active is refused, not applied as a rename", async () => {
+  const a = await signIn(h, "admin");
+  const before = (await h.query("SELECT name, role FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  const res = await a.agent.post("/app/team/invite").type("form").send({ _csrf: a.csrf, name: "Renamed By Invite", phone: `0${h.BROKERS.broker.phone.slice(2)}`, role: "broker", lang: "en" });
+  expect(res.text).toMatch(/already on your team/);
+  const after = (await h.query("SELECT name, role FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  expect(after).toEqual(before);
+});

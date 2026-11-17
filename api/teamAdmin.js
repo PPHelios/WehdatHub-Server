@@ -5,7 +5,7 @@
 const Team = require("../services/team");
 const Audit = require("../services/audit");
 
-const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, seats: 402, self: 409, active: 409, has_records: 409 };
+const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, already_member: 409, seats: 402, self: 409, active: 409, has_records: 409 };
 const fail = (res, error) => res.status(STATUS[error] || 422).json({ error });
 
 function register(api, { pool }) {

@@ -107,6 +107,8 @@ async function invite(pool, manager, input = {}, opts = {}) {
   let created = false;
   if (found[0] && found[0].agency_id !== manager.agency_id) return { error: "phone_taken" };
   if (found[0] && !mayActOn(manager, found[0].role)) return { error: "rank" };
+  // Someone already active on the team is never renamed or re-roled by an invite (it only brings back a deactivated member).
+  if (found[0] && found[0].is_active) return { error: "already_member" };
   // A new or returning broker takes a seat; the plan's seats are the ceiling (existing ones are never removed).
   if (!found[0]?.is_active && !(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
   if (found[0]) {
