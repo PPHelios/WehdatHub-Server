@@ -8,6 +8,7 @@ const WebAuth = require("../lib/webAuth");
 const Vis = require("../lib/visibility");
 const ErrorReports = require("../lib/errorReports");
 const ViewGuard = require("../lib/viewGuard");
+const ErrorText = require("../lib/errorText");
 
 const bearerOf = (req) => {
   const m = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(String(req.get("authorization") || ""));
@@ -32,6 +33,21 @@ function firebaseClientConfig() {
 }
 
 /** Loads req.token and req.session from the Bearer header (null when missing, unknown, expired or revoked). */
+/** Every JSON error answer gets a `message` in the person's language next to its `error` code (lib/errorText.js), so the app never has to show a raw code. */
+function withMessages() {
+  return (req, res, next) => {
+    const json = res.json.bind(res);
+    res.json = (body) => {
+      if (res.statusCode >= 400 && body && typeof body === "object" && !Array.isArray(body) && typeof body.error === "string" && body.message === undefined) {
+        const message = ErrorText.of(body.error, req.session?.broker?.preferred_lang === "en" ? "en" : "ar");
+        if (message) body = { ...body, message };
+      }
+      return json(body);
+    };
+    next();
+  };
+}
+
 function loadBearer(pool) {
   return async (req, res, next) => {
     try {
@@ -78,6 +94,7 @@ function mountApi(app, { pool }) {
   api.get("/config", (_req, res) =>
     res.json({ minAppVersion: /^\d+\.\d+\.\d+$/.test(process.env.APP_MIN_VERSION || "") ? process.env.APP_MIN_VERSION : "0.0.0", storeUrl: { android: process.env.APP_STORE_URL_ANDROID || null, ios: process.env.APP_STORE_URL_IOS || null }, firebase: firebaseClientConfig() })
   );
+  api.use(withMessages());
   api.use(loadBearer(pool));
   require("./auth").register(api, { pool });
 

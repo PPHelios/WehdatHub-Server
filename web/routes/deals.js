@@ -44,7 +44,7 @@ const ERRORS = {
   status: ["حالة غير معروفة.", "Unknown status."],
   not_found: ["مش موجود.", "Not found."]
 };
-const errorText = (code, lang) => (ERRORS[code] || [code, code])[lang === "en" ? 1 : 0];
+const errorText = (code, lang) => (ERRORS[code] ? ERRORS[code][lang === "en" ? 1 : 0] : require("../../lib/errorText").ofOrGeneric(code, lang));
 
 async function colleagues(pool, broker) {
   const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [broker.agency_id]);

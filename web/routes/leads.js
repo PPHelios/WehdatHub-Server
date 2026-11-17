@@ -29,6 +29,7 @@ const { isManager, isAgencyOwner, canEditLead } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
+const ErrorText = require("../../lib/errorText");
 const { html } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
@@ -373,7 +374,7 @@ ${tab === "portal" ? portalHtml : rows.length
       assignee: L(lang, "البروكر مش موجود.", "Unknown broker."),
       assignee_away: L(lang, "البروكر ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
       kind: L(lang, "النوع مش معروف.", "Unknown type.")
-    }[r.error] || r.error;
+    }[r.error] || ErrorText.ofOrGeneric(r.error, lang);
     return formPage(req, res, { values, error: `⚠️ ${why}` }, 422);
   });
 
@@ -638,7 +639,7 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
         request_empty: L(lang, "اختار فلتر واحد على الأقل (النوع، المكان أو السعر).", "Choose at least one filter (type, place or price)."),
         too_many_requests: L(lang, `الحد الأقصى ${LeadRequests.MAX_REQUESTS} طلبات للعميل؛ امسح واحد الأول.`, `At most ${LeadRequests.MAX_REQUESTS} requests per client; remove one first.`),
         too_many_requests_broker: L(lang, "وصلت للحد الأقصى: 30 طلب مفتوح. امسح طلب قديم الأول.", "You have 30 open requests, the maximum. Remove an old one first.")
-      }[r.error] || r.error;
+      }[r.error] || ErrorText.ofOrGeneric(r.error, lang);
       return leadPage(req, res, fresh, { status: 422, notice: `⚠️ ${why}` });
     });
   }

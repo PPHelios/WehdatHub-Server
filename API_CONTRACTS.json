@@ -862,6 +862,11 @@
       "fieldsOfCells": ["cells", "lang"],
       "typeWordPlaces": ["pool", "words"],
       "TYPE_WORD_CHOICES": "Array",
+      "WORD_FIELDS": "Array",
+      "FINISHING_KEYS": "Array",
+      "FURNISHING_KEYS": "Array",
+      "parseWordChoice": ["value"],
+      "suggestWordField": ["word", "place"],
       "missingCells": ["cells", "lang"],
       "setNewPlace": ["pool", "broker", "id", "row", "params"],
       "movePhoto": ["pool", "broker", "id", "params"],
@@ -1065,7 +1070,10 @@
     },
     "lib/formChecks.js": {
       "ownerBlockers": ["listing", "body", "lang", "params"],
-      "changesOf": ["existing", "next"]
+      "changesOf": ["existing", "next"],
+      "explainInvalid": ["blockers", "body", "lang"],
+      "lengthBlockers": ["body", "lang"],
+      "MAX_TEXT": "Object"
     },
     "api/clientError.js": {
       "register": ["api", "params"]
@@ -1383,6 +1391,8 @@
     },
     "services/deals.js": {
       "STATUSES": "Array",
+      "statusMoveError": ["actor", "from", "to", "params"],
+      "allowedStatuses": ["actor", "from"],
       "refLabel": ["ref"],
       "parseRef": ["text"],
       "statusLabel": ["s", "lang"],

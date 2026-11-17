@@ -122,3 +122,14 @@ test("QA round 2: notes longer than 1,000 characters are refused with the maximu
   expect(save.body.blockers.some((b) => b.field === "notes")).toBe(true);
   expect(await h.query("SELECT 1 FROM listings WHERE code = 'LONG-1'")).toHaveLength(0);
 });
+
+test("QA round 2 (item 50): API error answers carry a message in the person's language next to the code", async () => {
+  const r = await post("/units").field("fields", JSON.stringify({ listing_type: "sale" }));
+  expect(r.status).toBe(422);
+  expect(r.body.error).toBe("incomplete");
+  expect(typeof r.body.message).toBe("string");
+  expect(r.body.message).not.toMatch(/incomplete/);
+  const missing = await post("/units/NOPE-404/status").send({ status: "sold" });
+  expect(missing.body.error).toBe("not_found");
+  expect(missing.body.message.length).toBeGreaterThan(3);
+});
