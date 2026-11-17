@@ -37,6 +37,9 @@ const SWAPS = [
   [/(?<![\p{L}\p{N}])غرف[هة] ?و ?صال[هة](?![\p{L}\p{N}])/gu, "1 غرف"],
   // ordinal before the floor word
   [/(?<![\p{L}\p{N}])(?:ال)?(اول|تاني|ثاني|تالت|ثالث|رابع|خامس|سادس|سابع|تامن|ثامن|تاسع|عاشر) ?(?:دور|طابق)(?![\p{L}\p{N}])/gu, "دور $1"],
+  // A size with a Latin m ("land 600m", "garden 60m", "600m land") is metres, never millions: the money rules must not see it.
+  [/(?<![\p{L}\p{N}])(land|plot|garden|roof|terrace|bua|built ?up|build ?up) ?[:=]? ?(\d{2,5}) ?m(?![\p{L}\p{N}²])/giu, "$1 $2 متر"],
+  [/(?<![\p{L}\p{N}.,])(\d{2,5}) ?m (land|plot|garden|roof|terrace|bua|built ?up|build ?up)(?![\p{L}\p{N}])/giu, "$1 متر $2"],
   // "مساحة 150" → "150 متر"
   [/(?<![\p{L}\p{N}])(?:مساح[هة]|area) ?[:=]? ?(\d{2,5})(?! ?(?:متر|م|sqm|m2|م2|m²))(?![\p{L}\p{N}])/giu, "$1 متر"],
 ];

@@ -163,9 +163,16 @@ function cellPrice(raw) {
     const v = pickPrice(text, "long") ?? pickPrice(text, "first");
     return { value: v ?? raw, usd: false };
   }
-  const egp = pickPrice(text, "long");
+  // The EGP prices only: a part written in dollars is never read as pounds ("short 130$ / long 2700$" is dollars).
+  const parts = clean(text).split(/\s*(?:\/|;|\+)\s*/);
+  const egpParts = parts.filter((p) => !FOREIGN.test(p));
+  const egp = egpParts.length ? pickPrice(egpParts.join(" / "), "long") : null;
   if (egp) return { value: egp, usd: false };
-  const seg = clean(text).split(/\s*(?:\/|;|\+)\s*/).find((p) => FOREIGN.test(p));
+  // Only dollars stay dollars; a euro or any other currency is reported to the person, never read as dollars.
+  const dollarParts = parts.filter((p) => /(\$|usd|us\s*dollars?|dollars?|دولار)/i.test(p));
+  const pick = dollarParts.length ? pickPrice(dollarParts.join(" / "), "long") ?? pickPrice(dollarParts.join(" / "), "first") : null;
+  if (pick) return { value: pick, usd: true };
+  const seg = parts.find((p) => FOREIGN.test(p));
   const d = seg ? dollars(seg) : null;
   return d !== null ? { value: d, usd: true } : { value: raw, usd: false };
 }

@@ -28,7 +28,7 @@ async function planChat(pool, broker, posts, { lang = "ar", filename = null } = 
   const parsed = list.map((p, i) => {
     const t0 = Date.now();
     const r = ChatListing.parsePost(p.text, places, p);
-    logs[i] = { row: i + 1, text: p.text, read: r.read, missing: r.missing, parseMs: Date.now() - t0, ...(r.missing.length ? { aiSkipped: "rules_only" } : {}) };
+    logs[i] = { row: i + 1, text: p.text, read: r.read, missing: r.missing, suspect: r.suspect, parseMs: Date.now() - t0, ...(r.missing.length ? { aiSkipped: "rules_only" } : {}) };
     return r;
   });
   const areas = list.some((p) => p.fields) ? await require("./areas").approvedAreas(pool).catch(() => []) : [];

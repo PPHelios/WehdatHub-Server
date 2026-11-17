@@ -61,3 +61,17 @@ describe("Phase 2 phrases", () => {
     expect(f("تسعين أفينيو للايجار").property_types).toEqual([]);
   });
 });
+
+describe("a size with a Latin m is never a price (Phase 7)", () => {
+  const Q = require("../../domain/searchQuery");
+  const f = (q) => Q.fallbackParse(q).filters;
+  test("'land 600m', 'garden 60m' beside the unit's own area do not become a 600 or 60 million budget", () => {
+    expect(f("villa 400m land 600m")).toMatchObject({ price_max: null, area_min: 400 });
+    expect(f("apartment 150m garden 60m")).toMatchObject({ price_max: null, area_min: 150 });
+    expect(f("apartment 150m garden 60m under 6m")).toMatchObject({ price_max: 6000000, area_min: 150 });
+  });
+  test("real budgets are untouched", () => {
+    expect(f("apartment 150m 5m")).toMatchObject({ price_max: 5000000, area_min: 150 });
+    expect(f("villa 25m").price_max).toBe(25000000);
+  });
+});

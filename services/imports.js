@@ -832,7 +832,10 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
         try {
           // Rules only (Parser consolidation, Phase 6): the same post reader the chat import uses; what it cannot read stays empty and shows as missing.
           const read = ChatListing.parsePost(post.text, places, post);
-          const ex = { fields: SheetImport.rowToDraft(read.cells).draft || {} };
+          // The price the same way an Excel cell is read: several prices pick the long-term or monthly one, dollars stay dollars.
+          const price = Mixed.installmentOf(read.cells.price_value) ? { value: read.cells.price_value, usd: false } : Mixed.cellPrice(read.cells.price_value);
+          const ex = { fields: SheetImport.rowToDraft(price.value === read.cells.price_value ? read.cells : { ...read.cells, price_value: price.value }).draft || {} };
+          if (price.usd) ex.fields.details = { ...(ex.fields.details || {}), currency: "USD" };
           // "All rent" / "All sale" from the review page fills only posts that did not say.
           if (!ex.fields.listing_type && defaults.listing_type) ex.fields.listing_type = defaults.listing_type;
           // The compound's English name too, so the duplicate check matches "هايد بارك" with "Hyde Park".
