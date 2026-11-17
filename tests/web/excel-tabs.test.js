@@ -74,7 +74,7 @@ describe("one change for many rows", () => {
     expect(page.text).toMatch(/data-kind="new"[\s\S]*data-row="1"/);
     // The rest in one go.
     const b = await agent.post(`${r.body.url}/batch`).type("form").send({ _csrf: csrf, action: "listing_type", value: "rent" });
-    expect(b.headers.location).toMatch(/\?batch=2$/);
+    expect(b.headers.location).toMatch(/\?batch=2#batch-done$/);
     page = await agent.get(b.headers.location);
     expect(page.text).toMatch(/data-batch-done/);
     expect(page.text).not.toMatch(/data-kind="invalid"/);

@@ -164,7 +164,7 @@ describe("reading a PDF", () => {
     expect(sw.status).toBe(200);
     pageHtml = (await agent.get(`/app/catalogue/projects/${project.id}`)).text;
     expect(pageHtml).toContain("data-ai-read");
-    expect(pageHtml).toContain('data-pages-left="200"');
+    expect(pageHtml).toContain('data-pages-left="600"');
 
     const photo = Buffer.from("fake-jpeg-bytes");
     const up = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("confirmed", "1").attach("doc", photo, { filename: "p1.jpg", contentType: "image/jpeg" });

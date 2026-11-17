@@ -23,8 +23,8 @@ test("one list for an agency: AI credits, units, users", async () => {
   const list = await Quotas.forAgency(h.pool, h.BROKERS.admin.agency_id);
   expect(list.map((q) => q.key)).toEqual(["credits", "units", "seats"]);
   const by = Object.fromEntries(list.map((q) => [q.key, q]));
-  expect(by.units).toMatchObject({ used: 1, limit: 1500 });
-  expect(by.credits).toMatchObject({ used: 0, limit: 2000 });
+  expect(by.units).toMatchObject({ used: 1, limit: 1000000 });
+  expect(by.credits).toMatchObject({ used: 0, limit: 6000 });
 });
 
 test("the manager dashboard shows the limits; brokers can't open it; the guide explains them", async () => {
