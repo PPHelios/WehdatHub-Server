@@ -23,7 +23,7 @@ const FEATURES = [
   { key: "brochure_lines", tab: "written", ar: "أهم نقاط البروشور", en: "Brochure highlights" },
   { key: "catalogue_sentence", tab: "written", ar: "تعديلات الكتالوج بجملة", en: "Catalogue changes by sentence" },
   { key: "doc_reads", tab: "documents", ar: "قراءة PDF وصور الأسعار والأنظمة والبروشور", en: "Reading PDFs and photos (prices, plans, brochures)" },
-  { key: "chat_import", tab: "documents", ar: "استيراد وحدات من شات الجروب", en: "Import units from a group chat" },
+  { key: "chat_import", tab: "documents", ar: "تحميل وحدات من شات الجروب", en: "Import units from a group chat" },
   { key: "photo_order", tab: "documents", ar: "ترتيب صور الفلاير", en: "Flyer photo ordering" },
   { key: "search_ai", tab: "search", ar: "مساعدة الذكاء الاصطناعي في البحث لما القراءة السريعة مش متأكدة", en: "AI help when the quick reader is unsure" }
 ];

@@ -10,7 +10,7 @@ async function forAgency(db, agencyId, { now = new Date() } = {}) {
   const a = await Billing.allowance(db, agencyId, { now });
   return [
     { key: "credits", label: ["رصيد الذكاء الاصطناعي", "AI credits"], used: a.credits.used, limit: a.credits.limit, hint: ["كل عمل بالذكاء الاصطناعي بيتحسب، والجدول في صفحة الباقة. البحث والإضافة من الموقع ببلاش.", "Every AI action counts; the table is on the Plan page. Search and adding on the website are free."], href: "/app/usage#plan" },
-    { key: "units", label: ["وحدات متاحة", "Available units"], used: a.units.used, limit: a.units.limit, hint: ["المباعة والمؤرشفة مش بتتحسب.", "Sold and archived units don't count."], href: "/app/usage#plan" },
+    { key: "units", label: ["الوحدات (المتاحة والمؤرشفة)", "Units (available and archived)"], used: a.units.used, limit: a.units.limit, hint: ["المؤرشفة بتتحسب لأنها بتاخد مساحة. المباعة والمتمسحة لأ.", "Archived units count because they take storage. Sold and deleted ones don't."], href: "/app/usage#plan" },
     { key: "seats", label: ["المستخدمين", "Users"], used: a.seats.used, limit: a.seats.limit, hint: ["كل بروكر أو مدير نشط بياخد مكان.", "Each active broker or manager takes a seat."], href: "/app/team" }
   ];
 }

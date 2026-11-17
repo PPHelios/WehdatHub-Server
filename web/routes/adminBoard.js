@@ -16,7 +16,7 @@ const TAB_LABELS = {
   search: ["جودة البحث", "Search quality"],
   agencies: ["الشركات", "Agencies"],
   operations: ["التشغيل", "Operations"],
-  health: ["الصحة والاستيراد", "Health and import"],
+  health: ["الصحة والتحميل", "Health and import"],
   content: ["المحتوى", "Content"]
 };
 // The five views across the top; each opens on its first tab and lists the others as a second row.
@@ -45,13 +45,13 @@ ${Charts.bars(data.series, "ai_calls", { title: L(lang, "مكالمات الذك
 ${Charts.bars(data.series, "errors", { title: L(lang, "أخطاء", "Errors"), lang })}</div>
 <h3>${L(lang, "الأخطاء حسب المصدر", "Errors by source")}</h3>
 ${table([L(lang, "المصدر", "Source"), L(lang, "مرات", "Times"), ""], data.errorsBySource.map((x) => [x.source, num(x.n), html`<a class="secondary button small" href="/app/failures">${L(lang, "افتح", "Open")}</a>`]), lang)}
-<h3>${L(lang, "استيراد واتساب", "WhatsApp import")}</h3>
+<h3>${L(lang, "تحميل واتساب", "WhatsApp import")}</h3>
 ${kv([[L(lang, "بوستات اتقرت", "Posts read"), i.posts], [L(lang, "القارئ العادي كفى %", "Parser alone was enough %"), pc(i.parserCompletePct)], [L(lang, "اتستخدم الذكاء %", "AI used %"), pc(i.aiUsedPct)], [L(lang, "فشل الذكاء %", "AI failed %"), pc(i.aiErrorPct)], [L(lang, "اتفاق الذكاء والقارئ %", "AI and parser agree %"), pc(i.agreePct)], [L(lang, "صفوف اتعدلت في المراجعة %", "Rows edited in review %"), pc(i.editedPct)], [L(lang, "مرات الحفظ", "Saves"), i.applies], [L(lang, "صفوف محفوظة", "Rows saved"), i.rows]], lang)}
 <h3>${L(lang, "خانات اختلفوا فيها", "Cells they differ on")}</h3>
 ${table([L(lang, "الخانة", "Cell"), L(lang, "اختلاف", "Differ"), L(lang, "اتفاق %", "Agree %")], i.differCells.map((c) => [c.cell, num(c.differ), pc(c.agreePct)]), lang)}
 <h3>${L(lang, "خانات اتصلحت يدويًا", "Cells people corrected")}</h3>
 ${table([L(lang, "الخانة", "Cell"), L(lang, "مرات", "Times")], i.cellsCorrected.map((c) => [c.cell, num(c.times)]), lang)}
-<h3>${L(lang, "خطوات الاستيراد", "Import steps")}</h3>
+<h3>${L(lang, "خطوات التحميل", "Import steps")}</h3>
 ${table([L(lang, "الخطوة", "Step"), L(lang, "مرات", "Times"), L(lang, "نجح %", "OK %"), "p50 ms", "p95 ms"], i.steps.map((s) => [s.step, num(s.n), pc(s.okPct), num(s.p50), num(s.p95)]), lang)}
 <h3>${L(lang, "أخطاء الخطوات", "Step errors")}</h3>
 ${table([L(lang, "الخطوة", "Step"), L(lang, "الكود", "Code"), L(lang, "مرات", "Times")], i.stepErrors.map((s) => [s.step, s.error_code, num(s.n)]), lang)}

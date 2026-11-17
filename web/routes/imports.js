@@ -306,10 +306,10 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
       : "";
   const ready = (counts.new || 0) + (counts.changed || 0);
 
-  return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
+  return html`<h1>📥 ${L(lang, "مراجعة التحميل", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 ${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
-${query.batch ? html`<p class="card notice" role="status" data-batch-done>${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
+${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
 ${kindNav}${tabsNav}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
@@ -341,10 +341,10 @@ ${editForms}${chatDialogs}`;
 
 function resultCard(r, lang, undoId = null) {
   const line = (label, list) => (list && list.length ? html`<li>${label}: ${list.length} <span class="muted">${list.join("، ")}</span></li>` : "");
-  return html`<div class="card notice" data-result>
+  return html`<div class="card notice" data-result id="import-result" tabindex="-1">
   <h2>✅ ${L(lang, "اتطبق", "Applied")}</h2>
-  ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتأرشفت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are archived; changed units are back to their earlier values.")}</p>` : ""}
-  ${undoId && !r.undone ? html`<p><a class="secondary button" href="/app/import/${undoId}/undo" data-undo-link>↩️ ${L(lang, "تراجع عن الاستيراد ده", "Undo this import")}</a></p>` : ""}
+  ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتمسحت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are deleted; changed units are back to their earlier values.")}</p>` : ""}
+  ${undoId && !r.undone ? html`<p><a class="secondary button" href="/app/import/${undoId}/undo" data-undo-link>↩️ ${L(lang, "تراجع عن التحميل ده", "Undo this import")}</a></p>` : ""}
   <ul>
     ${line(L(lang, "اتضافت", "Created"), r.created)}
     ${line(L(lang, "اتعدلت", "Updated"), r.updated)}
@@ -388,7 +388,7 @@ function groupPage(imp, lang) {
   const said = results.filter((r) => r && !r.error && r.fields?.listing_type).map((r) => r.fields.listing_type);
   const suggest = said.length && said.every((v) => v === said[0]) ? said[0] : null;
   const undecided = !applied && results.some((r) => r && !r.error && !r.fields?.listing_type);
-  return html`<div id="group-status"><h1>📥 ${L(lang, "استيراد من الجروب", "Group import")}</h1>
+  return html`<div id="group-status"><h1>📥 ${L(lang, "تحميل من الجروب", "Group import")}</h1>
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
 ${undecided ? html`<section class="card stack" data-group-listing-type><p>${L(lang, "في بوستات مش مكتوب فيها بيع ولا إيجار. اختار للكل:", "Some posts do not say sale or rent. Choose for all of them:")}</p>
 <form method="post" action="/app/import/${imp.id}/listing-type" class="row">${suggest ? html`<p class="muted" data-suggest="${suggest}">${L(lang, `${said.length} بوست مكتوب فيهم ${suggest === "rent" ? "إيجار" : "بيع"}.`, `${said.length} post(s) here say ${suggest}.`)}</p>` : ""}<button type="submit" name="value" value="rent" class="${suggest === "sale" ? "secondary" : ""}">${L(lang, "الكل إيجار", "All rent")}</button> <button type="submit" name="value" value="sale" class="${suggest === "rent" ? "secondary" : ""}">${L(lang, "الكل بيع", "All sale")}</button></form></section>` : ""}
@@ -413,7 +413,7 @@ ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار
 }
 
 function register(web, { pool, page, assets }) {
-  const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "استيراد", "Import"), nav: "import", body }, status);
+  const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "تحميل", "Import"), nav: "import", body }, status);
 
   /**
    * The import hub: one tile per way in (Excel, pasted group posts, a chat export with photos, leads). An error shows
@@ -426,7 +426,7 @@ function register(web, { pool, page, assets }) {
     // The chat-export reader. "posts": the units are read from the posts (the WhatsApp import); "codes": photos go to units
     // already in the app by the code in the description. The date comes first; the order/gap settings sit under Advanced.
     const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-summary-url="/app/import/match/summary" data-editor-url="/app/import/match/editor" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
-  <h2>${mode === "posts" ? html`💬 ${L(lang, "استيراد وحدات من شات واتساب بالصور", "Import units from a WhatsApp chat, with photos")}` : html`📷 ${L(lang, "تطابق الصور مع وحدات موجودة", "Match photos to units already in the app")}`}</h2>
+  <h2>${mode === "posts" ? html`💬 ${L(lang, "تحميل وحدات من شات واتساب بالصور", "Import units from a WhatsApp chat, with photos")}` : html`📷 ${L(lang, "تطابق الصور مع وحدات موجودة", "Match photos to units already in the app")}`}</h2>
   <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيتحمل، فمفيش حد أقصى لحجمه. بنوزع كل صورة على بوستها، وإنت بتراجع وتعدّل وترتب الصور قبل أي حفظ. الفيديوهات مش بتتحمل. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its post, and you review, edit and order the photos before anything is saved. Videos are not uploaded. Only the photos you choose are saved.")}</p>
   <label>${L(lang, "من تاريخ", "From date")}<input type="date" data-cp-since value="${Chat.defaultSince()}"></label>
   <input type="file" accept=".zip,.txt,application/zip,text/plain" data-cp-file>
@@ -446,7 +446,7 @@ function register(web, { pool, page, assets }) {
   <div data-cp-out></div>
 </div>`;
     const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
-    return html`<h1>${L(lang, "استيراد", "Import")}</h1>
+    return html`<h1>${L(lang, "تحميل", "Import")}</h1>
 ${tabs("import_tab", [...(dataEntry ? [] : [
   [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-progress data-grid-url="/app/import/excel/grid">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
@@ -458,12 +458,12 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   <button type="submit">${L(lang, "قارن", "Compare")}</button>
   <script src="${assets.url("zipread.js")}"></script><script src="${assets.url("xlsxread.js")}"></script><script src="${assets.url("ximport.js")}"></script>
 </form>`]]),
-  [html`<span class="ti">💬</span>${L(lang, "استيراد من واتساب", "WhatsApp import")}`, html`${err(1)}${cpBox("posts")}
+  [html`<span class="ti">💬</span>${L(lang, "تحميل من واتساب", "WhatsApp import")}`, html`${err(1)}${cpBox("posts")}
   <details class="card stack" data-paste-import>
     <summary>${L(lang, "من غير صور: الصق البوستات أو حمل شات (.txt)", "Without photos: paste the posts or upload a chat (.txt)")}</summary>
     <form method="post" action="/app/import/group" enctype="multipart/form-data" class="stack" data-progress>
       <input type="hidden" name="_csrf" value="${req.session.csrf}">
-      <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
+      <label>${L(lang, "حمّل البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
       <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
       <label>${L(lang, "أو حمل تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
       <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
@@ -490,7 +490,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
         ["الكود اختياري: لو فاضي النظام يعمله.", "Code is optional: left empty, the system makes one."],
         ["لازم الكمبوند، النوع، بيع/إيجار، السعر والمساحة.", "Compound, property type, sale/rent, price and area are needed."],
         ["السعر يقبل «8.5 مليون» أو 8500000.", "Price accepts '8.5 million' or 8500000."],
-        ["الاستيراد للمديرين بس، وبتشوف كل صف هيعمل إيه قبل الحفظ.", "Import is for managers; you see what every row will do before anything is saved."]
+        ["التحميل للمديرين بس، وبتشوف كل صف هيعمل إيه قبل الحفظ.", "Import is for managers; you see what every row will do before anything is saved."]
       ]
     });
     res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -596,7 +596,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
     const found = Chat.candidatePosts(text, { since: req.body.since });
     if (file && isZip(file.buffer)) {
-      return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert" data-import-error="zip">⚠️ ${L(lang, "الـ zip بالصور بيتفتح من الجزء الأول في الصفحة (استيراد من واتساب).", "A zip with photos goes in the file box at the top of this tab.")}</p>` }), 422);
+      return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert" data-import-error="zip">⚠️ ${L(lang, "الـ zip بالصور بيتفتح من الجزء الأول في الصفحة (تحميل من واتساب).", "A zip with photos goes in the file box at the top of this tab.")}</p>` }), 422);
     }
     if (!found.posts.length) {
       return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">🔍 ${L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found.")}</p>` }), 422);
@@ -630,14 +630,14 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     const plan = await Imports.undoPreview(pool, broker.agency_id, imp);
     const names = (list) => list.map((x) => x.code).join("، ");
     return importPage(req, res, html`<section class="card stack" data-undo-confirm>
-  <h1>${L(lang, "تراجع عن الاستيراد ده؟", "Undo this import?")}</h1>
-  <p>${L(lang, "ده آخر استيراد اتطبق. التراجع ليه بس.", "This is the last import applied. Only this one can be undone.")}</p>
+  <h1>${L(lang, "تراجع عن التحميل ده؟", "Undo this import?")}</h1>
+  <p>${L(lang, "ده آخر تحميل اتطبق. التراجع ليه بس.", "This is the last import applied. Only this one can be undone.")}</p>
   <ul>
-    ${plan.archive.length ? html`<li data-undo-archive>${L(lang, `هنأرشف ${plan.archive.length} وحدة اتضافت: `, `Archive ${plan.archive.length} units it added: `)}<span class="muted">${names(plan.archive)}</span></li>` : ""}
+    ${plan.archive.length ? html`<li data-undo-archive>${L(lang, `هنمسح ${plan.archive.length} وحدة اتضافت (بتتحسب من الباقة تاني بعد المسح): `, `Delete ${plan.archive.length} units it added (they stop counting against your plan): `)}<span class="muted">${names(plan.archive)}</span></li>` : ""}
     ${plan.restore.length ? html`<li data-undo-restore>${L(lang, `هرجّع ${plan.restore.length} وحدة اتعدلت لقيمها القديمة: `, `Put back the earlier values of ${plan.restore.length} units it changed: `)}<span class="muted">${names(plan.restore)}</span></li>` : ""}
-    ${plan.skipped.length ? html`<li data-undo-skipped>${L(lang, `${plan.skipped.length} وحدة متتلمسش: اتعدلت بعد الاستيراد أو اتشالت. مش هتتغير: `, `${plan.skipped.length} units are left alone: changed or removed since the import. They will not change: `)}<span class="muted">${plan.skipped.join("، ")}</span></li>` : ""}
+    ${plan.skipped.length ? html`<li data-undo-skipped>${L(lang, `${plan.skipped.length} وحدة متتلمسش: اتعدلت بعد التحميل أو اتشالت. مش هتتغير: `, `${plan.skipped.length} units are left alone: changed or removed since the import. They will not change: `)}<span class="muted">${plan.skipped.join("، ")}</span></li>` : ""}
   </ul>
-  <p class="muted">${L(lang, "الوحدات المؤرشفة مش بتتمسح وتقدر ترجعها من الوحدات.", "Archived units are not deleted; you can restore them from Units.")}</p>
+  <p class="muted">${L(lang, "الوحدات المتمسحة بتفضل ١٠ أيام في «اتمسحت مؤخراً» وتقدر ترجعها.", "Deleted units stay 10 days in Recently deleted and can be restored.")}</p>
   <form method="post" action="/app/import/${imp.id}/undo" class="row">
     <button type="submit" data-undo-confirm-button>${L(lang, "أيوه، تراجع", "Yes, undo")}</button>
     <a class="secondary button" href="/app/import/${imp.id}">${L(lang, "لا، ارجع", "No, go back")}</a>
@@ -648,7 +648,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   web.post("/import/:id/undo", managersOnly, async (req, res, next) => {
     const out = await Imports.undoExcel(pool, req.session.broker, req.params.id);
     if (!out) return next();
-    return res.redirect(303, `/app/import/${req.params.id}?undone=1`);
+    return res.redirect(303, `/app/import/${req.params.id}?undone=1#import-result`);
   });
 
   web.get("/import/:id", async (req, res, next) => {
@@ -737,7 +737,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     }
     const out = await Imports.batchExcel(pool, req.session.broker, req.params.id, { action: String(req.body.action || ""), value: String(req.body.value || ""), scope: req.body.scope === "all" ? "all" : "missing", from: String(req.body.from || "").slice(0, 80) }, { lang });
     if (!out) return next();
-    return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}`);
+    return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}#batch-done`);
   });
 
   web.post("/import/:id/apply", importersOnly, async (req, res, next) => {
@@ -763,10 +763,10 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
         ? await Imports.applyExcel(pool, broker, imp.id, { rows, lang, resolutions, photoChoices })
         : await Imports.applyGroup(pool, broker, imp.id, { rows, lang });
     if (!result) {
-      return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "الاستيراد ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);
+      return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "التحميل ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);
     }
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_apply", metadata: { kind: imp.kind, ...Object.fromEntries(Object.entries(result).map(([k, v]) => [k, v.length])) } });
-    return res.redirect(303, `/app/import/${imp.id}`);
+    return res.redirect(303, `/app/import/${imp.id}#import-result`);
   });
 
 }

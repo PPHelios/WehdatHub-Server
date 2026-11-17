@@ -10,7 +10,7 @@ async function handleDocument(broker, message, ctx) {
     broker,
     lang === "en"
       ? "Spreadsheets can't be imported in chat. Managers import them from the app: open the menu, Units, Import."
-      : "مش بنستورد ملفات الإكسيل من الشات. المدير بيستوردها من التطبيق: القائمة، الوحدات، استيراد."
+      : "مش بنحمّل ملفات الإكسيل من الشات. المدير بيحمّلها من التطبيق: القائمة، الوحدات، تحميل."
   );
   return "done";
 }

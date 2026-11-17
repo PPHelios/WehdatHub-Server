@@ -1394,7 +1394,8 @@
     if (!input) return;
     e.preventDefault();
     input.blur();
-    if (input.value.trim()) send(input.form);
+    // The form's own submit path (its Search button is the submitter), so the button shows its spinner and the search is sent.
+    if (input.value.trim()) { var go = input.form.querySelector("[data-search-go]"); if (input.form.requestSubmit) input.form.requestSubmit(go || undefined); else send(input.form); }
   });
   if (Speech) {
     var mics = document.querySelectorAll("[data-mic]");

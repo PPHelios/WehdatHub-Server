@@ -25,7 +25,12 @@ const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCas
 /** The plan in force for an agency row: { plan, source: pilot|paid|trial|free, until }. */
 function effectivePlan(agency, now = new Date()) {
   if (!agency) return { plan: Plans.FREE, source: "free", until: null };
-  if (agency.pilot) return { plan: Plans.planById("office"), source: "pilot", until: null };
+  if (agency.pilot) {
+    // A pilot is on Office, or on its own bigger plan when one was set (NCH is on Agency).
+    const office = Plans.planById("office");
+    const own = Plans.planById(agency.plan);
+    return { plan: own && own.seats >= office.seats ? own : office, source: "pilot", until: null };
+  }
   if (agency.paid_until && new Date(agency.paid_until) > now) return { plan: Plans.planById(agency.plan) || Plans.FREE, source: "paid", until: new Date(agency.paid_until) };
   if (agency.trial_ends_at && new Date(agency.trial_ends_at) > now) return { plan: Plans.planById(Plans.TRIAL.plan), source: "trial", until: new Date(agency.trial_ends_at) };
   return { plan: Plans.FREE, source: "free", until: null };
@@ -41,7 +46,7 @@ async function monthUsage(db, agencyId) {
   const { rows } = await db.query(
     `SELECT
        (SELECT count(*)::int FROM brokers WHERE agency_id = $1 AND is_active) AS seats,
-       (SELECT count(*)::int FROM listings WHERE ${Vis.allUnits()} AND agency_id = $1 AND status = 'active') AS units`,
+       (SELECT count(*)::int FROM listings WHERE ${Vis.allUnits()} AND agency_id = $1 AND status IN ('active', 'archived')) AS units`,
     [agencyId]
   );
   return rows[0];
@@ -78,13 +83,13 @@ async function unitLimit(db, plan) {
 }
 
 /**
- * Whether one more available unit fits the plan: { ok, used, limit, plan }. Sold and archived units don't count, so
- * an agency is never punished for keeping its history; a unit marked available again is not checked.
+ * Whether one more unit fits the plan: { ok, used, limit, plan }. Available and archived units count (archived ones still
+ * take storage); sold and deleted units don't, so an agency is not punished for its sales history.
  */
 async function unitCapacity(db, agencyId, { adding = 1, now = new Date() } = {}) {
   const agency = await agencyRow(db, agencyId);
   const { plan } = effectivePlan(agency, now);
-  const { rows } = await db.query("SELECT count(*)::int AS n FROM listings WHERE " + Vis.allUnits() + " AND agency_id = $1 AND status = 'active'", [agencyId]);
+  const { rows } = await db.query("SELECT count(*)::int AS n FROM listings WHERE " + Vis.allUnits() + " AND agency_id = $1 AND status IN ('active', 'archived')", [agencyId]);
   const limit = await unitLimit(db, plan);
   return { ok: rows[0].n + adding <= limit, used: rows[0].n, limit, plan };
 }
