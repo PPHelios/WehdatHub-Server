@@ -7,6 +7,7 @@ const express = require("express");
 const WebAuth = require("../lib/webAuth");
 const Vis = require("../lib/visibility");
 const ErrorReports = require("../lib/errorReports");
+const ViewGuard = require("../lib/viewGuard");
 
 const bearerOf = (req) => {
   const m = /^Bearer ([A-Za-z0-9_-]{20,100})$/.exec(String(req.get("authorization") || ""));
@@ -32,7 +33,7 @@ function firebaseClientConfig() {
 
 /** Loads req.token and req.session from the Bearer header (null when missing, unknown, expired or revoked). */
 function loadBearer(pool) {
-  return async (req, _res, next) => {
+  return async (req, res, next) => {
     try {
       req.token = bearerOf(req);
       req.session = req.token ? await WebAuth.getSession(pool, req.token) : null;
@@ -40,6 +41,12 @@ function loadBearer(pool) {
       const TestRole = require("../lib/testRole");
       if (req.session && TestRole.canView(req.session.broker) && TestRole.isViewing(req.token)) {
         req.session.broker = TestRole.asViewer(req.session.broker);
+        // Read-only, exactly as on the website (web/index.js): switching the view or role and signing out stay open; Ask may
+        // be sent but runs read-only; every other write is refused here, and the pool refuses any write statement inside the request.
+        if (TestRole.VIEW_API_OPEN.test(req.path)) return next();
+        if (req.method !== "GET" && !TestRole.viewPostAllowed(req.method, req.path)) return res.status(403).json({ error: "read_only_view" });
+        ViewGuard.guardPool(pool);
+        return ViewGuard.runReadOnly(() => next());
       }
       next();
     } catch (err) {
