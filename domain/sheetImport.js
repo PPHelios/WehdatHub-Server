@@ -64,11 +64,23 @@ function fuzzyColumn(h) {
 }
 
 /** Header text → field key (or null). */
-function columnFor(header) {
+function columnOf(header) {
   const h = normalizeSearch(header);
   if (!h) return null;
   for (const [key, re] of COLUMNS) if (re.test(h)) return key;
   return fuzzyColumn(h);
+}
+
+/**
+ * Header text → field key (or null). A bilingual header such as the template's "Price / السعر" is tried whole first, then
+ * each side on its own, so "Code / الكود", "Purpose / بيع او ايجار" and the other anchored names are recognised too.
+ */
+function columnFor(header) {
+  const whole = columnOf(header);
+  if (whole) return whole;
+  const parts = String(header ?? "").split(/\s*[/|]\s*/);
+  if (parts.length > 1) for (const part of parts) { const key = columnOf(part); if (key) return key; }
+  return null;
 }
 
 const EMPTY = new Set(["", "-", "—", "n/a", "na", "null", "none", "لا يوجد"]);

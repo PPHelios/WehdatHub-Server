@@ -129,12 +129,12 @@ ${rows.length
     <select name="person"><option value="">${L(lang, "الكل", "Everyone")}</option>${people.map((p) => html`<option value="${p.id}"${p.id === person ? html` selected` : ""}>${p.name}</option>`)}</select></label>
   <button type="submit" class="secondary">${L(lang, "فلتر", "Filter")}</button>
 </form>
-<table>
+<div class="scroll"><table>
 <thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "التنبيه", "Alert")}</th><th>${L(lang, "القناة", "Channel")}</th><th>${L(lang, "السبب", "Why")}</th><th>${L(lang, "الحالة", "Status")}</th></tr></thead>
 <tbody>${log.rows.map(
         (r) => html`<tr data-log="${r.id}"><td>${when(r.created_at)}</td><td>${r.broker_name}</td><td>${r.title}</td><td>${pick(CHANNEL, r.channel || "inbox", lang)}</td><td>${pick(REASON, r.reason, lang)}</td><td>${r.status}</td></tr>`
       )}</tbody>
-</table>
+</table></div>
 <p class="row">${n > 0 ? html`<a href="${pageLink(n - 1)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${log.more ? html`<a href="${pageLink(n + 1)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
     });
   });

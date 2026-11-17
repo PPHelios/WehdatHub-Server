@@ -53,7 +53,7 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
   <div class="pills" role="group" aria-label="${L(lang, "النوع", "Type")}">${Stages.KINDS.map((k) => html`<label class="pill"><input type="radio" name="kind" value="${k}"${chk((v.kind || "buyer") === k)}><span>${Stages.kindLabel(k, lang)}</span></label>`)}</div>
   <div class="grid">
     <label>${L(lang, "الاسم", "Name")}<input name="name" value="${v.name || ""}" maxlength="120"></label>
-    <label>${L(lang, "الموبايل *", "Phone *")}<input name="phone1" value="${v.phone1 || ""}" dir="ltr" inputmode="tel" required hx-post="/app/leads/check" hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
+    <label>${L(lang, "الموبايل *", "Phone *")}<input name="phone1" value="${v.phone1 || ""}" dir="ltr" inputmode="tel" required hx-post="/app/leads/check" data-no-lock hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
 
     <label>${L(lang, "المصدر", "Source")}<select name="source"><option value="">—</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${sel(v.source === en)}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${sel(v.source === x)}>${x}</option>`)}<option value="other"${sel(v.source && !known)}>${L(lang, "أخرى", "Other")}</option></select></label>
     ${brokers
@@ -62,7 +62,7 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
   </div>
   <div id="dup">${duplicate || ""}</div>
   <details class="fgroup"${v.phone2 || v.phone3 || v.notes || (v.source && !known) || v.source_other ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر", "More details")}</summary><div class="fbody grid">
-    <label>${L(lang, "رقم تاني", "Second phone")}<input name="phone2" value="${v.phone2 || ""}" dir="ltr" inputmode="tel" hx-post="/app/leads/check" hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
+    <label>${L(lang, "رقم تاني", "Second phone")}<input name="phone2" value="${v.phone2 || ""}" dir="ltr" inputmode="tel" hx-post="/app/leads/check" data-no-lock hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
     <label>${L(lang, "رقم تالت", "Third phone")}<input name="phone3" value="${v.phone3 || ""}" dir="ltr" inputmode="tel"></label>
     <label>${L(lang, "مصدر تاني (اكتبه)", "Other source (type it)")}<input name="source_other" value="${v.source && !known ? v.source : v.source_other || ""}" maxlength="60"></label>
   </div>

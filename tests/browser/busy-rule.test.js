@@ -88,3 +88,14 @@ test("coming back from the back/forward cache unlocks the page", async () => {
   await page.evaluate(() => { window.whBusy.start(document.getElementById("a")); window.dispatchEvent(new Event("pageshow")); });
   expect((await state("#b")).disabled).toBe(false);
 });
+
+test("a background check marked data-no-lock (the lead form's duplicate-phone check) never locks the page", async () => {
+  await page.evaluate(() => {
+    const phone = document.getElementById("i");
+    phone.setAttribute("data-no-lock", "");
+    document.dispatchEvent(Object.assign(new Event("htmx:beforeRequest"), { detail: { elt: phone, requestConfig: {} } }));
+  });
+  expect(await page.evaluate(() => window.whBusy.active())).toBe(false);
+  expect((await state("#a")).disabled).toBe(false);
+  expect((await state("#b")).disabled).toBe(false);
+});

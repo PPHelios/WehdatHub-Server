@@ -46,10 +46,14 @@ const int = (v) => {
   const n = num(v);
   return n === null ? null : Math.round(n);
 };
+/** A count outside a sane range is not a count (99 bedrooms, -2 bathrooms): treated as not given, so the form asks for it. */
+const within = (n, min, max) => (n !== null && n >= min && n <= max ? n : null);
 /** "8.5 مليون", "9,500,000", "750 الف" → number. */
 const money = (v) => {
   const s = str(v, 60);
   if (!s) return null;
+  // A minus sign is never a price ("-5" used to be read as 5).
+  if (/^[-−–—]/.test(s)) return null;
   const plain = pos(s);
   if (plain !== null) return plain;
   const p = T.parseEgyptianPrice(T.normalizeDigits(s));
@@ -90,8 +94,8 @@ function unitFromForm(body = {}) {
     city: str(body.city, 120),
     price_value: money(body.price_value),
     area_value: pos(body.area_value),
-    bedrooms: int(body.bedrooms),
-    bathrooms: int(body.bathrooms),
+    bedrooms: within(int(body.bedrooms), 0, 30),
+    bathrooms: within(int(body.bathrooms), 0, 30),
     floor_level: int(body.floor_level),
     finishing: oneOf(body.finishing, FINISHING),
     furnishing: oneOf(body.furnishing, FURNISHING),
