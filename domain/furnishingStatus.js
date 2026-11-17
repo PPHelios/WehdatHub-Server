@@ -4,6 +4,8 @@
 "use strict";
 
 const { normalizeSearch } = require("./searchText");
+const { readFurnishing } = require("./read/furnishing");
+const { readFinishing } = require("./read/finishing");
 
 const FURNISHING_STATUSES = ["furnished", "semi_furnished", "unfurnished", "kitchen_and_ac", "ac_only", "kitchen_only"];
 const FINISHING_STATUSES = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
@@ -13,6 +15,13 @@ const AC = /تكييف|تكيف|مكيف|تكيفات|\bac\b|\bacs\b|a c\b|air c
 
 /** The one fixed status for a free-text furnishing, or null when the text says nothing about furnishing. */
 function mapFurnishing(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return null;
+  if (FURNISHING_STATUSES.includes(raw)) return raw;
+  return readFurnishing(raw).value;
+}
+
+function mapFurnishingLegacy(text) {
   const raw = String(text ?? "").trim();
   if (!raw) return null;
   if (FURNISHING_STATUSES.includes(raw)) return raw;
@@ -34,6 +43,13 @@ function mapFinishing(text) {
   const raw = String(text ?? "").trim();
   if (!raw) return null;
   if (FINISHING_STATUSES.includes(raw)) return raw;
+  return readFinishing(raw).value;
+}
+
+function mapFinishingLegacy(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return null;
+  if (FINISHING_STATUSES.includes(raw)) return raw;
   const t = ` ${normalizeSearch(raw)} `;
   if (/ultra super lux|ultra lux|الترا سوبر لوكس|الترا لوكس|الترا سوبر لكس/.test(t)) return "ultra_super_lux";
   if (/super lux|سوبر لوكس|سوبر لكس|سوبر لوكس/.test(t)) return "super_lux";
@@ -43,4 +59,4 @@ function mapFinishing(text) {
   return null;
 }
 
-module.exports = { FURNISHING_STATUSES, FINISHING_STATUSES, mapFurnishing, mapFinishing };
+module.exports = { FURNISHING_STATUSES, FINISHING_STATUSES, mapFurnishing, mapFinishing, mapFurnishingLegacy, mapFinishingLegacy };

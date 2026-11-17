@@ -3,6 +3,9 @@
 // text states it, and a price in another currency is reported, never converted.
 "use strict";
 
+const { readRooms } = require("./read/rooms");
+const { readArea } = require("./read/area");
+
 const AR = "٠١٢٣٤٥٦٧٨٩";
 const digits = (s) => String(s).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d)));
 const clean = (v) => digits(v).replace(/[\\|;،]+/g, " / ").replace(/\s+/g, " ").trim();
@@ -22,6 +25,15 @@ function areas(raw) {
   if (!bua && !land) {
     const plain = new RegExp(`${NUM}\\s*${SQM}`).exec(s);
     if (plain) out.area_value = num(plain[1]);
+  }
+  // Wider phrasing ("مساحة 150"): the shared reader fills only what the old rules left empty, and only when sure.
+  if (out.area_value === undefined && out.land_area === undefined) {
+    const r = readArea(raw);
+    if (r.sure) {
+      const built = r.built ?? r.plain;
+      if (built !== null) out.area_value = built;
+      if (r.land !== null) out.land_area = r.land;
+    }
   }
   return out;
 }
@@ -43,6 +55,13 @@ function rooms(raw) {
   const bath = new RegExp(`(?:bathrooms?|baths?|ba|حمام(?:ات)?)\\s*[:=]\\s*(\\d{1,2})`).exec(s) || new RegExp(`(\\d{1,2})\\s*${BATH}`).exec(s);
   if (bath) out.bathrooms = Number(bath[1]);
   else if (/(حمامين)/.test(s)) out.bathrooms = 2;
+  if (out.bedrooms === undefined || out.bathrooms === undefined) {
+    const r = readRooms(raw);
+    if (r.sure && r.bedroomsMax === null) {
+      if (out.bedrooms === undefined && r.bedrooms !== null) out.bedrooms = r.bedrooms;
+      if (out.bathrooms === undefined && r.bathrooms !== null) out.bathrooms = r.bathrooms;
+    }
+  }
   if (out.bedrooms > 20) delete out.bedrooms;
   if (out.bathrooms > 20) delete out.bathrooms;
   return out;
