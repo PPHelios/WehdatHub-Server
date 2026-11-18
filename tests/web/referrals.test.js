@@ -5,6 +5,7 @@
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
+jest.mock("../../lib/telegram", () => require("../harness/fake-telegram"));
 jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
 jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
@@ -68,10 +69,14 @@ test("sign-up with an invite code; the first payment gives both agencies a free 
   expect(form.text).toContain(`value="${code}"`);
   expect(form.text).toMatch(/free month/);
   expect((await anon.post("/app/signup").type("form").send({ agency: "Nile Homes", name: "Mona", phone: "01055556666", consent: "1", referral: "NOPE99" })).status).toBe(400);
-  expect((await anon.post("/app/signup").type("form").send({ agency: "Nile Homes", name: "Mona", phone: "01055556666", consent: "1", referral: code })).status).toBe(303);
-  const [nile] = await h.query("SELECT id, referred_by FROM agencies WHERE name = 'Nile Homes'");
+  const started = await anon.post("/app/signup").type("form").send({ agency: "Nile Homes", name: "Mona", phone: "01055556666", consent: "1", referral: code });
+  expect(started.status).toBe(200);
+  const token = started.text.match(/start=(su_[A-Za-z0-9_-]+)/)[1];
+  await h.tgText(8901, `/start ${token}`);
+  await h.tg(8901, { contact: { phone_number: "+201055556666", first_name: "Mona", user_id: 8901 } });
+  const [nile] = await h.query("SELECT id, referred_by, approval FROM agencies WHERE name = 'Nile Homes'");
   expect(nile.referred_by).toBe(h.AGENCY_A);
-  await a.agent.post(`/app/owner/signups/${nile.id}/approve`).type("form").send({ _csrf: a.csrf });
+  expect(nile.approval).toBe("approved");
   const [mona] = await h.query("SELECT * FROM brokers WHERE agency_id = $1", [nile.id]);
 
   // Agency A is a pilot (not paying), so its month waits as a credit.

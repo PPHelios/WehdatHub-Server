@@ -48,7 +48,12 @@ test("Arabic by default, English with ?lang=en and no Arabic left; plans, Telegr
   expect(en.text).toContain('dir="ltr"');
   expect(visible(en.text).split(/\s{2,}|\n/).filter((s) => ARABIC.test(s))).toEqual([]);
   expect(en.text).toContain("https://t.me/Wehdat_Hub_bot");
-  for (const p of Plans.PLANS) expect(en.text).toMatch(new RegExp(`data-plan="${p.id}"[\\s\\S]*?${p.priceEgp.toLocaleString("en-US")} EGP`));
+  // Each card shows its cheapest period (Agency has no monthly price); the trial is described, not a plan card.
+  for (const p of Plans.PLANS) expect(en.text).toMatch(new RegExp(`data-plan="${p.id}"[\\s\\S]*?${Plans.priceFor(p, Plans.periodsOf(p)[0]).toLocaleString("en-US")} EGP`));
+  expect(en.text).toContain("The first 14 days are a free trial (1 user, 50 units, 80 AI credits)");
+  expect(en.text).not.toContain("on the Office plan");
+  expect(ar.text).not.toContain("على باقة المكتب");
+  expect(en.text).toContain("2500 for 899 EGP");
   expect(en.text).toContain('id="try"');
 });
 
@@ -61,25 +66,27 @@ test("brand.css carries the brand colours and every page links it before app.css
   expect(css.text).toContain(`--accent: ${BRAND.colors.accent}`);
 });
 
-test("a trial request is kept and listed for the owner; honeypot, cross-site and the rate limit keep nothing more", async () => {
+test("a demo request is kept and listed for the owner; honeypot, cross-site and the rate limit keep nothing more", async () => {
   const ok = await post({ name: "Ahmed", agency: "Nile Homes", phone: "01012345678", team: "6" });
   expect(ok.status).toBe(303);
   expect(ok.headers.location).toBe("/?lang=ar&sent=1#try");
   expect((await request(h.app.app).get("/?sent=1")).text).toMatch(/وصلنا طلبك/);
-  expect(await h.query("SELECT name, agency_name, phone_e164, team_size FROM demo_requests")).toEqual([
-    { name: "Ahmed", agency_name: "Nile Homes", phone_e164: "+201012345678", team_size: 6 }
+  expect(await h.query("SELECT name, agency_name, phone_e164, team_size, kind FROM demo_requests")).toEqual([
+    { name: "Ahmed", agency_name: "Nile Homes", phone_e164: "+201012345678", team_size: 6, kind: "demo" }
   ]);
-  expect((await post({ name: "", phone: "01012345678" })).status).toBe(400);
-  expect((await post({ name: "X", phone: "12" })).status).toBe(400);
-  expect((await post({ name: "Bot", phone: "01012345678", website: "x" })).status).toBe(303);
-  expect((await post({ name: "X", phone: "01012345678" }, { "Sec-Fetch-Site": "cross-site" })).status).toBe(403);
-  for (let i = 0; i < 4; i++) expect((await post({ name: `N${i}`, phone: "01012345678" })).status).toBe(303);
-  expect((await post({ name: "Late", phone: "01012345678" })).status).toBe(429);
+  expect((await post({ name: "", agency: "X", phone: "01012345678", team: "20" })).status).toBe(400);
+  expect((await post({ name: "X", agency: "X", phone: "12", team: "20" })).status).toBe(400);
+  expect((await post({ name: "X", agency: "", phone: "01012345678", team: "20" })).status).toBe(400);
+  expect((await post({ name: "X", agency: "X", phone: "01012345678", team: "" })).status).toBe(400);
+  expect((await post({ name: "Bot", agency: "X", phone: "01012345678", team: "20", website: "x" })).status).toBe(303);
+  expect((await post({ name: "X", agency: "X", phone: "01012345678", team: "20" }, { "Sec-Fetch-Site": "cross-site" })).status).toBe(403);
+  for (let i = 0; i < 4; i++) expect((await post({ name: `N${i}`, agency: "X", phone: "01012345678", team: "20" })).status).toBe(303);
+  expect((await post({ name: "Late", agency: "X", phone: "01012345678", team: "20" })).status).toBe(429);
   expect((await h.query("SELECT count(*)::int AS n FROM demo_requests"))[0].n).toBe(5);
 
   process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
   resetConfig();
   const a = await signIn(h, "admin");
   const owner = await a.agent.get("/app/owner?lang=en");
-  expect(owner.text).toMatch(/id="trials"[\s\S]*Nile Homes/);
+  expect(owner.text).toMatch(/id="demos"[\s\S]*Nile Homes/);
 });

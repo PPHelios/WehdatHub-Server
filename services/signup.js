@@ -1,7 +1,7 @@
 // services/signup.js — Agency self sign-up (phase 2 step 4). The owner turns it on or off on /app/owner (off until
 // switched on). While on, anyone can ask for an agency from /app/signup: the agency and its admin are created waiting
 // (approval 'pending', the admin inactive, so nothing works yet) and the owner is alerted. Approving starts the 14-day
-// Office trial, activates the admin and returns their one-time Telegram start link for the owner to send.
+// trial (1 seat, 50 units, 80 AI credits), activates the admin and returns their one-time Telegram start link for the owner to send.
 "use strict";
 
 const Phone = require("../domain/phone");

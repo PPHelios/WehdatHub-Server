@@ -45,7 +45,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "", aiOff = [] }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
   const en = lang === "en";
   const crm = Boolean(broker) && require("../lib/authz").isCrmOwner(broker);
   const tab = broker ? (crm ? crmTabOf(path) : tabOf(path, nav)) : null;
@@ -73,6 +73,7 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 </head>
 <body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الشركة"}"`) : ""}>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread, tab }) : ""}
+${broker && planBanner ? html`<div class="plan-banner plan-${planBanner.phase}" role="alert" data-plan-banner="${planBanner.phase}">${planBanner.text}${planBanner.url ? html` <a href="${planBanner.url}">${planBanner.cta}</a>` : ""}</div>` : ""}
 <main id="main">${broker ? pageBar({ nav, lang, tab, path, crm }) : ""}${body}</main>
 ${broker ? footer(broker, lang) : ""}
 ${broker ? (crm ? crmTabBar(tab, lang) : tabBar(broker, tab, lang)) : ""}
