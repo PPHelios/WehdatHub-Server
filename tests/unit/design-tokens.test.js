@@ -7,9 +7,9 @@ test("no colour pair is below its contrast level in either mode", () => {
   expect(T.unreadable()).toEqual([]);
 });
 
-test("light and dark carry the same names; azure leads in light and copper in dark", () => {
+test("light and dark carry the same names; bright sun gold leads with obsidian navy companion", () => {
   expect(Object.keys(T.COLORS.dark).sort()).toEqual(Object.keys(T.COLORS.light).sort());
-  expect(T.COLORS.light.brand).toBe("#1d70b8");
-  expect(T.COLORS.dark.accent).toBe("#4e9fea");
-  expect(T.cssVars()).toMatch(/:root\[data-theme="dark"\] \{[^}]*--brand: #e8845a;/);
+  expect(T.COLORS.light.brand).toBe("#e8b92a");
+  expect(T.COLORS.dark.accent).toBe("#8ab3f0");
+  expect(T.cssVars()).toMatch(/:root\[data-theme="dark"\] \{[^}]*--brand: #f7cc48;/);
 });

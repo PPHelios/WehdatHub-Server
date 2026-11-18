@@ -65,7 +65,8 @@ ${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
 <link rel="stylesheet" href="${assets("brand.css")}">
 <link rel="stylesheet" href="${assets("app.css")}">
 ${head || ""}
-${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
+${scripts ? html`<script src="${assets("theme.js")}" defer></script>
+<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("carousel.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
 <script src="${assets("busy.js")}" defer></script>
@@ -240,9 +241,11 @@ function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   ${broker && TestRole.canSwitch(broker) && (TestRole.canView(broker) || broker.view_of) ? viewAgencyForm(broker, lang) : ""}
   ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
   ${broker
-    ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
+    ? html`<button type="button" class="iconbtn theme-toggle" data-theme-toggle aria-label="${en ? "Switch theme" : "تبديل المظهر"}"><span class="ico-sun">${icon("sun", 20)}</span><span class="ico-moon">${icon("moon", 20)}</span></button>
+  <a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
   <a class="iconbtn" href="${tab === "more" ? "/app/" : "/app/more"}" aria-label="${tab === "more" ? (en ? "Close menu" : "إغلاق القائمة") : (en ? "More" : "المزيد")}"${tab === "more" ? raw(' aria-current="page" data-menu-close') : ""}>${icon("more")}</a>`
-    : html`<a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
+    : html`<button type="button" class="iconbtn theme-toggle" data-theme-toggle aria-label="${en ? "Switch theme" : "تبديل المظهر"}"><span class="ico-sun">${icon("sun", 20)}</span><span class="ico-moon">${icon("moon", 20)}</span></button>
+  <a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
 </header>`;
 }
 

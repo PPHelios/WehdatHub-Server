@@ -20,6 +20,7 @@ const TYPES = {
 // Files served under /app/static/ (sw.js is served at /app/sw.js, filled in per version).
 const FILES = {
   "app.css": path.join(STATIC_DIR, "app.css"),
+  "theme.js": path.join(STATIC_DIR, "theme.js"),
   "app.js": path.join(STATIC_DIR, "app.js"),
   // The busy rule: one server call at a time locks the page's other controls and spins the one that started it.
   "busy.js": path.join(STATIC_DIR, "busy.js"),

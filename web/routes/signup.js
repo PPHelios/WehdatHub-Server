@@ -10,6 +10,7 @@ const BillingNotices = require("../../services/billingNotices");
 const Plans = require("../../domain/plans");
 const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
+const { MARK } = require("../icons");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const SIGNUP_IP = { limit: 3, windowSec: 3600 };
@@ -31,8 +32,11 @@ function closedPage(lang) {
 
 function signupForm(lang, { error, values = {} } = {}) {
   return html`<form method="post" action="/app/signup" class="card stack auth" id="signup">
-  <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
-  <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب بعد موافقتنا. بعدها تختار باقة أو تكمّل على الباقة المجانية.`, `A ${Plans.TRIAL.days}-day free trial on the Office plan once we approve it. Then pick a plan or carry on with the Free plan.`)}</p>
+  <div class="auth-head">
+    <span class="auth-mark" aria-hidden="true">${MARK}</span>
+    <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
+    <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب بعد موافقتنا. بعدها تختار باقة أو تكمّل على الباقة المجانية.`, `A ${Plans.TRIAL.days}-day free trial on the Office plan once we approve it. Then pick a plan or carry on with the Free plan.`)}</p>
+  </div>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}</p>` : ""}
   <label>${L(lang, "اسم الشركة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
   <label>${L(lang, "اسمك", "Your name")} <input name="name" required maxlength="80" autocomplete="name" value="${values.name || ""}"></label>

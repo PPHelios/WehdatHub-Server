@@ -8,27 +8,28 @@
 
 const COLORS = Object.freeze({
   light: Object.freeze({
-    // Main colour (azure): buttons, links, the selected item.
-    brand: "#1d70b8", "brand-hi": "#2a82cc", "brand-strong": "#14558c", "brand-weak": "#6fa8d6", "on-brand": "#ffffff", "brand-ink": "#155a96", "brand-soft": "#e6f0fa",
-    // Second colour (copper): "very interested", featured, launching.
-    accent: "#b8501f", "on-accent": "#ffffff", "accent-ink": "#8a3416", "accent-soft": "#fbeae2",
-    ink: "#0e1521", bg: "#f4f6f9", card: "#ffffff", soft: "#eef2f6", field: "#ffffff", muted: "#4a5568", line: "#e2e8f0", "line-strong": "#cbd5e1",
-    ok: "#1e7b4e", "on-ok": "#ffffff", "ok-ink": "#145a38", "ok-soft": "#e3f3ea", "ok-line": "#bfe3cb",
-    warn: "#9a5b00", "on-warn": "#ffffff", "warn-soft": "#fdf3e1",
-    bad: "#b42318", "on-bad": "#ffffff", "bad-ink": "#8f1b12", "bad-soft": "#fdecea",
+    // Main colour (Bright Sun Gold): primary CTAs, active accents, outer 4 logo towers. Dark navy text on gold (10:1 AAA).
+    brand: "#e8b92a", "brand-hi": "#f2c946", "brand-strong": "#cfa11b", "brand-weak": "#f4dc8a", "on-brand": "#0a111f", "brand-ink": "#0c1629", "brand-soft": "#fef7de",
+    // Companion colour (Obsidian Navy): center logo tower, secondary strong actions, links, status highlights.
+    accent: "#0c1629", "on-accent": "#ffffff", "accent-ink": "#0c1629", "accent-soft": "#e9edf4",
+    ink: "#0a111f", bg: "#f6f7f9", card: "#ffffff", soft: "#edeff3", field: "#ffffff", muted: "#4c5566", line: "#e0e4ec", "line-strong": "#c6cddb",
+    // Status tones (no green, no pink): crisp Obsidian Navy for positive/ready states, warm gold-bronze for warn, muted crimson for errors.
+    ok: "#0c1629", "on-ok": "#ffffff", "ok-ink": "#0c1629", "ok-soft": "#e9edf4", "ok-line": "#cad2e0",
+    warn: "#855d00", "on-warn": "#ffffff", "warn-soft": "#fef7de",
+    bad: "#a62319", "on-bad": "#ffffff", "bad-ink": "#801810", "bad-soft": "#fbece9",
     // A dark surface that stays dark in both modes (toasts) and a neutral fill (idle, sold out).
-    inverse: "#0e1521", "on-inverse": "#f8fafc", neutral: "#5b6878", "on-neutral": "#ffffff"
+    inverse: "#0a111f", "on-inverse": "#f8f9fc", neutral: "#566073", "on-neutral": "#ffffff"
   }),
   dark: Object.freeze({
-    // Main colour (copper). Text on a copper fill is dark: white on copper is too faint to read.
-    brand: "#e8845a", "brand-hi": "#ee9872", "brand-strong": "#dc6a3d", "brand-weak": "#7a4a36", "on-brand": "#0e1521", "brand-ink": "#f3b190", "brand-soft": "#3b2219",
-    // Second colour (azure).
-    accent: "#4e9fea", "on-accent": "#0e1521", "accent-ink": "#9fcaf3", "accent-soft": "#1b3350",
-    ink: "#f8fafc", bg: "#0e1521", card: "#172133", soft: "#1f2b40", field: "#1f2b40", muted: "#a9b4c4", line: "#2a3850", "line-strong": "#3a4a66",
-    ok: "#3fae78", "on-ok": "#0e1521", "ok-ink": "#9de0bd", "ok-soft": "#173328", "ok-line": "#2c5a44",
-    warn: "#e0a33a", "on-warn": "#0e1521", "warn-soft": "#33270f",
-    bad: "#f0715f", "on-bad": "#0e1521", "bad-ink": "#f7b4aa", "bad-soft": "#3a1c19",
-    inverse: "#f8fafc", "on-inverse": "#0e1521", neutral: "#5b6878", "on-neutral": "#ffffff"
+    // Main colour (Glowing Sun Gold) on deep Obsidian Navy surfaces.
+    brand: "#f7cc48", "brand-hi": "#fbd96d", "brand-strong": "#dfb026", "brand-weak": "#6b5619", "on-brand": "#080c14", "brand-ink": "#fde699", "brand-soft": "#2e2409",
+    // Companion colour (Steel Sky Navy).
+    accent: "#8ab3f0", "on-accent": "#070d18", "accent-ink": "#c7dcf9", "accent-soft": "#142036",
+    ink: "#f8f9fc", bg: "#070b12", card: "#0f1624", soft: "#162033", field: "#162033", muted: "#a3afc2", line: "#222e45", "line-strong": "#334363",
+    ok: "#8ab3f0", "on-ok": "#070d18", "ok-ink": "#c7dcf9", "ok-soft": "#142036", "ok-line": "#273b60",
+    warn: "#f7cc48", "on-warn": "#080c14", "warn-soft": "#2e2409",
+    bad: "#f07060", "on-bad": "#170a08", "bad-ink": "#f7b7ae", "bad-soft": "#381b18",
+    inverse: "#f8f9fc", "on-inverse": "#070b12", neutral: "#566073", "on-neutral": "#ffffff"
   })
 });
 
@@ -42,9 +43,8 @@ const SHAPE = Object.freeze({ radius: 20, "radius-btn": 14, "radius-field": 12, 
 const PAIRS = Object.freeze([
   ["ink", "bg", 4.5], ["ink", "card", 4.5], ["ink", "soft", 4.5], ["ink", "field", 4.5],
   ["muted", "bg", 4.5], ["muted", "card", 4.5], ["muted", "soft", 4.5],
-  ["brand", "bg", 4.5], ["brand", "card", 4.5], ["brand", "soft", 4.5],
-  ["on-brand", "brand", 4.5], ["on-brand", "brand-hi", 3], ["on-brand", "brand-strong", 4.5],
-  ["brand-ink", "brand-soft", 4.5], ["brand-ink", "card", 4.5],
+  ["brand-ink", "bg", 4.5], ["brand-ink", "card", 4.5], ["brand-ink", "soft", 4.5], ["brand-ink", "brand-soft", 4.5],
+  ["on-brand", "brand", 4.5], ["on-brand", "brand-hi", 4.5], ["on-brand", "brand-strong", 4.5],
   ["on-accent", "accent", 4.5], ["accent-ink", "accent-soft", 4.5], ["accent", "card", 3],
   ["on-ok", "ok", 4.5], ["ok-ink", "ok-soft", 4.5], ["ok", "card", 3],
   ["on-warn", "warn", 4.5], ["ink", "warn-soft", 4.5], ["warn", "card", 3],
