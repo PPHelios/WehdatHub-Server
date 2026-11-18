@@ -1402,6 +1402,45 @@ span.chip, li.chip { min-height: 28px; padding: 3px 11px; border: 0; font-size: 
 .chip.late { background: var(--bad-soft); color: var(--bad-ink); }
 
 /* ==========================================================================
+   Elevation & Architectural Surface Shading (Light & Dark Modes)
+   Overrides flat dark-mode surfaces with layered depth, subtle gradients & rim-light
+   ========================================================================== */
+:root {
+  --shadow-sm: 0 1px 2px rgba(13, 24, 43, 0.06), 0 3px 10px rgba(13, 24, 43, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --shadow: 0 2px 6px rgba(13, 24, 43, 0.06), 0 10px 28px rgba(13, 24, 43, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-lg: 0 6px 16px rgba(13, 24, 43, 0.10), 0 20px 44px rgba(13, 24, 43, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --tile-bg: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--soft) 88%, #ffffff) 100%);
+  --card-bg: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--card) 96%, var(--soft)) 100%);
+}
+:root[data-theme="dark"] {
+  --shadow-sm: 0 2px 8px rgba(2, 6, 16, 0.45), 0 1px 2px rgba(2, 6, 16, 0.35), inset 0 1px 0 rgba(198, 220, 250, 0.09);
+  --shadow: 0 8px 24px rgba(2, 6, 16, 0.56), 0 2px 6px rgba(2, 6, 16, 0.40), inset 0 1px 0 rgba(198, 220, 250, 0.11);
+  --shadow-lg: 0 16px 40px rgba(2, 6, 16, 0.72), 0 4px 12px rgba(2, 6, 16, 0.52), inset 0 1px 0 rgba(221, 185, 94, 0.16);
+  --tile-bg: linear-gradient(180deg, color-mix(in srgb, var(--soft) 84%, #2c4470) 0%, color-mix(in srgb, var(--card) 75%, var(--soft)) 100%);
+  --card-bg: linear-gradient(180deg, color-mix(in srgb, var(--card) 86%, #1f3358) 0%, var(--card) 100%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow-sm: 0 2px 8px rgba(2, 6, 16, 0.45), 0 1px 2px rgba(2, 6, 16, 0.35), inset 0 1px 0 rgba(198, 220, 250, 0.09);
+    --shadow: 0 8px 24px rgba(2, 6, 16, 0.56), 0 2px 6px rgba(2, 6, 16, 0.40), inset 0 1px 0 rgba(198, 220, 250, 0.11);
+    --shadow-lg: 0 16px 40px rgba(2, 6, 16, 0.72), 0 4px 12px rgba(2, 6, 16, 0.52), inset 0 1px 0 rgba(221, 185, 94, 0.16);
+    --tile-bg: linear-gradient(180deg, color-mix(in srgb, var(--soft) 84%, #2c4470) 0%, color-mix(in srgb, var(--card) 75%, var(--soft)) 100%);
+    --card-bg: linear-gradient(180deg, color-mix(in srgb, var(--card) 86%, #1f3358) 0%, var(--card) 100%);
+  }
+}
+
+.card, .count, .kpi, .acc, .scard, .bcard, details.card.sheet {
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+.unitcard, .leadcard {
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+.searchbox { box-shadow: var(--shadow); }
+.pill span, .chipbar a, .pill-link { box-shadow: var(--shadow-sm); }
+
+/* ==========================================================================
    POC Screen Refinements — Royal Dark Blue & Brushed Satin Gold (CSS-only)
    Covers: Public Unit & Compare, Units List & Detail, Search, Leads List & Detail
    ========================================================================== */
@@ -1412,7 +1451,8 @@ article[data-public-unit], article[data-compare] {
   margin: 14px auto 32px;
   padding: 20px 18px 26px;
   border-radius: 24px;
-  border: 1px solid color-mix(in srgb, var(--brand) 24%, var(--line));
+  background: var(--card-bg);
+  border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line));
   box-shadow: var(--shadow-lg);
 }
 @media (min-width: 720px) {
@@ -1478,27 +1518,37 @@ article[data-public-unit] > p.line {
 article[data-public-unit] > p.line strong { font-weight: 800; }
 article[data-public-unit] > ul.facts {
   list-style: none;
-  margin: 16px 0;
+  margin: 18px 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 10px;
 }
 article[data-public-unit] > ul.facts li {
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--soft);
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  padding: 12px 15px;
+  border-radius: 14px;
+  background: var(--tile-bg);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 75%, transparent);
+  border-inline-start: 3px solid color-mix(in srgb, var(--brand) 78%, transparent);
+  box-shadow: var(--shadow-sm);
+  text-align: start;
   font-size: 0.94rem;
   font-weight: 600;
   line-height: 1.45;
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), border-color 0.15s var(--ease);
 }
-article[data-public-unit] > ul.tags { margin: 12px 0 16px; gap: 8px; }
+article[data-public-unit] > ul.facts li:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--brand) 48%, var(--line-strong));
+  box-shadow: var(--shadow);
+}
+article[data-public-unit] > ul.tags { margin: 14px 0 18px; gap: 8px; }
 article[data-public-unit] > ul.tags li {
-  padding: 5px 12px;
-  background: var(--accent-soft);
+  padding: 6px 13px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 88%, #ffffff 12%), var(--accent-soft));
   color: var(--accent-ink);
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: var(--shadow-sm);
   font-size: 0.85rem;
 }
 article[data-public-unit] > section#project,
@@ -1506,16 +1556,16 @@ article[data-public-unit] > section#plans {
   margin-top: 18px;
   padding: 18px;
   border-radius: 18px;
-  background: var(--soft);
+  background: var(--tile-bg);
   border: 1px solid var(--line);
-  box-shadow: none;
+  box-shadow: var(--shadow-sm);
 }
 article[data-public-unit] #plans [data-plan] {
-  background: var(--card);
+  background: var(--card-bg);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow-sm);
+  padding: 15px 17px;
+  box-shadow: var(--shadow);
 }
 article[data-public-unit] #plans [data-plan].notice {
   border-color: var(--brand);
@@ -1735,10 +1785,11 @@ ul.timeline {
 }
 ul.timeline > li {
   position: relative;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--soft);
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  padding: 11px 15px;
+  border-radius: 13px;
+  background: var(--tile-bg);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, transparent);
+  box-shadow: var(--shadow-sm);
   font-size: 0.92rem;
   line-height: 1.5;
 }

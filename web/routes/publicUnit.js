@@ -57,7 +57,7 @@ function interestForm(u, { action, error, values = {}, sent }) {
   <label>${L(lang, "رسالة (اختياري)", "Message (optional)")} <textarea name="message" maxlength="500" rows="2">${values.message || ""}</textarea></label>
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
   <button type="submit">${L(lang, "ابعت", "Send")}</button>
-  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الشركة تتواصل معاك بخصوص الوحدة دي وتحتفظ بالاسم والرقم لده.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
+  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الشركة تتواصل معاك بخصوص الوحدة دي وتحفظ اسمك ورقمك عشان المتابعة.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
 </form>`;
 }
 
