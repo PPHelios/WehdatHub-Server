@@ -102,7 +102,7 @@ function inputOf(body, manager) {
     name: body.name,
     kind: body.kind || "buyer",
     source: source || "Web",
-    lawfulBasis: body.lawful_basis,
+    lawfulBasis: body.lawful_basis ?? body.lawfulBasis,
     notes: body.notes,
     assignTo: manager ? body.assign_to || null : null,
     allowErased: body.allow_erased === "1"

@@ -58,7 +58,8 @@ describe("price drops (6.5)", () => {
     expect(await run()).toMatchObject({ matches: 0, drops: 1, alerts: 1 });
     const last = (await alerts()).pop();
     expect(last.title).toMatch(/📉 سعر HP-1 نزل/);
-    expect(last.body).toMatch(/8\.8[\s\S]*→[\s\S]*8\.2/);
+    // Arabic reads right to left, so the old price points to the new one with "←" (QA round 3, step 2).
+    expect(last.body).toMatch(/8\.8[\s\S]*←[\s\S]*8\.2/);
     // The same price again is no news.
     await h.query("UPDATE listings SET updated_at = NOW() WHERE code = 'HP-1'");
     expect((await run()).drops).toBe(0);

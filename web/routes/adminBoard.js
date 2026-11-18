@@ -149,7 +149,7 @@ function register(web, { pool, page }) {
   <span class="muted small">${L(lang, "آخر تحديث", "Last updated")}: <time>${stored ? when(stored.computedAt) : L(lang, "أبدًا", "never")}</time></span></form>`;
     return page(req, res, {
       title: L(lang, "لوحة المالك", "Owner board"), nav: "owner",
-      body: html`<p><a class="btn secondary small" href="/app/owner">← ${L(lang, "متابعة التطبيق", "App tracking")}</a></p>
+      body: html`<p><a class="btn secondary small" href="/app/owner">${L(lang, "→", "←")} ${L(lang, "متابعة التطبيق", "App tracking")}</a></p>
 ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "التبويبات", "Tabs")}">${nav}</nav>
 ${subnav ? html`<nav class="seg" aria-label="${L(lang, "الأقسام", "Sections")}" data-subnav>${subnav}</nav>` : ""}

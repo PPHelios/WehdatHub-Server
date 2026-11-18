@@ -112,6 +112,7 @@ async function assign(pool, actor, id, { phone, brokerId }) {
  */
 async function linkUnit(pool, actor, id, unitCode) {
   if (!Authz.isManager(actor)) return { error: "forbidden" };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ""))) return { error: "not_found" };
   const found = await pool.query("SELECT listing_no FROM portal_enquiries WHERE id = $1 AND agency_id = $2", [id, actor.agency_id]);
   const listingNo = found.rows[0]?.listing_no;
   if (!listingNo) return { error: "no_listing_number" };

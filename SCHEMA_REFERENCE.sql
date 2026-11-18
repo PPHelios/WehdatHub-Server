@@ -282,6 +282,26 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.listings_touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  skip text[] := ARRAY['flyer_cache', 'flyer_url', 'flyer_wa_media_id', 'flyer_wa_media_at', 'updated_at', 'search_document', 'code_norm'];
+BEGIN
+  IF NEW.updated_at IS DISTINCT FROM OLD.updated_at THEN
+    RETURN NEW;
+  END IF;
+  IF (to_jsonb(NEW) - skip) = (to_jsonb(OLD) - skip) THEN
+    NEW.updated_at = OLD.updated_at;
+  ELSE
+    NEW.updated_at = NOW();
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.match_place(p_kind text, p_text text)
  RETURNS compound_synonyms
  LANGUAGE sql
@@ -2521,7 +2541,7 @@ CREATE TRIGGER trg_leads_same_agency BEFORE INSERT OR UPDATE OF agency_id, assig
 CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
 CREATE TRIGGER listings_subzone BEFORE INSERT OR UPDATE OF area_id, subzone_id ON public.listings FOR EACH ROW EXECUTE FUNCTION area_subzone_check();
 CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();
-CREATE TRIGGER trg_update_listings_timestamp BEFORE UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();
+CREATE TRIGGER trg_update_listings_timestamp BEFORE UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_touch_updated_at();
 CREATE TRIGGER map_places_subzone BEFORE INSERT OR UPDATE OF area_id, subzone_id ON public.map_places FOR EACH ROW EXECUTE FUNCTION area_subzone_check();
 
 CREATE OR REPLACE VIEW public.agency_outbound_daily AS

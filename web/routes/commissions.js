@@ -159,7 +159,7 @@ function register(web, { pool, page }) {
     const periodNav = html`<nav class="row" data-commission-period>
   ${["month", "week", "all"].map((v) => html`<a class="btn ${v === range.period ? "" : "secondary"}" href="${link({ period: v, page: 0 })}">${periodName[v]}</a>`)}
   ${range.period !== "all"
-    ? html`<a class="btn secondary" href="${link({ at: range.prevAt, page: 0 })}" aria-label="${L(lang, "السابق", "Previous")}">←</a> <span dir="ltr">${range.fromDay} – ${range.toDay}</span> <a class="btn secondary" href="${link({ at: range.nextAt, page: 0 })}" aria-label="${L(lang, "التالي", "Next")}">→</a>`
+    ? html`<a class="btn secondary" href="${link({ at: range.prevAt, page: 0 })}" aria-label="${L(lang, "السابق", "Previous")}">${L(lang, "→", "←")}</a> <span dir="ltr">${range.fromDay} – ${range.toDay}</span> <a class="btn secondary" href="${link({ at: range.nextAt, page: 0 })}" aria-label="${L(lang, "التالي", "Next")}">${L(lang, "←", "→")}</a>`
     : ""}
 </nav>`;
 

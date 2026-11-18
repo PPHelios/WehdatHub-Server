@@ -354,7 +354,7 @@ function card(u, lang = "ar") {
     title = `${up ? "📈" : "📉"} ${L(lang, up ? `زيادة ${p.pct}%` : `تخفيض ${-p.pct}%`, up ? `+${p.pct}% increase` : `${p.pct}% cut`)} · ${where}`;
     lines.push(`📅 ${L(lang, "من", "From")} ${p.effective_on}${p.date_given ? "" : L(lang, " (مفيش تاريخ في الرسالة، فهتتطبق من النهارده)", " (no date was said, so from today)")}`);
     lines.push(`🏠 ${L(lang, `${u.units} وحدة متاحة في الكتالوج`, `${u.units} available catalogue units`)}`);
-    if (code) lines.push(`${L(lang, "مثال", "Example")}: ${code} ${money(ex.before, lang)} → ${money(ex.after, lang)}`);
+    if (code) lines.push(`${L(lang, "مثال", "Example")}: ${code} ${money(ex.before, lang)} ${L(lang, "←", "→")} ${money(ex.after, lang)}`);
   } else if (u.action === "plan") {
     const plan = p.plan || {};
     title = `🗓️ ${L(lang, "خطة جديدة", "New plan")} «${plan.name}» · ${where}`;
@@ -363,7 +363,7 @@ function card(u, lang = "ar") {
     if (code) lines.push(`${L(lang, "مثال", "Example")}: ${code} ${money(ex.price, lang)}: ${L(lang, "مقدم", "down")} ${money(ex.down_payment, lang)}، ${ex.installments} × ${money(ex.installment, lang)}`);
   } else if (u.action === "price") {
     title = `🏷️ ${L(lang, "سعر جديد", "New price")} · ${code}`;
-    lines.push(`${ex.before ? money(ex.before, lang) : "—"} → ${money(ex.after, lang)}`);
+    lines.push(`${ex.before ? money(ex.before, lang) : "—"} ${L(lang, "←", "→")} ${money(ex.after, lang)}`);
   } else {
     const w = STATUS_WORD[p.status] || STATUS_WORD.sold;
     title = `${p.status === "sold" ? "🔴" : "🟢"} ${L(lang, `تتعلم ${w[0]}`, `Mark ${w[1]}`)}: ${(p.codes || []).join("، ")}`;

@@ -357,7 +357,7 @@ ol.photo-order img.img-bad { outline: 2px dashed var(--bad); cursor: pointer; }
 .task .actions { flex-wrap: nowrap; }
 .task .actions .btn { flex: 1; min-height: 44px; padding: 8px 10px; }
 .task .actions .btn:last-child { flex: 0 0 48px; }
-[dir="ltr"] .task .actions .btn:last-child .ico { transform: scaleX(-1); }
+[dir="rtl"] .task .actions .btn:last-child .ico { transform: scaleX(-1); } /* "Open" points forward: right in English, left in Arabic */
 .btn.call { background: var(--ok); color: var(--on-ok); }
 .btn.call:hover { box-shadow: 0 4px 12px color-mix(in srgb, var(--ok) 30%, transparent); color: var(--on-ok); }
 .chip { white-space: nowrap; }

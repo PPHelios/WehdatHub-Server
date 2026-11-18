@@ -4,6 +4,8 @@
 // refused, never moved. Admin and owner roles stay with onboarding (npm run onboard).
 "use strict";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const Phone = require("../domain/phone");
 const TgLink = require("../lib/tgLink");
 const Brokers = require("./brokers");
@@ -44,7 +46,7 @@ async function teamBoard(pool, broker) {
   const Vis = require("../lib/visibility");
   const members = (
     await pool.query(
-      `SELECT id, name, role, away_until FROM brokers
+      `SELECT id, name, role, away_until, team_lead_id FROM brokers
         WHERE agency_id = $1 AND is_active AND ($2::boolean OR id = $3 OR team_lead_id = $3)
         ORDER BY (id = $3) DESC, name`,
       [broker.agency_id, manager, broker.id]
@@ -66,7 +68,7 @@ async function teamBoard(pool, broker) {
   return members.map((m) => {
     const c = counts.get(m.id) || {};
     const away = m.away_until && new Date(m.away_until) > new Date();
-    return { id: m.id, name: m.name, role: m.role, me: m.id === broker.id, away: Boolean(away), open: c.open || 0, overdue: c.overdue || 0, soon: c.soon || 0 };
+    return { id: m.id, name: m.name, role: m.role, teamLeadId: m.team_lead_id || null, me: m.id === broker.id, away: Boolean(away), open: c.open || 0, overdue: c.overdue || 0, soon: c.soon || 0 };
   });
 }
 
@@ -132,6 +134,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
 /** Deactivates one of the manager's brokers (never themselves, never a role above theirs); their leads go to the unassigned pool. */
 async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
   if (!isManager(manager)) return { error: "forbidden" };
+  if (!UUID_RE.test(String(brokerId || ""))) return { error: "not_found" };
   if (brokerId === manager.id) return { error: "self" };
   const { rows } = await pool.query("SELECT role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   if (!rows[0]) return { error: "not_found" };
@@ -142,6 +145,7 @@ async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
 /** Brings a deactivated broker back with the same role (a seat must be free). Their old leads stay with the managers. */
 async function reactivate(pool, manager, brokerId) {
   if (!isManager(manager)) return { error: "forbidden" };
+  if (!UUID_RE.test(String(brokerId || ""))) return { error: "not_found" };
   const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   const b = rows[0];
   if (!b) return { error: "not_found" };
@@ -158,6 +162,7 @@ async function reactivate(pool, manager, brokerId) {
  */
 async function remove(pool, manager, brokerId) {
   if (!isManager(manager)) return { error: "forbidden" };
+  if (!UUID_RE.test(String(brokerId || ""))) return { error: "not_found" };
   if (brokerId === manager.id) return { error: "self" };
   const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   const b = rows[0];

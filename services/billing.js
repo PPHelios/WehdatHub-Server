@@ -104,6 +104,7 @@ async function checkAllowance(db, agencyId, { now = new Date(), brokerId = null 
   const agency = await agencyRow(db, agencyId);
   const { plan } = effectivePlan(agency, now);
   const [used, pool] = await Promise.all([Credits.usedThisMonth(db, agencyId, { now }), Credits.poolFor(db, agencyId, plan.id, { now })]);
+  warnLevel(db, agencyId, used, pool.total, now);
   if (used >= pool.total) {
     const err = new Error("AI credits used up for the month");
     err.code = "PLAN_QUOTA_EXCEEDED";
@@ -124,6 +125,21 @@ async function checkAllowance(db, agencyId, { now = new Date(), brokerId = null 
     }
   }
   return { used, limit: pool.total };
+}
+
+// Levels already told this process run (agency:month:level); the notification itself is deduped per month as well.
+const warned = new Set();
+/** At 80% and 100% of the month's AI credits the managers hear once (lib/notifications.js aiCreditWarning). Never blocks. */
+function warnLevel(db, agencyId, used, limit, now) {
+  if (!limit || limit <= 0) return;
+  const level = used >= limit ? 100 : used / limit >= 0.8 ? 80 : 0;
+  if (!level) return;
+  const key = `${agencyId}:${Credits.monthKey(now)}:${level}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  Promise.resolve()
+    .then(() => require("../lib/notifications").aiCreditWarning(db, agencyId, { level, used, limit, now }))
+    .catch(() => warned.delete(key));
 }
 
 /** Whether one more active broker fits the plan. */

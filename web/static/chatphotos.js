@@ -736,7 +736,7 @@
     if (importId) out.appendChild(el("a", { class: "btn", href: "/app/import/" + importId, text: TEXT.seeReview }));
     else out.appendChild(el("a", { class: "btn", href: "/app/units", text: TEXT.seeUnits }));
     // Anything that went wrong stays on screen; a clean run goes straight to the review.
-    if (importId && !run.cancelled && !errs.length && !c.failed && !c.heic) window.location.href = "/app/import/" + importId;
+    if (importId && !run.cancelled && !errs.length && !c.failed && !c.heic) window.location.replace("/app/import/" + importId);
   }
 
   // The Read button is locked and shows a spinner until the unit list and the reading are done.

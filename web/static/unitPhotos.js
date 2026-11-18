@@ -509,7 +509,7 @@
             window.__whSaved = true;
             status(form, T.saved, "ok");
             report("recovered");
-            location.assign("/app/units/" + encodeURIComponent(j.code) + "?saved=1");
+            location.replace("/app/units/" + encodeURIComponent(j.code) + "?saved=1");
             return true;
           }
           return false;
@@ -634,7 +634,7 @@
       xhr.onload = function () {
         clearTimers();
         report(xhr.status >= 400 ? "refused" : "ok");
-        if (xhr.responseURL && xhr.responseURL !== new URL(action, location.href).href && xhr.status < 400) { progress(sub, 100); clearPersist(); window.__whSaved = true; location.assign(xhr.responseURL); return; }
+        if (xhr.responseURL && xhr.responseURL !== new URL(action, location.href).href && xhr.status < 400) { progress(sub, 100); clearPersist(); window.__whSaved = true; location.replace(xhr.responseURL); return; }
         var fresh = new DOMParser().parseFromString(xhr.responseText, "text/html").getElementById("unit-form");
         // No form back (a server error page): ask whether it saved before saying it did not.
         if (!fresh) { checkSaved().then(function (saved) { if (!saved) failed(T.notSaved); }); return; }
