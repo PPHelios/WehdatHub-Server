@@ -8,28 +8,28 @@
 
 const COLORS = Object.freeze({
   light: Object.freeze({
-    // Main colour (Bright Sun Gold): primary CTAs, active accents, outer 4 logo towers. Dark navy text on gold (10:1 AAA).
-    brand: "#e8b92a", "brand-hi": "#f2c946", "brand-strong": "#cfa11b", "brand-weak": "#f4dc8a", "on-brand": "#0a111f", "brand-ink": "#0c1629", "brand-soft": "#fef7de",
-    // Companion colour (Obsidian Navy): center logo tower, secondary strong actions, links, status highlights.
-    accent: "#0c1629", "on-accent": "#ffffff", "accent-ink": "#0c1629", "accent-soft": "#e9edf4",
-    ink: "#0a111f", bg: "#f6f7f9", card: "#ffffff", soft: "#edeff3", field: "#ffffff", muted: "#4c5566", line: "#e0e4ec", "line-strong": "#c6cddb",
-    // Status tones (no green, no pink): crisp Obsidian Navy for positive/ready states, warm gold-bronze for warn, muted crimson for errors.
-    ok: "#0c1629", "on-ok": "#ffffff", "ok-ink": "#0c1629", "ok-soft": "#e9edf4", "ok-line": "#cad2e0",
-    warn: "#855d00", "on-warn": "#ffffff", "warn-soft": "#fef7de",
-    bad: "#a62319", "on-bad": "#ffffff", "bad-ink": "#801810", "bad-soft": "#fbece9",
+    // Main colour (Brushed Satin Gold): primary CTAs, active accents, outer 4 logo towers. Deep royal ink on gold (6.9:1 AA+/AAA).
+    brand: "#c29741", "brand-hi": "#d5af55", "brand-strong": "#a67e32", "brand-weak": "#e8d49c", "on-brand": "#0a1324", "brand-ink": "#122b4f", "brand-soft": "#f8f2e2",
+    // Companion colour (Royal Dark Blue): secondary strong actions, links, status highlights.
+    accent: "#122b4f", "on-accent": "#ffffff", "accent-ink": "#122b4f", "accent-soft": "#e6eef9",
+    ink: "#0d182b", bg: "#f4f6fa", card: "#ffffff", soft: "#ecf0f6", field: "#ffffff", muted: "#4c596f", line: "#dce2ee", "line-strong": "#c2cce0",
+    // Status tones (strictly 2-colour system — no green): Royal Dark Blue for positive/ready/Call, antique bronze for warn, muted crimson for errors.
+    ok: "#122b4f", "on-ok": "#ffffff", "ok-ink": "#122b4f", "ok-soft": "#e6eef9", "ok-line": "#c3d3ec",
+    warn: "#7a5614", "on-warn": "#ffffff", "warn-soft": "#faf3df",
+    bad: "#a62319", "on-bad": "#ffffff", "bad-ink": "#8a1c14", "bad-soft": "#fbece9",
     // A dark surface that stays dark in both modes (toasts) and a neutral fill (idle, sold out).
-    inverse: "#0a111f", "on-inverse": "#f8f9fc", neutral: "#566073", "on-neutral": "#ffffff"
+    inverse: "#0d182b", "on-inverse": "#f8fafc", neutral: "#566073", "on-neutral": "#ffffff"
   }),
   dark: Object.freeze({
-    // Main colour (Glowing Sun Gold) on deep Obsidian Navy surfaces.
-    brand: "#f7cc48", "brand-hi": "#fbd96d", "brand-strong": "#dfb026", "brand-weak": "#6b5619", "on-brand": "#080c14", "brand-ink": "#fde699", "brand-soft": "#2e2409",
-    // Companion colour (Steel Sky Navy).
-    accent: "#8ab3f0", "on-accent": "#070d18", "accent-ink": "#c7dcf9", "accent-soft": "#142036",
-    ink: "#f8f9fc", bg: "#070b12", card: "#0f1624", soft: "#162033", field: "#162033", muted: "#a3afc2", line: "#222e45", "line-strong": "#334363",
-    ok: "#8ab3f0", "on-ok": "#070d18", "ok-ink": "#c7dcf9", "ok-soft": "#142036", "ok-line": "#273b60",
-    warn: "#f7cc48", "on-warn": "#080c14", "warn-soft": "#2e2409",
-    bad: "#f07060", "on-bad": "#170a08", "bad-ink": "#f7b7ae", "bad-soft": "#381b18",
-    inverse: "#f8f9fc", "on-inverse": "#070b12", neutral: "#566073", "on-neutral": "#ffffff"
+    // Main colour (Brushed Satin Gold) on deep Royal Navy surfaces.
+    brand: "#d5af55", "brand-hi": "#ddb95e", "brand-strong": "#c29741", "brand-weak": "#6b5424", "on-brand": "#08101e", "brand-ink": "#e8cc7e", "brand-soft": "#261f10",
+    // Companion colour (Lifted Cobalt Blue — matches invariant logo center spire).
+    accent: "#4b83d4", "on-accent": "#08101e", "accent-ink": "#c6dcfa", "accent-soft": "#162a4a",
+    ink: "#f8fafc", bg: "#09111f", card: "#111c30", soft: "#182742", field: "#15233b", muted: "#9db0ca", line: "#243656", "line-strong": "#344b73",
+    ok: "#d5af55", "on-ok": "#08101e", "ok-ink": "#c6dcfa", "ok-soft": "#162a4a", "ok-line": "#27416b",
+    warn: "#d5af55", "on-warn": "#08101e", "warn-soft": "#261f10",
+    bad: "#e87166", "on-bad": "#170a08", "bad-ink": "#f7b7ae", "bad-soft": "#361918",
+    inverse: "#f8fafc", "on-inverse": "#09111f", neutral: "#566073", "on-neutral": "#ffffff"
   })
 });
 

@@ -308,8 +308,8 @@ ol.photo-order img.img-bad { outline: 2px dashed var(--bad); cursor: pointer; }
 .tabs #pay-tab-resale:checked ~ .tab-bar label[for="pay-tab-resale"], .tabs #pay-tab-primary:checked ~ .tab-bar label[for="pay-tab-primary"] { background: var(--card); color: var(--brand-ink); box-shadow: 0 1px 3px rgba(10, 17, 31, 0.12); }
 .tabs .tab-radio:focus-visible ~ .tab-bar { outline: 2px solid var(--brand); }
 
-/* Today (home) — Obsidian Navy hero with sunlit Gold glow in Light mode; rich Obsidian-Gold tint in Dark mode. */
-.today-head { position: relative; margin: 0 -16px; padding: 18px 18px 60px; background: radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 48%), linear-gradient(148deg, #162542, var(--accent)); color: var(--on-accent); overflow: hidden; }
+/* Today (home) — Royal Dark Blue hero with brushed Satin Gold glow in Light mode; deep Royal Navy + Gold tint in Dark mode. */
+.today-head { position: relative; margin: 0 -16px; padding: 18px 18px 60px; background: radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--brand) 30%, transparent), transparent 48%), linear-gradient(148deg, #173866, var(--accent)); color: var(--on-accent); overflow: hidden; }
 .today-head .today-meta, .today-head .muted { display: inline-block; font-size: 0.88rem; font-weight: 600; color: var(--on-accent); opacity: 0.84; }
 .today-head h1 { margin: 4px 0 14px; font-size: 1.6rem; color: var(--on-accent); }
 :root[data-theme="dark"] .today-head { background: radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--brand) 24%, transparent), transparent 52%), linear-gradient(150deg, var(--brand-soft), var(--card) 84%); color: var(--ink); border: 1px solid color-mix(in srgb, var(--brand) 42%, var(--line)); }
