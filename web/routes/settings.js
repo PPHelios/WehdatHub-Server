@@ -55,7 +55,8 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   const lockNote = eff.locked ? html` <span class="muted small" data-locked-by="${eff.locked}">🔒 ${L(lang, `اتقفلت من ${by}`, `set by ${by}`)}</span>` : "";
   const fixed = (f) => eff.lockedFields.includes(f);
   // The channels are check boxes: Telegram, website, phone app. "both" is stored when Telegram is on with the website or the app.
-  const chosen = new Set(shownChannel === "both" ? ["telegram", "web"] : [shownChannel]);
+  // Delivery (lib/notifications.js deliverRows) sends the website push and the phone app push together, so a push channel shows both boxes on.
+  const chosen = new Set(shownChannel === "both" ? ["telegram", "web", "app"] : shownChannel === "web" || shownChannel === "app" ? ["web", "app"] : [shownChannel]);
   const chOpts = [
     ["telegram", L(lang, "تليجرام", "Telegram"), tgOn],
     ["web", L(lang, "الموقع", "Website"), true],
@@ -174,18 +175,20 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
 <section id="me" class="sect stack" data-settings-section="me">
 <h1 class="sect-title">🙋 ${L(lang, "أنا", "Me")}</h1>
 <div class="fold" data-fold>
-<form method="post" action="/app/settings" class="card stack">
+<form method="post" action="/app/settings" class="card stack" data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}">
   <h2>🌐 ${L(lang, "اللغة", "Language")}</h2>
   <label>${L(lang, "لغة الموقع ورسايل البوت", "Website and bot language")}
     <select name="lang"><option value="ar"${lang === "ar" ? html` selected` : ""}>العربية</option><option value="en"${lang === "en" ? html` selected` : ""}>English</option></select>
   </label>
-  ${kinds.length ? html`  <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
+  ${kinds.length ? html`  <details class="fgroup"><summary>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</summary>
+  <div class="fbody">
   <p class="muted">${L(
     lang,
     "التنبيه بيوصل على القناة اللي اخترتها. لو تليجرام مش متوصل أو فشل، بيوصل على الموقع أو التطبيق. وكله بيتسجل في 🔔.",
     "Each alert comes on the channel you choose. When Telegram is not linked or fails, it comes on the website or the app. All of them are kept in 🔔."
   )}</p>
   ${kinds.map((k) => notifyRow(k, policy, broker, lang, tgOn))}
+  </div></details>
 ` : ""}
   <h2>⏰ ${L(lang, "تذكير المكالمات والمعاينات", "Reminders for calls and viewings")}</h2>
   <p class="muted">${L(lang, "ابعتلي تذكير قبل الميعاد بكام؟ الاختيار واحد أو أكتر. الافتراضي ساعة. التذكير بيوصل حتى لو في ساعات الهدوء.", "Remind me this long before: one or more. Default one hour. Reminders arrive even during quiet hours.")}</p>
@@ -199,7 +202,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
 ${appearanceCard(lang)}
-${dataEntry ? "" : html`<form method="post" action="/app/settings/quiet-line" class="card stack" id="quiet-line">
+${dataEntry ? "" : html`<form method="post" action="/app/settings/quiet-line" class="card stack" id="quiet-line" data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}" data-savebar-name="${L(lang, "سطر الـ 60 يوم", "60-day line")}">
   <h2>⏳ ${L(lang, "سطر «بقالك 60 يوم مكلمتوش»", "The \"60 days since you spoke\" line")}</h2>
   <label class="check"><input type="checkbox" name="on" value="1"${broker.quiet_line !== false ? html` checked` : ""}> ${L(lang, "في تنبيه الوحدات المناسبة، قولي لو العميل بقاله 60 يوم أو أكتر من غير مكالمة", "In match alerts, tell me when I haven't spoken to the client for 60 days or more")}</label>
   <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>

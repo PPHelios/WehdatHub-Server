@@ -104,7 +104,7 @@ ${list.rows.length
       title: L(lang, "طلبات تعديل الأسماء", "Name requests"),
       nav: "units",
       body: html`<h1>📝 ${L(lang, "طلبات تعديل الأسماء", "Name requests")}</h1>
-${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => html`<li class="card" data-request="${r.id}"><b>${r.code}</b> · ${r.old_value || "—"} → <b>${r.new_value}</b> <span class="muted small">${r.requested_by_name || ""} · ${stamp(r.created_at, lang)}</span>
+${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => html`<li class="card" data-request="${r.id}"><b>${r.code}</b> · ${r.old_value || "—"} ${L(lang, "←", "→")} <b>${r.new_value}</b> <span class="muted small">${r.requested_by_name || ""} · ${stamp(r.created_at, lang)}</span>
 <form method="post" action="/app/owners/requests/${r.id}" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><button name="decision" value="approve" type="submit">${L(lang, "موافقة", "Approve")}</button><button name="decision" value="reject" type="submit" class="secondary">${L(lang, "رفض", "Reject")}</button></form></li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش طلبات.", "No requests.")}</p>`}`
     });
   });

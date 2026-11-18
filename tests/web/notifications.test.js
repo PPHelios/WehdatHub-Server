@@ -246,7 +246,7 @@ describe("website: inbox, log, settings, usage, push", () => {
     expect(b.notify_prefs.quiet).toEqual({ enabled: true, start: 23, end: 7 });
     const again = await me.agent.get("/app/settings");
     expect(again.text).toMatch(/<input type="checkbox" name="ch_match" value="web" data-kind="match" checked> Website/);
-    expect(again.text).toMatch(/<input type="checkbox" name="ch_match" value="app" data-kind="match"> Phone app/);
+    expect(again.text).toMatch(/<input type="checkbox" name="ch_match" value="app" data-kind="match" checked> Phone app/);
     expect(again.text).not.toMatch(/\(free\)/);
     expect(again.text).not.toMatch(/WhatsApp \(uses credits\)|value="whatsapp"/);
   });

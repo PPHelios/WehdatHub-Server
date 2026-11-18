@@ -47,7 +47,9 @@
    */
   function codeFinder(codes, aliases = {}) {
     const known = new Map();
-    for (const [k, v] of Object.entries(aliases || {})) if (k && v) known.set(String(k), v);
+    // Codes and aliases meet on normCode: an alias to "hp12" lands on the app's "HP-12", and keys like "hp-12" match "HP12".
+    const canon = new Map((codes || []).map((c) => [normCode(c), c]));
+    for (const [k, v] of Object.entries(aliases || {})) if (k && v && normCode(k)) known.set(normCode(k), canon.get(normCode(v)) || v);
     for (const c of codes || []) {
       const n = normCode(c);
       if (n.length >= 2 && (/\d/.test(n) || n.length >= 5)) known.set(n, c);
@@ -87,18 +89,19 @@
   /**
    * @param {string} text the chat .txt
    * @param {object} o
-   * @param {string|null} o.since "YYYY-MM-DD": older messages are dropped (and their photos never read)
+   * @param {number|string|null} o.since epoch ms, "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm": older messages are dropped (and their photos never read)
+   * @param {number|string|null} o.until same formats, exclusive upper bound: messages at or after it are dropped
    * @param {number} o.windowMin minutes: a longer silence starts a new block
    * @param {boolean} o.sameSender only the same person's photos go with a description
    * @param {"auto"|"photos_first"|"text_first"} o.pattern
    * @param {string[]|null} o.codes the unit codes in the app (codes mode) or null (posts mode)
    * @param {Object} o.aliases a chat word the person chose to read as a code ({ NORMALISED_WORD: code })
    */
-  function match(text, { since = null, windowMin = 10, sameSender = true, pattern = "auto", codes = null, aliases = {} } = {}) {
+  function match(text, { since = null, until = null, windowMin = 10, sameSender = true, pattern = "auto", codes = null, aliases = {} } = {}) {
     const find = codes ? codeFinder(codes, aliases) : null;
     const knownNorms = new Map((codes || []).map((c) => [normCode(c), c]));
     const windowMs = Math.max(1, Number(windowMin) || 10) * 60 * 1000;
-    const messages = P.parseWithAttachments(text).filter(P.notOlder(P.sinceMs(since)));
+    const messages = P.parseWithAttachments(text).filter(P.notOlder(P.sinceMs(since), P.sinceMs(until)));
     const stats = { messages: messages.length, dividers: 0, photos: 0, skippedMedia: 0, omittedMedia: 0, duplicates: 0, truncated: 0 };
     for (const line of String(text || "").split(/\r?\n/)) {
       const body = line.replace(/^.*?\s-\s[^:]{1,80}:\s?/, "").replace(/^\[[^\]]*\]\s*[^:]{1,80}:\s?/, "").trim();
@@ -110,7 +113,7 @@
     const items = [];
     const skips = []; // videos and other files in the export: never uploaded, counted on the post they sit next to
     for (const m of messages) {
-      const t = P.atMs(m.at);
+      const t = typeof m.t === "number" ? m.t : P.atMs(m.at);
       if (m.divider) {
         stats.dividers++;
         items.push({ kind: "D", m, t, sender: m.sender });
@@ -247,11 +250,11 @@
           continue;
         }
         const code = a.codes[0];
-        const u = units.get(code) || { code, files: [], messages: 0, verify: false };
+        const u = units.get(normCode(code)) || { code, files: [], messages: 0, verify: false };
         u.messages++;
         if (a.verify) u.verify = true;
         for (const f of withFiles(a)) if (!u.files.some((x) => x.name === f.name)) u.files.push(f);
-        units.set(code, u);
+        units.set(normCode(code), u);
       }
       result.units = [...units.values()].map((u) => {
         u.files.sort((x, y) => x.i - y.i);
@@ -273,8 +276,8 @@
         }
       }
       result.unknownCodes = result.unknownCodes.slice(0, 50);
-      const used = new Set(result.units.map((u) => u.code));
-      result.noPhotos = (codes || []).filter((c) => !used.has(c) || !result.units.find((u) => u.code === c).files.length);
+      const byNorm = new Map(result.units.map((u) => [normCode(u.code), u]));
+      result.noPhotos = (codes || []).filter((c) => !byNorm.has(normCode(c)) || !byNorm.get(normCode(c)).files.length);
     } else {
       // A post keeps up to MAX_PICK photos so the person can choose which 15 go to the unit (the first 15 are the default).
       const posts = byAnchor.map((a) => ({ i: a.m.i, t: a.t, sender: a.sender, at: a.m.at, text: a.m.text.slice(0, 4000), orig: String(a.m.orig || a.m.text).slice(0, 4000), code: postCode(a.m.text), files: withFiles(a).sort((x, y) => x.i - y.i).slice(0, MAX_PICK), over: Math.max(0, withFiles(a).length - MAX_PICK), videos: 0, verify: Boolean(a.verify) }));

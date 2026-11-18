@@ -309,7 +309,7 @@ function referralsSection(r, lang) {
   <h2>🎁 ${L(lang, "الدعوات بين الشركات", "Agency referrals")}</h2>
   ${r.referrals.length
     ? html`<div class="scroll"><table><tbody>${r.referrals.map(
-        (x) => html`<tr data-referral-row="${x.id}"><td>${x.name}</td><td>← ${x.referrer_name}</td><td>${x.referral_rewarded_at ? html`🎁 ${L(lang, "الشهرين اتحسبوا", "Both months given")} <span dir="ltr">${day(x.referral_rewarded_at)}</span>` : L(lang, "مستنية أول دفعة", "Waiting for its first payment")}</td></tr>`
+        (x) => html`<tr data-referral-row="${x.id}"><td>${x.name}</td><td>${L(lang, "←", "→")} ${x.referrer_name}</td><td>${x.referral_rewarded_at ? html`🎁 ${L(lang, "الشهرين اتحسبوا", "Both months given")} <span dir="ltr">${day(x.referral_rewarded_at)}</span>` : L(lang, "مستنية أول دفعة", "Waiting for its first payment")}</td></tr>`
       )}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش دعوات لسه.", "No referrals yet.")}</p>`}
   ${r.linkable.length
@@ -839,7 +839,7 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const r = id ? await Intake.create(pool, id, { name: req.body.name, source: req.body.source, quietDays: req.body.quiet_days }) : { error: "not_found" };
     if (r.error) return ownerView(req, res, bad(L(lang, "اكتب الاسم والمصدر، والأيام من 1 لـ 60.", "Fill in the name and source; quiet days 1 to 60.")), 400);
     return ownerView(req, res, html`<section class="card notice ok" role="status" data-intake-created="${r.intake.id}"><h2>✅ ${L(lang, `لينك ${r.agency.name} جاهز`, `${r.agency.name}'s URL is ready`)}</h2>
-<p>${L(lang, "انسخه دلوقتي: مش هيظهر تاني. حطه في Make (HTTP → Make a request، POST، Body JSON).", "Copy it now: it won't be shown again. Put it in Make (HTTP → Make a request, POST, JSON body).")}</p>
+<p>${L(lang, "انسخه دلوقتي: مش هيظهر تاني. حطه في Make (HTTP ← Make a request، POST، Body JSON).", "Copy it now: it won't be shown again. Put it in Make (HTTP → Make a request, POST, JSON body).")}</p>
 <p class="row" dir="ltr"><input readonly value="${r.url}" id="intake-url" aria-label="URL"> <button type="button" class="secondary" data-copy="#intake-url">📋 ${L(lang, "نسخ", "Copy")}</button></p></section>`);
   }));
 

@@ -1,6 +1,6 @@
 /* WehdatHub web app — mobile first; logical properties so RTL and LTR share one sheet.
-   --brand (azure), --accent (copper), --ink (charcoal) and --bg come from brand.css (domain/brand.js) with the
-   Cairo faces. Copper is only for "very interested" and featured; azure for actions and links. */
+   --brand (royal blue), --accent (gold), --ink (charcoal) and --bg come from brand.css (domain/brand.js) with the
+   Cairo faces. Gold is only for "very interested" and featured; royal blue for actions and links. */
 :root {
   --shadow-sm: 0 1px 2px rgba(11, 19, 32, 0.04), 0 2px 6px rgba(11, 19, 32, 0.04);
   --shadow: 0 1px 3px rgba(11, 19, 32, 0.05), 0 8px 24px rgba(11, 19, 32, 0.06);
@@ -92,8 +92,10 @@ details.tip p { position: absolute; z-index: 15; inset-inline-end: 0; inset-bloc
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .card { border-color: var(--line); } }
 details.card > summary { cursor: pointer; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px; list-style: none; }
 details.card > summary::-webkit-details-marker { display: none; }
-details.card > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.18s var(--ease); flex: none; margin-inline-end: 4px; }
-details.card[open] > summary::after { transform: rotate(225deg); }
+details.card > summary::after { content: ""; width: 8px; height: 8px; border-inline-end: 2px solid var(--muted); border-block-end: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.18s var(--ease); flex: none; margin-inline-end: 4px; }
+details.card[open] > summary::after { transform: rotate(45deg); }
+[dir="rtl"] details.card > summary::after { transform: rotate(45deg); }
+[dir="rtl"] details.card[open] > summary::after { transform: rotate(-45deg); }
 details.card[open] > summary { margin-bottom: 10px; }
 .muted { color: var(--muted); font-size: 0.9rem; }
 .small { font-size: 0.85rem; }
@@ -168,7 +170,7 @@ form.inline { display: inline; }
 .chip.good { background: var(--ok-soft); color: var(--ok-ink); }
 .chip.late { background: var(--bad-soft); color: var(--bad-ink); }
 .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--soft); overflow-x: auto; scrollbar-width: none; }
-.seg a, .seg button { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 11px; background: transparent; color: var(--muted); font-weight: 600; font-size: 0.92rem; text-decoration: none; border: 0; white-space: nowrap; }
+.seg a, .seg button { gap: 6px; flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 11px; background: transparent; color: var(--muted); font-weight: 600; font-size: 0.92rem; text-decoration: none; border: 0; white-space: nowrap; }
 .seg a[aria-current="page"], .seg a.btn:not(.secondary), .seg button[aria-pressed="true"] { background: var(--card); color: var(--brand-ink); box-shadow: 0 1px 3px rgba(10, 17, 31, 0.12); }
 .seg a.btn.secondary { border: 0; background: transparent; }
 /* Settings tabs: the open tab is filled with the brand colour; without script all sections show and the tabs are links. */
@@ -1210,8 +1212,10 @@ label:has(> [data-area-list]) { position: relative; }
 .acc { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 .acc > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 10px 16px; font-weight: 700; }
 .acc > summary::-webkit-details-marker { display: none; }
-.acc > summary::after { content: ""; width: 9px; height: 9px; border-inline-end: 2px solid var(--muted); border-block-end: 2px solid var(--muted); rotate: 45deg; transition: rotate 0.15s; flex: none; }
-.acc[open] > summary::after { rotate: 225deg; }
+.acc > summary::after { content: ""; width: 9px; height: 9px; border-inline-end: 2px solid var(--muted); border-block-end: 2px solid var(--muted); rotate: -45deg; transition: rotate 0.15s; flex: none; }
+.acc[open] > summary::after { rotate: 45deg; }
+[dir="rtl"] .acc > summary::after { rotate: 45deg; }
+[dir="rtl"] .acc[open] > summary::after { rotate: -45deg; }
 .acc[open] > summary { border-bottom: 1px solid var(--line); }
 .acc-body { padding: 4px 16px 16px; }
 .acc-body > .card { margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }
@@ -2236,13 +2240,15 @@ ol.results { gap: 14px; margin-top: 12px; }
   height: 9px;
   border-inline-end: 2.5px solid var(--muted);
   border-block-end: 2.5px solid var(--muted);
-  rotate: 45deg;
+  rotate: -45deg;
   transition: rotate 0.16s var(--ease), border-color 0.16s var(--ease);
 }
 .acc[open] > summary::after {
-  rotate: 225deg;
+  rotate: 45deg;
   border-color: var(--brand);
 }
+[dir="rtl"] .acc > summary::after { rotate: 45deg; }
+[dir="rtl"] .acc[open] > summary::after { rotate: -45deg; }
 .acc[open] > summary {
   border-bottom: 1px solid var(--line);
   color: var(--brand-ink);
@@ -2380,14 +2386,19 @@ details.fgroup > summary::after {
   height: 8px;
   border-inline-end: 2.5px solid var(--muted);
   border-block-end: 2.5px solid var(--muted);
-  rotate: 45deg;
+  rotate: -45deg;
   transition: rotate 0.15s var(--ease), border-color 0.15s var(--ease);
   flex: none;
 }
 details.fgroup[open] > summary::after {
-  rotate: 225deg;
+  rotate: 45deg;
   border-color: var(--brand);
 }
+[dir="rtl"] details.fgroup > summary::after { rotate: 45deg; }
+[dir="rtl"] details.fgroup[open] > summary::after { rotate: -45deg; }
+/* details.card.fgroup matches both caret rules (transform + rotate): keep only `rotate` so the two do not add up. */
+details.card.fgroup > summary::after, details.card.fgroup[open] > summary::after,
+[dir="rtl"] details.card.fgroup > summary::after, [dir="rtl"] details.card.fgroup[open] > summary::after { transform: none; }
 details.fgroup[open] > summary {
   color: var(--brand-ink);
   margin-bottom: 12px;
@@ -2537,3 +2548,20 @@ ul.timeline > li[data-event*="viewing"]::before { background: var(--accent); box
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
+
+/* Unsaved-changes bar (web/static/saveBar.js): one sticky bar at the bottom while a data-savebar form differs from what was loaded. */
+.savebar { position: fixed; z-index: 35; inset-inline: 0; inset-block-end: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; max-width: 720px; margin-inline: auto; padding: 10px 16px; background: var(--card); color: var(--ink); border-block-start: 1px solid var(--line); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 18px rgba(14, 21, 33, 0.12); }
+body:not(.has-tabbar) .savebar { inset-block-end: 0; padding-block-end: calc(10px + env(safe-area-inset-bottom, 0px)); }
+.savebar[hidden] { display: none; }
+.savebar-text { font-weight: 600; flex: 1 1 160px; min-width: 0; }
+.savebar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (min-width: 1024px) { body.has-tabbar .savebar { inset-block-end: 0; padding-block-end: calc(10px + env(safe-area-inset-bottom, 0px)); } }
+@media (prefers-color-scheme: dark) { .savebar { box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.4); } }
+:root[data-theme="dark"] .savebar { box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.4); }
+:root[data-theme="light"] .savebar { box-shadow: 0 -6px 18px rgba(14, 21, 33, 0.12); }
+
+/* WhatsApp import review: bulk controls, discarded bar and the line above Save */
+[data-cp-bulk], [data-discarded-bar], [data-save-summary], [data-cp-save-line] { margin-block: 8px; }
+[data-cp-discarded] ul, [data-discarded-bar] ul { margin: 6px 0; padding-inline-start: 18px; }
+.unit-card .uc-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+.unit-card .uc-head input[type="checkbox"]:disabled { cursor: not-allowed; }

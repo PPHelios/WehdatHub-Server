@@ -74,7 +74,7 @@
       "splitPasted": ["text"],
       "looksLikeListing": ["text"],
       "candidatePosts": ["text", "params"],
-      "atMs": ["at"],
+      "atMs": ["at", "order"],
       "parseWithAttachments": ["text"]
     },
     "domain/chatListing.js": {
@@ -106,10 +106,12 @@
       "PHOTO_WINDOW_MS": "Number",
       "MAX_PHOTOS": "Number",
       "DEFAULT_DAYS": "Number",
-      "atMs": ["at"],
+      "atMs": ["at", "order"],
+      "detectDateOrder": ["ats"],
       "sinceMs": ["v"],
+      "untilMs": ["v"],
       "defaultSince": ["now"],
-      "notOlder": ["since"],
+      "notOlder": ["since", "until"],
       "parseWithAttachments": ["text"],
       "looksLikeListing": ["text"]
     },
@@ -982,7 +984,7 @@
     "lib/flyerWorker.js": {},
     "lib/formChecks.js": {
       "ownerBlockers": ["listing", "body", "lang", "params"],
-      "changesOf": ["existing", "next"],
+      "changesOf": ["existing", "next", "lang"],
       "explainInvalid": ["blockers", "body", "lang"],
       "lengthBlockers": ["body", "lang"],
       "MAX_TEXT": "Object"
@@ -1895,6 +1897,7 @@
       "setNewPlace": ["pool", "broker", "id", "row", "params"],
       "movePhoto": ["pool", "broker", "id", "params"],
       "setPhotoChoice": ["pool", "broker", "id", "row", "params"],
+      "setDiscarded": ["pool", "broker", "id", "params"],
       "escapeRegex": ["v"],
       "escapeLike": ["v"],
       "describeChanges": ["listing", "patch", "lang"],
@@ -2586,6 +2589,7 @@
       "SafeHtml": [],
       "html": ["strings", "values"],
       "raw": ["text"],
+      "phoneLtr": ["value"],
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],

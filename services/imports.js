@@ -28,6 +28,7 @@ const Vis = require("../lib/visibility");
 
 const MONEY = ["price_value", "down_payment_value", "remaining_amount", "installment_value"];
 const DETAIL_LABELS = { owner_name: ["المالك", "Owner"], owner_phone: ["تليفون المالك", "Owner phone"], notes: ["ملاحظات", "Notes"], clean_summary: ["الوصف", "Description"], summary_en: ["الوصف بالإنجليزي", "English summary"], floor: ["الدور", "Floor"] };
+const SIDE = { sale: ["بيع", "Sale"], rent: ["إيجار", "Rent"] };
 const STATUS = { active: ["متاحة", "Available"], sold: ["مباعة", "Sold"], archived: ["مؤرشفة", "Archived"] };
 const pick = (pair, lang) => (pair ? pair[lang === "en" ? 1 : 0] : null);
 
@@ -37,6 +38,8 @@ function display(col, v, lang) {
   if (col === "feature_keys") return v.map((k) => Features.featureLabel(k, lang)).join("، ");
   if (col === "finishing") return pick(Describe.FINISHING_LABELS[v], lang) || v;
   if (col === "status") return pick(STATUS[v], lang) || v;
+  if (col === "listing_type") return pick(SIDE[v], lang) || v;
+  if (col === "furnishing") return pick(Describe.FURNISHING_LABELS[v], lang) || v;
   if (col === "property_type") return pick(Describe.TYPE_LABELS[v], lang) || v;
   if (col === "installments_end") return String(v instanceof Date ? v.toISOString() : v).slice(0, 7);
   if (Array.isArray(v)) return v.join("، ");
@@ -292,7 +295,11 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
       }
       if (p.status && p.status !== existing.status) patch.status = p.status;
       const before = Object.fromEntries(Object.keys(patch).map((k) => [k, existing[k] === undefined ? null : existing[k]]));
-      const changes = describeChanges(existing, patch, lang);
+      // A chat post always carries generated text ("WhatsApp · sender · date" notes, its own text as the description): those alone never
+      // make an existing unit "changed". The owner phone is only ever read from the post's own text (never the sender's chat phone),
+      // so it stays a real change.
+      const AUTO = new Set(["details.notes", "details.clean_summary", "details.summary_en"]);
+      const changes = describeChanges(existing, patch, lang).filter((c) => source !== "chat" || !AUTO.has(c.field));
       items.push({
         ...base,
         code: existing.code,
@@ -477,7 +484,10 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
   if (!imp) return null;
   const started = Date.now();
   const wanted = new Set(rows.map(Number));
-  const result = { created: [], updated: [], conflicts: [], failed: [], undo: { made: [], changed: [], photos: [] } };
+  // unchanged: an existing unit the post says nothing new about (never written, never given photos); blocked: a row with errors or one
+  // the person may not change; discarded: rows the person threw away in the review. None of these is written, even when ticked.
+  const result = { created: [], updated: [], conflicts: [], failed: [], unchanged: [], blocked: [], discarded: [], undo: { made: [], changed: [], photos: [] } };
+  const thrown = new Set((imp.payload.discarded || []).map(Number));
   const photoMap = imp.payload.photos || {};
   const used = new Set();
   const withPhotos = async (item, listing) => {
@@ -520,13 +530,17 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
   };
   for (const item of imp.payload.items) {
     if (!wanted.has(item.row)) continue;
+    if (thrown.has(item.row)) { result.discarded.push(item.code || `row ${item.row}`); continue; }
+    if (item.kind === "unchanged") { result.unchanged.push(item.code || `row ${item.row}`); continue; }
+    if (item.kind === "invalid" || item.kind === "forbidden") { result.blocked.push(item.code || `row ${item.row}`); continue; }
     if (item.kind === "new") {
       if ((await insert(item, item.code)) === "limit") break;
     } else if (item.kind === "changed") {
       await merge(item);
     } else if (item.kind === "review") {
       const pick = resolutions[item.row] || {};
-      if (pick.mode === "merge" && item.merge) await merge(item);
+      if (pick.mode === "merge" && item.merge && !(item.merge.changes || []).length) result.unchanged.push(item.merge.code || item.code);
+      else if (pick.mode === "merge" && item.merge) await merge(item);
       else {
         // A new unit: the code typed in the review, else the message's own code when it is free, else a generated one.
         const typed = pick.code ? normalizeCode(pick.code) : null;
@@ -914,7 +928,7 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
           if (place?.name_en) ex.fields.details = { ...(ex.fields.details || {}), compound_en: place.name_en };
           const composed = L.composeFields({ draft: ex.fields, lang });
           // A phone in the post is the owner's contact: every unit needs one before it is saved.
-          const ownerPhone = (String(post.text).match(/(?:\+?20)?0?1[0125]\d{8}/) || [])[0] || null;
+          const ownerPhone = (String(post.text).match(/(?<!\d)(?:\+?20)?0?1[0125]\d{8}(?!\d)/) || [])[0] || null;
           composed.details = { ...composed.details, source: "group_import", ...(ownerPhone ? { owner_phone: ownerPhone } : {}), ...(post.sender ? { co_broker: post.sender } : {}), ...(ex.fields.code ? { source_ref: ex.fields.code } : {}) };
           const ev = Rules.evaluate(composed, { lang });
           results[i] = {
@@ -1039,7 +1053,8 @@ async function movePhoto(pool, broker, id, { row, index, dir } = {}) {
   const imp = await loadImport(pool, broker, id);
   if (!imp || imp.kind !== "excel" || imp.status !== "ready" || imp.payload?.source !== "chat") return false;
   const p = imp.payload;
-  const rows = (p.items || []).filter((i) => ["new", "changed", "review", "invalid"].includes(i.kind)).map((i) => i.row).sort((a, b) => a - b);
+  const thrown = new Set((p.discarded || []).map(Number));
+  const rows = (p.items || []).filter((i) => ["new", "changed", "review", "invalid"].includes(i.kind) && !thrown.has(i.row)).map((i) => i.row).sort((a, b) => a - b);
   const at = rows.indexOf(Number(row));
   const to = at < 0 ? undefined : rows[at + (dir === "prev" ? -1 : 1)];
   const photos = { ...(p.photos || {}) };
@@ -1061,6 +1076,33 @@ async function movePhoto(pool, broker, id, { row, index, dir } = {}) {
     [id, JSON.stringify(photos), JSON.stringify(choices), broker.agency_id, broker.id]
   );
   return rowCount > 0;
+}
+
+/**
+ * Throws rows of a ready chat plan away (or brings them back), kept in the plan: a discarded row is hidden in the review and never
+ * written or given photos by apply, whatever the page sends. scope "errors" (rows with errors), "unchanged" (existing units with no
+ * change) or rows: [row numbers]; on=false restores (rows, or scope "all").
+ * @returns {Promise<number|null>} how many rows changed state, null when the plan is not a ready plan of this broker
+ */
+async function setDiscarded(pool, broker, id, { rows = [], scope = null, on = true } = {}) {
+  const imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel" || imp.status !== "ready") return null;
+  const items = imp.payload.items || [];
+  const have = new Set((imp.payload.discarded || []).map(Number));
+  const known = new Set(items.map((i) => i.row));
+  let target;
+  if (scope === "errors") target = items.filter((i) => i.kind === "invalid" || i.kind === "forbidden").map((i) => i.row);
+  else if (scope === "unchanged") target = items.filter((i) => i.kind === "unchanged").map((i) => i.row);
+  else if (scope === "all" && !on) target = [...have];
+  else target = (Array.isArray(rows) ? rows : []).map(Number).filter((n) => Number.isInteger(n) && known.has(n));
+  const next = new Set(have);
+  for (const n of target) (on ? next.add(n) : next.delete(n));
+  const changed = [...next].filter((n) => !have.has(n)).length + [...have].filter((n) => !next.has(n)).length;
+  await pool.query(
+    "UPDATE web_imports SET payload = jsonb_set(payload, '{discarded}', $2::jsonb, true) WHERE id = $1 AND agency_id = $3 AND broker_id = $4 AND status = 'ready' AND kind = 'excel'",
+    [id, JSON.stringify([...next].sort((a, b) => a - b)), broker.agency_id, broker.id]
+  );
+  return changed;
 }
 
 /** The Arabic name and map link asked for a new compound on a chat plan's row, kept in the plan until the unit is saved. */
@@ -1086,6 +1128,7 @@ module.exports = {
   setNewPlace,
   movePhoto,
   setPhotoChoice,
+  setDiscarded,
   escapeRegex,
   escapeLike,
   describeChanges,

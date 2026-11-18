@@ -461,6 +461,8 @@
     if (!cols) return;
     var col = cols.querySelector(".bcol");
     var delta = Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12);
+    // RTL: the first column is on the right and scrollLeft runs negative, so "previous" (-1) must scroll right (+).
+    if (getComputedStyle(cols).direction === "rtl") delta = -delta;
     var before = cols.scrollLeft, max = cols.scrollWidth - cols.clientWidth;
     cols.scrollBy({ left: delta, behavior: "smooth" });
     // Loop: when the edge stops the step, jump to the other end (any sign of scrollLeft, RTL or LTR).

@@ -137,7 +137,14 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const t0 = Date.now();
     const wanted = [...new Set((Array.isArray(req.body?.codes) ? req.body.codes : []).map((c) => String(c || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 200);
-    const byNorm = new Map(wanted.map((c) => [normalizeCode(c), c]));
+    // Several spellings can fold to one code_norm (HP-12, hp-12, #HP-12): each of them gets the answer.
+    const byNorm = new Map();
+    for (const c of wanted) {
+      const n = normalizeCode(c);
+      if (!byNorm.has(n)) byNorm.set(n, []);
+      byNorm.get(n).push(c);
+    }
+    const put = (n, v) => { for (const c of byNorm.get(n) || []) out[c] = v; };
     const out = {};
     if (byNorm.size) {
       const { rows } = await pool.query(
@@ -146,11 +153,11 @@ function register(api, { pool }) {
            FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.code_norm = ANY($2::text[])`,
         [broker.agency_id, [...byNorm.keys()]]
       );
-      for (const l of rows) out[byNorm.get(l.code_norm)] = Authz.canEdit(broker, l) ? { state: "update", code: l.code, photos: l.photos, status: l.status } : { state: "taken" };
-      const rest = [...byNorm.keys()].filter((n) => !out[byNorm.get(n)]);
+      for (const l of rows) put(l.code_norm, Authz.canEdit(broker, l) ? { state: "update", code: l.code, photos: l.photos, status: l.status } : { state: "taken" });
+      const rest = [...byNorm.keys()].filter((n) => !out[byNorm.get(n)[0]]);
       if (rest.length) {
         const { rows: hidden } = await pool.query("SELECT code_norm FROM listings WHERE agency_id = $1 AND code_norm = ANY($2::text[]) /* vis:exempt */", [broker.agency_id, rest]);
-        for (const l of hidden) out[byNorm.get(l.code_norm)] = { state: "taken" };
+        for (const l of hidden) put(l.code_norm, { state: "taken" });
       }
     }
     for (const c of wanted) if (!out[c]) out[c] = { state: "new" };

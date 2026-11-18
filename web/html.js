@@ -36,6 +36,9 @@ function html(strings, ...values) {
 /** Marks trusted markup (never use on user input). */
 const raw = (text) => new SafeHtml(String(text ?? ""));
 
+/** A phone number kept left-to-right inside RTL text (the "+" and digits would otherwise render reversed). */
+const phoneLtr = (value) => html`<bdi dir="ltr">${value}</bdi>`;
+
 /** JSON text for an attribute; html`` escapes it once when interpolated. */
 const jsonAttr = (obj) => JSON.stringify(obj);
 
@@ -70,6 +73,7 @@ ${scripts ? html`<script src="${assets("theme.js")}" defer></script>
 <script src="${assets("carousel.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
 <script src="${assets("busy.js")}" defer></script>
+<script src="${assets("saveBar.js")}" defer></script>
 <script src="${assets("voice.js")}" defer></script>` : ""}
 </head>
 <body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الشركة"}"`) : ""}>
@@ -261,4 +265,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, navFor, tabOf, HTMX_CONFIG };
+module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, phoneLtr, escapeHtml, jsonAttr, layout, withCsrf, navFor, tabOf, HTMX_CONFIG };

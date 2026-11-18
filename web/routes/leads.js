@@ -30,7 +30,7 @@ const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const ErrorText = require("../../lib/errorText");
-const { html } = require("../html");
+const { html, phoneLtr } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
@@ -113,7 +113,7 @@ function inputOf(body, manager) {
 async function duplicateNotice(pool, broker, body, lang) {
   for (const raw of [body.phone1, body.phone2].filter(Boolean)) {
     const e164 = Phone.toE164(raw);
-    if (!e164) return html`<p class="notice bad">⚠️ ${L(lang, `الرقم «${raw}» مش مظبوط.`, `"${raw}" isn't a valid number.`)}</p>`;
+    if (!e164) return html`<p class="notice bad">⚠️ ${lang === "en" ? html`"${phoneLtr(raw)}" isn't a valid number.` : html`الرقم «${phoneLtr(raw)}» مش مظبوط.`}</p>`;
     const found = await Leads.findByPhone(pool, broker, e164);
     if (found.lead) {
       return html`<p class="notice">📇 ${L(lang, "الرقم ده متسجل بالفعل:", "This number is already saved:")} <a href="${V.leadPath(found.lead)}">${Card.refLabel(found.lead.ref)} · ${Card.displayName(found.lead, lang)}</a>. ${L(lang, "الحفظ هيضيف للعميل ده.", "Saving adds to that lead.")}</p>`;
@@ -558,7 +558,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       title,
       nav: "leads",
       body: html`<h1>🕓 ${title}</h1>
-<p><a class="btn secondary small" href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "← رجوع للعميل", "← Back to the lead")}</a></p>
+<p><a class="btn secondary small" href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "→ رجوع للعميل", "← Back to the lead")}</a></p>
 <form method="get" action="${base}" class="row" data-history-filter>
   <label>${L(lang, "من", "From")} <input type="date" name="from" value="${fromDay || ""}"></label>
   <label>${L(lang, "لغاية", "To")} <input type="date" name="to" value="${toDay || ""}"></label>

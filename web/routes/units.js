@@ -564,7 +564,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       nav: "units",
       body: html`<article class="card unit-card" data-code="${listing.code}">
   ${req.query.saved ? html`<div class="notice card ok" data-saved>✅ ${L(lang, "تم الحفظ", "Saved")} <a class="btn secondary" href="/app/units/new">➕ ${L(lang, "ضيف وحدة تانية", "Add another unit")}</a></div>` : ""}
-  <div class="unit-head"><h1 dir="ltr">${listing.code}</h1><span class="unit-pill">${status}</span>${conf ? html`<span class="muted">${conf[0]}</span>` : ""}${listing.is_private ? html`<span class="unit-pill">⭐ VIP</span>` : ""}</div>
+  <div class="unit-head"><h1 dir="ltr">${listing.code}</h1><span class="unit-pill">${status}</span>${listing.property_type && Describe.TYPE_LABELS[String(listing.property_type).toLowerCase()] ? html`<span class="unit-pill" data-property-type="${listing.property_type}">${Describe.typeLabel(listing, lang)}</span>` : ""}${conf ? html`<span class="muted">${conf[0]}</span>` : ""}${listing.is_private ? html`<span class="unit-pill">⭐ VIP</span>` : ""}</div>
   ${carousel(images.map((i) => i.url), lang)}
   ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
