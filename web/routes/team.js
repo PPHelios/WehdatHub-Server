@@ -21,7 +21,7 @@ const { html, raw } = require("../html");
 const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
-const ROLE_LABEL = { data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قائد فريق", "Team lead"] };
+const ROLE_LABEL = { broker: ["بروكر", "Broker"], manager: ["مدير", "Manager"], owner: ["مالك الشركة", "Agency owner"], admin: ["مدير", "Manager"], data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قائد فريق", "Team lead"] };
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };
 const LINKS = { limit: 30, windowSec: 24 * 3600 };
@@ -152,9 +152,11 @@ function teamLeadForm(b, lang, teamLeads) {
   return html`<form method="post" action="/app/team/${b.id}/team" class="row"><label>${L(lang, "الفريق", "Team")} <select name="team_lead_id"><option value="">${L(lang, "من غير فريق", "No team")}</option>${options}</select></label><button type="submit" class="secondary">${L(lang, "احفظ الفريق", "Save team")}</button></form><form method="post" action="/app/team/${b.id}/team-role"><input type="hidden" name="on" value="1"><button type="submit" class="secondary">${L(lang, "⭐ خليه قائد فريق", "⭐ Make team lead")}</button></form>`;
 }
 
+/** The agency owner moves a member between broker, manager and data entry (Team.changeRole; team lead has its own form). */
 function roleForm(b, lang) {
-  const to = b.role === "manager" ? "broker" : "manager";
-  return html`<form method="post" action="/app/team/${b.id}/role" data-confirm="${L(lang, "متأكد؟ الدور هيتغير فورًا.", "Sure? The role changes right away.")}"><input type="hidden" name="role" value="${to}"><button type="submit" class="secondary">${to === "manager" ? L(lang, "⬆️ خليه مدير", "⬆️ Make manager") : L(lang, "⬇️ خليه بروكر", "⬇️ Make broker")}</button></form>`;
+  const choices = ["broker", "manager", "data_entry"].filter((r) => r !== b.role);
+  const options = choices.map((r) => html`<option value="${r}">${L(lang, ROLE_LABEL[r][0], ROLE_LABEL[r][1])}</option>`);
+  return html`<form method="post" action="/app/team/${b.id}/role" class="row" data-confirm="${L(lang, "متأكد؟ الدور هيتغير فورًا.", "Sure? The role changes right away.")}"><label>${L(lang, "غيّر الدور", "Change role")} <select name="role">${options}</select></label><button type="submit" class="secondary">${L(lang, "احفظ الدور", "Save role")}</button></form>`;
 }
 
 function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
@@ -167,7 +169,7 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
   </dl>
   <div class="row m-actions">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
   ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/${b.id}/reactivate"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Reactivate")}</button></form><form method="post" action="/app/team/${b.id}/delete" data-confirm="${L(lang, "مسح نهائي ومينفعش يتراجع. متأكد؟", "Delete for good? This cannot be undone.")}"><button type="submit" class="secondary danger">🗑️ ${L(lang, "مسح نهائي", "Delete for good")}</button></form>`}</div>
-  ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager"].includes(b.role) ? roleForm(b, lang) : ""}
+  ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager", "data_entry"].includes(b.role) ? roleForm(b, lang) : ""}
   ${b.is_active && b.id !== viewer?.id && MANAGER_ROLES.includes(String(viewer?.role || "").toLowerCase()) ? teamLeadForm(b, lang, teamLeads) : ""}
   ${memberTools(b, lang, today)}
 </li>`;
@@ -298,7 +300,7 @@ function register(web, { pool, page }) {
     const r = await Team.changeRole(pool, owner, req.params.id, String(req.body.role || ""));
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
     logOperation(pool, { agency_id: owner.agency_id, broker_id: owner.id, operation_type: "team_role_change", metadata: { broker_id: r.broker.id, from: r.from, to: r.to } });
-    const notice = html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} بقى ${r.to === "manager" ? "مدير" : "بروكر"}.`, `${r.broker.name} is now a ${r.to}.`)}</p>`;
+    const notice = html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} بقى ${ROLE_LABEL[r.to][0]}.`, `${r.broker.name} is now: ${ROLE_LABEL[r.to][1]}.`)}</p>`;
     return render(req, res, { notice });
   });
 
