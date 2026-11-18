@@ -701,6 +701,48 @@
   }
   // A plain POST form is locked by busy.js (the one busy rule: the tapped button spins, every other control is disabled); this file no
   // longer locks the same form a second way. What stays below: the tap lock for pages that handle their own form, and button links.
+  // Back after a save goes to the page before the form, not to the used form (QA round 3, step 6). A form page that was
+  // submitted and then left (the save moved on to another page) is marked "used"; landing on it again with Back steps back
+  // once more. A form that came back with an error (same page) is not marked. Telegram's webview may ignore history.back(),
+  // so the page's own ← Back link is the fallback. sessionStorage can be missing or blocked: then Back works as before.
+  (function () {
+    var FORM_PAGE = /^\/app\/(add|units\/new|units\/[^/]+\/edit|leads\/new|deals\/new|catalogue\/projects\/new|catalogue\/projects\/[^/]+\/edit|owner\/library\/[^/]+\/edit)\/?$/;
+    var store = null;
+    try { store = window.sessionStorage; store.getItem("x"); } catch (e) { store = null; }
+    if (!store) return;
+    var get = function (k) { try { return JSON.parse(store.getItem(k) || "null"); } catch (e) { return null; } };
+    var set = function (k, v) { try { if (v === null) store.removeItem(k); else store.setItem(k, JSON.stringify(v)); } catch (e) { /* full or blocked */ } };
+    document.addEventListener("submit", function (e) {
+      var f = e.target;
+      if (!f || String(f.method || "").toLowerCase() !== "post" || !FORM_PAGE.test(location.pathname)) return;
+      set("wh-form-pending", { path: location.pathname, at: Date.now() });
+    }, true);
+    window.addEventListener("pageshow", function () {
+      var here = location.pathname;
+      var pending = get("wh-form-pending");
+      if (pending) {
+        set("wh-form-pending", null);
+        if (pending.path !== here && Date.now() - pending.at < 30 * 60 * 1000) {
+          var used = get("wh-form-used") || {};
+          used[pending.path] = Date.now();
+          set("wh-form-used", used);
+        }
+      }
+      // The result page: drop ?saved=1 so a reload does not say "Saved" again.
+      if (/[?&]saved=1\b/.test(location.search) && history.replaceState) history.replaceState(history.state, "", location.pathname + location.search.replace(/([?&])saved=1(&|$)/, "$1").replace(/[?&]$/, "") + location.hash);
+      if (!FORM_PAGE.test(here)) return;
+      var marks = get("wh-form-used") || {};
+      if (!marks[here] || Date.now() - marks[here] > 60 * 60 * 1000) return;
+      delete marks[here];
+      set("wh-form-used", marks);
+      var back = document.querySelector("a[data-back]");
+      var fallback = back && back.href ? back.href : "/app/";
+      if (history.length > 1) {
+        history.back();
+        setTimeout(function () { if (location.pathname === here) location.replace(fallback); }, 400);
+      } else location.replace(fallback);
+    });
+  })();
   window.addEventListener("pageshow", function () {
     unlock();
     var lk = document.querySelectorAll("a.btn.busy, a.btn.is-disabled");
