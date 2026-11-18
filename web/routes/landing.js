@@ -1,6 +1,7 @@
 // web/routes/landing.js — The public landing page at / (phase 2 step 3), Arabic or English (?lang=en): what WehdatHub
-// does, the plans, "Open in Telegram", and a "Try it with your agency" form (honeypot, rate limit, same-origin) that is
-// kept in demo_requests and alerts the owner. Colours come from the brand tokens (domain/brand.js).
+// does, the plans, "Open in Telegram", the self-serve trial (Track A: /app/signup) and a "Book a Live Demo / Contact Sales"
+// form for offices of 15+ seats (Track B; honeypot, rate limit, same-origin) kept in demo_requests (kind 'demo') that
+// alerts the owner. Colours come from the brand tokens (domain/brand.js).
 "use strict";
 
 const express = require("express");
@@ -32,36 +33,49 @@ const FEATURES = [
 const ERRORS = {
   name: ["اكتب اسمك.", "Enter your name."],
   phone: ["اكتب رقم موبايل صحيح.", "Enter a valid mobile number."],
+  agency: ["اكتب اسم الشركة.", "Enter the agency name."],
+  team: ["اكتب عدد البروكرز (رقم).", "Enter the number of brokers (a number)."],
   rate: ["طلبات كتير؛ جرب بعد شوية.", "Too many requests; try again later."]
 };
 
 function tryForm(lang, { error, values = {}, sent }) {
   if (sent) {
-    return html`<section class="card notice ok" id="try" role="status"><h2>✅ ${T(lang, "وصلنا طلبك", "We got your request")}</h2><p>${T(lang, "هنكلمك خلال يوم عمل.", "We'll call you within one working day.")}</p></section>`;
+    return html`<section class="card notice ok" id="try" role="status"><h2>✅ ${T(lang, "وصلنا طلبك", "We got your request")}</h2><p>${T(lang, "فريق المبيعات هيكلمك خلال يوم عمل.", "Our sales team will call you within one working day.")}</p></section>`;
   }
   return html`<form method="post" action="/try?lang=${lang}#try" class="card stack" id="try">
-  <h2>🤝 ${T(lang, "جرّبه مع شركتك", "Try it with your agency")}</h2>
+  <h2>📅 ${T(lang, "احجز عرض مباشر / كلّم المبيعات", "Book a Live Demo / Contact Sales")}</h2>
+  <p class="muted">${T(lang, "للمكاتب (١٥ بروكر أو أكتر): سيب بياناتك وهنعمل لك عرض مباشر لفريقك، وبعده تجربة موجّهة ١٤ يوم لكل الفريق.", "For offices (15+ seats): leave your details and we'll run a live demo for your team, then a guided 14-day pilot for everyone.")}</p>
+  <p class="muted">${T(lang, `فرد أو فريق صغير؟ ابدأ تجربتك المجانية بنفسك: ${num(Plans.TRIAL.days, lang)} يوم، من غير كارت.`, `A solo broker or a small team? Start your own free trial: ${Plans.TRIAL.days} days, no card.`)} <a href="/app/signup?lang=${lang}">${T(lang, "ابدأ التجربة", "Start the trial")}</a></p>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}</p>` : ""}
   <label>${T(lang, "اسمك", "Your name")} <input name="name" required maxlength="80" autocomplete="name" value="${values.name || ""}"></label>
-  <label>${T(lang, "اسم الشركة", "Agency name")} <input name="agency" maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
+  <label>${T(lang, "اسم الشركة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
   <div class="grid two"><label>${T(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" autocomplete="tel" dir="ltr" maxlength="20" value="${values.phone || ""}"></label>
-  <label>${T(lang, "عدد البروكرز", "Number of brokers")} <input name="team" type="number" min="1" max="1000" inputmode="numeric" value="${values.team || ""}"></label></div>
+  <label>${T(lang, "عدد البروكرز", "Team size")} <input name="team" type="number" required min="1" max="1000" inputmode="numeric" value="${values.team || ""}"></label></div>
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
-  <p class="muted">${T(lang, "بنستخدم الرقم بس عشان نكلمك بخصوص التجربة.", "We use the number only to call you about the trial.")}</p>
-  <button type="submit">${T(lang, "اطلب تجربة", "Request a trial")}</button>
+  <p class="muted">${T(lang, "بنستخدم الرقم بس عشان نكلمك بخصوص العرض.", "We use the number only to call you about the demo.")}</p>
+  <button type="submit">${T(lang, "احجز العرض", "Book a live demo")}</button>
 </form>`;
 }
 
+/** A plan card's price: the monthly price when the plan has one, otherwise its cheapest period (Agency is sold for 6 or 12 months). */
+function landingPrice(p, lang) {
+  const months = Plans.periodsOf(p);
+  if (!months.length) return "";
+  const m = months[0];
+  const price = Plans.priceFor(p, m);
+  const per = m === 1 ? T(lang, "شهر", "mo") : T(lang, `${num(m, lang)} شهور`, `${m} months`);
+  return html`<div class="price">${num(price, lang)} ${T(lang, "ج.م", "EGP")} <small>/ ${per}</small></div>`;
+}
+
 function landingBody(lang, { telegramUrl, form, logo, signupOpen, actions = [] }) {
-  const trial = Plans.TRIAL.plan || "office";
   return html`<section class="hero lp-hero">
   <img class="hero-logo" src="${logo}" alt="" width="64" height="64">
   <h1>${T(lang, "وحداتك وعملاءك في مكان واحد", "Your units and clients in one place")}</h1>
   <p class="lead">${T(lang, "على تيليجرام والموقع. ابعت فويس، البوت يضيف الوحدة ويلاقي لعميلك المناسب. معمول للبروكرز والشركات العقارية في مصر.", "On Telegram and the web. Send a voice note; the bot adds the unit and finds what fits your client. Built for real estate brokers and agencies in Egypt.")}</p>
   <div class="lp-cta">
     ${telegramUrl ? html`<a class="btn" href="${telegramUrl}" rel="noopener">✈️ ${T(lang, "افتح في تيليجرام", "Open in Telegram")}</a>` : ""}
-    ${signupOpen ? html`<a class="btn${telegramUrl ? " secondary" : ""}" href="/app/signup?lang=${lang}">🏢 ${T(lang, "سجّل شركتك", "Sign up your agency")}</a>` : ""}
-    <a class="btn${telegramUrl || signupOpen ? " secondary" : ""}" href="#try">🤝 ${T(lang, "جرّبه مع شركتك", "Try it with your agency")}</a>
+    ${signupOpen ? html`<a class="btn${telegramUrl ? " secondary" : ""}" href="/app/signup?lang=${lang}">🏢 ${T(lang, "ابدأ تجربتك المجانية", "Start your free trial")}</a>` : ""}
+    <a class="btn${telegramUrl || signupOpen ? " secondary" : ""}" href="#try">📅 ${T(lang, "احجز عرض مباشر", "Book a live demo")}</a>
   </div>
   <p class="lp-trust">${T(lang, `${num(Plans.TRIAL.days, lang)} يوم ببلاش · من غير كارت · بياناتك مش بتتمسح`, `${Plans.TRIAL.days} days free · no card · your data is never deleted`)}</p>
 </section>
@@ -73,15 +87,21 @@ function landingBody(lang, { telegramUrl, form, logo, signupOpen, actions = [] }
 <section id="plans" class="lp-plans">
   <h2>${T(lang, "الباقات (شهري)", "Plans (monthly)")}</h2>
   <div class="lp-plan-row">${Plans.PLANS.map(
-    (p) => html`<div class="lp-plan${p.id === trial ? " on" : ""}" data-plan="${p.id}">${p.id === trial ? html`<span class="chip">${T(lang, "التجربة عليها", "Trial plan")}</span>` : ""}<strong>${Plans.planName(p, lang)}</strong>
-    <div class="price">${num(p.priceEgp, lang)} ${T(lang, "ج.م", "EGP")}</div>
+    (p) => html`<div class="lp-plan" data-plan="${p.id}"><strong>${Plans.planName(p, lang)}</strong>
+    ${landingPrice(p, lang)}
     <ul><li>${p.seats === 1 ? T(lang, "مستخدم واحد", "1 user") : T(lang, `${num(p.seats, lang)} مستخدمين`, `${p.seats} users`)}</li>
-    <li>${T(lang, `${num(p.credits, lang)} رصيد ذكاء اصطناعي في الشهر`, `${num(p.credits, "en")} AI credits a month`)}</li></ul></div>`
-  )}</div>
+    <li>${T(lang, `${num(p.credits, lang)} رصيد ذكاء اصطناعي في الشهر`, `${num(p.credits, "en")} AI credits a month`)}</li></ul>
+    ${p.seats >= 15
+      ? html`<a class="btn secondary small" href="#try" data-plan-cta="demo">${T(lang, "احجز عرض مباشر", "Book a live demo")}</a>`
+      : html`<a class="btn secondary small" href="${signupOpen ? `/app/signup?lang=${lang}` : "#try"}" data-plan-cta="trial">${T(lang, "ابدأ التجربة", "Start trial")}</a>`}</div>`
+  )}<div class="lp-plan" data-plan="enterprise"><strong>${T(lang, "إنتربرايز", "Enterprise")}</strong>
+    <div class="price">${T(lang, "٥٠+ مستخدم", "50+ seats")}</div>
+    <ul><li>${T(lang, "سعر خاص ودعم مخصص", "Custom pricing and dedicated support")}</li></ul>
+    <a class="btn secondary small" href="#try" data-plan-cta="sales">${T(lang, "كلّم المبيعات", "Contact Sales")}</a></div></div>
   <p class="muted small">${T(
     lang,
-    `أول ${num(Plans.TRIAL.days, lang)} يوم مجاناً على باقة المكتب. رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. بياناتك مش بتتمسح أبداً.`,
-    `The first ${Plans.TRIAL.days} days are free on the Office plan. Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Your data is never deleted.`
+    `أول ${num(Plans.TRIAL.days, lang)} يوم تجربة مجانية (مستخدم واحد، ${num(Plans.TRIAL.units, lang)} وحدة، ${num(Plans.TRIAL.credits, lang)} رصيد ذكاء اصطناعي)، من غير كارت. رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. سولو وفريق: ابدأ بنفسك. المكاتب (١٥ مستخدم فأكتر) والإنتربرايز (٥٠+): احجز عرض مباشر. بياناتك مش بتتمسح أبداً.`,
+    `The first ${Plans.TRIAL.days} days are a free trial (1 user, ${Plans.TRIAL.units} units, ${Plans.TRIAL.credits} AI credits), no card. Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Solo and Team: start on your own. Offices (15+ seats) and Enterprise (50+): book a live demo. Your data is never deleted.`
   )}</p>
 </section>
 ${creditTable(actions, lang)}
@@ -136,17 +156,19 @@ ${landingBody(lang, { telegramUrl, form: tryForm(lang, form), logo: assets.url(B
     const done = () => res.redirect(303, `/?lang=${lang}&sent=1#try`);
     if (body.website) return done();
     if (!values.name) return render(req, res, lang, { error: "name", values }, 400);
+    if (!values.agency) return render(req, res, lang, { error: "agency", values }, 400);
     const e164 = Phone.toE164(values.phone);
     if (!e164) return render(req, res, lang, { error: "phone", values }, 400);
+    if (!/^\d{1,4}$/.test(values.team) || Number(values.team) < 1 || Number(values.team) > 1000) return render(req, res, lang, { error: "team", values }, 400);
     const gate = await RateLimit.hit(pool, `try:ip:${req.ip}`, TRY_IP);
     if (!gate.allowed) return render(req, res, lang, { error: "rate", values }, 429);
     const team = /^\d{1,4}$/.test(values.team) && Number(values.team) >= 1 && Number(values.team) <= 1000 ? Number(values.team) : null;
     const { rows } = await pool.query(
-      "INSERT INTO demo_requests (name, agency_name, phone_e164, team_size, lang) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-      [values.name, values.agency || null, e164, team, lang]
+      "INSERT INTO demo_requests (name, agency_name, phone_e164, team_size, lang, kind) VALUES ($1, $2, $3, $4, $5, 'demo') RETURNING id",
+      [values.name, values.agency, e164, team, lang]
     );
     ErrorReports.alertOwner(
-      [`🤝 Trial request #T${rows[0].id}`, `${values.name}${values.agency ? ` · ${values.agency}` : ""}`, `📞 ${e164}`, team ? `👥 ${team} brokers` : ""].filter(Boolean).join("\n")
+      [`📅 Demo request #D${rows[0].id}`, `${values.name} · ${values.agency}`, `📞 ${e164}`, `👥 ${team} brokers`].filter(Boolean).join("\n")
     ).catch(() => {});
     return done();
   });

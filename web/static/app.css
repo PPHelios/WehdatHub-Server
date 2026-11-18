@@ -475,6 +475,10 @@ details.sheet { padding-block: 4px; }
 .plancards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .plancard { position: relative; display: grid; gap: 4px; padding: 16px; border-radius: 18px; border: 2px solid var(--line); background: var(--card); cursor: pointer; font-weight: 400; }
 .plancard input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+fieldset.plancard { margin: 0; min-width: 0; cursor: default; }
+fieldset.plancard legend { padding: 0 6px; }
+fieldset.plancard .period { display: block; padding: 4px 0; cursor: pointer; }
+fieldset.plancard .period input { position: static; opacity: 1; inset: auto; margin-inline-end: 6px; cursor: pointer; }
 .plancard strong { font-size: 1.1rem; }
 .plancard .price { font-size: 1.6rem; font-weight: 800; color: var(--brand); }
 .plancard .price small { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
@@ -532,7 +536,9 @@ details.sheet { padding-block: 4px; }
 .lp-plan .price { font-size: 1.8rem; font-weight: 800; color: var(--brand); margin: 4px 0 8px; }
 .lp-plan ul { margin: 0; padding-inline-start: 18px; }
 .lp-foot { display: flex; gap: 16px; justify-content: center; padding: 18px 0 28px; color: var(--muted); font-size: .9rem; }
-@media (min-width: 720px) { .lp-plan-row { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); } .lp-cta { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); max-width: 640px; } }
+.lp-plan .price small { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.lp-plan .btn { margin-top: 10px; }
+@media (min-width: 720px) { .lp-plan-row { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); } .lp-cta { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); max-width: 640px; } }
 
 /* Sign in and sign up */
 .auth { max-width: 440px; margin: 16px auto; padding: 22px 18px; }
@@ -1219,3 +1225,8 @@ progress.pbar::-moz-progress-bar { background: var(--brand); border-radius: 999p
 [data-word-form] > .row select, [data-word-form] > .row input:not([type=hidden]) { min-height: var(--btn-md, 44px); margin: 0; box-sizing: border-box; }
 [data-word-form] > .row > button { min-height: var(--btn-md, 44px); margin: 0; }
 [data-batch] .row > button { min-height: var(--btn-md, 44px); margin: 0; }
+
+/* Plan ended (grace, read-only, blocked): one banner on every private page (lib/planGuard.js). */
+.plan-banner { padding: 10px 16px; font-weight: 600; text-align: center; background: var(--warn-soft); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+.plan-banner.plan-readonly, .plan-banner.plan-blocked { background: var(--bad-soft); color: var(--bad-ink); border-bottom-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+.plan-banner a { margin-inline-start: 8px; text-decoration: underline; }

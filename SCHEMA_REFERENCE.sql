@@ -25,6 +25,8 @@ CREATE SEQUENCE IF NOT EXISTS public.payments_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.price_read_log_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.push_subscriptions_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.share_link_opens_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.trial_claims_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.trial_signups_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_access_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_owner_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_reference_id_seq;
@@ -400,7 +402,12 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   owner_code_next integer DEFAULT 1 NOT NULL,
   ai_usage_mode text DEFAULT 'pool'::text NOT NULL,
   ai_user_default_credits integer,
-  manager_can_edit_ai_settings boolean DEFAULT false NOT NULL
+  manager_can_edit_ai_settings boolean DEFAULT false NOT NULL,
+  grace_extra_until timestamp with time zone,
+  locked_prices jsonb,
+  lock_until timestamp with time zone,
+  founding_partner boolean DEFAULT false NOT NULL,
+  extra_seats smallint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -916,7 +923,9 @@ CREATE TABLE IF NOT EXISTS public.demo_requests (
   phone_e164 text NOT NULL,
   team_size integer,
   lang text,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  kind text DEFAULT 'trial'::text NOT NULL,
+  pilot_agency_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.app_settings (
@@ -937,7 +946,9 @@ CREATE TABLE IF NOT EXISTS public.payments (
   requested_by uuid,
   confirmed_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  bundle_id text
+  bundle_id text,
+  seats smallint,
+  detail jsonb
 );
 
 CREATE TABLE IF NOT EXISTS public.viewings (
@@ -1290,7 +1301,8 @@ CREATE TABLE IF NOT EXISTS public.credit_plans (
   credits integer NOT NULL,
   sort integer DEFAULT 0 NOT NULL,
   active boolean DEFAULT true NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  prices jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.credit_bundles (
@@ -1830,6 +1842,30 @@ CREATE TABLE IF NOT EXISTS public.search_actions (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.trial_claims (
+  id bigint DEFAULT nextval('trial_claims_id_seq'::regclass) NOT NULL,
+  phone_e164 text NOT NULL,
+  telegram_id bigint NOT NULL,
+  agency_id uuid,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.trial_signups (
+  id bigint DEFAULT nextval('trial_signups_id_seq'::regclass) NOT NULL,
+  token_hash text NOT NULL,
+  phone_e164 text NOT NULL,
+  agency_name text NOT NULL,
+  owner_name text NOT NULL,
+  lang text DEFAULT 'ar'::text NOT NULL,
+  referred_by uuid,
+  telegram_id bigint,
+  chat_id bigint,
+  attempts smallint DEFAULT 0 NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1911,6 +1947,8 @@ ALTER TABLE share_link_opens ADD CONSTRAINT share_link_opens_pkey PRIMARY KEY (i
 ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMARY KEY (token_hash);
+ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_pkey PRIMARY KEY (id);
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_pkey PRIMARY KEY (id);
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
@@ -1944,6 +1982,9 @@ ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, na
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
 ALTER TABLE search_aliases ADD CONSTRAINT search_aliases_term_target_key UNIQUE (term, target);
 ALTER TABLE search_reports ADD CONSTRAINT search_reports_search_log_id_broker_id_key UNIQUE (search_log_id, broker_id);
+ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_phone_key UNIQUE (phone_e164);
+ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_telegram_key UNIQUE (telegram_id);
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_token_hash_key UNIQUE (token_hash);
 ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp >= 0));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric));
@@ -1954,6 +1995,7 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_ai_usage_mode_check CHECK ((ai_usag
 ALTER TABLE agencies ADD CONSTRAINT agencies_ai_user_default_credits_check CHECK (((ai_user_default_credits IS NULL) OR (ai_user_default_credits >= 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
+ALTER TABLE agencies ADD CONSTRAINT agencies_extra_seats_check CHECK (((extra_seats >= 0) AND (extra_seats <= 4)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
@@ -2022,6 +2064,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_price_check CHECK ((price > (0)::numeric)
 ALTER TABLE deals ADD CONSTRAINT deals_ref_check CHECK ((ref > 0));
 ALTER TABLE deals ADD CONSTRAINT deals_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'signed'::text, 'paid'::text, 'cancelled'::text])));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_agency_name_check CHECK (((agency_name IS NULL) OR (length(agency_name) <= 120)));
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_kind_check CHECK ((kind = ANY (ARRAY['trial'::text, 'demo'::text])));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_lang_check CHECK (((lang IS NULL) OR (lang = ANY (ARRAY['ar'::text, 'en'::text]))));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_name_check CHECK (((length(name) >= 1) AND (length(name) <= 80)));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_phone_e164_check CHECK ((length(phone_e164) <= 20));
@@ -2100,9 +2143,10 @@ ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_kind_chec
 ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_kind_check CHECK ((kind = ANY (ARRAY['register'::text, 'login'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_amount_egp_check CHECK ((amount_egp > 0));
-ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text) = (plan IS NOT NULL)));
-ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text, 'credit_bundle'::text])));
-ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
+ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text, 'credit_bundle'::text, 'upgrade'::text, 'extra_seats'::text])));
+ALTER TABLE payments ADD CONSTRAINT payments_months_range_check CHECK (((months >= 1) AND (months <= 60)));
+ALTER TABLE payments ADD CONSTRAINT payments_plan_kind_check CHECK (((kind = ANY (ARRAY['plan'::text, 'upgrade'::text])) = (plan IS NOT NULL)));
+ALTER TABLE payments ADD CONSTRAINT payments_seats_check CHECK (((seats IS NULL) OR ((seats >= 1) AND (seats <= 4))));
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
 ALTER TABLE place_names ADD CONSTRAINT place_names_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'merged'::text, 'rejected'::text])));
 ALTER TABLE place_proposals ADD CONSTRAINT place_proposals_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'area'::text])));
@@ -2168,6 +2212,11 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel
 ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_note_length CHECK (((note IS NULL) OR (char_length(note) <= 200)));
 ALTER TABLE share_links ADD CONSTRAINT share_links_source_check CHECK (((source IS NULL) OR (source = ANY (ARRAY['bot'::text, 'web'::text, 'lead'::text]))));
+ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_phone_e164_check CHECK ((length(phone_e164) <= 20));
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_agency_name_check CHECK (((length(agency_name) >= 1) AND (length(agency_name) <= 120)));
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_owner_name_check CHECK (((length(owner_name) >= 1) AND (length(owner_name) <= 80)));
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_phone_e164_check CHECK ((length(phone_e164) <= 20));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text, 'rename_requested'::text, 'rename_approved'::text, 'rename_rejected'::text])));
 ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_key_check CHECK (((length(key) >= 8) AND (length(key) <= 64)));
@@ -2216,6 +2265,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_closing_broker_id_fkey FOREIGN KEY (closi
 ALTER TABLE deals ADD CONSTRAINT deals_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE deals ADD CONSTRAINT deals_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
 ALTER TABLE deals ADD CONSTRAINT deals_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pilot_agency_id_fkey FOREIGN KEY (pilot_agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE developers ADD CONSTRAINT developers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE developers ADD CONSTRAINT developers_global_id_fkey FOREIGN KEY (global_id) REFERENCES global_developers(id) ON DELETE SET NULL;
 ALTER TABLE device_tokens ADD CONSTRAINT device_tokens_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -2342,6 +2392,8 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_lead_id_fkey FOREIGN KEY (lea
 ALTER TABLE share_links ADD CONSTRAINT share_links_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2514,6 +2566,7 @@ CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WH
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);
 CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USING btree (broker_id);
+CREATE INDEX trial_signups_telegram_idx ON public.trial_signups USING btree (telegram_id) WHERE (used_at IS NULL);
 CREATE INDEX unit_access_requests_listing ON public.unit_access_requests USING btree (agency_id, listing_id, broker_id, created_at DESC);
 CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (owner_id, created_at DESC, id DESC);
 CREATE INDEX unit_owners_agency ON public.unit_owners USING btree (agency_id, created_at DESC);

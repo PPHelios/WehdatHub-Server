@@ -11,6 +11,7 @@ const PortalEnquiries = require("../services/portalEnquiries");
 const PortalParse = require("../domain/portalEnquiry");
 const PortalPicker = require("../services/portalPicker");
 const Authz = require("../lib/authz");
+const PlanGuard = require("../lib/planGuard");
 const DealsWA = require("../lib/deals");
 const { reply, replyButtons, replyForClient, setTurnNote } = require("../lib/dispatcher");
 const { handleCommand } = require("./commands");
@@ -66,9 +67,24 @@ async function logServerOp(
 }
 
 /**
- * Central Inbound Message Dispatcher
+ * Central Inbound Message Dispatcher. The plan gate (lib/planGuard.js) comes first: after the plan period ended, read-only and
+ * blocked agencies get the payment link (or "ask your manager") for anything but the read-only commands; in grace the answer is
+ * followed by one reminder line a day.
  */
 async function dispatchMessage(broker, message, ctx) {
+  const gate = await PlanGuard.bot(ctx.pool, broker, message, ctx.lang, {
+    canonical: message.type === "text" ? canonicalCommand(message.text?.body?.trim() || "") : ""
+  }).catch(() => null);
+  if (gate?.block) {
+    await reply(broker, gate.block);
+    return "done";
+  }
+  const out = await routeMessage(broker, message, ctx);
+  if (gate?.note) await reply(broker, gate.note).catch(() => {});
+  return out;
+}
+
+async function routeMessage(broker, message, ctx) {
   const { lang, pool: poolInstance } = ctx;
 
   // P11: photos get no message of their own; the next reply in the draft counts them.

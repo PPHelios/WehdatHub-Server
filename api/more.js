@@ -146,7 +146,7 @@ function register(api, { pool }) {
     const [allowance, payTo, limits] = await Promise.all([Billing.allowance(pool, b.agency_id), Billing.payTo(pool), Billing.planLimits(pool)]);
     const manager = isManager(b);
     const [payments, requests, referral] = manager ? await Promise.all([Billing.paymentsOf(pool, b.agency_id), Credits.requestsOf(pool, b.agency_id), Referrals.summary(pool, b.agency_id)]) : [[], [], null];
-    res.json({ allowance, payTo, limits, payments, requests, referral, canPay: isAgencyOwner(b) });
+    res.json({ allowance: Billing.publicAllowance(allowance), payTo, limits, payments: payments.map(Billing.publicPayment), requests, referral, canPay: isAgencyOwner(b) });
   });
 
   api.post("/plan/credit-request", agencyOwner, async (req, res) => {
@@ -156,14 +156,14 @@ function register(api, { pool }) {
 
   api.post("/plan/pay", agencyOwner, async (req, res) => {
     const r = await Billing.requestPayment(pool, req.session.broker, { kind: req.body?.kind, plan: req.body?.plan, months: req.body?.months, bundle: req.body?.bundle });
-    return r.error ? fail(res, r) : res.json({ ok: true, payment: r.payment });
+    return r.error ? fail(res, r) : res.json({ ok: true, payment: Billing.publicPayment(r.payment) });
   });
 
   api.get("/usage", async (req, res) => {
     const b = req.session.broker;
     const allowance = await Billing.allowance(pool, b.agency_id);
     const ai = await require("../services/aiUserLimits").overview(pool, b);
-    res.json({ allowance, ai });
+    res.json({ allowance: Billing.publicAllowance(allowance), ai });
   });
 
   // Platform (the app owner's pages)

@@ -19,14 +19,14 @@ async function planningRate(db) {
 /** Every plan row, cheapest first (inactive plans are kept for old agencies but not offered). */
 async function plans(db, { onlyActive = false } = {}) {
   const { rows } = await db.query(
-    `SELECT id, name_ar, name_en, price_egp, seats, units, credits, sort, active FROM credit_plans
+    `SELECT id, name_ar, name_en, price_egp, seats, units, credits, sort, active, prices FROM credit_plans
      ${onlyActive ? "WHERE active" : ""} ORDER BY sort, price_egp`
   );
   return rows;
 }
 
 async function planById(db, id) {
-  const { rows } = await db.query("SELECT id, name_ar, name_en, price_egp, seats, units, credits, sort, active FROM credit_plans WHERE id = $1", [id]);
+  const { rows } = await db.query("SELECT id, name_ar, name_en, price_egp, seats, units, credits, sort, active, prices FROM credit_plans WHERE id = $1", [id]);
   return rows[0] || null;
 }
 
@@ -64,8 +64,11 @@ async function actionMap(db) {
  * flyer credits, and each fresh document page is the page credits (the AI call behind a page is not charged twice;
  * a page another agency already read is free). With brokerId, only that person's use (their own allowance, services/aiUserLimits.js).
  */
-async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null } = {}) {
+async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null, since = null, until = null } = {}) {
   const c = await actionMap(db);
+  // since / until bound the count by instants instead of the Cairo month of `now` (a trial's whole allowance, a grace period, the last paid month up to paid_until).
+  const from = `COALESCE($9::timestamptz, ${MONTH_START})`;
+  const to = "AND ($10::timestamptz IS NULL OR created_at < $10::timestamptz)";
   const { rows } = await db.query(
     `SELECT
        (SELECT COALESCE(sum(CASE
@@ -76,10 +79,10 @@ async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null }
             WHEN operation_type = 'assistant' THEN $6
             ELSE $4 END), 0)::int
           FROM operation_logs
-         WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START} AND ($8::uuid IS NULL OR broker_id = $8::uuid)) AS ai,
+         WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${from} ${to} AND ($8::uuid IS NULL OR broker_id = $8::uuid)) AS ai,
        (SELECT count(*)::int FROM price_read_log
-         WHERE agency_id = $1 AND created_at >= ${MONTH_START} AND ($8::uuid IS NULL OR broker_id = $8::uuid)) AS pages`,
-    [agencyId, now.toISOString(), c.voice ?? 0, c.text ?? 0, c.flyer ?? 0, c.assistant ?? 0, PAGE_OPS, brokerId]
+         WHERE agency_id = $1 AND created_at >= ${from} ${to} AND ($8::uuid IS NULL OR broker_id = $8::uuid)) AS pages`,
+    [agencyId, now.toISOString(), c.voice ?? 0, c.text ?? 0, c.flyer ?? 0, c.assistant ?? 0, PAGE_OPS, brokerId, since ? new Date(since).toISOString() : null, until ? new Date(until).toISOString() : null]
   );
   return rows[0].ai + rows[0].pages * (c.page ?? 0);
 }
@@ -91,7 +94,9 @@ async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null }
  */
 async function poolFor(db, agencyId, planId, { now = new Date() } = {}) {
   const plan = (await planById(db, planId)) || (await planById(db, "free"));
-  const base = plan ? plan.credits : 0;
+  // Each extra seat the platform owner added (agencies.extra_seats) brings its own credits to the monthly pool.
+  const { rows: ex } = await db.query("SELECT extra_seats FROM agencies WHERE id = $1", [agencyId]);
+  const base = (plan ? plan.credits : 0) + Plans.EXTRA_SEAT.credits * Number(ex[0]?.extra_seats || 0);
   const since = new Date(now.getTime() - 30 * 86400000).toISOString();
   const { rows } = await db.query(
     `SELECT COALESCE(sum(b.credits), 0)::int AS credits, min(p.confirmed_at) AS first
@@ -118,6 +123,9 @@ async function requestMore(db, manager, { credits, note = "" } = {}) {
   if (!isAgencyOwner(manager)) return { error: "forbidden" };
   const n = Math.round(Number(credits));
   if (!Number.isFinite(n) || n < 1 || n > 100000) return { error: "credits" };
+  // Extra credits need an active plan: not in grace, read-only or blocked.
+  const Billing = require("./billing");
+  if (Billing.LAPSED.includes(Billing.effectivePlan(await Billing.agencyRow(db, manager.agency_id)).source)) return { error: "lapsed" };
   const { rows: open } = await db.query("SELECT count(*)::int AS n FROM credit_requests WHERE agency_id = $1 AND status = 'pending'", [manager.agency_id]);
   if (open[0].n >= 3) return { error: "too_many" };
   const { rows } = await db.query(
@@ -199,9 +207,26 @@ async function ownerOverview(db) {
     db.query("SELECT id, name FROM agencies ORDER BY name").then((r) => r.rows)
   ]);
   const costOf = (credits) => credits * costUsd * fx;
+  const graceAiPct = Number(await require("./billing").getSetting(db, "grace_ai_pct", 15));
   const withMargin = (x) => ({ ...x, cost_egp: Math.round(costOf(x.credits)), margin: marginOf({ priceEgp: x.price_egp, cost: costOf(x.credits) }) });
-  return { plans: pl.map(withMargin), bundles: bundleRows.map(withMargin), actions: acts, fx, costUsd, requests, agencies };
+  return { plans: pl.map(withMargin), bundles: bundleRows.map(withMargin), actions: acts, fx, costUsd, requests, agencies, graceAiPct: Number.isFinite(graceAiPct) ? graceAiPct : 15 };
 }
+
+/** The per-period price table as typed: "1:199, 6:1075, 12:1990" (also "1=199" and new lines) → { "1": 199, ... }; null when a pair is invalid. An empty text is {} (not sold). */
+function parsePrices(v) {
+  const out = {};
+  for (const part of String(v ?? "").split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean)) {
+    const m = part.match(/^(\d{1,2})\s*[:=]\s*(\d{1,7})$/);
+    if (!m) return null;
+    const months = Number(m[1]);
+    const price = Number(m[2]);
+    if (months < 1 || months > 36 || price < 1) return null;
+    out[months] = price;
+  }
+  return out;
+}
+/** The table as the form shows it. */
+const pricesText = (prices) => Object.entries(prices || {}).sort((a, b) => a[0] - b[0]).map(([m, n]) => `${m}:${n}`).join(", ");
 
 /** Saves the plans form (p_<id>_<field>) and an optional new plan (new_*): { ok } | { error }. */
 async function savePlans(db, body = {}) {
@@ -213,10 +238,12 @@ async function savePlans(db, body = {}) {
     const credits = intIn(k("credits"), 0, 10000000);
     const name_ar = text(k("name_ar"));
     const name_en = text(k("name_en"));
-    if ([price, seats, units, credits].includes(null) || !name_ar || !name_en) return { error: "plan", id: p.id };
+    // The period prices: a form without the field keeps the table; the field present (even empty) replaces it. Free and trial are never sold.
+    const prices = k("prices") === undefined ? undefined : p.id === "free" || p.id === "trial" ? {} : parsePrices(k("prices"));
+    if ([price, seats, units, credits].includes(null) || !name_ar || !name_en || prices === null) return { error: "plan", id: p.id };
     await db.query(
-      "UPDATE credit_plans SET name_ar = $2, name_en = $3, price_egp = $4, seats = $5, units = $6, credits = $7, active = $8, updated_at = NOW() WHERE id = $1",
-      [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : k("active") === "on"]
+      "UPDATE credit_plans SET name_ar = $2, name_en = $3, price_egp = $4, seats = $5, units = $6, credits = $7, active = $8, prices = COALESCE($9::jsonb, prices), updated_at = NOW() WHERE id = $1",
+      [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : p.id === "trial" ? false : k("active") === "on", prices === undefined ? null : JSON.stringify(prices)]
     );
   }
   if (text(body.new_id)) {
@@ -227,12 +254,13 @@ async function savePlans(db, body = {}) {
     const credits = intIn(body.new_credits, 0, 10000000);
     const name_ar = text(body.new_name_ar);
     const name_en = text(body.new_name_en);
-    if (!ID_RE.test(id) || [price, seats, units, credits].includes(null) || !name_ar || !name_en) return { error: "new_plan" };
+    const newPrices = parsePrices(body.new_prices);
+    if (!ID_RE.test(id) || [price, seats, units, credits].includes(null) || !name_ar || !name_en || newPrices === null) return { error: "new_plan" };
     const { rows: taken } = await db.query("SELECT 1 FROM credit_plans WHERE id = $1", [id]);
     if (taken.length) return { error: "new_plan" };
     await db.query(
-      "INSERT INTO credit_plans (id, name_ar, name_en, price_egp, seats, units, credits, sort) VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_plans))",
-      [id, name_ar, name_en, price, seats, units, credits]
+      "INSERT INTO credit_plans (id, name_ar, name_en, price_egp, seats, units, credits, sort, prices) VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_plans), $8::jsonb)",
+      [id, name_ar, name_en, price, seats, units, credits, JSON.stringify(newPrices)]
     );
   }
   await refresh(db);
@@ -312,4 +340,4 @@ function marginOf({ priceEgp, cost }) {
   return priceEgp > 0 ? Math.round((1 - cost / priceEgp) * 100) : null;
 }
 
-module.exports = { costOf, ownerOverview, savePlans, saveBundles, saveActionsAndRates, COST_KEY, COST_DEFAULT, requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };
+module.exports = { parsePrices, pricesText, costOf, ownerOverview, savePlans, saveBundles, saveActionsAndRates, COST_KEY, COST_DEFAULT, requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };

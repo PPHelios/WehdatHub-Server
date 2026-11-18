@@ -49,7 +49,7 @@ function mountWeb(app, { pool, config }) {
     return res
       .status(status)
       .type("html")
-      .send(solo(s, lang, withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, aiOff: s?.aiOff || [], path: String(req.originalUrl || ""), ...opts, lang }), s?.csrf)));
+      .send(solo(s, lang, withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, aiOff: s?.aiOff || [], planBanner: s?.planBanner || null, path: String(req.originalUrl || ""), ...opts, lang }), s?.csrf)));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);
@@ -136,6 +136,8 @@ function mountWeb(app, { pool, config }) {
     if (req.method !== "GET" && !TestRole.viewPostAllowed(req.method, req.path)) return res.status(403).type("text/plain").send("Read only while viewing another agency");
     return ViewGuard.runReadOnly(() => next());
   });
+  // After the plan period ended (grace, read-only, blocked): the banner on every page and the write guard (lib/planGuard.js).
+  priv.use(require("../lib/planGuard").web(pool, { page }));
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   priv.use(async (req, _res, next) => {

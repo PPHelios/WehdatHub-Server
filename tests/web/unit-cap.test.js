@@ -1,4 +1,4 @@
-// tests/web/unit-cap.test.js — The plan's cap on available units: archived units count, sold ones don't, a new unit past
+// tests/web/unit-cap.test.js — The plan's cap on units: available, archived and sold units count (deleted don't), a new unit past
 // the cap isn't saved (web form, price-sheet apply, import) and the broker is told to upgrade; the owner edits the caps.
 "use strict";
 
@@ -31,14 +31,17 @@ const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartme
 
 test("defaults per plan, owner overrides, and what counts", async () => {
   expect(Plans.planById("free").units).toBe(50);
-  expect(await Billing.planLimits(h.pool)).toEqual({ solo: 1000, team: 5000, office: 1000000, agency: 1000000, free: 50 });
+  expect(await Billing.planLimits(h.pool)).toEqual({ solo: 1000, team: 5000, office: 1000000, agency: 1000000, free: 50, trial: 50 });
   await setCap("office", 2);
   await h.insertListing({ code: "CAP-1" });
   await h.insertListing({ code: "CAP-2", status: "sold" });
   await h.insertListing({ code: "CAP-3", status: "archived" });
   const a = await Billing.allowance(h.pool, h.BROKERS.broker.agency_id);
-  expect(a.units).toEqual({ used: 2, limit: 2 });
+  // Sold units count too: available + archived + sold = 3 (a deleted one would not).
+  expect(a.units).toEqual({ used: 3, limit: 2 });
   expect((await Billing.unitCapacity(h.pool, h.BROKERS.broker.agency_id)).ok).toBe(false);
+  await h.insertListing({ code: "CAP-4", status: "deleted" });
+  expect((await Billing.allowance(h.pool, h.BROKERS.broker.agency_id)).units.used).toBe(3);
 });
 
 test("a unit past the cap is refused with the upgrade message; archiving does not make room, deleting does", async () => {
@@ -74,11 +77,73 @@ test("owner edits the caps on /app/owner; the plan page shows the meter", async 
     expect(r.status).toBe(200);
     expect((await Billing.planLimits(h.pool)).solo).toBe(200);
     const plan = await agent.get("/app/usage?lang=en");
-    expect(plan.text).toContain("Units (available and archived)");
+    expect(plan.text).toContain("Units (available, archived and sold)");
     const b = await signIn(h, "broker");
     expect((await b.agent.post("/app/owner/credit-plans").type("form").send({ _csrf: b.csrf })).status).toBe(404);
   } finally {
     delete process.env.OWNER_BROKER_IDS;
     require("../../config").resetConfig();
   }
+});
+
+test("the unit cap message names sold units in both languages", () => {
+  const limit = { used: 50, limit: 50, plan: Plans.planById("free") };
+  expect(Plans.unitLimitText(limit, "en")).toContain("(available, archived and sold)");
+  expect(Plans.unitLimitText(limit, "ar")).toContain("المتاحة والمؤرشفة والمباعة");
+});
+
+describe("85% soft warning", () => {
+  const BillingNotices = require("../../services/billingNotices");
+  const fill = async (n) => {
+    for (let i = 0; i < n; i++) await h.insertListing({ code: `W-${i}`, status: i % 3 === 0 ? "sold" : "active" });
+  };
+
+  test("unitLevel: 85 from 85% of the cap, 100 at the cap, never for an unlimited plan", () => {
+    expect(Billing.unitLevel({ used: 83, limit: 100 })).toBeNull();
+    expect(Billing.unitLevel({ used: 85, limit: 100 })).toBe(85);
+    expect(Billing.unitLevel({ used: 99, limit: 100 })).toBe(85);
+    expect(Billing.unitLevel({ used: 100, limit: 100 })).toBe(100);
+    expect(Billing.unitLevel({ used: 999999, limit: Plans.UNLIMITED })).toBeNull();
+  });
+
+  test("the Plan page and the dashboard show a banner from 85%, none below it or on an unlimited plan", async () => {
+    await setCap("office", 10);
+    await fill(8);
+    const { agent } = await signIn(h, "admin");
+    expect((await agent.get("/app/usage?lang=en")).text).not.toContain("data-unit-warning");
+    await h.insertListing({ code: "W-8" });
+    const usage = await agent.get("/app/usage?lang=en");
+    expect(usage.text).toContain('data-unit-warning="85"');
+    expect(usage.text).toContain("Available, archived and sold units all count");
+    expect((await agent.get("/app/dashboard?lang=en")).text).toContain('data-unit-warning="85"');
+    await h.insertListing({ code: "W-9" });
+    expect((await agent.get("/app/usage?lang=en")).text).toContain('data-unit-warning="100"');
+    await setCap("office", Plans.UNLIMITED);
+    expect((await agent.get("/app/usage?lang=en")).text).not.toContain("data-unit-warning");
+    expect((await agent.get("/app/dashboard?lang=en")).text).not.toContain("data-unit-warning");
+  });
+
+  test("owner and managers are told once per level, then again at 100%", async () => {
+    await h.seedBroker("owner");
+    await setCap("office", 10);
+    await fill(9);
+    const agencyId = h.BROKERS.broker.agency_id;
+    const first = await BillingNotices.warnUnits(h.pool);
+    expect(first.sent).toBeGreaterThan(0);
+    expect((await BillingNotices.warnUnits(h.pool)).sent).toBe(first.sent);
+    const rows = async () => await h.query("SELECT broker_id, dedupe_key FROM notifications WHERE dedupe_key LIKE 'units_warn:%' AND agency_id = $1", [agencyId]);
+    const at85 = await rows();
+    expect(new Set(at85.map((r) => r.dedupe_key))).toEqual(new Set(["units_warn:office:85"]));
+    expect(at85.map((r) => r.broker_id)).toContain(h.BROKERS.owner.id);
+    expect(new Set(at85.map((r) => r.broker_id)).size).toBe(at85.length);
+    await h.insertListing({ code: "W-X" });
+    await BillingNotices.warnUnits(h.pool);
+    expect(new Set((await rows()).map((r) => r.dedupe_key))).toEqual(new Set(["units_warn:office:85", "units_warn:office:100"]));
+  });
+
+  test("no notification for an unlimited plan", async () => {
+    await fill(3);
+    await BillingNotices.warnUnits(h.pool);
+    expect(await h.query("SELECT 1 FROM notifications WHERE dedupe_key LIKE 'units_warn:%'")).toEqual([]);
+  });
 });
