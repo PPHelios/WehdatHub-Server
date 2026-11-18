@@ -99,7 +99,7 @@ function marketLine(m, listing, lang) {
 
 /** The lease's buttons: message the tenant or the owner on WhatsApp, and mark the lease handled so the reminders stop. */
 function leaseActions(listing, lease, lang, csrf, contacts) {
-  const wa = (c, ar, en) => (c ? html`<a class="btn secondary" href="https://wa.me/${c.phone}" target="_blank" rel="noopener" data-lease-wa>${icon("chat", 18)} ${L(lang, ar, en)}${c.name ? ` · ${c.name}` : ""}</a>` : "");
+  const wa = (c, ar, en) => (c ? html`<a class="btn secondary btn-wa" href="https://wa.me/${c.phone}" target="_blank" rel="noopener" data-lease-wa>${icon("chat", 18)} ${L(lang, ar, en)}${c.name ? ` · ${c.name}` : ""}</a>` : "");
   const path = `/app/units/${encodeURIComponent(listing.code)}/lease/done`;
   const kinds = [["renewed", "اتجدد", "Renewed"], ["leaving", "المستأجر ماشي", "Tenant leaving"], ["relist", "هنعرضها تاني", "Re-list"]];
   return html`<div class="row actions" data-lease-actions>${wa(contacts.tenant, "واتساب المستأجر", "WhatsApp tenant")}${wa(contacts.owner, "واتساب المالك", "WhatsApp owner")}</div>
@@ -311,7 +311,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   <div class="stack" data-msg-box>
     <label class="stack">${L(lang, "الرسالة (تقدر تعدلها قبل الإرسال)", "The message (edit it before sending)")}<textarea rows="9" data-share-copy data-ar="${copyIn("ar")}" data-en="${copyIn("en")}">${copyIn(fresh.lang)}</textarea></label>
     <label>${L(lang, "لغة الرسالة", "Message language")} <select data-msg-lang><option value="ar"${fresh.lang === "en" ? "" : raw(" selected")}>العربية</option><option value="en"${fresh.lang === "en" ? raw(" selected") : ""}>English</option></select></label>
-    <p><a class="btn" href="${waBase}" data-wa-base="${waBase}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
+    <p><a class="btn btn-wa" href="${waBase}" data-wa-base="${waBase}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
   </div>`
     : ""}
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="stack" data-share-form>

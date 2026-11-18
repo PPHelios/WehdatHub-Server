@@ -2256,6 +2256,46 @@ ol.results { gap: 14px; margin-top: 12px; }
   color: var(--ink);
 }
 
+/* WhatsApp emerald green styling across the web app & on Unit Details matching client link */
+.btn-wa,
+.btn.whatsapp,
+.btn[data-send-whatsapp],
+.btn[data-lease-wa],
+a.btn[href*="wa.me"],
+a.btn[href*="whatsapp"],
+button[data-send-whatsapp] {
+  background: rgba(37, 211, 102, 0.14);
+  color: #0c6b37;
+  border: 1px solid rgba(37, 211, 102, 0.5);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(37, 211, 102, 0.12);
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease), transform 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+:root[data-theme="dark"] .btn-wa,
+:root[data-theme="dark"] .btn.whatsapp,
+:root[data-theme="dark"] .btn[data-send-whatsapp],
+:root[data-theme="dark"] .btn[data-lease-wa],
+:root[data-theme="dark"] a.btn[href*="wa.me"],
+:root[data-theme="dark"] a.btn[href*="whatsapp"],
+:root[data-theme="dark"] button[data-send-whatsapp] {
+  background: rgba(37, 211, 102, 0.2);
+  color: #25d366;
+  border-color: rgba(37, 211, 102, 0.55);
+}
+.btn-wa:hover,
+.btn.whatsapp:hover,
+.btn[data-send-whatsapp]:hover,
+.btn[data-lease-wa]:hover,
+a.btn[href*="wa.me"]:hover,
+a.btn[href*="whatsapp"]:hover,
+button[data-send-whatsapp]:hover {
+  background: #25d366;
+  color: #ffffff;
+  border-color: #25d366;
+  box-shadow: 0 4px 14px rgba(37, 211, 102, 0.38);
+  transform: translateY(-1px);
+}
+
 /* 3. Search & Filter Sheet (web/routes/search.js, web/views/searchForm.js) */
 details.card.sheet {
   padding: 18px 22px;
