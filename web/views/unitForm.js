@@ -120,13 +120,13 @@ function unitBox(v, areas, lang, place, opts = {}) {
 /**
  * @param {Object} p - { values (formFromUnit), mode: "new"|"edit", code, version, images, lang, notice, error, review, duplicate (P13: the save button becomes "Save anyway"), areas, place (the box's place chip) }
  */
-function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null, areas = [], place = null, extraValues = null }) {
+function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null, areas = [], place = null, extraValues = null, showAll = false }) {
   if (extraValues) v = { ...v, ...extraValues };
   // New primary units are not added; a unit that already is primary keeps its primary payment tab.
   const isPrimary = v.market === "primary";
   const action = mode === "edit" ? `/app/units/${encodeURIComponent(code)}/edit` : "/app/units/new";
-  // A new unit is added in 4 steps (app.js shows one at a time); editing, an error or a review shows everything.
-  const stepped = mode === "new" && !error && !review && !duplicate;
+  // A new unit is added in 4 steps (app.js shows one at a time); editing, an error, a review or a quick-reader fill (showAll) shows everything.
+  const stepped = mode === "new" && !error && !review && !duplicate && !showAll;
   const steps = [L(lang, "الوحدة والمكان", "Unit and place"), L(lang, "المساحة والسعر", "Size and price"), L(lang, "التسليم والدفع", "Delivery and payment"), L(lang, "المالك والصور", "Owner and photos")];
   const voiceCost = L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`);
   return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack uf${mode === "edit" ? " uf-edit" : ""}" data-progress${stepped ? html` data-steps="${steps.join("|")}" data-next="${L(lang, "التالي", "Next")}" data-prev="${L(lang, "رجوع", "Back")}" data-check="/app/units/step-check"` : ""}>
