@@ -16,6 +16,7 @@ async function setPrivate(pool, owner, kind, id, value) {
   if (!isAgencyOwner(owner)) return { error: "forbidden" };
   const table = TABLES[kind];
   if (!table) return { error: "kind" };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ""))) return { error: "not_found" };
   await Audit.recordStrict(pool, { agencyId: owner.agency_id, brokerId: owner.id, action: "portfolio_private", targetType: kind, targetId: id, payload: { private: Boolean(value) } });
   const { rowCount } = await pool.query(`UPDATE ${table} SET is_private = $3 WHERE id = $1 AND agency_id = $2`, [id, owner.agency_id, Boolean(value)]);
   if (!rowCount) return { error: "not_found" };

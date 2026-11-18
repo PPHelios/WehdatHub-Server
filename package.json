@@ -16,7 +16,7 @@
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB --testPathIgnorePatterns /node_modules/ tests/e2e.test.js tests/browser/ tests/heavy/ tests/parsers/",
-    "test:fast": "node --test tests/e2e.test.js tests/parsers/regression.test.js && node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB tests/parity tests/contract-guard tests/visibility-guard tests/safeguards tests/api tests/unit tests/web/unit tests/web/search tests/web/data-entry",
+    "test:fast": "node --test tests/e2e.test.js tests/parsers/regression.test.js && node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB tests/parity tests/security tests/contract-guard tests/visibility-guard tests/safeguards tests/api tests/unit tests/web/unit tests/web/search tests/web/data-entry",
     "test:heavy": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/heavy",
     "test:main-paths": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/main-paths.test.js' --testPathIgnorePatterns /node_modules/",
     "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
