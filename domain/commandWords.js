@@ -135,7 +135,7 @@ function helpText(lang = "ar") {
   const i = lang === "en" ? 1 : 0;
   const head = lang === "en" ? "*📖 Commands* (Arabic in any spelling; English in any case)" : "*📖 الأوامر* (العربي بأي طريقة كتابة؛ أ/ا، ة/ه، ى/ي زي بعض)";
   const mgr = lang === "en" ? " (managers)" : " (للمديرين)";
-  return [head, ...grouped().map((g) => [`\n*${g.title[i]}*`, ...g.commands.map((c) => `• ${usage(c, lang)} ← ${c.help[i]}${c.manager ? mgr : ""}`)].join("\n"))].join("\n");
+  return [head, ...grouped().map((g) => [`\n*${g.title[i]}*`, ...g.commands.map((c) => `• ${usage(c, lang)} ${lang === "en" ? "→" : "←"} ${c.help[i]}${c.manager ? mgr : ""}`)].join("\n"))].join("\n");
 }
 
 /** docs/commands.md (tests keep the file in step with COMMANDS). */

@@ -57,9 +57,9 @@ function quietDays(lead, now) {
 
 /** One hit's line: a new unit, or "📉 9 مليون ← 8.5 مليون" for a price drop; with N3's line when the client is quiet. */
 function hitLine(x, lang, { now = new Date(), quietLine = true } = {}) {
-  if (!x.lead) return x.drop ? `• 📉 ${x.request} ← ${x.listing.code}: ${money(x.drop.from, lang)} → ${money(x.drop.to, lang)}` : `• 🔔 ${x.request} ← ${Describe.searchResult(x.listing, lang)}`;
+  if (!x.lead) return x.drop ? `• 📉 ${x.request} ← ${x.listing.code}: ${money(x.drop.from, lang)} ${lang === "en" ? "→" : "←"} ${money(x.drop.to, lang)}` : `• 🔔 ${x.request} ← ${Describe.searchResult(x.listing, lang)}`;
   const who = `${Card.refLabel(x.lead.ref)} ${Card.displayName(x.lead, lang)}`;
-  const main = x.drop ? `• 📉 ${who} ← ${x.listing.code}: ${money(x.drop.from, lang)} → ${money(x.drop.to, lang)}` : `• ${who} ← ${Describe.searchResult(x.listing, lang)}`;
+  const main = x.drop ? `• 📉 ${who} ← ${x.listing.code}: ${money(x.drop.from, lang)} ${lang === "en" ? "→" : "←"} ${money(x.drop.to, lang)}` : `• ${who} ← ${Describe.searchResult(x.listing, lang)}`;
   const days = quietLine ? quietDays(x.lead, now) : null;
   if (!days) return main;
   const never = !x.lead.last_contact_at;
