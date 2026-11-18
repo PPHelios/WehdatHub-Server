@@ -89,3 +89,22 @@ test("a form that came back with an error is not skipped", async () => {
   expect(used["/app/leads/new"]).toBeUndefined();
   await ctx.close();
 });
+
+test("an error sent back on a long page is shown where the person is: toast and scrolled into view", async () => {
+  const { ctx, pg } = await openAs();
+  await pg.goto(`${BASE}/app/leads/new?lang=en`, { waitUntil: "networkidle" });
+  await pg.fill('[name="name"]', "Error Test");
+  await pg.fill('[name="phone1"]', "123");
+  await pg.evaluate(() => { const f = document.querySelector('[name="phone1"]').form; f.noValidate = true; window.scrollTo(0, document.body.scrollHeight); });
+  await pg.click('button[type=submit][data-tg-main]');
+  await pg.waitForLoadState("networkidle");
+  const seen = await pg.evaluate(() => {
+    const n = document.querySelector("#main .notice.bad:not([hidden])");
+    const t = document.querySelector("[data-toast-box]");
+    if (!n) return { notice: false };
+    const r = n.getBoundingClientRect();
+    return { notice: true, inView: r.bottom > 0 && r.top < window.innerHeight, toast: Boolean(t && !t.hidden && t.textContent.trim()) };
+  });
+  expect(seen).toEqual({ notice: true, inView: true, toast: true });
+  await ctx.close();
+});

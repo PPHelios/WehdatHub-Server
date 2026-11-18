@@ -674,6 +674,26 @@
     toast(n.textContent.replace(/\s+/g, " ").trim(), false);
     n.hidden = true;
   });
+  // An error the server sent back (.notice.bad) is shown where the person is looking (QA round 3, step 1): its words also go
+  // to the toast above the bottom bar, and when the notice is off screen it is scrolled into view and focused, so a refusal
+  // at the top of a long form is not missed by someone who tapped Save at the bottom. A wrong field marked by the browser
+  // (:invalid) gets the focus instead when there is one.
+  function showError(root) {
+    var scope = root && root.querySelector ? root : document.getElementById("main") || document;
+    var n = scope.querySelector(".notice.bad:not([hidden])");
+    if (!n) return;
+    var text = n.textContent.replace(/\s+/g, " ").trim();
+    if (text) toast(text.length > 160 ? text.slice(0, 157) + "…" : text, true);
+    var r = n.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > (window.innerHeight || document.documentElement.clientHeight)) {
+      if (!n.hasAttribute("tabindex")) n.setAttribute("tabindex", "-1");
+      try { n.scrollIntoView({ block: "center" }); } catch (e) { n.scrollIntoView(); }
+      try { n.focus({ preventScroll: true }); } catch (e) { /* old browser */ }
+    }
+  }
+  window.whShowError = showError;
+  document.addEventListener("DOMContentLoaded", function () { showError(null); });
+  document.addEventListener("htmx:afterSwap", function (e) { if (e.detail && e.detail.target) showError(e.detail.target); });
   // htmx buttons (Fill from description, Review, duplicate check): say so when the server can't be reached.
   document.addEventListener("htmx:responseError", function (e) {
     var xhr = e.detail && e.detail.xhr;
