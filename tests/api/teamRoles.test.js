@@ -66,3 +66,19 @@ test("brokers cannot change team roles or teams; nobody reaches another agency's
   expect((await api().post(`/api/v1/team/${B().broker.id}/team`).set(manager).send({ teamLeadId: B().colleague.id })).status).toBe(404);
   expect((await roleOf(B().rival.id)).role).toBe("broker");
 });
+
+test("QA round 4: deactivate then undo-deactivate gives the leads and the broker back; a broker cannot; unknown id is 404", async () => {
+  const Leads = require("../../services/leads");
+  const manager = await as("manager");
+  const owner = (await h.pool.query("SELECT * FROM brokers WHERE id = $1", [B().colleague.id])).rows[0];
+  await Leads.captureLead(h.pool, owner, { phones: "01012345678", name: "Sara" });
+  expect((await api().post(`/api/v1/team/${B().colleague.id}/deactivate`).set(manager).send({})).status).toBe(200);
+  expect((await h.pool.query("SELECT assigned_broker_id FROM leads")).rows[0].assigned_broker_id).toBeNull();
+  const broker = await as("broker");
+  expect((await api().post(`/api/v1/team/${B().colleague.id}/undo-deactivate`).set(broker).send({})).status).toBe(403);
+  const undo = await api().post(`/api/v1/team/${B().colleague.id}/undo-deactivate`).set(manager).send({});
+  expect(undo.body).toEqual({ ok: true, restored: 1 });
+  expect((await h.pool.query("SELECT assigned_broker_id FROM leads")).rows[0].assigned_broker_id).toBe(B().colleague.id);
+  expect((await roleOf(B().colleague.id)).role).toBe("broker");
+  expect((await api().post(`/api/v1/team/${B().rival.id}/undo-deactivate`).set(manager).send({})).status).toBe(404);
+});

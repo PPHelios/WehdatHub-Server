@@ -957,7 +957,45 @@ async function releaseBrokerLeads(pool, agencyId, brokerId, { actorId = null, no
   return { count: released };
 }
 
+/**
+ * Undo of releaseBrokerLeads: gives back the leads that the broker's latest deactivation released. Only a lead whose newest 'assigned'
+ * event is that release (reason 'deactivated', from this broker, not undone) and that is still unassigned comes back; one a manager
+ * has handed to someone since stays where it is. Marks each release event undone_at and logs a new 'assigned' event.
+ * @returns {Promise<{ count: number }>}
+ */
+async function restoreBrokerLeads(pool, agencyId, brokerId, { actorId = null, now = new Date() } = {}) {
+  const count = await withTransaction(pool, async (client) => {
+    const { rows: ev } = await client.query(
+      `SELECT e.id, e.lead_id FROM lead_events e
+         JOIN leads l ON l.id = e.lead_id AND l.agency_id = e.agency_id
+        WHERE e.agency_id = $1 AND e.kind = 'assigned' AND e.undone_at IS NULL
+          AND e.data->>'reason' = 'deactivated' AND e.data->>'from' = $2::text AND e.data->'to' = 'null'::jsonb
+          AND l.assigned_broker_id IS NULL
+          AND e.created_at = (SELECT max(x.created_at) FROM lead_events x
+                               WHERE x.agency_id = $1 AND x.kind = 'assigned' AND x.undone_at IS NULL AND x.data->>'reason' = 'deactivated' AND x.data->>'from' = $2::text)
+          AND e.id = (SELECT max(y.id) FROM lead_events y WHERE y.agency_id = e.agency_id AND y.lead_id = e.lead_id AND y.kind = 'assigned')
+        FOR UPDATE OF l`,
+      [agencyId, brokerId]
+    );
+    if (!ev.length) return 0;
+    const ids = ev.map((r) => r.lead_id);
+    await client.query(
+      `UPDATE leads SET assigned_broker_id = $2, assigned_at = $3, updated_at = $3, version = version + 1 WHERE agency_id = $1 AND id = ANY($4::uuid[])`,
+      [agencyId, brokerId, now.toISOString(), ids]
+    );
+    await client.query("UPDATE lead_events SET undone_at = $3 WHERE agency_id = $1 AND id = ANY($2::bigint[])", [agencyId, ev.map((r) => r.id), now.toISOString()]);
+    await client.query(
+      `INSERT INTO lead_events (agency_id, lead_id, broker_id, kind, data, created_at)
+       SELECT $1, id, $2, 'assigned', jsonb_build_object('from', NULL, 'to', $3::text, 'reason', 'deactivation_undone'), $4 FROM unnest($5::uuid[]) AS id`,
+      [agencyId, actorId, brokerId, now.toISOString(), ids]
+    );
+    return ids.length;
+  });
+  return { count };
+}
+
 module.exports = {
+  restoreBrokerLeads,
   historyFor,
   historyPeople,
   MAX_PHONES,

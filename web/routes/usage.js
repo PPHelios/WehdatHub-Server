@@ -224,8 +224,10 @@ ${t.features.map((f) => switchField({ name: `f_${f.key}`, on: f.on, lang, label:
   web.post("/usage/agency", async (req, res) => {
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).send("Managers only");
-    // A prefix that isn't 1–4 Latin letters keeps the current one.
-    await pool.query("UPDATE agencies SET code_prefix = COALESCE($2, code_prefix) WHERE id = $1", [broker.agency_id, UnitCode.cleanPrefix(req.body.code_prefix)]);
+    // A prefix that isn't 1–4 Latin letters is refused (QA round 4 #95): the current one stays, Settings says the rule and keeps what was typed.
+    const prefix = UnitCode.cleanPrefix(req.body.code_prefix);
+    if (!prefix) return res.redirect(303, `/app/settings?codebad=1&typed=${encodeURIComponent(String(req.body.code_prefix ?? "").slice(0, 20))}#agency-caps`);
+    await pool.query("UPDATE agencies SET code_prefix = $2 WHERE id = $1", [broker.agency_id, prefix]);
     if (req.body.return === "settings") return res.redirect(303, "/app/settings?saved=1#agency-caps");
     return res.redirect(303, "/app/usage?saved=1");
   });

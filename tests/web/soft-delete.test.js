@@ -87,3 +87,19 @@ test("a deleted unit cannot be changed by a bulk edit or a sold command, and del
   expect(out.updated).toEqual([]);
   expect(await statusOf("DL-4")).toMatchObject({ status: "deleted" });
 });
+
+test("QA round 4 #101: after a delete the list says which unit was deleted and that a manager can restore it for 10 days", async () => {
+  await h.insertListing({ broker_id: h.BROKERS.broker.id, code: "DL-9" });
+  const a = await signIn(h, "admin");
+  const r = await a.agent.post("/app/units/DL-9/delete").type("form").send({ _csrf: a.csrf });
+  expect(r.headers.location).toMatch(/status=deleted&deleted=DL-9/);
+  const page = (await a.agent.get(`${r.headers.location}&lang=en`)).text;
+  expect(page).toMatch(/Unit DL-9 deleted; a manager can restore it for 10 days/);
+  expect(page).toContain("data-restore");
+  await h.insertListing({ broker_id: h.BROKERS.broker.id, code: "DL-8" });
+  const b = await signIn(h, "broker");
+  const rb = await b.agent.post("/app/units/DL-8/delete").type("form").send({ _csrf: b.csrf });
+  expect(rb.headers.location).toBe("/app/units?deleted=DL-8");
+  expect((await b.agent.get(`${rb.headers.location}&lang=en`)).text).toMatch(/Unit DL-8 deleted; a manager can restore it for 10 days/);
+  expect((await b.agent.get("/app/units?deleted=%3Cb%3E&lang=en")).text).not.toMatch(/data-unit-deleted/);
+});

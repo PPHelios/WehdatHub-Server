@@ -140,6 +140,10 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     // Recently deleted (soft delete, services/unitDelete.js) is for managers and the owner only.
+    const gone = /^[A-Za-z0-9._-]{1,40}$/.test(String(req.query.deleted || "")) ? String(req.query.deleted) : null;
+    const deletedNotice = gone
+      ? html`<p class="card notice ok" role="status" data-unit-deleted="${gone}">🗑️ ${L(lang, `الوحدة ${gone} اتحذفت. المدير يقدر يرجعها لمدة ١٠ أيام.`, `Unit ${gone} deleted; a manager can restore it for 10 days.`)}${Authz.isManager(broker) ? html` ${L(lang, "هتلاقيها تحت مع زرار الرجوع.", "Find it below with the Restore button.")}` : ""}</p>`
+      : "";
     const status = req.query.status === "deleted" && Authz.isManager(broker) ? "deleted" : STATUSES.includes(req.query.status) ? req.query.status : "active";
     // Filters: one reader for the website and the app (domain/unitFilters.js).
     const f = UnitFilters.read(req.query, { isOwner: Authz.isAgencyOwner(broker), status });
@@ -185,6 +189,7 @@ function register(web, { pool, page }) {
       nav: "units",
       body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a><a class="btn secondary small" href="/app/owners">👤 ${L(lang, "المُلّاك", "Owners")}</a></div>
 ${notice || ""}
+${deletedNotice}
 ${oldStrip}
 ${oldOnly ? html`<p class="card notice" data-old-filter>${L(lang, "الوحدات اللي محدش أكدها من 21 يوم، الأقدم الأول.", "Units nobody has confirmed for 21 days, oldest first.")} <a href="${link({ old: "", page: "" })}">${L(lang, "اعرض الكل", "Show all")}</a></p>` : ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
@@ -239,7 +244,8 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const out = await UnitDelete.softDelete(pool, broker, listing.id);
     if (out.error) return res.status(out.error === "forbidden" ? 403 : 400).type("text/plain").send(out.error);
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: "unit_soft_delete", metadata: {} });
-    return res.redirect(303, "/app/units?status=deleted");
+    const q = `deleted=${encodeURIComponent(listing.code)}`;
+    return res.redirect(303, Authz.isManager(broker) ? `/app/units?status=deleted&${q}` : `/app/units?${q}`);
   });
 
   web.post("/units/:code/restore", async (req, res) => {

@@ -101,13 +101,14 @@ async function agencySection({ pool, req, broker, lang, brandHtml }) {
     require("../../services/leadScope").brokersSeeAll(pool, broker.agency_id)
   ]);
   const rates = FxDomain.ratesFrom(ag.crm_settings?.fx);
-  const codePrefix = ag.code_prefix || UnitCode.prefixFrom(ag.name || "");
+  const codeBad = req.query.codebad === "1";
+  const codePrefix = codeBad ? String(req.query.typed ?? "").slice(0, 20) : ag.code_prefix || UnitCode.prefixFrom(ag.name || "");
   const csrf = req.session.csrf;
   return html`<section id="agency" class="sect stack" data-settings-section="agency">
   <h1 class="sect-title">🏢 ${L(lang, "الشركة", "Agency")}</h1>
   ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
   ${owner ? brandHtml : ""}
-  ${capsForm({ lang, codePrefix, ret: "settings", id: "agency-caps" })}
+  ${capsForm({ lang, codePrefix, ret: "settings", id: "agency-caps", bad: codeBad })}
   ${fxForm({ lang, rates, bad: req.query.fx === "bad", ret: "settings", id: "fx" })}
   ${owner ? html`${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
   ${brokerEditSection(brokersWrite, lang, csrf, owner, "settings")}

@@ -21,10 +21,11 @@ function fxForm({ lang, rates = {}, bad = false, ret = null, id = null }) {
 }
 
 /** The unit code letters: { lang, codePrefix, ret, id }. */
-function capsForm({ lang, codePrefix = "", ret = null, id = null }) {
+function capsForm({ lang, codePrefix = "", ret = null, id = null, bad = false }) {
   return html`<form method="post" action="/app/usage/agency" class="card stack" data-agency-caps${id ? html` id="${id}"` : ""}>${back(ret)}
   <h2>${L(lang, "حروف أكواد الوحدات", "Unit code letters")}</h2>
-  <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
+  ${bad ? html`<p class="bad" role="alert" data-code-bad>❌ ${L(lang, "اتحفظش: الحروف لازم تكون من 1 لـ 4 حروف إنجليزي بس (زي NH)، من غير مسافات ولا رموز ولا حروف عربي.", "Not saved: use 1 to 4 English letters only (like NH), with no spaces, symbols or Arabic letters.")}</p>` : ""}
+  <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"${bad ? html` aria-invalid="true"` : ""}></label>
   <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>`;

@@ -29,7 +29,8 @@ const LINKS = { limit: 30, windowSec: 24 * 3600 };
 const ERRORS = {
   name: ["اكتب الاسم.", "Enter the name."],
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
-  role: ["الدور مش مظبوط.", "The role isn't valid."],
+  role: ["الدور مش مظبوط. اختار من القايمة: بروكر أو مدير أو مدخل بيانات.", "That role isn't valid. Pick one from the list: broker, manager or data entry."],
+  same: ["ده نفس الدور الحالي؛ مفيش حاجة اتغيّرت.", "That is already their role; nothing changed."],
   phone_taken: ["الرقم ده مسجل مع شركة تانية.", "This number is registered with another agency."],
   already_member: ["الرقم ده موجود بالفعل في الفريق. افتح البروكر من القايمة لو عايز تغيّر حاجة.", "This number is already on your team. Open them in the list to change anything."],
   not_found: ["البروكر مش موجود.", "Broker not found."],
@@ -406,13 +407,24 @@ function register(web, { pool, page }) {
     return render(req, res, { tab: 2, notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} اتمسح نهائي.`, `${r.broker.name} was deleted.`)}</p>` });
   });
 
+  // Undo of a deactivation (the message's "Undo" button): the broker comes back and gets the leads that deactivation released.
+  web.post("/team/:id/undo-deactivate", async (req, res) => {
+    const lang = langOf(req);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
+    const r = await Team.undoDeactivate(pool, req.session.broker, req.params.id);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
+    return render(req, res, {
+      notice: html`<p class="card notice ok" role="status">↩️ ${L(lang, `${r.broker.name} رجع للفريق؛ ${r.restored} عميل اتسلموله تاني.`, `${r.broker.name} is back on the team; ${r.restored} lead(s) were given back.`)}</p>`
+    });
+  });
+
   web.post("/team/:id/deactivate", async (req, res) => {
     const lang = langOf(req);
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
     const r = await Team.deactivate(pool, req.session.broker, req.params.id);
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     return render(req, res, {
-      notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} اتوقف؛ ${r.released} عميل رجعوا للمديرين.`, `${r.broker.name} deactivated; ${r.released} leads went back to the managers.`)}</p>`
+      notice: html`<div class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} اتوقف؛ ${r.released} عميل رجعوا للمديرين.`, `${r.broker.name} deactivated; ${r.released} leads went back to the managers.`)} <form method="post" action="/app/team/${r.broker.id}/undo-deactivate" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form></div>`
     });
   });
 }

@@ -9,6 +9,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const Phone = require("../domain/phone");
 const TgLink = require("../lib/tgLink");
 const Brokers = require("./brokers");
+const Leads = require("./leads");
 const Billing = require("./billing");
 const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const { getConfig } = require("../config");
@@ -142,6 +143,25 @@ async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
   return Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
 }
 
+/**
+ * Undo of a deactivation: the broker is active again (a seat must be free) and gets back the leads that deactivation released
+ * (services/leads.js restoreBrokerLeads: not the ones a manager reassigned since). Returns { ok, broker, restored } | { error }.
+ */
+async function undoDeactivate(pool, manager, brokerId, { now = new Date() } = {}) {
+  if (!isManager(manager)) return { error: "forbidden" };
+  if (!UUID_RE.test(String(brokerId || ""))) return { error: "not_found" };
+  const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  const b = rows[0];
+  if (!b) return { error: "not_found" };
+  if (!mayActOn(manager, b.role)) return { error: "rank" };
+  if (!b.is_active) {
+    if (!(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
+    await pool.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
+  }
+  const { count } = await Leads.restoreBrokerLeads(pool, manager.agency_id, brokerId, { actorId: manager.id, now });
+  return { ok: true, broker: b, restored: count };
+}
+
 /** Brings a deactivated broker back with the same role (a seat must be free). Their old leads stay with the managers. */
 async function reactivate(pool, manager, brokerId) {
   if (!isManager(manager)) return { error: "forbidden" };
@@ -246,4 +266,4 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
   return { ok: true };
 }
 
-module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };
+module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, undoDeactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };

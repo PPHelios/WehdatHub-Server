@@ -13,6 +13,7 @@ const { signIn } = require("../harness/web");
 const { resetConfig } = require("../../config");
 const TgLink = require("../../lib/tgLink");
 const Leads = require("../../services/leads");
+const Team = require("../../services/team");
 
 jest.setTimeout(90000);
 
@@ -170,6 +171,7 @@ describe("agency owner: managers and role changes", () => {
 
   test("changeRole refuses other agencies' people and the admin/owner roles", async () => {
     await h.seedBroker("owner");
+    await h.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [h.BROKERS.owner.id]);
     const owner = h.BROKERS.owner;
     expect(await Team.changeRole(h.pool, owner, h.BROKERS.rival.id, "manager")).toEqual({ error: "not_found" });
     expect(await Team.changeRole(h.pool, owner, h.BROKERS.admin.id, "broker")).toEqual({ error: "rank" });
@@ -179,6 +181,7 @@ describe("agency owner: managers and role changes", () => {
   test("the team page offers Manager and the change-role button only to the agency owner", async () => {
     await h.seedBroker("manager");
     await h.seedBroker("owner");
+    await h.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [h.BROKERS.owner.id]);
     const owner = await signIn(h, "owner");
     const ownerPage = (await owner.agent.get("/app/team")).text;
     expect(ownerPage).toContain('<option value="manager">');
@@ -217,4 +220,60 @@ test("QA round 2: after a refused invite the typed name, phone and role stay in 
   expect(res.text).toMatch(/valid Egyptian mobile/);
   expect(res.text).toMatch(/name="name"[^>]*value="Keep Me"/);
   expect(res.text).toMatch(/name="phone"[^>]*value="123"/);
+});
+
+describe("QA round 4: undo a deactivation, role refusal", () => {
+  const leadsOf = async (id) => (await h.query("SELECT ref FROM leads WHERE assigned_broker_id = $1 ORDER BY ref", [id])).map((r) => r.ref);
+  async function seedTwoLeads() {
+    const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+    await Leads.captureLead(h.pool, broker, { phones: "01012345678", name: "Sara" });
+    await Leads.captureLead(h.pool, broker, { phones: "01012345679", name: "Omar" });
+  }
+
+  test("web: the deactivate message has an Undo that restores the leads and the broker; marks the events; a second undo gives nothing", async () => {
+    await seedTwoLeads();
+    const a = await signIn(h, "admin");
+    const id = h.BROKERS.broker.id;
+    const off = await a.agent.post(`/app/team/${id}/deactivate`).type("form").send({ _csrf: a.csrf, lang: "en" });
+    expect(off.text).toContain(`/app/team/${id}/undo-deactivate`);
+    expect(off.text).toMatch(/Undo/);
+    expect(await leadsOf(id)).toEqual([]);
+    const undo = await a.agent.post(`/app/team/${id}/undo-deactivate`).type("form").send({ _csrf: a.csrf, lang: "en" });
+    expect(undo.status).toBe(200);
+    expect(undo.text).toMatch(/2 lead\(s\) were given back/);
+    expect((await h.query("SELECT is_active FROM brokers WHERE id = $1", [id]))[0].is_active).toBe(true);
+    expect((await leadsOf(id)).length).toBe(2);
+    expect((await h.query("SELECT count(*)::int AS n FROM lead_events WHERE kind = 'assigned' AND data->>'reason' = 'deactivated' AND undone_at IS NOT NULL"))[0].n).toBe(2);
+    const again = await a.agent.post(`/app/team/${id}/undo-deactivate`).type("form").send({ _csrf: a.csrf, lang: "en" });
+    expect(again.text).toMatch(/0 lead\(s\)/);
+  });
+
+  test("undo leaves alone a lead a manager reassigned since, and a broker of another agency is not found", async () => {
+    await seedTwoLeads();
+    const a = await signIn(h, "admin");
+    const id = h.BROKERS.broker.id;
+    await a.agent.post(`/app/team/${id}/deactivate`).type("form").send({ _csrf: a.csrf });
+    const first = (await h.query("SELECT id FROM leads ORDER BY ref LIMIT 1"))[0].id;
+    const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+    await Leads.assignLead(h.pool, admin, first, h.BROKERS.admin.id);
+    const undo = await Team.undoDeactivate(h.pool, admin, id);
+    expect(undo).toMatchObject({ ok: true, restored: 1 });
+    expect((await h.query("SELECT assigned_broker_id FROM leads WHERE id = $1", [first]))[0].assigned_broker_id).toBe(h.BROKERS.admin.id);
+    expect(await Team.undoDeactivate(h.pool, admin, h.BROKERS.rival.id)).toEqual({ error: "not_found" });
+    const plain = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+    expect(await Team.undoDeactivate(h.pool, plain, id)).toEqual({ error: "forbidden" });
+  });
+
+  test("a role that is not allowed gets a clear message", async () => {
+    await h.seedBroker("owner");
+    await h.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [h.BROKERS.owner.id]);
+    const o = await signIn(h, "owner");
+    const id = h.BROKERS.broker.id;
+    const bad = await o.agent.post(`/app/team/${id}/role`).type("form").send({ _csrf: o.csrf, role: "owner", lang: "en" });
+    expect(bad.status).toBe(400);
+    expect(bad.text).toMatch(/role isn.{1,6}t valid/);
+    const same = await o.agent.post(`/app/team/${id}/role`).type("form").send({ _csrf: o.csrf, role: "broker" });
+    expect(same.status).toBe(400);
+    expect(same.text).not.toMatch(/للمديرين بس|Managers only/);
+  });
 });

@@ -59,6 +59,12 @@ function register(api, { pool }) {
     return r.error ? fail(res, r.error) : res.json({ ok: true });
   });
 
+  // Undo of a deactivation: the broker is active again and gets back the leads it released (never ones reassigned since).
+  api.post("/team/:id/undo-deactivate", async (req, res) => {
+    const r = await Team.undoDeactivate(pool, req.session.broker, req.params.id);
+    return r.error ? fail(res, r.error) : res.json({ ok: true, restored: r.restored });
+  });
+
   api.post("/team/:id/reactivate", async (req, res) => {
     const r = await Team.reactivate(pool, req.session.broker, req.params.id);
     return r.error ? fail(res, r.error) : res.json({ ok: true });

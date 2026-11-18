@@ -103,7 +103,7 @@ test("the agency forms come back to Settings when asked to", async () => {
   r = await post("/app/dashboard/brokers-edit-units", { allowed: "on" });
   expect(r.headers.location).toMatch(/^\/app\/settings\?saved=1#broker-edit/);
   // Without the field they still go where they always did.
-  r = await s.agent.post("/app/usage/agency").type("form").send({ _csrf: s.csrf, monthly: "5000" });
+  r = await s.agent.post("/app/usage/agency").type("form").send({ _csrf: s.csrf, monthly: "5000", code_prefix: "ZZ" });
   expect(r.headers.location).toMatch(/^\/app\/usage\?saved=1/);
   const [a] = await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]);
   expect(a).toMatchObject({ code_prefix: "ZZ" });
@@ -128,4 +128,23 @@ test("the owner's Plan section shows the plan and credits with the link to pay",
   expect(text).toMatch(/data-plan-summary/);
   expect(text).toMatch(/AI credits this month: \d+ of \d+/);
   expect(text).toMatch(/href="\/app\/usage#plan"/);
+});
+
+test("QA round 4 #95: a bad unit code is refused with the rule, keeps what was typed, shows no Saved, and the old letters stay", async () => {
+  await h.query("UPDATE agencies SET code_prefix = 'OK' WHERE id = $1", [h.AGENCY_A]);
+  const s = await signIn(h, "admin");
+  for (const bad of ["", "AB CD", "N-H", "ABCDE", "أبج", "N1"]) {
+    const r = await s.agent.post("/app/usage/agency").type("form").send({ _csrf: s.csrf, return: "settings", code_prefix: bad });
+    expect(r.status).toBe(303);
+    expect(r.headers.location).toMatch(/codebad=1/);
+    expect(r.headers.location).not.toMatch(/saved=1/);
+    const page = (await s.agent.get(`${r.headers.location}`.replace("#agency-caps", "") + "&lang=en")).text;
+    expect(page).toMatch(/Not saved: use 1 to 4 English letters/);
+    expect(page).toContain(`value="${bad.replace(/&/g, "&amp;")}"`);
+    expect(page).not.toMatch(/Saved\.<\/p>/);
+  }
+  expect((await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].code_prefix).toBe("OK");
+  const good = await s.agent.post("/app/usage/agency").type("form").send({ _csrf: s.csrf, return: "settings", code_prefix: "nh" });
+  expect(good.headers.location).toMatch(/saved=1/);
+  expect((await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].code_prefix).toBe("NH");
 });
