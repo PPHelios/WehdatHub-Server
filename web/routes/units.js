@@ -39,6 +39,7 @@ const { PROPERTY_TYPES } = require("../../domain/fieldRules");
 const UnitDelete = require("../../services/unitDelete");
 const Recipients = require("../../services/linkRecipients");
 const Phone = require("../../domain/phone");
+const UnitFilters = require("../../domain/unitFilters");
 const Deal = require("../../domain/dealType");
 const DAY_MS = 24 * 3600 * 1000;
 const deletedDaysLeft = (r) => Math.max(0, Math.ceil((new Date(r.deleted_at).getTime() + UnitDelete.RETENTION_DAYS * DAY_MS - Date.now()) / DAY_MS));
@@ -140,19 +141,10 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     // Recently deleted (soft delete, services/unitDelete.js) is for managers and the owner only.
     const status = req.query.status === "deleted" && Authz.isManager(broker) ? "deleted" : STATUSES.includes(req.query.status) ? req.query.status : "active";
-    const mine = req.query.mine === "1";
-    // "Units to check" (Today's card): active units nobody has confirmed for 21 days, oldest first.
-    const oldOnly = req.query.old === "1" && status === "active";
-    const onlyPrivate = req.query.private === "1" && Authz.isAgencyOwner(broker);
-    // Filters: fixed lists (type, furnishing, finishing), the agency's own compounds, and a search on the code.
-    const oneOf = (v, list) => (list.includes(String(v || "")) ? String(v) : "");
-    const type = oneOf(req.query.type, PROPERTY_TYPES);
-    const furnishing = oneOf(req.query.furnishing, [...FURNISHING_STATUSES, "none"]);
-    const finishing = oneOf(req.query.finishing, [...FINISHING_STATUSES, "none"]);
-    const deal = Deal.clean(req.query.deal);
-    const pmin = String(req.query.pmin || "").slice(0, 20);
-    const pmax = String(req.query.pmax || "").slice(0, 20);
-    const q = String(req.query.q || "").trim().slice(0, 40);
+    // Filters: one reader for the website and the app (domain/unitFilters.js).
+    const f = UnitFilters.read(req.query, { isOwner: Authz.isAgencyOwner(broker), status });
+    const { mine, onlyPrivate, type, furnishing, finishing, deal, pmin, pmax, q } = f;
+    const oldOnly = f.old;
     const pageNo = Math.max(0, Math.min(parseInt(req.query.page, 10) || 0, 10000));
     const { rows: compounds } = await pool.query(
       `SELECT compound, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = $2 AND coalesce(compound, '') <> ''
@@ -163,26 +155,7 @@ function register(web, { pool, page }) {
     const compound = wanted ? compounds.find((c) => c.compound.toLowerCase() === wanted)?.compound || "" : "";
     const args = [broker.agency_id, status];
     const where = ["agency_id = $1", "status = $2"];
-    const add = (sql, v) => {
-      args.push(v);
-      where.push(sql.split("?").join(`$${args.length}`));
-    };
-    if (mine) add("broker_id = ?", broker.id);
-    if (onlyPrivate) where.push("is_private");
-    if (oldOnly) {
-      where.push("inventory_type IS DISTINCT FROM 'developer_model'");
-      add("COALESCE(confirmed_at, updated_at, created_at) < ?", new Date(Date.now() - Today.OLD_AFTER_DAYS * 24 * 3600 * 1000).toISOString());
-    }
-    if (compound) add("compound = ?", compound);
-    if (type) add("property_type = ?", type);
-    if (furnishing === "none") where.push("furnishing IS NULL");
-    else if (furnishing) add("furnishing = ?", furnishing);
-    if (finishing === "none") where.push("finishing IS NULL");
-    else if (finishing) add("finishing = ?", finishing);
-    if (deal) where.push(Deal.sql(deal, ""));
-    if (Deal.parseMoney(pmin)) add("price_value >= ?", Deal.parseMoney(pmin));
-    if (Deal.parseMoney(pmax)) add("price_value <= ?", Deal.parseMoney(pmax));
-    if (q) add("(code ILIKE '%' || ? || '%' OR developer_unit_code ILIKE '%' || ? || '%')", q.replace(/[%_\\]/g, (c) => `\\${c}`));
+    UnitFilters.appendTo(where, args, UnitFilters.conditions(f, { brokerId: broker.id, compound }));
     const cond = where.join(" AND ");
     const total = (await pool.query(`SELECT count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${cond}`, args)).rows[0].n;
     // Counts for the three status tabs (same visibility rule as the list itself).

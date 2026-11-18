@@ -127,7 +127,8 @@ function register(api, { pool }) {
       name: b.name,
       kind: b.kind || "buyer",
       source: String(b.source || "").trim() || "App",
-      lawfulBasis: b.lawfulBasis,
+      // Either spelling: the app sends lawfulBasis, the website form lawful_basis (QA round 3, finding 91).
+      lawfulBasis: b.lawfulBasis ?? b.lawful_basis,
       notes: b.notes
     });
     if (r.outcome === "created") return res.status(201).json({ outcome: "created", lead: leadView(r.lead) });

@@ -55,8 +55,19 @@ function loadSession(pool) {
 }
 
 /** Private pages: never cached by the browser or a proxy. */
-function noStore(_req, res, next) {
+function noStore(req, res, next) {
   res.set("Cache-Control", "no-store");
+  // A form the server refused comes back as the answer to a POST. With no-store the browser cannot show it again, so Back to
+  // it asked "Confirm form resubmission" (QA round 3, finding 77). That answer may be kept by this browser only (private,
+  // revalidated on every normal load); a successful POST redirects (303) and is never kept.
+  if (req.method === "POST") {
+    const writeHead = res.writeHead;
+    res.writeHead = function (...args) {
+      const code = typeof args[0] === "number" ? args[0] : res.statusCode;
+      if (code >= 400 && code < 500 && /text\/html/.test(String(res.getHeader("Content-Type") || ""))) res.setHeader("Cache-Control", "private, no-cache");
+      return writeHead.apply(this, args);
+    };
+  }
   next();
 }
 
