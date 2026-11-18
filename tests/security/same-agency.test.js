@@ -37,8 +37,8 @@ async function bearer(who) {
   return { Authorization: `Bearer ${(await api().post("/api/v1/auth/code/verify").send({ phone: b.phone, code })).body.token}` };
 }
 const snapshot = async () => ({
-  // Any broker may make a unit's flyer to share it; the flyer is cached on the unit (and touches updated_at), so those columns are left out.
-  unit: (await h.query("SELECT md5((to_jsonb(l) - 'flyer_url' - 'flyer_cache' - 'flyer_wa_media_id' - 'flyer_wa_media_at' - 'updated_at')::text) AS h FROM listings l WHERE code = $1", [CODE]))[0].h,
+  // Any broker may make a unit's flyer to share it; the flyer is cached on the unit, so those columns are left out (updated_at stays: migration 127).
+  unit: (await h.query("SELECT md5((to_jsonb(l) - 'flyer_url' - 'flyer_cache' - 'flyer_wa_media_id' - 'flyer_wa_media_at')::text) AS h FROM listings l WHERE code = $1", [CODE]))[0].h,
   lead: (await h.query("SELECT md5(l::text) AS h FROM leads l WHERE name = 'ZZCOL Lead'"))[0].h
 });
 const BODY = { stage: "won", note: "x", status: "sold", at: new Date(Date.now() + 864e5).toISOString(), kind: "call", lang: "en", to: null, brokerId: null, version: 1, digits: "5555", confirm: "5555", other: "L-0001", owner_name: "Hijack", area: "999", price: "1", tenantName: "x", startDate: "2026-01-01", rent: "1", months: "12", value: true, on: true };

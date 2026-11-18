@@ -6,7 +6,7 @@
 const Vis = require("../lib/visibility");
 const Store = require("../lib/listingStore");
 const Storage = require("../lib/supabase");
-const Deal = require("../domain/dealType");
+const UnitFilters = require("../domain/unitFilters");
 const Authz = require("../lib/authz");
 const Credits = require("../services/credits");
 const Describe = require("../domain/describe");
@@ -20,8 +20,6 @@ const Recipients = require("../services/linkRecipients");
 const Flyer = require("../lib/flyer");
 const RateLimit = require("../lib/rateLimit");
 const ReadCaps = require("../lib/readCaps");
-const { PROPERTY_TYPES } = require("../domain/fieldRules");
-const { FURNISHING_STATUSES, FINISHING_STATUSES } = require("../domain/furnishingStatus");
 
 const STATUSES = ["active", "sold", "archived"];
 const MAX_LIMIT = 50;
@@ -72,41 +70,14 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const q = req.query;
     const status = oneOf(q.status, STATUSES) || "active";
-    const type = oneOf(q.type, PROPERTY_TYPES);
-    const furnishing = oneOf(q.furnishing, FURNISHING_STATUSES);
-    const finishing = oneOf(q.finishing, FINISHING_STATUSES);
-    const deal = Deal.clean(q.deal);
     const limit = Math.max(1, Math.min(parseInt(q.limit, 10) || 20, MAX_LIMIT));
     const offset = Math.max(0, Math.min(parseInt(q.offset, 10) || 0, 100000));
     if (offset > ReadCaps.maxOffset(broker, 100000)) return res.status(403).json({ error: "too_deep" });
     const args = [broker.agency_id];
     const where = ["listings.agency_id = $1"];
-    const add = (sql, v) => {
-      args.push(v);
-      where.push(sql.split("?").join(`$${args.length}`));
-    };
-    if (q.mine === "1") add("listings.broker_id = ?", broker.id);
-    if (q.compound) add("listings.compound = ?", String(q.compound).slice(0, 120));
-    if (type) add("listings.property_type = ?", type);
-    if (furnishing) add("listings.furnishing = ?", furnishing);
-    if (finishing) add("listings.finishing = ?", finishing);
-    if (deal) where.push(Deal.sql(deal, "listings"));
-    const pmin = Deal.parseMoney(String(q.pmin || ""));
-    const pmax = Deal.parseMoney(String(q.pmax || ""));
-    if (pmin) add("listings.price_value >= ?", pmin);
-    if (pmax) add("listings.price_value <= ?", pmax);
-    // "Units to check" (Today's card): active units nobody has confirmed for 21 days.
-    if (q.old === "1") {
-      where.push("listings.inventory_type IS DISTINCT FROM 'developer_model'");
-      add("COALESCE(listings.confirmed_at, listings.updated_at, listings.created_at) < now() - (?::int * interval '1 day')", 21);
-    }
-    // Not updated for N days (data entry's "stale" filter).
-    const staleDays = parseInt(q.staleDays, 10);
-    if (staleDays >= 1 && staleDays <= 3650) add("COALESCE(listings.updated_at, listings.created_at) < now() - (?::int * interval '1 day')", staleDays);
-    const bedrooms = parseInt(q.bedrooms, 10);
-    if (bedrooms >= 0 && bedrooms <= 20) add("listings.bedrooms = ?", bedrooms);
-    const code = String(q.q || "").trim().slice(0, 40);
-    if (code) add("(listings.code ILIKE '%' || ? || '%' OR listings.developer_unit_code ILIKE '%' || ? || '%' OR listings.compound ILIKE '%' || ? || '%')", code.replace(/[%_\\]/g, (c) => `\\${c}`));
+    // Filters: one reader for the website and the app (domain/unitFilters.js).
+    const f = UnitFilters.read(q, { isOwner: Authz.isAgencyOwner(broker), status });
+    UnitFilters.appendTo(where, args, UnitFilters.conditions(f, { brokerId: broker.id, alias: "listings", compound: q.compound ? String(q.compound).slice(0, 120) : "" }));
     // The three status counts use every filter except the status itself, so the tabs show their numbers from the start.
     const byStatus = (await pool.query(`SELECT listings.status AS s, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${where.join(" AND ")} AND listings.status IN ('active', 'sold', 'archived') GROUP BY listings.status`, args)).rows;
     const counts = { active: 0, sold: 0, archived: 0 };

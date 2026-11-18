@@ -87,6 +87,12 @@ test("a form that came back with an error is not skipped", async () => {
   await pg.goto(`${BASE}/app/units?lang=en`, { waitUntil: "networkidle" });
   const used = await pg.evaluate(() => JSON.parse(sessionStorage.getItem("wh-form-used") || "{}"));
   expect(used["/app/leads/new"]).toBeUndefined();
+  // Back to the refused form shows it again, without "Confirm form resubmission" (finding 77).
+  await pg.goBack();
+  await pg.waitForLoadState("networkidle");
+  await pg.waitForTimeout(600);
+  expect(new URL(pg.url()).pathname).toMatch(/\/app\/leads(\/new)?$/);
+  expect(await pg.locator('[name="phone1"]').count()).toBe(1);
   await ctx.close();
 });
 
