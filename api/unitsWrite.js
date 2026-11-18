@@ -19,6 +19,7 @@ const Rules = require("../domain/fieldRules");
 const Plans = require("../domain/plans");
 const FormChecks = require("../lib/formChecks");
 const Form = require("../web/forms/unitForm");
+const QuickFill = require("../services/quickFill");
 const { uploads, PHOTO, VOICE } = require("../web/uploads");
 const SaveKeys = require("../lib/saveKeys");
 const Uploads = require("../lib/unitUploads");
@@ -174,8 +175,14 @@ function register(api, { pool }) {
       return res.json({ fields: { ...Form.formFromUnit(merged), code: extracted.fields.code || "" } });
     } catch (err) {
       const why = AiBlock.kindOf(err);
-      if (why !== "ai") return res.status(402).json({ error: "ai_blocked", message: AiBlock.text(why, lang, { owner: Authz.isAgencyOwner(broker) }), fallback: true });
-      return res.status(503).json({ error: "ai_unavailable", fallback: true });
+      // The free quick reader fills what it can from the typed text, so the person keeps going without credits.
+      const quick = await QuickFill.draftFromText(pool, text, lang);
+      const base = Form.composeFromForm({ existing: null, form: Form.unitFromForm(fieldsOf(req.body)), lang });
+      const fields = quick ? { ...Form.formFromUnit(L.composeFields({ existing: base, draft: quick.draft, lang })), code: quick.code } : undefined;
+      if (quick) logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "app_unit_quick_fill", metadata: { why } });
+      const filled = quick ? (lang === "en" ? " The quick reader filled what it could: check every field." : " القراءة السريعة ملت اللي قدرت عليه: راجع كل الخانات.") : "";
+      if (why !== "ai") return res.status(402).json({ error: "ai_blocked", message: `${AiBlock.text(why, lang, { owner: Authz.isAgencyOwner(broker) })}${filled}`, fallback: true, fields });
+      return res.status(503).json({ error: "ai_unavailable", fallback: true, fields, ...(quick ? { message: (lang === "en" ? "The AI is not answering." : "الذكاء الاصطناعي مش بيرد.") + filled } : {}) });
     }
   });
 
