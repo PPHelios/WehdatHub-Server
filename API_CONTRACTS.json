@@ -1149,6 +1149,7 @@
       "getConfig": []
     },
     "lib/notifications.js": {
+      "aiCreditWarning": ["pool", "agencyId", "params"],
       "brokersWithRoles": ["pool", "agencyId", "roles"],
       "ownChoiceOf": ["broker", "kind"],
       "effectiveFor": ["pool", "broker", "kind"],
@@ -2247,6 +2248,9 @@
       "retentionSweep": ["pool", "params"],
       "purgeInboundPayloads": ["pool", "params"],
       "privacyJob": []
+    },
+    "services/quickFill.js": {
+      "draftFromText": ["pool", "text", "lang"]
     },
     "services/privatePortfolio.js": {
       "setPrivate": ["pool", "owner", "kind", "id", "value"]
