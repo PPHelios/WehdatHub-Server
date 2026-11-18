@@ -66,3 +66,15 @@ test("the deal page asks for the tick and shows the sentence when it is missing"
   expect(done.status).toBe(303);
   expect(await statusOf(deal.id)).toBe("pending");
 });
+
+test("QA round 4 #32: the saved message names the status the deal has now", async () => {
+  const deal = await newDeal();
+  const a = await signIn(h, "admin");
+  await h.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [h.BROKERS.admin.id]);
+  const ref = `D-${String(deal.ref).padStart(4, "0")}`;
+  const post = await a.agent.post(`/app/deals/${ref}`).type("form").send({ _csrf: a.csrf, status: "signed", version: deal.version });
+  expect(post.status).toBe(303);
+  expect((await a.agent.get(post.headers.location)).text).toMatch(/Saved\. The deal status is: [^<]*Signed/);
+  const created = await a.agent.get(`/app/deals/${ref}?saved=1`);
+  expect(created.text).toMatch(/Deal saved\. Its status is now: [^<]*Signed/);
+});

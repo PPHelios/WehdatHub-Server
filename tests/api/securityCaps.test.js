@@ -94,3 +94,22 @@ test("app demo sign-in: the demo code works, and asking for a code sends nothing
   const c = h.BROKERS.colleague;
   expect((await api().post("/api/v1/auth/code/verify").send({ phone: c.phone, code: "123456" })).status).toBe(401);
 });
+
+test("QA round 4 #3/#59: opening the same owner page again today does not use more of the daily phone cap; a new owner does", async () => {
+  const auth = await login("manager").catch(async () => { await h.seedBroker("manager"); return login("manager"); });
+  const mgr = h.BROKERS.manager;
+  const mk = async (name, phone) => (await h.query("INSERT INTO unit_owners (agency_id, name, phones) VALUES ($1, $2, $3::text[]) RETURNING id", [mgr.agency_id, name, [phone]]))[0].id;
+  const a = await mk("Owner A", "201012345671");
+  const b = await mk("Owner B", "201012345672");
+  const used = async () => (await h.query("SELECT coalesce(max(hits), 0)::int AS n FROM web_rate_limits WHERE bucket = $1", [`owner_phones:broker:${mgr.id}`]))[0].n;
+  for (let i = 0; i < 5; i++) expect((await api().get(`/api/v1/owners/${a}`).set(auth)).status).toBe(200);
+  expect(await used()).toBe(1);
+  expect((await api().get(`/api/v1/owners/${b}`).set(auth)).status).toBe(200);
+  expect(await used()).toBe(2);
+  // Over the cap: a new owner is refused, one already seen today still opens.
+  await fillBucket(`owner_phones:broker:${mgr.id}`, 150);
+  const c = await mk("Owner C", "201012345673");
+  expect((await api().get(`/api/v1/owners/${c}`).set(auth)).status).toBe(429);
+  expect((await api().get(`/api/v1/owners/${c}`).set(auth)).status).toBe(429);
+  expect((await api().get(`/api/v1/owners/${a}`).set(auth)).status).toBe(200);
+});

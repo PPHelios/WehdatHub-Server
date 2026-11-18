@@ -43,7 +43,7 @@ function register(api, { pool }) {
     const owner = await Owners.getFor(pool, b, req.params.id);
     if (!owner) return fail(res, "not_found");
     if ((owner.phones || []).length) {
-      const cap = await ReadCaps.takeOwnerPhones(pool, b, 1, { channel: "app", ref: owner.code || null });
+      const cap = await ReadCaps.takeOwnerPhones(pool, b, 1, { channel: "app", ref: owner.code || null, once: owner.id });
       if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
     }
     const [events, lead] = await Promise.all([Owners.history(pool, b, owner.id), isDataEntry(b) ? null : Owners.leadFor(pool, b, owner)]);

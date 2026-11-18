@@ -967,7 +967,7 @@ async function restoreBrokerLeads(pool, agencyId, brokerId, { actorId = null, no
   const count = await withTransaction(pool, async (client) => {
     const { rows: ev } = await client.query(
       `SELECT e.id, e.lead_id FROM lead_events e
-         JOIN leads l ON l.id = e.lead_id AND l.agency_id = e.agency_id
+         JOIN leads l ON l.id = e.lead_id AND l.agency_id = e.agency_id /* vis:exempt */
         WHERE e.agency_id = $1 AND e.kind = 'assigned' AND e.undone_at IS NULL
           AND e.data->>'reason' = 'deactivated' AND e.data->>'from' = $2::text AND e.data->'to' = 'null'::jsonb
           AND l.assigned_broker_id IS NULL

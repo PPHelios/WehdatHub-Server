@@ -212,7 +212,10 @@ ${manager
   web.get("/deals/:ref", async (req, res, next) => {
     const deal = await Deals.getDeal(pool, req.session.broker, req.params.ref);
     if (!deal) return next();
-    return dealPage(req, res, deal, { notice: req.query.saved ? L(langOf(req), "✅ الصفقة اتسجلت.", "✅ Deal saved.") : req.query.done ? L(langOf(req), "✅ اتحفظ.", "✅ Saved.") : null });
+    // The message names the status the deal has now (QA round 4 #32).
+    const lang = langOf(req);
+    const now = Deals.statusLabel(deal.status, lang);
+    return dealPage(req, res, deal, { notice: req.query.saved ? L(lang, `✅ الصفقة اتسجلت. حالتها دلوقتي: ${now}.`, `✅ Deal saved. Its status is now: ${now}.`) : req.query.done ? L(lang, `✅ اتحفظ. حالة الصفقة: ${now}.`, `✅ Saved. The deal status is: ${now}.`) : null });
   });
 
   web.post("/deals/:ref", async (req, res, next) => {

@@ -123,7 +123,7 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
     const owner = await Owners.getFor(pool, broker, req.params.id);
     if (!owner) return next();
     if ((owner.phones || []).length) {
-      const cap = await require("../../lib/readCaps").takeOwnerPhones(pool, broker, 1, { channel: "web", ref: owner.code || null });
+      const cap = await require("../../lib/readCaps").takeOwnerPhones(pool, broker, 1, { channel: "web", ref: owner.code || null, once: owner.id });
       if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).type("text/plain").send(L(lang, "وصلت للحد اليومي لعرض أرقام الملّاك. جرّب بكرة.", "You have reached today's limit for viewing owner numbers. Try again tomorrow."));
     }
     const manager = isManager(broker);

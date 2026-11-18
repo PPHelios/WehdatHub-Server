@@ -2040,6 +2040,7 @@
       "saveSpend": ["pool", "actor", "params"]
     },
     "services/leads.js": {
+      "restoreBrokerLeads": ["pool", "agencyId", "brokerId", "params"],
       "historyFor": ["pool", "actor", "key", "params"],
       "historyPeople": ["pool", "actor"],
       "MAX_PHONES": "Number",
@@ -2521,6 +2522,7 @@
       "startLinkFor": ["pool", "manager", "brokerId", "params"],
       "invite": ["pool", "manager", "input", "opts"],
       "deactivate": ["pool", "manager", "brokerId", "params"],
+      "undoDeactivate": ["pool", "manager", "brokerId", "params"],
       "reactivate": ["pool", "manager", "brokerId"],
       "remove": ["pool", "manager", "brokerId"],
       "inviteText": ["broker", "url", "agencyName"],
