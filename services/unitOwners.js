@@ -9,6 +9,8 @@
 // A broker edits an owner while one of their active units belongs to that owner.
 "use strict";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const Phone = require("../domain/phone");
 const { isManager, isAgencyOwner, isDataEntry } = require("../lib/authz");
 
@@ -315,6 +317,7 @@ async function history(pool, viewer, ownerId, { limit = 50 } = {}) {
 
 /** Managers edit the name, phone, notes and flag. A phone already on another profile is refused (no merge yet); a change is logged with both numbers. Units follow the profile. */
 async function edit(pool, actor, ownerId, { name, phone, notes, flag }) {
+  if (!UUID_RE.test(String(ownerId || ""))) return { error: "not_found" };
   if (!(await canEditOwner(pool, actor, ownerId))) return { error: "forbidden" };
   const before = (await pool.query("SELECT * FROM unit_owners WHERE id = $1 AND agency_id = $2", [ownerId, actor.agency_id])).rows[0];
   if (!before) return { error: "not_found" };
