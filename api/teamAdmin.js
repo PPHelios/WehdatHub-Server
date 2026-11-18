@@ -4,8 +4,10 @@
 
 const Team = require("../services/team");
 const Audit = require("../services/audit");
+const { logOperation } = require("../lib/db");
 
-const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, already_member: 409, seats: 402, self: 409, active: 409, has_records: 409 };
+const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, already_member: 409, seats: 402, self: 409, active: 409, has_records: 409, same: 409, team_lead_nested: 409, team_lead_not_found: 404 };
+const UUID = /^[0-9a-f-]{36}$/i;
 const fail = (res, error) => res.status(STATUS[error] || 422).json({ error });
 
 function register(api, { pool }) {
@@ -31,6 +33,25 @@ function register(api, { pool }) {
     }
     const r = await Team.changeRole(pool, owner, req.params.id, String(req.body?.role || ""));
     return r.error ? fail(res, r.error) : res.json({ ok: true, from: r.from, to: r.to });
+  });
+
+  // A manager or the owner makes a broker a team lead (on: true) or takes the role back (on: false); taking it back
+  // clears the team under them. Same service as the website's "Make team lead" (web/routes/team.js).
+  api.post("/team/:id/team-role", async (req, res) => {
+    const m = req.session.broker;
+    if (!UUID.test(req.params.id)) return fail(res, "not_found");
+    const r = await Team.setTeamLeadRole(pool, m, req.params.id, req.body?.on === true || req.body?.on === "1");
+    if (r.error) return fail(res, r.error);
+    logOperation(pool, { agency_id: m.agency_id, broker_id: m.id, operation_type: "team_lead_role", metadata: { broker_id: r.broker.id, from: r.from, to: r.to } });
+    return res.json({ ok: true, from: r.from, to: r.to });
+  });
+
+  // A manager puts a broker under a team lead (teamLeadId) or takes them out of any team (teamLeadId null).
+  api.post("/team/:id/team", async (req, res) => {
+    if (!UUID.test(req.params.id)) return fail(res, "not_found");
+    const lead = req.body?.teamLeadId;
+    const r = await Team.setTeam(pool, req.session.broker, req.params.id, lead && UUID.test(String(lead)) ? String(lead) : null);
+    return r.error ? fail(res, r.error) : res.json({ ok: true });
   });
 
   api.post("/team/:id/deactivate", async (req, res) => {
