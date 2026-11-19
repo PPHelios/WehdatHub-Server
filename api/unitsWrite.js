@@ -206,6 +206,20 @@ function register(api, { pool }) {
     return res.json({ posts });
   });
 
+  // What each chat post would do against the broker's own inventory (nothing is written): new, update (the safe form-field patch and the
+  // changes in both languages), unchanged, other_unit, older, invalid, forbidden. The website's chat planner decides; the app only shows.
+  api.post("/units/chat-plan", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
+    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    const ChatPlan = require("../services/chatPlan");
+    const sent = Array.isArray(req.body?.posts) ? req.body.posts.slice(0, ChatPlan.MAX_APP_POSTS) : [];
+    const plan = await ChatPlan.planPosts(pool, broker, sent, { lang: langOf(req) });
+    res.set("Cache-Control", "no-store");
+    return res.json(plan);
+  });
+
   // What is still missing, warnings, and a duplicate, without saving.
   api.post("/units/review", async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });

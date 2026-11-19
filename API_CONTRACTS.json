@@ -1799,8 +1799,10 @@
     },
     "services/chatPlan.js": {
       "planChat": ["pool", "broker", "posts", "params"],
+      "planPosts": ["pool", "broker", "posts", "params"],
       "loadPlaces": ["pool"],
-      "MAX_POSTS": "Number"
+      "MAX_POSTS": "Number",
+      "MAX_APP_POSTS": "Number"
     },
     "services/clientRequests.js": {
       "PAGE": "Number",
