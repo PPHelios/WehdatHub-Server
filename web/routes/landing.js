@@ -60,7 +60,7 @@ function tryForm(lang, { error, values = {}, sent }) {
     <p class="muted">${T(lang, "للمكاتب (١٥ بروكر أو أكتر): سيب بياناتك وهنعمل لك عرض مباشر لفريقك، وبعده تجربة موجّهة ١٤ يوم لكل الفريق.", "For offices (15+ seats): leave your details and we'll run a live demo for your team, then a guided 14-day pilot for everyone.")}</p>
     <p class="muted">${T(lang, `فرد أو فريق صغير؟ ابدأ تجربتك المجانية بنفسك: ${num(Plans.TRIAL.days, lang)} يوم، من غير كارت.`, `A solo broker or a small team? Start your own free trial: ${Plans.TRIAL.days} days, no card.`)} <a href="/app/signup?lang=${lang}">${T(lang, "ابدأ التجربة", "Start the trial")}</a></p>
     <ul class="lp-try-points">
-      <li>${icon("check", 16)} ${T(lang, `${num(Plans.TRIAL.days, lang)} يوم مجاناً على باقة المكتب`, `${Plans.TRIAL.days} days free on the Office plan`)}</li>
+      <li>${icon("check", 16)} ${T(lang, `${num(Plans.TRIAL.days, lang)} يوم مجاناً، من غير كارت`, `${Plans.TRIAL.days} days free, no card`)}</li>
       <li>${icon("shield", 16)} ${T(lang, "بياناتك محمية ومش بتتمسح أبداً", "Your data stays private and is never deleted")}</li>
       <li>${icon("phone", 16)} ${T(lang, "بنستخدم الرقم بس عشان نكلمك بخصوص العرض.", "We use the number only to call you about the demo.")}</li>
     </ul>

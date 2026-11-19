@@ -40,11 +40,11 @@ const say = (text, who = "Ahmed", at = T(10, 15)) => `${at} - ${who}: ${text}`;
 
 async function makeZip() {
   const chat = [
-    photo(1), photo(2), say("شقة NH-V1 للبيع 200 متر 3 غرف السعر 12 مليون"),
-    photo(3, "Ahmed", T(10, 29)), say("فيلا NH-V2 للبيع 300 متر 4 غرف السعر 25 مليون", "Ahmed", T(10, 30)),
+    photo(1), photo(2), say("شقة NH-V1 للبيع في كمبوند هايد بارك 200 متر 3 غرف السعر 12 مليون 01012345678"),
+    photo(3, "Ahmed", T(10, 29)), say("فيلا NH-V2 للبيع في كمبوند هايد بارك 300 متر 4 غرف السعر 25 مليون 01012345678", "Ahmed", T(10, 30)),
     photo(4, "Sara", T(10, 40)), // nobody's description: the tray
     photo(5, "Ahmed", T(11, 29)), // named in the chat but missing from the zip
-    say("شقة NH-V3 للبيع 120 متر 2 غرف السعر 6 مليون", "Ahmed", T(11, 30))
+    say("شقة NH-V3 للبيع في كمبوند هايد بارك 120 متر 2 غرف السعر 6 مليون 01012345678", "Ahmed", T(11, 30))
   ].join("\n");
   const zip = new JSZip();
   zip.file("WhatsApp Chat with Brokers.txt", chat);
@@ -143,6 +143,8 @@ test("with no codes: the posts and their photos become an import plan for review
   await pg.fill("[data-cp-since]", "2026-01-01");
   await pg.click("[data-cp-read]");
   await pg.waitForSelector("[data-cp-unit]");
+  // A post is ticked by default once its summary is read (the button counts the ticked units and is off at 0), so wait for it.
+  await pg.waitForSelector("[data-cp-apply]:not([disabled])");
   await pg.click("[data-cp-apply]");
   await pg.waitForURL(/\/app\/import\/[0-9a-f-]{36}$/);
   const page = await pg.content();
