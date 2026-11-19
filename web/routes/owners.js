@@ -11,6 +11,7 @@ const Vis = require("../../lib/visibility");
 const { html, escapeHtml } = require("../html");
 
 const { L } = require("../../lib/copy");
+const { phoneHelp } = require("../views/phoneHelp");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const stamp = (d, lang) => new Date(d).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const PAGE = 50;
@@ -46,7 +47,7 @@ async function unitOwnerBlock(pool, viewer, listing, lang, csrf, notice = null) 
     <label>${L(lang, "كود العميل اللي اشتراها (L-0042)", "Lead who bought it (L-0042)")}<input name="lead" dir="ltr" placeholder="L-0042"></label>
     <p class="muted small">${L(lang, "أو مالك جديد:", "or a new owner:")}</p>
     <label>${L(lang, "الاسم", "Name")}<input name="name" maxlength="120"></label>
-    <label>${L(lang, "الموبايل", "Mobile")}<input name="phone" inputmode="tel" dir="ltr"></label>
+    <label>${L(lang, "الموبايل", "Mobile")}<input name="phone" inputmode="tel" dir="ltr">${phoneHelp(lang)}</label>
     <button type="submit" class="secondary">${L(lang, "انقل", "Move")}</button>
   </form></details>`
     : "";

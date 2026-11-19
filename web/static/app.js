@@ -940,15 +940,24 @@
     // Phone: say how the typed text is read, as you type.
     var DIG = { "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
     function latin(t) { return String(t).replace(/[٠-٩]/g, function (c) { return DIG[c]; }); }
-    function hint(name, fn) {
+    function hint(name, fn, empty) {
       var inp = form.querySelector('[name="' + name + '"]');
       if (!inp) return;
       var s = document.createElement("small");
       s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", name);
       inp.parentNode.appendChild(s);
-      var run = function () { s.textContent = inp.value ? fn(inp.value) : ""; };
+      var run = function () { s.textContent = inp.value ? fn(inp.value) : (empty || ""); };
       inp.addEventListener("input", run);
       run();
+    }
+    // A usable phone: an Egyptian mobile (01…, 20…; landlines are not used) or foreign written with + or 00 and the country code (8 to 15 digits).
+    function okPhone(v) {
+      var t = latin(v).trim(), d = t.replace(/\D/g, "");
+      if (/[^\d\s+\-().]/.test(t)) return false;
+      if (/^(20)?0?1[0125]\d{8}$/.test(d)) return true;
+      var intl = /^\+/.test(t) || /^00/.test(d);
+      if (/^00/.test(d)) d = d.slice(2);
+      return intl && d.length >= 8 && d.length <= 15 && d.charAt(0) !== "0";
     }
     // A phone that is already one of this broker's clients fills the owner's name and the lead code (only fields still empty).
     (function () {
@@ -959,7 +968,7 @@
       phone.addEventListener("input", function () {
         clearTimeout(timer);
         var d = latin(phone.value).replace(/\D/g, "");
-        if (!/^(20)?0?1[0125]\d{8}$/.test(d) || d === lastAsked) return;
+        if (!okPhone(phone.value) || d === lastAsked) return;
         timer = setTimeout(function () {
           lastAsked = d;
           fetch("/app/units/owner-lookup?phone=" + encodeURIComponent(d), { credentials: "same-origin", headers: { Accept: "application/json" } })
@@ -975,7 +984,7 @@
         }, 500);
       });
     })();
-    hint("owner_phone", function (v) { var d = latin(v).replace(/\D/g, ""); return /^(20)?0?1[0125]\d{8}$/.test(d) ? "✅" : (EN ? "⚠️ Egyptian mobile numbers have 11 digits (01…)" : "⚠️ الموبايل المصري 11 رقم (01…)"); });
+    hint("owner_phone", function (v) { return okPhone(v) ? "✅" : (EN ? "⚠️ Egyptian numbers are 11 digits (01…); a foreign number starts with + and the country code. No landlines" : "⚠️ الرقم المصري 11 رقم (01…)، والأجنبي يبدأ بـ + وكود الدولة. مفيش أرضي"); }, EN ? "Mobile only (no landlines): 01012345678, or a foreign number with + and the country code (+971…)." : "موبايل بس (مش أرضي): 01012345678، أو رقم أجنبي بـ + وكود الدولة (+971…).");
     // Area: a typo guard ("1500" for a 150 m² flat) and the price per m² once the price is filled too.
     (function () {
       var area = form.querySelector('[name="area_value"]'), price = form.querySelector('[name="price_value"]'), type = form.querySelector('[name="property_type"]');

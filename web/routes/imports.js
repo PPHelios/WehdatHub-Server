@@ -28,6 +28,7 @@ const { importEditor, cellsFromForm } = require("../views/importEditor");
 const { stripMarkdown } = require("../views/units");
 
 const { L } = require("../../lib/copy");
+const { phoneHelp } = require("../views/phoneHelp");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const SHEET = { name: "sheet", maxCount: 1, accept: /^(text\/(csv|plain)|application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel|csv|octet-stream|zip))$/ };
 const CHAT = { name: "chat", maxCount: 1, accept: /^(text\/plain|application\/(zip|x-zip-compressed|octet-stream))$/ };
@@ -424,7 +425,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   <h2>📞 ${L(lang, "الشيت مفيهوش عمود تليفون المالك", "The sheet has no owner phone column")}</h2>
   <p>${L(lang, "من غير تليفون المالك الوحدة مبتتسجلش. اكتب رقم واحد لكل الصفوف، أو صلّح كل صف لوحده.", "A unit cannot be saved without the owner's phone. Type one phone for all rows, or fix each row on its own.")}</p>
   ${extra.dataEntry ? "" : html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="owner_phone"><input type="hidden" name="action" value="owner_phone"><input type="hidden" name="_csrf" value="${extra.csrf || ""}">
-  <label>${L(lang, "رقم تليفون المالك", "Owner phone")}<input name="value" type="tel" inputmode="tel" autocomplete="off" maxlength="40" required placeholder="01012345678"></label>
+  <label>${L(lang, "رقم تليفون المالك", "Owner phone")}<input name="value" type="tel" inputmode="tel" autocomplete="off" maxlength="40" required placeholder="01012345678">${phoneHelp(lang)}</label>
   <div class="row"><button name="scope" value="missing">${L(lang, "استخدمه للصفوف اللي من غير رقم", "Use it for rows with no phone")}</button><button name="scope" value="all" class="secondary">${L(lang, "استخدمه لكل الصفوف", "Use it for all rows")}</button></div></form>`}
 </section>`
       : "";
@@ -437,7 +438,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
 ${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null, applied ? 0 : ready) : ""}
 ${noPhoneCard}${skippedLine}${readCard}
-${query.batch_error === "bad_phone" ? html`<p class="card notice bad" role="alert" data-batch-error="bad_phone">⚠️ ${L(lang, "الرقم مش صحيح. اكتب رقم موبايل مصري زي 01012345678.", "That number is not valid. Type an Egyptian mobile like 01012345678.")}</p>` : ""}
+${query.batch_error === "bad_phone" ? html`<p class="card notice bad" role="alert" data-batch-error="bad_phone">⚠️ ${L(lang, "الرقم مش صحيح. اكتب رقم زي 01012345678، أو رقم أجنبي بـ + وكود الدولة.", "That number is not valid. Type a number like 01012345678, or a foreign one with + and the country code.")}</p>` : ""}
 ${query.mapping === "empty" ? html`<p class="card notice bad" role="alert" data-mapping-error>⚠️ ${L(lang, "بالاختيار ده السعر أو المساحة بقوا فاضيين في كل الصفوف. رجّعنا القراءة زي ما كانت.", "With that choice price or area would be empty on every row. We kept the earlier reading.")}</p>` : ""}
 ${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}

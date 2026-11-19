@@ -2586,3 +2586,9 @@ body:not(.has-tabbar) .savebar { inset-block-end: 0; padding-block-end: calc(10p
 [data-draft-note]::before { content: "↩️"; font-size: 1.2rem; }
 [data-draft-note] button { margin-inline-start: auto; background: var(--warn); color: var(--on-warn); border-color: var(--warn); }
 .owner-found { color: var(--ok); }
+
+/* Import review: a problem row is a small card: where + reason, the unit line, the notes, then the Fix button on its own line, never beside the text. */
+section[data-kind] > ul, section[data-kind] ul.ie-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+section[data-kind] ul > li[data-row] { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); line-height: 1.6; }
+section[data-kind] ul > li[data-row] > button, section[data-kind] ul > li[data-row] > [data-edit-open] { margin-top: 2px; min-height: 44px; padding: 8px 16px; }
+section[data-kind] ul > li[data-row] > .muted { overflow-wrap: anywhere; }

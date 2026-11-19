@@ -123,7 +123,7 @@ const ERROR_LABELS = {
 };
 const NOTE = {
   compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
-  phone: (lang) => (lang === "en" ? "Owner phone does not look like an Egyptian mobile" : "تليفون المالك مش شكل موبايل مصري"),
+  phone: (lang) => (lang === "en" ? "Owner phone does not look like a valid number (foreign numbers need the country code)" : "تليفون المالك مش شكل رقم صحيح (الرقم الأجنبي لازم يبدأ بكود الدولة)"),
   dollar: (usd, lang) => (lang === "en" ? `Priced in dollars: saved as $${usd}, not converted` : `السعر بالدولار: اتسجل ${usd}$ من غير تحويل`),
   compoundUnknown: (name, near, lang) => (lang === "en"
     ? `Compound "${name}" is not on the list.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""} Open Edit to pick it from the list, or save it as a new compound.`
@@ -133,7 +133,6 @@ const NOTE = {
   codeMade: (lang) => (lang === "en" ? "No code in the sheet: numbered in the sheet's own pattern" : "مفيش كود في الشيت: اتعمل بنفس نمط أكواد الشيت"),
   codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت")
 };
-const EGY_PHONE = /^(\+?20|0)?1[0-9]{9}$/;
 // "UPtown cairo" and "UPtown" are the same compound: the city word at the end is not part of the name.
 const compoundKey = (v) => normalizeSearch(v).replace(/\s+(cairo|new cairo|القاهره|القاهرة|مصر|egypt)$/, "").trim();
 
@@ -298,7 +297,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
       }
     }
     const phone = p.draft.details?.owner_phone;
-    if (phone && !EGY_PHONE.test(phone.replace(/[\s-]/g, ""))) base.notes.push(NOTE.phone(lang));
+    if (phone && !require("../domain/phone").normalizePhone(phone)) base.notes.push(NOTE.phone(lang));
     if (code && seen.has(code)) {
       items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
       continue;

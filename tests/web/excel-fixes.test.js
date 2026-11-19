@@ -75,7 +75,7 @@ describe("Excel fixes in the review", () => {
     expect(page.text).not.toMatch(/data-notes=/);
   });
 
-  test("a euro price and a text-only row each show their reason; an owner phone that is not Egyptian is flagged", async () => {
+  test("a euro price and a text-only row each show their reason; an owner phone that is not a valid number is flagged", async () => {
     const { agent, csrf } = await signIn(h, "manager");
     const head = [...HEAD, "تليفون المالك"];
     const r = await upload(
@@ -91,7 +91,7 @@ describe("Excel fixes in the review", () => {
     expect(r.status).toBe(303);
     const page = await agent.get(r.headers.location);
     expect(page.text).toMatch(/السعر بعملة غير الجنيه/);
-    expect(page.text).toMatch(/data-notes="3"[^>]*>تليفون المالك مش شكل موبايل مصري/);
+    expect(page.text).toMatch(/data-notes="3"[^>]*>تليفون المالك مش شكل رقم صحيح/);
   });
 
   test("a row with text only in a column the app does not know is reported, not dropped", async () => {
