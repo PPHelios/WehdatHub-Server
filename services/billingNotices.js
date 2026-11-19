@@ -22,16 +22,16 @@ async function toManagers(pool, agencyId, { dedupeKey, title, body, now = new Da
   return n;
 }
 
-function paymentRequested(payment, agency, manager) {
+function paymentRequested(payment, agency, manager, pool = null) {
   const what = payment.kind === "credit_bundle" ? `credit bundle (${Plans.bundleById(payment.bundle_id)?.credits ?? "?"} credits)` : payment.kind === "voice_pack" ? "voice pack (old)" : payment.kind === "upgrade" ? `upgrade ${payment.detail?.from || ""} to ${payment.plan} (${payment.detail?.remainingDays ?? "?"} days left)` : `${payment.plan} × ${payment.months} month(s)`;
-  return ErrorReports.alertOwner([`💳 Payment announced ${payment.reference}`, `${agency.name} · ${manager.name || ""}`, `${what} · ${payment.amount_egp} EGP`, "Confirm on /app/owner once it arrives."].join("\n")).catch(() => {});
+  return ErrorReports.alertOwner([`💳 Payment announced ${payment.reference}`, `${agency.name} · ${manager.name || ""}`, `${what} · ${payment.amount_egp} EGP`, "Confirm on /app/owner once it arrives."].join("\n"), { category: "payments", pool }).catch(() => {});
 }
 
-function signupRequested(agency, broker, referrer = null) {
+function signupRequested(agency, broker, referrer = null, pool = null) {
   const lines = [`🆕 Sign-up waiting: ${agency.name}`, `${broker.name} · +${broker.phone_number}`];
   if (referrer) lines.push(`🎁 Invited by ${referrer.name}`);
   lines.push("Approve or reject on /app/owner.");
-  return ErrorReports.alertOwner(lines.join("\n")).catch(() => {});
+  return ErrorReports.alertOwner(lines.join("\n"), { category: "new_trial", pool }).catch(() => {});
 }
 
 async function paymentConfirmed(pool, { payment, agency, referral = null, restored: back = null }, { now = new Date() } = {}) {

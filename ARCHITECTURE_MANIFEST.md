@@ -123,6 +123,7 @@
   | `136_lead_intake_health.sql` | `lead_intakes` health: `status` (`active`/`disconnected`), `disconnect_reason`, `disconnected_at`, `last_error_at`, `last_error_code` |
   | `137_analytics_history.sql` | Market analytics history: `analytics_meta`, `analytics_search_daily` (nightly search counts by day, area, type, sale/rent, bedroom band, budget band), `listing_status_events` (+ `approx` backfill for sold units), triggers on `listings` that record every `price_value` change into `listing_prices` (source `edit`) and every status / `deleted_at` change into `listing_status_events`; RLS on |
   | `138_analytics_aggregates.sql` | `agencies.analytics_enabled` (default false), `analytics_market_daily`, `analytics_funnel_monthly` (own rows per agency + market row with `agency_id` NULL); RLS on, no policy |
+  | `139_agency_team_style.sql` | `agencies.team_style` ('shared' default | 'structured'), `agencies.segment_hint` (nullable solo/team/agency); read by `lib/workspace.js`, rules in `domain/segments.js` |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

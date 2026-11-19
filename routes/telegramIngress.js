@@ -91,7 +91,7 @@ ${TG_COPY.trialUsedEn}${Links.siteOrigin()}/#plans`;
       }
       const token = await WebAuth.issueLoginToken(pool, r.broker, { channel: "web" });
       await say(TG_COPY.trialDone(r.broker, Links.loginLinkUrl(token), WebAuth.LOGIN_TOKEN_TTL_MINUTES), { remove_keyboard: true });
-      ErrorReports.alertOwner(`🆕 Self-serve trial: ${r.agency.name} (${r.broker.name}) +${r.broker.phone_number}`).catch(() => {});
+      ErrorReports.alertOwner(`🆕 Self-serve trial: ${r.agency.name} (${r.broker.name}) +${r.broker.phone_number}`, { category: "new_trial", pool }).catch(() => {});
       return true;
     }
     return false;

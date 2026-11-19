@@ -445,7 +445,9 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   lock_until timestamp with time zone,
   founding_partner boolean DEFAULT false NOT NULL,
   extra_seats smallint DEFAULT 0 NOT NULL,
-  analytics_enabled boolean DEFAULT false NOT NULL
+  analytics_enabled boolean DEFAULT false NOT NULL,
+  team_style text DEFAULT 'shared'::text NOT NULL,
+  segment_hint text
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -2119,7 +2121,9 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = A
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_extra_seats_check CHECK (((extra_seats >= 0) AND (extra_seats <= 4)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
+ALTER TABLE agencies ADD CONSTRAINT agencies_segment_hint_check CHECK (((segment_hint IS NULL) OR (segment_hint = ANY (ARRAY['solo'::text, 'team'::text, 'agency'::text]))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
+ALTER TABLE agencies ADD CONSTRAINT agencies_team_style_check CHECK ((team_style = ANY (ARRAY['shared'::text, 'structured'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((wa_credits_monthly IS NULL) OR (wa_credits_monthly >= 0)));

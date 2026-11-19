@@ -1476,6 +1476,12 @@ form.card.row > label:has(select, input:not([type=checkbox], [type=radio])) { di
 form.card.row > label select, form.card.row > label input:not([type=checkbox], [type=radio]) { min-height: var(--btn-md); margin: 0; box-sizing: border-box; }
 form.card.row > button, form.card.row > .btn { min-height: var(--btn-md); }
 
+/* Failures page: severity badge. */
+.sev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
+.sev-high { background: #fde2e1; color: #9b1c1c; }
+.sev-medium { background: #fdf0d2; color: #8a5a00; }
+.sev-low { background: var(--soft); color: var(--ink); }
+
 /* Button rows (kind, period, pager): one even gap between rows and under the last one. */
 nav.row { margin-block: 0 12px; }
 

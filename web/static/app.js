@@ -829,6 +829,8 @@
   document.addEventListener("change", function (e) {
     var t = e.target;
     if (t && t.hasAttribute && t.hasAttribute("data-autosubmit") && t.form) t.form.submit();
+    // <form data-autosave>: a switch inside it saves at once; the Save button stays for browsers without script.
+    else if (t && t.type === "checkbox" && t.form && t.form.hasAttribute("data-autosave")) t.form.submit();
   });
   // Tabs made of radios: a link to something inside a hidden tab (#merge, #timeline) opens that tab first.
   function openTabFor(hash) {

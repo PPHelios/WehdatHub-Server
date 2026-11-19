@@ -21,6 +21,9 @@ const PLANS = [
 const FREE = { id: "free", name: ["مجاني", "Free"], priceEgp: 0, seats: 1, units: 50, credits: 80, prices: {} };
 // The self sign-up trial: 1 seat, 50 units and 80 AI credits. Never sold (not in PLANS, no prices).
 const TRIAL_PLAN = { id: "trial", name: ["تجربة", "Trial"], priceEgp: 0, seats: 1, units: 50, credits: 80, prices: {} };
+// Trial limits by sign-up choice (wired in Phase 5/6): 5 seats when sign-up picks "with a team", 7 photos per unit on the trial.
+const TRIAL_TEAM_SEATS = 5;
+const TRIAL_PHOTO_CAP = 7;
 // Extra credits bought for the month: { id, name: [ar, en], priceEgp, credits }.
 const BUNDLES = [
   { id: "small", name: ["باقة صغيرة", "Small"], priceEgp: 99, credits: 200 },
@@ -79,4 +82,4 @@ function unitLimitText(limit, lang = "ar") {
     : `⛔ وصلت للحد الأقصى لباقة ${name}: ${n} وحدة (المتاحة والمؤرشفة والمباعة). امسح الوحدات اللي مش محتاجها، أو رقّي الباقة من صفحة الباقة (/app/plan).`;
 }
 
-module.exports = { UNLIMITED, unitLimitText, hydrate, periodsOf, priceFor, perMonth, tierOf, EXTRA_SEAT, ALL, PLANS, FREE, TRIAL_PLAN, BUNDLES, TRIAL, planById, planName, bundleById };
+module.exports = { TRIAL_TEAM_SEATS, TRIAL_PHOTO_CAP, UNLIMITED, unitLimitText, hydrate, periodsOf, priceFor, perMonth, tierOf, EXTRA_SEAT, ALL, PLANS, FREE, TRIAL_PLAN, BUNDLES, TRIAL, planById, planName, bundleById };

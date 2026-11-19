@@ -214,8 +214,8 @@ function billingSections(b, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
   return html`${b.csrf !== undefined ? newAgencySection(lang, b.csrf) : ""}<section class="card" id="signups">
   <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
-  <form method="post" action="/app/owner/signup" class="stack" data-signup-form>
-    ${switchField({ name: "open", value: "1", on: b.open, lang, id: "signup-switch", label: L(lang, "التسجيل مفتوح", "Sign-up is open"), sentence: L(lang, "لما يكون شغّال، أي شركة تقدر تطلب تسجيل وكل طلب بيستنى موافقتك. لما يتقفل، مفيش طلبات جديدة.", "When on, any agency can ask to sign up and every request waits for your approval. When off, no new requests come in.") })}
+  <form method="post" action="/app/owner/signup" class="stack" data-signup-form data-autosave>
+    ${switchField({ name: "open", value: "1", on: b.open, lang, id: "signup-switch", label: L(lang, "التجربة المجانية مفتوحة", "Free trial sign-up is open"), sentence: L(lang, "لما يكون شغّال، أي حد يقدر يبدأ تجربة مجانية من صفحة الموقع ومن تليجرام من غير موافقتك. لما يتقفل، زرار «ابدأ التجربة» بيختفي ومفيش تجارب جديدة بتبدأ.", "When on, anyone can start a free trial from the landing page and Telegram, no approval needed. When off, the Start trial buttons disappear and no new trials start.") })}
     <button type="submit" class="secondary" data-signup-toggle="save">${L(lang, "حفظ", "Save")}</button>
   </form>
   ${b.signups.length
@@ -821,7 +821,7 @@ function register(web, { pool, page }) {
 
   web.post("/owner/signup", ownerOnly(async (req, res, lang) => {
     await Signup.setOpen(pool, req.body.open === "1");
-    return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التسجيل اتفتح.", "Sign-up is open.") : L(lang, "التسجيل اتقفل.", "Sign-up is closed.")));
+    return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التجربة المجانية اتفتحت.", "Free trial sign-up is open.") : L(lang, "التسجيل اتقفل.", "Free trial sign-up is closed.")));
   }));
 
   // CRM owner only: create an agency and its owner; the owner's Telegram start link is shown once.

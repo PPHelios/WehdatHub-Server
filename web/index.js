@@ -141,9 +141,16 @@ function mountWeb(app, { pool, config }) {
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   priv.use(async (req, _res, next) => {
-    if (req.method === "GET" && req.session?.broker?.agency_id) req.session.solo = await require("../lib/credits").isSoloCached(pool, req.session.broker.agency_id);
-    // Market analytics: the menu item shows only for managers of an agency the owner switched it on for (the page checks again).
-    if (req.method === "GET" && req.session?.broker?.agency_id && require("../services/analytics").isAgencyManager(req.session.broker)) req.session.broker.analytics_enabled = await require("../services/analytics").isEnabled(pool, req.session.broker.agency_id).catch(() => false);
+    const b = req.session?.broker;
+    if (req.method === "GET" && b?.agency_id) {
+      const ws = await require("../lib/workspace").stateOf(pool, b.agency_id, { role: b.role }).catch(() => null);
+      if (ws) {
+        b.workspace = ws;
+        req.session.solo = ws.solo;
+        // Market analytics: the menu item shows only for managers of an agency the owner switched it on for (the page checks again).
+        if (require("../services/analytics").isAgencyManager(b)) b.analytics_enabled = ws.analytics;
+      }
+    }
     return next();
   });
   // Data entry: only units (add, edit, look up), search, settings and notifications. Everything else is closed to them.

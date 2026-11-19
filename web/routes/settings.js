@@ -13,6 +13,7 @@ const { isManager, isDataEntry, isCrmOwner, isAgencyOwner } = require("../../lib
 const AgencyLogo = require("../../services/agencyLogo");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
+const OwnerAlerts = require("../../lib/ownerAlerts");
 const { uploads } = require("../uploads");
 
 // C7: the agency logo on client pages and PDFs (managers upload it here).
@@ -69,6 +70,27 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   <fieldset class="choice" data-channels="${k}"><legend>${L(lang, "القناة", "Channel")}</legend><div class="row">${chOpts.map(([v, text]) => html`<label class="check"><input type="checkbox" name="ch_${k}" value="${v}" data-kind="${k}"${chFixed ? html` data-fixed` : ""}${eff.enabled && chosen.has(v) ? html` checked` : ""}${chFixed || !eff.enabled ? html` disabled` : ""}${eff.enabled ? "" : chosen.has(v) ? html` data-was` : ""}> ${text}</label>`)}</div></fieldset>
   ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") ? html` data-fixed` : ""}${fixed("frequency") || !eff.enabled ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
 </div>`;
+}
+
+/** The CRM owner: which of the app's own alerts reach them (lib/ownerAlerts.js). One switch per category with its severity. */
+function ownerAlertsCard(lang, settings, { signupOpen = false } = {}) {
+  const en = lang === "en" ? 1 : 0;
+  const allOff = OwnerAlerts.CATEGORIES.every((c) => settings.off.includes(c.id));
+  const minOpts = [
+    ["low", L(lang, "كل التنبيهات", "Everything")],
+    ["medium", L(lang, "المتوسطة والعالية", "Medium and up")],
+    ["high", L(lang, "العالية بس", "High only")]
+  ];
+  return html`<form method="post" action="/app/settings/owner-alerts" class="card stack" id="owner-alerts" data-owner-alerts>
+  <h2>📣 ${L(lang, "تنبيهات ليا", "Alerts to me")}</h2>
+  <p class="muted">${L(lang, "اختار التنبيهات اللي توصلك عن التطبيق نفسه (تليجرام والإشعارات).", "Choose which alerts about the app itself reach you (Telegram and notifications).")}</p>
+  ${allOff ? html`<p class="notice bad" role="alert" data-owner-alerts-warning>⚠️ ${L(lang, "كل التنبيهات مقفولة. مش هيوصلك أي حاجة، حتى لو التطبيق وقع.", "Every alert is off. You will hear nothing, even if the app breaks.")}</p>` : ""}
+  <label>${L(lang, "ابعتلي", "Send me")} <select name="minSeverity">${minOpts.map(([v, text]) => html`<option value="${v}"${settings.minSeverity === v ? html` selected` : ""}>${text}</option>`)}</select></label>
+  ${OwnerAlerts.CATEGORIES.map((c) => switchField({ name: `on_${c.id}`, value: "1", send0: true, on: !settings.off.includes(c.id), lang, id: `oa-${c.id}`, label: html`${c[lang === "en" ? "en" : "ar"]} <span class="sev sev-${c.severity}">${OwnerAlerts.SEVERITY_LABELS[c.severity][en]}</span>` }))}
+  <h3>🏢 ${L(lang, "التسجيل", "Sign-ups")}</h3>
+  <p class="muted">${signupOpen ? L(lang, "التجربة المجانية مفتوحة.", "Free trial sign-up is open.") : L(lang, "التجربة المجانية مقفولة.", "Free trial sign-up is closed.")} <a href="/app/owner#signups">${L(lang, "غيّرها من هنا", "Change it here")}</a></p>
+  <button type="submit">${L(lang, "حفظ", "Save")}</button>
+</form>`;
 }
 
 /** Theme: light, dark or the phone's choice (the same buttons as the More page; web/static/app.js remembers it). */
@@ -201,6 +223,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   </div>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
+${crm ? ownerAlertsCard(lang, await OwnerAlerts.get(pool), { signupOpen: await require("../../services/signup").isOpen(pool) }) : ""}
 ${appearanceCard(lang)}
 ${dataEntry ? "" : html`<form method="post" action="/app/settings/quiet-line" class="card stack" id="quiet-line" data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}" data-savebar-name="${L(lang, "سطر الـ 60 يوم", "60-day line")}">
   <h2>⏳ ${L(lang, "سطر «بقالك 60 يوم مكلمتوش»", "The \"60 days since you spoke\" line")}</h2>
@@ -263,6 +286,18 @@ ${planHtml}`
       await pool.query("UPDATE brokers SET preferred_lang = $3 WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id, lang]);
     }
     return res.redirect(303, "/app/settings?saved=1");
+  });
+
+  // CRM owner only: which app alerts reach them. A switch posts "0" then "1" when on; unknown fields are ignored.
+  web.post("/settings/owner-alerts", async (req, res) => {
+    if (!isCrmOwner(req.session.broker)) return res.status(404).type("text/plain").send("Not found");
+    const now = await OwnerAlerts.get(pool);
+    const off = OwnerAlerts.CATEGORIES.filter((c) => {
+      const v = [].concat(req.body[`on_${c.id}`] ?? []).pop();
+      return v === "0" ? true : v === "1" ? false : now.off.includes(c.id);
+    }).map((c) => c.id);
+    await OwnerAlerts.save(pool, { off, minSeverity: req.body.minSeverity });
+    return res.redirect(303, "/app/settings?saved=1#owner-alerts");
   });
 
   // From the browser's PushManager (web/static/app.js): endpoint and keys as form fields.

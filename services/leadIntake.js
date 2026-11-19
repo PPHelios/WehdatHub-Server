@@ -112,7 +112,8 @@ async function disconnect(pool, intake, reason, r, now = new Date()) {
       `🔌 Facebook intake disconnected: ${agency?.name || intake.agency_id} · ${intake.name}`,
       `Page: ${intake.page_name || intake.page_id || "?"}. Reason: ${reason} (Graph ${r.err?.code ?? r.status}${r.err?.subcode ? `/${r.err.subcode}` : ""}) — ${reasonOf(reason, 1)}`,
       "Leads from this Page are NOT coming in. Get a new Page token from the agency, then press Update token on /app/owner (Facebook leads tab)."
-    ].join("\n")
+    ].join("\n"),
+    { category: "lead_intake", pool }
   ).catch(() => {});
   try {
     for (const m of await Notifications.managersOf(pool, intake.agency_id)) {
@@ -466,7 +467,7 @@ async function quietCheck(pool, { now = new Date() } = {}) {
   for (const i of rows) {
     await pool.query("UPDATE lead_intakes SET quiet_alerted_at = $2 WHERE id = $1", [i.id, now.toISOString()]);
     const since = i.last_lead_at ? new Date(i.last_lead_at).toISOString().slice(0, 10) : null;
-    ErrorReports.alertOwner([`🔕 Lead intake quiet: ${i.agency_name} · ${i.name}`, since ? `No lead since ${since} (${i.quiet_days}+ days).` : `No lead yet, ${i.quiet_days}+ days after it was made.`, "Check the Page token on /app/owner (Test) and the Page's leads access."].join("\n")).catch(() => {});
+    ErrorReports.alertOwner([`🔕 Lead intake quiet: ${i.agency_name} · ${i.name}`, since ? `No lead since ${since} (${i.quiet_days}+ days).` : `No lead yet, ${i.quiet_days}+ days after it was made.`, "Check the Page token on /app/owner (Test) and the Page's leads access."].join("\n"), { category: "lead_intake", pool }).catch(() => {});
     for (const m of await Notifications.managersOf(pool, i.agency_id)) {
       await Notifications.notifyBroker(pool, m, {
         kind: "manager_alert",

@@ -12,6 +12,7 @@ const Brokers = require("./brokers");
 const Billing = require("./billing");
 const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const { getConfig } = require("../config");
+const forgetWorkspace = (agencyId) => require("../lib/workspace").forget(agencyId);
 
 const INVITE_ROLES = ["broker", "manager", "data_entry"];
 /** Roles a manager can add a member as (a team lead too; changeRole keeps INVITE_ROLES: a team lead is made through setTeamLeadRole). */
@@ -126,6 +127,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
     brokerId = rows[0].id;
     created = true;
   }
+  forgetWorkspace(manager.agency_id);
   const link = await startLinkFor(pool, manager, brokerId, opts);
   const { rows: b } = await pool.query("SELECT id, name, role, phone_number, preferred_lang FROM brokers WHERE id = $1", [brokerId]);
   return { ok: true, broker: b[0], url: link.url || null, created, noBot: link.error === "no_bot" };
@@ -139,7 +141,9 @@ async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
   const { rows } = await pool.query("SELECT role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   if (!rows[0]) return { error: "not_found" };
   if (!mayActOn(manager, rows[0].role)) return { error: "rank" };
-  return Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
+  const out = await Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
+  forgetWorkspace(manager.agency_id);
+  return out;
 }
 
 /** Brings a deactivated broker back with the same role (a seat must be free). Their old leads stay with the managers. */
@@ -153,6 +157,7 @@ async function reactivate(pool, manager, brokerId) {
   if (b.is_active) return { ok: true, broker: b };
   if (!(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
   await pool.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
+  forgetWorkspace(manager.agency_id);
   return { ok: true, broker: b };
 }
 
@@ -169,6 +174,7 @@ async function remove(pool, manager, brokerId) {
   if (!b) return { error: "not_found" };
   if (!mayActOn(manager, b.role)) return { error: "rank" };
   if (b.is_active) return { error: "active" };
+  forgetWorkspace(manager.agency_id);
   try {
     await pool.query("DELETE FROM brokers WHERE id = $1 AND agency_id = $2 AND NOT is_active", [brokerId, manager.agency_id]);
   } catch (e) {
@@ -223,6 +229,7 @@ async function setTeamLeadRole(pool, manager, brokerId, on) {
     await pool.query("UPDATE broker_team_history SET to_at = now() WHERE team_lead_id = $1 AND agency_id = $2 AND to_at IS NULL", [brokerId, manager.agency_id]);
     await pool.query("UPDATE brokers SET team_lead_id = NULL WHERE team_lead_id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   }
+  forgetWorkspace(manager.agency_id);
   return { ok: true, broker: rows[0], from, to };
 }
 
