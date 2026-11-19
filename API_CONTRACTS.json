@@ -916,6 +916,24 @@
       "withCodeLock": ["pool", "agencyId", "code", "fn"],
       "FIELD_LABELS": "Object"
     },
+    "lib/failureInfo.js": {
+      "SEVERITIES": "Array",
+      "describe": ["operationType", "code"],
+      "SEVERITY_SQL": "String"
+    },
+    "lib/ownerAlerts.js": {
+      "CATEGORIES": "Array",
+      "SEVERITIES": "Array",
+      "SEVERITY_LABELS": "Object",
+      "DEFAULTS": "Object",
+      "KEY": "String",
+      "get": ["pool", "params"],
+      "save": ["pool", "input"],
+      "allowed": ["pool", "categoryId"],
+      "permits": ["settings", "categoryId"],
+      "clean": ["v"],
+      "invalidate": []
+    },
     "lib/errorReports.js": {
       "capture": ["err", "params"],
       "submitReport": ["pool", "broker", "params", "params"],
@@ -1782,8 +1800,8 @@
       "REMINDER_DAYS": "Object"
     },
     "services/billingNotices.js": {
-      "paymentRequested": ["payment", "agency", "manager"],
-      "signupRequested": ["agency", "broker", "referrer"],
+      "paymentRequested": ["payment", "agency", "manager", "pool"],
+      "signupRequested": ["agency", "broker", "referrer", "pool"],
       "paymentConfirmed": ["pool", "params", "params"],
       "remindEnding": ["pool", "params"],
       "remindLapsed": ["pool", "params"],
