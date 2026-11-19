@@ -16,7 +16,7 @@ const { html } = require("../html");
 const { dealsSwitch } = require("../views/tabs");
 const Vis = require("../../lib/visibility");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const money = (n, lang) => Commission.money(n, lang);
 const when = (d) => new Date(d).toISOString().slice(0, 10);

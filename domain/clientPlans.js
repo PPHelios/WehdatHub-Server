@@ -6,7 +6,7 @@
 const F = require("../lib/financials");
 
 const FREQ = { monthly: ["شهري", "monthly"], quarterly: ["ربع سنوي", "quarterly"], semi_annual: ["نص سنوي", "semi-annual"], annual: ["سنوي", "annual"] };
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../lib/copy");
 const known = (v) => v !== null && v !== undefined && v !== "" && !Number.isNaN(Number(v));
 
 /** The plan with the unit's own maintenance and delivery (the same merge as the Excel export). */

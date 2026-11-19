@@ -10,7 +10,7 @@ const Portfolio = require("../../services/privatePortfolio");
 const Vis = require("../../lib/visibility");
 const { html, escapeHtml } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const stamp = (d, lang) => new Date(d).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const PAGE = 50;

@@ -4,7 +4,7 @@
 
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 
 const FREE_ACTIONS = [
   ["صفحة اتقرت قبل كده من أي شركة، وفلاير تاني لنفس الوحدة", "A page any agency already read, and a later flyer for the same unit"],

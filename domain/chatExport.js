@@ -45,8 +45,8 @@ function splitPasted(text) {
  * Upload or paste → candidate posts, de-duplicated by normalized text, at most MAX_POSTS.
  * @returns {{ posts: [{ sender, at, text, hash }], total, skipped, duplicates, truncated }}
  */
-function candidatePosts(text, { since = null } = {}) {
-  const messages = (isChatExport(text) ? parseChatExport(text) : splitPasted(text)).filter(notOlder(sinceMs(since)));
+function candidatePosts(text, { since = null, until = null } = {}) {
+  const messages = (isChatExport(text) ? parseChatExport(text) : splitPasted(text)).filter(notOlder(sinceMs(since), sinceMs(until)));
   const seen = new Set();
   const posts = [];
   let skipped = 0;

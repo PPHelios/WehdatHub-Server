@@ -336,7 +336,7 @@ async function discard(pool, actor, id) {
 /* The card (website and bot share the words)                              */
 /* ---------------------------------------------------------------------- */
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../lib/copy");
 const money = (n, lang) => Commission.money(n, lang);
 const STATUS_WORD = { sold: ["مباعة", "sold"], active: ["متاحة", "available"] };
 const FREQ = { monthly: ["شهري", "monthly"], quarterly: ["ربع سنوي", "quarterly"], semi_annual: ["نص سنوي", "semi-annual"], annual: ["سنوي", "annual"] };

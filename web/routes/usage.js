@@ -17,7 +17,7 @@ const { switchField, choiceField } = require("../views/switches");
 const AiLimits = require("../../services/aiUserLimits");
 const { tabs } = require("../views/tabs");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const isManager = (b) => MANAGER_ROLES.includes(String(b.role || "").toLowerCase());
 

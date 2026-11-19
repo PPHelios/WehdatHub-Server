@@ -346,3 +346,44 @@ test("every query services/leads.js sends is scoped by agency", async () => {
   expect(leadSql.length).toBeGreaterThan(20);
   for (const q of leadSql) expect(q).toMatch(/agency_id/);
 });
+
+describe("countTabs: one statement, same numbers as listLeads per tab", () => {
+  const Stages = require("../../domain/leadStages");
+  const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step"];
+  const tabFilter = (tab) => ({ stage: Stages.STAGES.includes(tab) ? tab : null, dueToday: tab === "due_today", overdue: tab === "overdue", noNextStep: tab === "no_next_step" });
+
+  test("every tab equals the old per-tab total, for each role and filter", async () => {
+    const now = new Date();
+    let n = 0;
+    for (const who of ["broker", "colleague", "broker", "colleague", "broker", "colleague", "broker", "broker"]) {
+      n++;
+      await capture(who, { phones: `0101234${String(5000 + n)}`, name: n % 2 ? `Sara ${n}` : `Omar ${n}` });
+    }
+    const stages = ["contacted", "interested", "viewing", "negotiation", "won", "lost", "contacted"];
+    for (let i = 0; i < stages.length; i++) {
+      const lead = (await h.query("SELECT id, assigned_broker_id FROM leads WHERE ref = $1", [i + 1]))[0];
+      await h.query("UPDATE leads SET stage = $2, lost_reason = CASE WHEN $2 = 'lost' THEN 'x' END WHERE id = $1", [lead.id, stages[i]]);
+    }
+    const hour = 3600e3;
+    // 1 overdue, 2 due today (cairo day may vary: use now), 3 open later, others none.
+    await h.query("UPDATE leads SET follow_up_status = 'open', next_follow_up_at = $1 WHERE ref = 1", [new Date(now.getTime() - 5 * 24 * hour).toISOString()]);
+    await h.query("UPDATE leads SET follow_up_status = 'open', next_follow_up_at = $1 WHERE ref = 2", [new Date(now.getTime() - 1 * hour).toISOString()]);
+    await h.query("UPDATE leads SET follow_up_status = 'open', next_follow_up_at = $1 WHERE ref = 3", [new Date(now.getTime() + 30 * hour).toISOString()]);
+    await h.query("UPDATE leads SET follow_up_status = 'open', next_follow_up_at = $1 WHERE ref = 4", [new Date(now.getTime() + 2 * hour).toISOString()]);
+
+    const filters = [{}, { q: "Sara" }, { q: "L-0003" }, { q: "5002" }, { brokerId: "none" }, { brokerId: B.colleague.id }, { q: "Omar", brokerId: B.broker.id }];
+    let nonZero = 0;
+    for (const who of ["admin", "owner", "broker", "colleague"]) {
+      for (const f of filters) {
+        const got = await Leads.countTabs(h.pool, B[who], f, Object.fromEntries(TABS.map((t) => [t, tabFilter(t)])), { now });
+        for (const t of TABS) {
+          const old = (await Leads.listLeads(h.pool, B[who], { ...tabFilter(t), ...f, countOnly: true }, { now })).total;
+          expect(got[t]).toBe(old);
+          if (old > 0) nonZero++;
+        }
+        expect(Object.keys(got)).toEqual(TABS);
+      }
+    }
+    expect(nonZero).toBeGreaterThan(40);
+  });
+});

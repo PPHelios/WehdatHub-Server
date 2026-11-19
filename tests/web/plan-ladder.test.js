@@ -30,6 +30,9 @@ let h;
 
 beforeEach(async () => {
   h = await createHarness();
+  // These tests move plan dates straight in the database, so the 15 s plan-state memo must be dropped on every write.
+  const query = h.query;
+  h.query = async (...args) => { const r = await query(...args); PlanGuard.forget(h.AGENCY_A); return r; };
   await Credits.refresh(h.pool); // the plans of this fresh database, not the last test's
   process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
   resetConfig();

@@ -15,7 +15,7 @@ const Signup = require("../../services/signup");
 const { BRAND } = require("../../domain/brand");
 const { getConfig } = require("../../config");
 const { securityHeaders, sameOrigin } = require("../security");
-const { html, layout } = require("../html");
+const { html, layout, brandLink } = require("../html");
 const { icon, MARK } = require("../icons");
 
 const T = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -209,13 +209,13 @@ function mountLanding(app, { pool, assets }) {
             title: T(lang, "وحداتك وعملاءك على تيليجرام", "Units and clients on Telegram"),
             robots: "index, follow",
             scripts: false,
+            theme: true,
             manifest: false,
             head: html`<meta name="description" content="${T(lang, "WehdatHub: مساعد الوحدات والعملاء للبروكرز والشركات العقارية في مصر، على تيليجرام والموقع.", "WehdatHub: the units and clients assistant for real estate brokers and agencies in Egypt, on Telegram and the web.")}">
 <meta property="og:title" content="${BRAND.name}">
-<link rel="alternate" hreflang="${other}" href="/?lang=${other}">
-<script src="${assets.url("theme.js")}" defer></script>`,
+<link rel="alternate" hreflang="${other}" href="/?lang=${other}">`,
             body: html`<nav class="top lp-top">
-  <a class="brand" href="/?lang=${lang}">${MARK}${lang === "en" ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>
+  ${brandLink(`/?lang=${lang}`, lang)}
   <div class="lp-nav-links">
     <a href="#features">${T(lang, "المميزات", "Features")}</a>
     <a href="#plans">${T(lang, "الباقات", "Plans")}</a>

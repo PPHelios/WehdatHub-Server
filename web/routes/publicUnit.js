@@ -30,7 +30,7 @@ const { html, layout } = require("../html");
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 const CODE = /^[A-Za-z0-9][A-Za-z0-9_\-.]{1,29}$/;
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const INTEREST_IP = { limit: 5, windowSec: 3600 };
 const INTEREST_LINK = { limit: 20, windowSec: 24 * 3600 };
 const PDF_IP = { limit: 20, windowSec: 3600 };

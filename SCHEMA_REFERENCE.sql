@@ -1866,6 +1866,15 @@ CREATE TABLE IF NOT EXISTS public.trial_signups (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.chat_import_decisions (
+  agency_id uuid NOT NULL,
+  broker_id uuid,
+  chat_fp text NOT NULL,
+  post_fp text NOT NULL,
+  outcome text NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -1963,6 +1972,7 @@ ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id_hash);
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_key UNIQUE (credential_id);
 ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
 ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
+ALTER TABLE chat_import_decisions ADD CONSTRAINT chat_import_decisions_key UNIQUE (agency_id, chat_fp, post_fp);
 ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_key UNIQUE (deal_id);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_idem_key_key UNIQUE (agency_id, idem_key);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref);
@@ -2022,6 +2032,9 @@ ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHEC
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_input_check CHECK ((length(input) <= 1000));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_status_check CHECK ((status = ANY (ARRAY['preview'::text, 'applied'::text, 'undone'::text, 'discarded'::text])));
+ALTER TABLE chat_import_decisions ADD CONSTRAINT chat_import_decisions_chat_fp_check CHECK (((length(chat_fp) >= 8) AND (length(chat_fp) <= 64)));
+ALTER TABLE chat_import_decisions ADD CONSTRAINT chat_import_decisions_outcome_check CHECK ((outcome = ANY (ARRAY['saved'::text, 'discarded'::text, 'unchanged'::text])));
+ALTER TABLE chat_import_decisions ADD CONSTRAINT chat_import_decisions_post_fp_check CHECK (((length(post_fp) >= 2) AND (length(post_fp) <= 64)));
 ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_amount_check CHECK (((amount IS NULL) OR (amount > 0)));
 ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_claim_paid_pct_check CHECK (((claim_paid_pct IS NULL) OR ((claim_paid_pct > (0)::numeric) AND (claim_paid_pct <= (100)::numeric))));
 ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_claim_trigger_check CHECK ((claim_trigger = ANY (ARRAY['contract'::text, 'down_payment'::text, 'paid_pct'::text])));
@@ -2225,7 +2238,7 @@ ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRA
 ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_status_check CHECK ((status = ANY (ARRAY['proposed'::text, 'confirmed'::text, 'reschedule'::text, 'cancelled'::text])));
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_kind_check CHECK ((kind = ANY (ARRAY['excel'::text, 'group'::text, 'leads'::text])));
-ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applied'::text, 'failed'::text])));
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applying'::text, 'applied'::text, 'failed'::text])));
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text, 'code'::text])));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -2246,6 +2259,8 @@ ALTER TABLE brokers ADD CONSTRAINT brokers_team_lead_id_fkey FOREIGN KEY (team_l
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE chat_import_decisions ADD CONSTRAINT chat_import_decisions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE chat_import_decisions ADD CONSTRAINT chat_import_decisions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE commissions ADD CONSTRAINT commissions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -2435,6 +2450,7 @@ CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree 
 CREATE INDEX brokers_team_lead ON public.brokers USING btree (agency_id, team_lead_id) WHERE (team_lead_id IS NOT NULL);
 CREATE UNIQUE INDEX brokers_telegram_user_uidx ON public.brokers USING btree (telegram_user_id) WHERE (telegram_user_id IS NOT NULL);
 CREATE INDEX idx_catalogue_updates_agency ON public.catalogue_updates USING btree (agency_id, created_at DESC);
+CREATE INDEX chat_import_decisions_chat_idx ON public.chat_import_decisions USING btree (agency_id, chat_fp, updated_at DESC);
 CREATE INDEX idx_commissions_agency_status ON public.commissions USING btree (agency_id, status);
 CREATE INDEX idx_compare_links_broker ON public.compare_links USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);

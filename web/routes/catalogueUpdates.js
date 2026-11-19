@@ -10,7 +10,7 @@ const { isManager } = require("../../lib/authz");
 const { uploads, VOICE } = require("../uploads");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const upload = uploads([VOICE], { maxMb: 10 });
 Session.allowMultipart(/^\/catalogue\/updates$/);

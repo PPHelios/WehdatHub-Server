@@ -420,7 +420,7 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
   }
   const total = rows.length ? Number(rows[0].total_count) : 0;
   const rateMissing = await Fx.missingRates(pool, agencyId, fx);
-  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, rateMissing, dbMs: Date.now() - t0, ask: null };
+  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, rateMissing, fx, dbMs: Date.now() - t0, ask: null };
 }
 
 /**
@@ -442,10 +442,11 @@ async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE, { st
 /**
  * How many units of one status fit the same filters (strict pass only): the number on the "Sold" button. 0 when none.
  * The filters are the ones the available results were built with, so words that were left out stay left out.
+ * `fx` (optional): the agency's rates when the caller already has them (runSearch returns them).
  */
-async function countByStatus(pool, agencyId, parsed, status) {
+async function countByStatus(pool, agencyId, parsed, status, fx) {
   if (!SEARCH_STATUSES.includes(status)) return 0;
-  const { sql, params } = buildSearchQuery(agencyId, parsed, { status, limit: 1, fx: await Fx.loadRates(pool, agencyId) });
+  const { sql, params } = buildSearchQuery(agencyId, parsed, { status, limit: 1, fx: fx || (await Fx.loadRates(pool, agencyId)) });
   const { rows } = await pool.query(sql, params);
   return rows.length ? Number(rows[0].total_count) : 0;
 }

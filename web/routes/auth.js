@@ -11,7 +11,7 @@ const { notifyPreferred } = require("../../lib/dispatcher");
 const { logOperation: logOp } = require("../../lib/db");
 const Audit = require("../../services/audit");
 const logOperation = (pool, p) => { Audit.fromOperation(pool, p); return logOp(pool, p); };
-const { t } = require("../../lib/copy");
+const { t, L } = require("../../lib/copy");
 const TgInit = require("../../domain/tgInitData");
 const TgLink = require("../../lib/tgLink");
 const Passkeys = require("../../services/passkeys");
@@ -20,7 +20,6 @@ const S = require("../session");
 const { html } = require("../html");
 const { icon, MARK } = require("../icons");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
 
 /** True only for the demo broker: the demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true". */
 function isDemoBroker(env, broker) {

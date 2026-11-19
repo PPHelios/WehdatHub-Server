@@ -12,7 +12,7 @@ const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
 const { html } = require("../html");
 const Credits = require("../../services/credits");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const isManager = (b) => MANAGER_ROLES.includes(String(b.role || "").toLowerCase());
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");

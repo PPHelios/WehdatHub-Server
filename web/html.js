@@ -48,7 +48,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, theme = false, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
   const en = lang === "en";
   const crm = Boolean(broker) && require("../lib/authz").isCrmOwner(broker);
   const tab = broker ? (crm ? crmTabOf(path) : tabOf(path, nav)) : null;
@@ -61,15 +61,16 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta name="theme-color" content="${BRAND.colors.brand}">
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}
-<title>${title ? `${title} · WehdatHub` : "WehdatHub"}</title>
+<title>${title ? `${title} · ${BRAND.name}` : BRAND.name}</title>
 ${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
 <link rel="icon" href="${assets(BRAND.logo)}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${assets("icons/icon-192.png")}">
-<link rel="stylesheet" href="${assets("brand.css")}">
+${scripts || theme ? html`<script src="${assets("theme.js")}"></script>
+` : ""}<link rel="preload" href="${assets("fonts/cairo-400.woff2")}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="${assets("fonts/cairo-700.woff2")}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${assets("app.css")}">
 ${head || ""}
-${scripts ? html`<script src="${assets("theme.js")}" defer></script>
-<script src="${assets("htmx.min.js")}" defer></script>
+${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("carousel.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
 <script src="${assets("busy.js")}" defer></script>
@@ -237,20 +238,33 @@ function viewAgencyForm(broker, lang) {
   return html`<form method="post" action="/app/test-view" class="test-role" data-test-role><label><span class="sr-only">${en ? "Agency" : "الشركة"}</span><select name="view" data-autosubmit><option value="home"${on ? "" : raw(" selected")}>${en ? "Test agency" : "شركة التجربة"}</option><option value="other"${on ? raw(" selected") : ""}>${en ? "NCH (read only)" : "NCH (للقراءة فقط)"}</option></select></label><noscript><button type="submit">✓</button></noscript></form>`;
 }
 
+/** The brand name and mark that link home (translate="no": the product name is never machine-translated). */
+function brandLink(href, lang, { label = false } = {}) {
+  const en = lang === "en";
+  const { MARK } = require("./icons");
+  return html`<a class="brand" translate="no" href="${href}"${label ? html` aria-label="${en ? "Wehdat Hub" : "وحدات هب"}"` : ""}>${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>`;
+}
+
+/** The light/dark switch of the top bar (web/static/theme.js drives it). */
+function themeToggle(lang) {
+  const en = lang === "en";
+  const { icon } = require("./icons");
+  return html`<button type="button" class="iconbtn theme-toggle" data-theme-toggle aria-label="${en ? "Switch theme" : "تبديل المظهر"}"><span class="ico-sun">${icon("sun", 20)}</span><span class="ico-moon">${icon("moon", 20)}</span></button>`;
+}
+
 function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   const en = lang === "en";
-  const { icon, MARK } = require("./icons");
+  const { icon } = require("./icons");
   const TestRole = require("../lib/testRole");
   return html`<header class="top">
-  <a class="brand" href="${broker ? "/app/" : "/"}" aria-label="${en ? "Wehdat Hub" : "وحدات هب"}">${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>
+  ${brandLink(broker ? "/app/" : "/", lang, { label: true })}
   ${broker && TestRole.canSwitch(broker) && (TestRole.canView(broker) || broker.view_of) ? viewAgencyForm(broker, lang) : ""}
   ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
+  ${themeToggle(lang)}
   ${broker
-    ? html`<button type="button" class="iconbtn theme-toggle" data-theme-toggle aria-label="${en ? "Switch theme" : "تبديل المظهر"}"><span class="ico-sun">${icon("sun", 20)}</span><span class="ico-moon">${icon("moon", 20)}</span></button>
-  <a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
+    ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}${unread ? ` (${unread > 99 ? "99+" : unread})` : ""}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
   <a class="iconbtn" href="${tab === "more" ? "/app/" : "/app/more"}" aria-label="${tab === "more" ? (en ? "Close menu" : "إغلاق القائمة") : (en ? "More" : "المزيد")}"${tab === "more" ? raw(' aria-current="page" data-menu-close') : ""}>${icon("more")}</a>`
-    : html`<button type="button" class="iconbtn theme-toggle" data-theme-toggle aria-label="${en ? "Switch theme" : "تبديل المظهر"}"><span class="ico-sun">${icon("sun", 20)}</span><span class="ico-moon">${icon("moon", 20)}</span></button>
-  <a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
+    : html`<a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
 </header>`;
 }
 
@@ -266,4 +280,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, phoneLtr, escapeHtml, jsonAttr, layout, withCsrf, navFor, tabOf, HTMX_CONFIG };
+module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, phoneLtr, escapeHtml, jsonAttr, layout, themeToggle, brandLink, withCsrf, navFor, tabOf, HTMX_CONFIG };

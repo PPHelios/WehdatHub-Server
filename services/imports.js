@@ -23,6 +23,7 @@ const { normalizeSearch } = require("../domain/searchText");
 const Supabase = require("../lib/supabase");
 const PhotoHash = require("./photoHash");
 const ParseLog = require("./chatParseLog");
+const Decisions = require("./chatDecisions");
 const { MAX_PHOTOS } = require("../lib/images");
 const Vis = require("../lib/visibility");
 
@@ -209,7 +210,7 @@ async function forgetPrefs(pool, agencyId) {
  * @param {Object} sheet - lib/sheets.js readInventorySheet output
  * @returns {Promise<{ items, counts }>}
  */
-async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {}) {
+async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seenCodes = [] } = {}) {
   let remembered = null;
   if (sheet.tabs) {
     // Earlier choices are only offered on the review page (pre-selected), never applied without a tap.
@@ -234,7 +235,22 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
   const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
   const byCode = new Map(found.map((l) => [l.code_norm, l]));
   const known = await knownCompounds(pool, broker.agency_id);
-  const seen = new Set();
+  const seen = new Set(seenCodes);
+  // One compound resolve per distinct typed name, shared by the unknown-compound check and the duplicate check.
+  const CR = require("./compoundResolve");
+  const resolved = new Map();
+  const resolveOf = async (typed) => {
+    if (!resolved.has(typed)) resolved.set(typed, await CR.resolve(pool, { compound: typed }).catch(() => null));
+    return resolved.get(typed);
+  };
+  // Many rows: the agency's comparable units are read once and compared in memory (Store.duplicateIndex); a few rows (one Edit) keep the narrow query.
+  let dupIndex = null;
+  const findDup = async (l) => {
+    if (parsed.length <= 5) return Store.findDuplicate(pool, broker.agency_id, l);
+    if (!dupIndex) dupIndex = await Store.duplicateIndex(pool, broker.agency_id);
+    const named = Dup.comparable(l) && l.compound && !l.compound_en ? await resolveOf(String(l.compound).trim()) : null;
+    return dupIndex.find(l, named);
+  };
   const compoundCheck = new Map(); // compound key → { unknown, near } (one lookup per distinct name)
   const items = [];
   const sheetNew = [];
@@ -250,6 +266,11 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
     if (p.hint) base.status_hint = p.hint;
     if (p.errors.length) {
       items.push({ ...base, kind: "invalid", reasons: p.errors.map((e) => quoted(e, p.cells, lang)), needs: [...new Set(p.errors.map((e) => ERROR_NEEDS[e]).filter(Boolean))] });
+      continue;
+    }
+    // The template's example rows (code SAMPLE-1, notes "صف تجريبي") are never imported as units.
+    if (/^SAMPLE[-_ ]/i.test(String(p.cells.code ?? "").trim()) || String(p.cells.notes ?? "").includes("صف تجريبي")) {
+      items.push({ ...base, kind: "invalid", reasons: [lang === "en" ? "Sample row, delete it" : "ده صف تجريبي، امسحه"], needs: [], sample: true });
       continue;
     }
     if (p.draft.compound) {
@@ -322,8 +343,8 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
       // and said here, so the preview and the apply agree (QA 2026-11-17: a bad phone was listed as New, then not applied).
       const ownerPhone = p.draft.details?.owner_phone;
       const typedPhone = String(ownerPhone ?? p.cells?.owner_phone ?? "").trim();
-      // A typed number that is not a mobile is always a problem; an empty phone only blocks a WhatsApp post (an Excel sheet may leave it empty).
-      if (!require("../domain/phone").normalizePhone(ownerPhone) && (typedPhone || source === "chat")) {
+      // A typed number that is not a mobile is a problem, and so is an empty one: createListing refuses a unit with no owner phone.
+      if (!require("../domain/phone").normalizePhone(ownerPhone)) {
         const typed = typedPhone;
         const reason = typed
           ? lang === "en" ? `Owner phone is not a valid Egyptian mobile: «${typed.slice(0, 40)}»` : `تليفون المالك مش موبايل مصري صحيح: «${typed.slice(0, 40)}»`
@@ -340,8 +361,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
       if (typedCompound) {
         const key = compoundKey(typedCompound);
         if (!compoundCheck.has(key)) {
-          const CR = require("./compoundResolve");
-          const r = await CR.resolve(pool, { compound: typedCompound }).catch(() => null);
+          const r = await resolveOf(typedCompound);
           const unknown = Boolean(r && r.compound_state === "needs_fix");
           compoundCheck.set(key, { unknown, near: unknown ? ((await CR.suggest(pool, typedCompound, 3).catch(() => [])) || []).map((x) => (typeof x === "string" ? x : x.name || x.name_ar || "")).filter(Boolean) : [] });
         }
@@ -352,7 +372,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
         }
       }
       // A likely duplicate: an active unit in the agency, or an earlier row of this sheet (never a block, only a warning).
-      const dup = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
+      const dup = await findDup(ev.listing);
       if (dup) warnings.push(NOTE.dupDb(dup, lang));
       if (dup && source === "chat") {
         const ex = await Store.findByCode(pool, broker.agency_id, dup);
@@ -384,7 +404,10 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null } = {
   }
 
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
-  return remembered ? { items, counts, remembered } : { items, counts };
+  // Whether the sheet had an owner phone column at all (the review says so when it had none).
+  const mapped = Array.isArray(sheet.mapped) ? sheet.mapped : null;
+  const info = source === "chat" ? null : { no_phone_column: mapped ? !mapped.includes("owner_phone") : !sheet.rows.some((r) => r.cells?.owner_phone !== undefined) };
+  return { items, counts, ...(info ? { info } : {}), ...(remembered ? { remembered } : {}) };
 }
 
 /**
@@ -471,25 +494,186 @@ async function patchOne(pool, broker, code, patch, expectedVersion) {
     if (!Authz.canEdit(broker, listing)) return { rollback: true, outcome: "forbidden" };
     const res = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion: expectedVersion ?? listing.version });
     if (res.conflict) return { rollback: true, outcome: "conflict" };
+    if (!res.listing) return { rollback: true, outcome: "forbidden" };
     return { outcome: "updated", listing: res.listing };
   });
 }
 
+/* ---------------------------------------------------------------------- */
+/* Apply: a background job, a few rows at a time, written down as it goes   */
+/* ---------------------------------------------------------------------- */
+
+const applyJobs = new Map(); // import id → promise of the running Apply (tests and shutdown can wait for it)
+const APPLY_BATCH = 25; // rows per transaction, and how often the result is written (a crash leaves a record)
+const APPLY_STALE_MS = 120000; // an 'applying' plan with no heartbeat for this long lost its process
+
+const rowSet = (v) => new Set((Array.isArray(v) ? v : []).map(Number));
+/** Rows of a plan an Apply already wrote (the plan stays 'ready' while other rows remain). */
+const appliedRows = (imp) => new Set([...rowSet(imp?.payload?.applied_rows), ...rowSet(imp?.result?.applied_rows)]);
+/** The new and changed rows no Apply wrote yet (a thrown-away row does not count). The plan closes when there are none. */
+function remainingRows(imp) {
+  const done = appliedRows(imp);
+  const thrown = rowSet(imp?.payload?.discarded);
+  return (imp?.payload?.items || []).filter((i) => ["new", "changed"].includes(i.kind) && !done.has(i.row) && !thrown.has(i.row)).map((i) => i.row);
+}
+
+const FAIL_REASONS = {
+  owner_required: ["تليفون المالك ناقص أو مش صحيح", "Owner phone is missing or not valid"],
+  owner_name_required: ["اسم المالك ناقص", "Owner name is missing"],
+  forbidden: ["مش من حقك تضيف أو تعدل وحدات", "You may not add or change units"],
+  missing: ["الوحدة مش موجودة", "The unit no longer exists"],
+  photos: ["الصور متحفظتش", "The photos were not saved"],
+  error: ["حصلت مشكلة وقت الحفظ", "Something went wrong while saving"]
+};
+/** The words for a failed row's reason key (an unknown key is shown as it is). */
+const failReason = (reason, lang = "ar") => pick(FAIL_REASONS[reason], lang) || String(reason || "");
+/** A failed entry as a line: "NH-1: reason". Old results stored the code alone (a string). */
+const failedLine = (f, lang = "ar") => (f && typeof f === "object" ? (f.reason ? `${f.code}: ${failReason(f.reason, lang)}` : String(f.code)) : String(f));
+const failedCode = (f) => (f && typeof f === "object" ? f.code : f);
+
+/** Moves a ready plan to 'applying' once (a second press, a stale tab or an expired plan gets null). */
+async function claimApply(pool, broker, id, req) {
+  const { rows } = await pool.query(
+    `UPDATE web_imports SET status = 'applying', applied_at = NOW(), result = coalesce(result, '{}'::jsonb) || $4::jsonb
+     WHERE id = $1 AND agency_id = $2 AND broker_id = $3 AND kind = 'excel' AND status = 'ready' AND expires_at > NOW()
+     RETURNING *`,
+    [id, broker.agency_id, broker.id, JSON.stringify({ apply_req: req, heartbeat: new Date().toISOString(), progress: { done: 0, total: 0 } })]
+  );
+  return rows[0] || null;
+}
+
+function launchApply(pool, broker, imp, req, fresh) {
+  const run = new Promise((resolve) => setImmediate(resolve)).then(() => runApply(pool, broker, imp, req, fresh));
+  // Kept apart so a failure in the background is logged (the plan stays 'applying': Resume or Undo), never an unhandled rejection.
+  run.catch((err) => console.error("Excel apply failed:", err.message)).finally(() => applyJobs.delete(imp.id));
+  applyJobs.set(imp.id, run);
+  return run;
+}
+
 /**
- * Applies the selected rows of an Excel plan. Each row is its own transaction.
- * @returns {Promise<{ created, updated, conflicts, failed } | null>} null when the plan cannot be applied
+ * Starts applying the ticked rows in the background and returns at once: { id, status: "applying" }, or null when the plan
+ * cannot be applied (not ready, already running, expired, not this broker's). Poll applyStatus.
  */
-async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolutions = {}, photoChoices = {} } = {}) {
-  const imp = await claim(pool, broker, id, "excel");
+async function startApplyExcel(pool, broker, id, { rows = [], lang = "ar", resolutions = {}, photoChoices = {} } = {}) {
+  const req = { rows: [...new Set(rows.map(Number))].filter(Number.isInteger), lang, resolutions, photoChoices };
+  const imp = await claimApply(pool, broker, id, req);
   if (!imp) return null;
+  launchApply(pool, broker, imp, req, true);
+  return { id, status: "applying" };
+}
+
+/** Applies the ticked rows and waits for the end (what the page did before Apply ran in the background). Null when the plan cannot be applied. */
+async function applyExcel(pool, broker, id, opts = {}) {
+  const started = await startApplyExcel(pool, broker, id, opts);
+  if (!started) return null;
+  return applyJobs.get(id);
+}
+
+/**
+ * Where an Apply is: { status, done, total, created, updated, failed, resumed }. An 'applying' plan whose process died (no
+ * running job here, no heartbeat for a while) is taken up again from the rows it already wrote.
+ */
+async function applyStatus(pool, broker, id, { staleMs = APPLY_STALE_MS } = {}) {
+  let imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel") return null;
+  let resumed = false;
+  if (imp.status === "applying" && !applyJobs.has(id) && imp.result?.apply_req) {
+    const { rows } = await pool.query(
+      `UPDATE web_imports SET result = jsonb_set(result, '{heartbeat}', to_jsonb(now()::text))
+       WHERE id = $1 AND status = 'applying' AND (result->>'heartbeat')::timestamptz < now() - ($2::int * interval '1 millisecond') RETURNING *`,
+      [id, staleMs]
+    );
+    if (rows[0]) {
+      launchApply(pool, broker, rows[0], rows[0].result.apply_req, false);
+      resumed = true;
+      imp = rows[0];
+    }
+  }
+  const r = imp.result || {};
+  return {
+    status: imp.status,
+    done: r.progress?.done || 0,
+    total: r.progress?.total || 0,
+    created: (r.created || []).length,
+    updated: (r.updated || []).length,
+    failed: (r.failed || []).length,
+    remaining: imp.status === "ready" ? remainingRows(imp).length : 0,
+    resumed
+  };
+}
+
+/** Waits for a running Apply of this plan (immediately when none). */
+const waitForApply = (id) => applyJobs.get(id) || Promise.resolve();
+
+async function runApply(pool, broker, imp, req, fresh) {
+  const id = imp.id;
+  const lang = req.lang || "ar";
+  const resolutions = req.resolutions || {};
+  const photoChoices = req.photoChoices || {};
+  const payload = imp.payload;
+  const chat = payload.source === "chat";
   const started = Date.now();
-  const wanted = new Set(rows.map(Number));
+  const prev = imp.result || {};
   // unchanged: an existing unit the post says nothing new about (never written, never given photos); blocked: a row with errors or one
   // the person may not change; discarded: rows the person threw away in the review. None of these is written, even when ticked.
-  const result = { created: [], updated: [], conflicts: [], failed: [], unchanged: [], blocked: [], discarded: [], undo: { made: [], changed: [], photos: [] } };
-  const thrown = new Set((imp.payload.discarded || []).map(Number));
-  const photoMap = imp.payload.photos || {};
+  // What was written (created, updated, undo, applied_rows) adds up over the Applys of a plan; the other lists are the last one's.
+  const keep = (k) => (fresh ? [] : [...(prev[k] || [])]);
+  const result = {
+    created: [...(prev.created || [])],
+    updated: [...(prev.updated || [])],
+    conflicts: keep("conflicts"),
+    failed: keep("failed"),
+    unchanged: keep("unchanged"),
+    blocked: keep("blocked"),
+    discarded: keep("discarded"),
+    limit_skipped: keep("limit_skipped"),
+    undo: { made: [...(prev.undo?.made || [])], changed: [...(prev.undo?.changed || [])], photos: [...(prev.undo?.photos || [])] },
+    applied_rows: [...(prev.applied_rows || [])]
+  };
+  if (prev.photos) result.photos = prev.photos;
+  if (!fresh && prev.limit) result.limit = prev.limit;
+  const done = new Set(result.applied_rows.map(Number));
+  const wanted = new Set((req.rows || []).map(Number));
+  const thrown = rowSet(payload.discarded);
+  const savedRows = new Set();
+  const photoMap = payload.photos || {};
   const used = new Set();
+  const label = (item) => item.code || `row ${item.row}`;
+  const markDone = (row) => {
+    if (!done.has(row)) {
+      done.add(row);
+      result.applied_rows.push(row);
+    }
+  };
+
+  const queue = (payload.items || []).filter((i) => wanted.has(i.row) && !done.has(i.row));
+  const steps = queue.map((item) => {
+    if (thrown.has(item.row)) return { item, type: "discarded" };
+    if (item.kind === "unchanged") return { item, type: "unchanged" };
+    if (item.kind === "invalid" || item.kind === "forbidden") return { item, type: "blocked" };
+    if (item.kind === "new") return { item, type: "insert", code: item.code };
+    if (item.kind === "changed") return { item, type: "merge" };
+    if (item.kind === "review") {
+      const pick = resolutions[item.row] || {};
+      if (pick.mode === "merge" && item.merge && !(item.merge.changes || []).length) return { item, type: "unchanged", code: item.merge.code || item.code };
+      if (pick.mode === "merge" && item.merge) return { item, type: "merge" };
+      // A new unit: the code typed in the review, else the message's own code when it is free, else a generated one.
+      const typed = pick.code ? normalizeCode(pick.code) : null;
+      return { item, type: "insert", code: typed || (item.code_taken ? null : item.code || null) };
+    }
+    return { item, type: "skip" };
+  });
+
+  let processed = 0;
+  let sinceWrite = 0;
+  const writeResult = async (db) => {
+    result.heartbeat = new Date().toISOString();
+    result.progress = { done: processed, total: steps.length };
+    result.apply_req = req;
+    await db.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
+    sinceWrite = 0;
+  };
+
   const withPhotos = async (item, listing) => {
     if (!listing) return;
     const list = photoMap[String(item.row)] || [];
@@ -498,62 +682,151 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
       urls.forEach((u) => used.add(u));
       result.photos = (result.photos || 0) + urls.length;
     } catch (err) {
-      result.failed.push(`${listing.code} (photos)`);
+      result.failed.push({ code: listing.code, reason: "photos" });
       console.warn("Chat import photos failed:", err.message);
     }
   };
   const merge = async (item) => {
     const res = await patchOne(pool, broker, item.merge?.code || item.code, item.merge?.patch || item.patch, item.merge?.version ?? item.version);
     if (res.outcome === "updated") {
+      markDone(item.row);
+      savedRows.add(item.row);
       result.updated.push(res.listing.code);
       result.undo.changed.push({ code: res.listing.code, before: item.merge?.before || item.before || {}, version: res.listing.version });
       await withPhotos(item, res.listing);
-    } else (res.outcome === "conflict" ? result.conflicts : result.failed).push(item.merge?.code || item.code);
+    } else if (res.outcome === "conflict") result.conflicts.push(item.merge?.code || item.code);
+    else result.failed.push({ code: item.merge?.code || item.code, reason: res.outcome === "forbidden" ? "forbidden" : "missing" });
   };
-  const insert = async (item, code) => {
-    const res = await insertOne(pool, broker, item.fields, code, lang, `import:${id}`);
-    if (res.listing) {
-      result.created.push(res.listing.code);
-      result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
-      const np = (imp.payload.newPlaces || {})[String(item.row)];
-      if (np && item.fields?.compound) await require("../lib/placeNames").addDetails(pool, item.fields.compound, np).catch(() => {});
-      await withPhotos(item, res.listing);
-      return true;
-    }
-    if (res.limit) {
-      result.limit = res.limit;
-      return "limit";
-    }
-    if (res.owner_required || res.owner_name_required) result.failed.push(item.code || `row ${item.row}`);
-    else result.conflicts.push(res.code);
-    return false;
-  };
-  for (const item of imp.payload.items) {
-    if (!wanted.has(item.row)) continue;
-    if (thrown.has(item.row)) { result.discarded.push(item.code || `row ${item.row}`); continue; }
-    if (item.kind === "unchanged") { result.unchanged.push(item.code || `row ${item.row}`); continue; }
-    if (item.kind === "invalid" || item.kind === "forbidden") { result.blocked.push(item.code || `row ${item.row}`); continue; }
-    if (item.kind === "new") {
-      if ((await insert(item, item.code)) === "limit") break;
-    } else if (item.kind === "changed") {
-      await merge(item);
-    } else if (item.kind === "review") {
-      const pick = resolutions[item.row] || {};
-      if (pick.mode === "merge" && item.merge && !(item.merge.changes || []).length) result.unchanged.push(item.merge.code || item.code);
-      else if (pick.mode === "merge" && item.merge) await merge(item);
-      else {
-        // A new unit: the code typed in the review, else the message's own code when it is free, else a generated one.
-        const typed = pick.code ? normalizeCode(pick.code) : null;
-        const code = typed || (item.code_taken ? null : item.code || null);
-        if ((await insert(item, code)) === "limit") break;
+
+  let shared = null;
+  /**
+   * One transaction for up to APPLY_BATCH consecutive new units; a SAVEPOINT per row, so a bad row never rolls back the others.
+   * The result (with the undo log) is written in the same transaction: a crash leaves either all of these rows and their record, or none.
+   * @returns {Promise<number>} how many of the chunk's steps were handled (fewer when the unit limit stopped it)
+   */
+  const insertChunk = async (chunk) => {
+    shared = shared || (await Store.batchContext(pool, broker));
+    const client = await pool.connect();
+    const made = [];
+    let handled = 0;
+    try {
+      await client.query("BEGIN");
+      shared.codes = Store.codeSequence(client, broker.agency_id);
+      for (const s of chunk) {
+        const { item } = s;
+        const fields = item.fields;
+        // A file has no one to ask: a row with an owner phone and no name uses the phone as the name.
+        if (fields?.details?.owner_phone && !fields.details.owner_name) fields.details.owner_name = require("../domain/phone").displayPhone(fields.details.owner_phone);
+        const left = shared.left;
+        const usedCount = shared.used;
+        await client.query("SAVEPOINT apply_row");
+        let res;
+        try {
+          res = await Store.createListing(client, broker, { fields, code: s.code, lang, batch: `import:${id}`, shared });
+          if (res.listing && fields.status && fields.status !== "active") {
+            await client.query("UPDATE listings SET status = $1 WHERE id = $2 AND agency_id = $3", [fields.status, res.listing.id, broker.agency_id]);
+          }
+          await client.query(res.listing ? "RELEASE SAVEPOINT apply_row" : "ROLLBACK TO SAVEPOINT apply_row");
+          if (!res.listing) await client.query("RELEASE SAVEPOINT apply_row");
+        } catch (err) {
+          await client.query("ROLLBACK TO SAVEPOINT apply_row");
+          await client.query("RELEASE SAVEPOINT apply_row");
+          shared.left = left;
+          shared.used = usedCount;
+          console.warn("Excel apply row failed:", err.message);
+          result.failed.push({ code: label(item), reason: "error" });
+          handled++;
+          processed++;
+          continue;
+        }
+        handled++;
+        processed++;
+        if (res.listing) {
+          markDone(item.row);
+          savedRows.add(item.row);
+          result.created.push(res.listing.code);
+          result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
+          made.push(s);
+          made[made.length - 1].listing = res.listing;
+        } else if (res.limit) {
+          result.limit = res.limit;
+          handled--;
+          processed--;
+          break;
+        } else if (res.owner_required || res.owner_name_required) result.failed.push({ code: label(item), reason: res.owner_required ? "owner_required" : "owner_name_required" });
+        else if (res.forbidden) result.failed.push({ code: label(item), reason: "forbidden" });
+        else result.conflicts.push(res.code);
       }
+      await shared.codes.finish();
+      // A chat plan is small and its rows carry photos: its record is written every APPLY_BATCH rows instead.
+      if (!chat) await writeResult(client);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
+    if (chat) sinceWrite += handled;
+    for (const s of made) {
+      const np = (payload.newPlaces || {})[String(s.item.row)];
+      if (np && s.item.fields?.compound) await require("../lib/placeNames").addDetails(pool, s.item.fields.compound, np).catch(() => {});
+      await withPhotos(s.item, s.listing);
+    }
+    return handled;
+  };
+
+  let k = 0;
+  while (k < steps.length) {
+    const s = steps[k];
+    if (s.type === "insert") {
+      const size = chat ? 1 : APPLY_BATCH;
+      const chunk = [];
+      for (let j = k; j < steps.length && steps[j].type === "insert" && chunk.length < size; j++) chunk.push(steps[j]);
+      const handled = await insertChunk(chunk);
+      k += handled;
+      if (handled < chunk.length) {
+        // The plan's unit limit stopped the run: every other ticked row that was still to be written is listed, not lost.
+        for (const rest of steps.slice(k)) if (rest.type === "insert" || rest.type === "merge") result.limit_skipped.push(label(rest.item));
+        break;
+      }
+    } else {
+      if (s.type === "discarded") result.discarded.push(label(s.item));
+      else if (s.type === "unchanged") result.unchanged.push(s.code || label(s.item));
+      else if (s.type === "blocked") result.blocked.push(label(s.item));
+      else if (s.type === "merge") await merge(s.item);
+      processed++;
+      k++;
+      sinceWrite++;
+    }
+    if (sinceWrite >= APPLY_BATCH) await writeResult(pool);
   }
+  if (!fresh) for (const key of ["conflicts", "unchanged", "blocked", "discarded", "limit_skipped"]) result[key] = [...new Set(result[key])];
   const unused = Object.values(photoMap).flat().map((x) => x?.url).filter((u) => u && !used.has(u));
   if (unused.length) await Supabase.deleteStorageFiles(unused).catch(() => {});
-  await pool.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
-  if (imp.payload.source === "chat") ParseLog.applied(pool, broker, id, imp.payload, wanted, Date.now() - started);
+  result.applied_rows.sort((a, b) => a - b);
+  result.progress = { done: steps.length, total: steps.length };
+  result.heartbeat = new Date().toISOString();
+  // The plan stays open while new or changed rows are left (the next page, a fixed row); a chat plan is closed by its first Apply.
+  const left = chat ? [] : remainingRows({ payload, result });
+  await pool.query(
+    "UPDATE web_imports SET result = $2::jsonb, status = $3, payload = jsonb_set(payload, '{applied_rows}', $4::jsonb, true) WHERE id = $1 AND status = 'applying'",
+    [id, JSON.stringify(result), left.length ? "ready" : "applied", JSON.stringify(result.applied_rows)]
+  );
+  if (chat) {
+    ParseLog.applied(pool, broker, id, payload, wanted, Date.now() - started);
+    // Remembered for the next import of this chat (website and app): what was saved, and what the chat said nothing new about.
+    const unchanged = payload.items.filter((i) => i.kind === "unchanged" && !thrown.has(i.row)).map((i) => i.row);
+    await rememberRows(pool, broker, payload, [...[...savedRows].map((r) => [r, "saved"]), ...unchanged.filter((r) => !savedRows.has(r)).map((r) => [r, "unchanged"])]);
+  }
   return result;
+}
+
+/** Writes the outcome of chat plan rows ([[row, outcome]]) to the agency's remembered decisions, by the posts' fingerprints. Never breaks an import. */
+async function rememberRows(pool, broker, payload, pairs) {
+  if (!payload?.chat_fp || !pairs.length) return;
+  const items = pairs.map(([row, outcome]) => ({ post_fp: payload.posts?.[row - 1]?.pfp, outcome })).filter((x) => x.post_fp);
+  for (let i = 0; i < items.length; i += Decisions.MAX_PER_REQUEST) await Decisions.record(pool, broker.agency_id, broker.id, payload.chat_fp, items.slice(i, i + Decisions.MAX_PER_REQUEST)).catch(() => {});
 }
 
 /**
@@ -590,7 +863,10 @@ async function attachChatPhotos(pool, broker, listing, photos, choice, result) {
 /** The agency's last applied Excel import that was not undone yet; null when there is none. */
 async function lastApplied(pool, agencyId) {
   const { rows } = await pool.query(
-    "SELECT * FROM web_imports WHERE agency_id = $1 AND kind = 'excel' AND status = 'applied' AND result IS NOT NULL ORDER BY applied_at DESC LIMIT 1",
+    `SELECT * FROM web_imports WHERE agency_id = $1 AND kind = 'excel' AND result IS NOT NULL
+       AND (status = 'applied' OR (status IN ('ready', 'applying')
+            AND jsonb_array_length(coalesce(result#>'{undo,made}', '[]'::jsonb)) + jsonb_array_length(coalesce(result#>'{undo,changed}', '[]'::jsonb)) > 0))
+     ORDER BY applied_at DESC LIMIT 1`,
     [agencyId]
   );
   const imp = rows[0] || null;
@@ -616,9 +892,10 @@ async function undoPreview(pool, agencyId, imp) {
   return { archive, restore, skipped };
 }
 
-/** Whether this broker may undo this import now (the last applied one, not yet undone). */
+/** Whether this broker may undo this import now (the last applied one, not yet undone). A plan still open for more rows, or one whose Apply was cut short, can be undone for what it wrote. */
 async function canUndo(pool, broker, imp) {
-  if (!imp || imp.kind !== "excel" || imp.status !== "applied") return false;
+  if (!imp || imp.kind !== "excel" || !["applied", "ready", "applying"].includes(imp.status)) return false;
+  if (imp.status === "applying" && (applyJobs.has(imp.id) || Date.now() - Date.parse(imp.result?.heartbeat || 0) < APPLY_STALE_MS)) return false;
   const last = await lastApplied(pool, broker.agency_id);
   return Boolean(last && last.id === imp.id);
 }
@@ -628,7 +905,7 @@ async function undoExcel(pool, broker, id) {
   const imp = await loadImport(pool, broker, id);
   if (!(await canUndo(pool, broker, imp))) return null;
   const { rows: claimed } = await pool.query(
-    "UPDATE web_imports SET result = jsonb_set(result, '{undone}', $3::jsonb) WHERE id = $1 AND agency_id = $2 AND status = 'applied' AND NOT (result ? 'undone') RETURNING id",
+    "UPDATE web_imports SET status = 'applied', result = jsonb_set(result, '{undone}', $3::jsonb) WHERE id = $1 AND agency_id = $2 AND status IN ('applied', 'ready', 'applying') AND NOT (result ? 'undone') RETURNING id",
     [id, broker.agency_id, JSON.stringify({ at: new Date().toISOString(), by: broker.id })]
   );
   if (!claimed[0]) return null;
@@ -677,6 +954,8 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
   if (!imp || imp.kind !== "excel" || imp.status !== "ready" || new Date(imp.expires_at) <= new Date()) return false;
   const { rows, items } = imp.payload;
   const target = Array.isArray(rows) ? rows.find((r) => r.rowNumber === Number(rowNumber)) : null;
+  // A row an Apply already wrote is not planned again.
+  if (appliedRows(imp).has(Number(rowNumber))) return false;
   const at = Array.isArray(items) ? items.findIndex((i) => i.row === Number(rowNumber)) : -1;
   if (!target || at < 0) return false;
   const oldType = target.cells.property_type;
@@ -699,7 +978,8 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
   }
   items[at] = item;
   const columns = [...new Set([...(imp.payload.columns || []), ...Object.keys(target.cells)])];
-  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, items, counts: countKinds(items), columns })]);
+  const info = imp.payload.info ? { ...imp.payload.info, no_phone_column: !columns.includes("owner_phone") } : imp.payload.info;
+  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, items, counts: countKinds(items), columns, ...(info ? { info } : {}) })]);
   return true;
 }
 
@@ -777,7 +1057,8 @@ async function typeWordPlaces(pool, words = []) {
 
 /** How many rows each batch action would touch, for the review page. */
 function batchStats(payload) {
-  const rows = payload.rows || [];
+  const applied = rowSet(payload.applied_rows);
+  const rows = (payload.rows || []).filter((r) => !applied.has(r.rowNumber));
   return {
     no_type: (payload.items || []).filter((i) => i.kind === "invalid" && (i.needs || []).includes("listing_type")).length,
     several_prices: rows.filter(hasSeveralPrices).length,
@@ -803,8 +1084,12 @@ function batchStats(payload) {
 async function batchExcel(pool, broker, id, { action, value, scope = "missing", from = "" }, { lang = "ar" } = {}) {
   const imp = await loadImport(pool, broker, id);
   if (!imp || imp.kind !== "excel" || imp.status !== "ready" || new Date(imp.expires_at) <= new Date()) return null;
-  const rows = Array.isArray(imp.payload.rows) ? imp.payload.rows : [];
+  const allRows = Array.isArray(imp.payload.rows) ? imp.payload.rows : [];
+  // Rows an Apply already wrote are left alone: a batch change only touches (and plans again) the rows still to be applied.
+  const applied = appliedRows(imp);
+  const rows = allRows.filter((r) => !applied.has(r.rowNumber));
   const defaults = { ...(imp.payload.defaults || {}) };
+  let columns = imp.payload.columns;
   const original = (r, text) => {
     r.cells.notes = [r.cells.notes, `${lang === "en" ? "Price in the sheet" : "السعر في الشيت"}: ${text}`].filter(Boolean).join(" · ");
   };
@@ -817,6 +1102,17 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
       }
     }
     defaults.listing_type = value;
+  } else if (action === "owner_phone") {
+    // One owner phone for every row that has none (scope "all": for every row).
+    const phone = require("../domain/phone").normalizePhone(value);
+    if (!phone) return { touched: 0, error: "bad_phone" };
+    for (const r of rows) {
+      if (scope === "all" || !cellText(r, "owner_phone").trim()) {
+        r.cells.owner_phone = String(value).trim().slice(0, 40);
+        touched++;
+      }
+    }
+    if (touched && Array.isArray(columns)) columns = [...new Set([...columns, "owner_phone"])];
   } else if (action === "price_pick" && ["long", "first"].includes(value)) {
     for (const r of rows) {
       if (!hasSeveralPrices(r)) continue;
@@ -878,8 +1174,13 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
   if (!touched) return { touched: 0 };
   if (action === "price_pick") await savePrefs(pool, broker.agency_id, { price_pick: value });
   if (action === "type_map") await savePrefs(pool, broker.agency_id, { types: { [typeKey(from)]: value } });
-  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [] }, { lang, source: imp.payload.source || null });
-  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, rows, defaults })]);
+  const oldItems = imp.payload.items || [];
+  const appliedCodes = oldItems.filter((i) => applied.has(i.row) && i.code).map((i) => i.code);
+  const plan = await planExcel(pool, broker, { rows, skipped: imp.payload.skipped || [], mapped: columns }, { lang, source: imp.payload.source || null, seenCodes: appliedCodes });
+  // The rows an Apply wrote keep their item; the others take the new plan (one item per row, in the old order).
+  const fresh = new Map(plan.items.map((i) => [i.row, i]));
+  const items = applied.size ? oldItems.map((o) => (applied.has(o.row) ? o : fresh.get(o.row) || o)) : plan.items;
+  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, items, counts: countKinds(items), rows: allRows, defaults, ...(columns ? { columns } : {}) })]);
   return { touched };
 }
 
@@ -1098,11 +1399,36 @@ async function setDiscarded(pool, broker, id, { rows = [], scope = null, on = tr
   const next = new Set(have);
   for (const n of target) (on ? next.add(n) : next.delete(n));
   const changed = [...next].filter((n) => !have.has(n)).length + [...have].filter((n) => !next.has(n)).length;
+  // The same choice is remembered for the chat (Restore forgets it), so another import of this chat starts the same way.
+  const pfpsOf = (rowsList) => rowsList.map((n) => imp.payload.posts?.[n - 1]?.pfp).filter(Boolean);
+  if (imp.payload.chat_fp) {
+    await rememberRows(pool, broker, imp.payload, [...next].filter((n) => !have.has(n)).map((n) => [n, "discarded"]));
+    const back = pfpsOf([...have].filter((n) => !next.has(n)));
+    if (back.length) await Decisions.forget(pool, broker.agency_id, imp.payload.chat_fp, back).catch(() => {});
+  }
   await pool.query(
     "UPDATE web_imports SET payload = jsonb_set(payload, '{discarded}', $2::jsonb, true) WHERE id = $1 AND agency_id = $3 AND broker_id = $4 AND status = 'ready' AND kind = 'excel'",
     [id, JSON.stringify([...next].sort((a, b) => a - b)), broker.agency_id, broker.id]
   );
   return changed;
+}
+
+/**
+ * "Forget remembered decisions for this chat": every remembered decision of the chat is removed (for the whole agency), and this plan
+ * goes back to a plain one: posts that started discarded because of a memory are restored, nothing is hidden or unticked.
+ * @returns {Promise<number|null>} decisions removed, null when the plan is not a ready chat plan
+ */
+async function forgetChatDecisions(pool, broker, id) {
+  const imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel" || imp.status !== "ready" || imp.payload?.source !== "chat") return null;
+  const removed = imp.payload.chat_fp ? await Decisions.forget(pool, broker.agency_id, imp.payload.chat_fp) : 0;
+  const was = imp.payload.remembered || {};
+  const discarded = (imp.payload.discarded || []).map(Number).filter((n) => was[n] !== "discarded");
+  await pool.query(
+    "UPDATE web_imports SET payload = jsonb_set(jsonb_set(payload, '{remembered}', '{}'::jsonb, true), '{discarded}', $2::jsonb, true) WHERE id = $1 AND agency_id = $3 AND broker_id = $4 AND status = 'ready' AND kind = 'excel'",
+    [id, JSON.stringify(discarded), broker.agency_id, broker.id]
+  );
+  return removed;
 }
 
 /** The Arabic name and map link asked for a new compound on a chat plan's row, kept in the plan until the unit is saved. */
@@ -1132,10 +1458,19 @@ module.exports = {
   escapeRegex,
   escapeLike,
   describeChanges,
+  forgetChatDecisions,
   planExcel,
   savePlan,
   loadImport,
   applyExcel,
+  startApplyExcel,
+  applyStatus,
+  waitForApply,
+  remainingRows,
+  appliedRows,
+  failReason,
+  failedLine,
+  failedCode,
   editExcelRow,
   batchExcel,
   batchStats,

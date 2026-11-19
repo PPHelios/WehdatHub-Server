@@ -1,5 +1,5 @@
 // domain/designTokens.js — The one set of colours and shapes for the website and the app (plan part 2, section 8).
-// Light: azure is the main colour. Dark: copper is the main colour, and azure becomes the second colour.
+// Light: Brushed Satin Gold is the main colour and Royal Dark Blue the companion. Dark: a lighter gold is the main colour and Cobalt Blue the companion.
 // The website gets these as CSS variables (web/assets.js, brand.css); the app carries the same values in
 // packages/shared/src/tokens.ts (a test there compares the two when the repos sit side by side).
 // Every "on" colour is the text or icon colour that is readable on its fill: tests/unit/design-tokens.test.js checks the

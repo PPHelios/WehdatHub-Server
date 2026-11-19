@@ -9,7 +9,7 @@ const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const RESPOND = { limit: 10, windowSec: 3600 };
 const STATUS = {
   proposed: ["⏳ مستني تأكيدك", "⏳ Waiting for your confirmation"],

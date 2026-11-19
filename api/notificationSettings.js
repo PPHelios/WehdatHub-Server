@@ -12,8 +12,9 @@ async function read(pool, broker) {
   const prefs = Notifications.prefsOf(me, { telegramLinked: Boolean(me.telegram_chat_id) });
   const kinds = Notifications.kindsFor(broker);
   const items = {};
+  const policy = Policy.policyOf((await pool.query("SELECT notify_policy FROM agencies WHERE id = $1", [broker.agency_id])).rows[0]);
   for (const k of kinds) {
-    const eff = await Notifications.effectiveFor(pool, me, k);
+    const eff = Notifications.effectiveFrom(policy, me, k);
     items[k] = { label: { ar: Notifications.KIND_LABELS[k][0], en: Notifications.KIND_LABELS[k][1] }, on: eff.enabled !== false, channel: eff.channel || prefs.channels[k], frequency: eff.frequency || "immediate", locked: eff.locked || null, urgent: Policy.isUrgent(k) };
   }
   return { kinds: items, reminderMinutes: prefs.reminderMinutes, quiet: prefs.quiet, telegramLinked: Boolean(me.telegram_chat_id) };

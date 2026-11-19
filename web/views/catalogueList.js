@@ -8,7 +8,7 @@ const { html, raw } = require("../html");
 const { ICON } = require("./unitForm");
 const { projectCard } = require("./projectCard");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const STATUS = { launching: ["إطلاق جديد", "New launch"], selling: ["متاح", "Selling"], sold_out: ["اتباع", "Sold out"] };
 const money = (n, lang) => {
   const v = Number(n);

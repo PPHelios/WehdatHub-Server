@@ -6,7 +6,7 @@ const LeadRules = require("../../services/leadRules");
 const Authz = require("../../lib/authz");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const dayStart = (v) => (DAY.test(String(v || "")) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) ? LeadRules.cairoMidnight(String(v)) : null);

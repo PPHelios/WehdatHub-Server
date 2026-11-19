@@ -10,6 +10,7 @@
   var lang = root.getAttribute("data-lang") === "en" ? "en" : "ar";
   var TEXT = {
     ar: {
+      lastImport: "آخر تحميل للشات ده:", sinceLast: "من آخر تحميل",
       pick: "اختار ملف الـ zip الأول.", reading: "جاري قراءة الملف…", noChat: "مفيش ملف الشات (.txt) جوه الـ zip.", badZip: "الملف مش zip سليم.", encrypted: "الملف عليه باسورد.",
       noUnits: "مفيش وحدات في الشركة لسه. حمّل الشيت الأول أو اختار «اقرأ الوحدات من البوستات».", big: "الملف كبير والتليفون ممكن يقف. الأفضل تستخدم كمبيوتر.",
       photos: "صورة", units: "وحدة", noPhotos: "وحدات من غير صور", tray: "صور مش متوزعة", unknown: "أكواد في الشات مش موجودة", pattern: "ترتيب الشات", p_photos_first: "الصور الأول وبعدها الوصف", p_text_first: "الوصف الأول وبعدها الصور", p_mixed: "مختلط (مفيش قاعدة واحدة)", p_unknown: "مش واضح",
@@ -26,6 +27,7 @@
       sumLine: function (n, a, b, m, x, z) { return "هيتحفظ " + n + " وحدة (" + a + " جديدة، " + b + " تحديث) · هيتساب " + m + " (أخطاء " + x + "، متجاهلة " + z + "). الوحدات اللي مفيش فيها تغيير بتتساب لوحدها بعد القراءة."; }
     },
     en: {
+      lastImport: "Last import of this chat:", sinceLast: "Since last import",
       pick: "Choose the zip file first.", reading: "Reading the file…", noChat: "No chat text (.txt) inside the zip.", badZip: "That is not a readable zip.", encrypted: "The zip is password-protected.",
       noUnits: "There are no units in the agency yet. Import the sheet first or choose “Read units from the posts”.", big: "This file is big and a phone may stop. A computer is better.",
       photos: "photos", units: "units", noPhotos: "Units with no photos", tray: "Photos not placed", unknown: "Codes in the chat that are not in the app", pattern: "Chat order", p_photos_first: "photos first, then the description", p_text_first: "description first, then photos", p_mixed: "mixed (no single rule)", p_unknown: "not clear",
@@ -96,9 +98,11 @@
     await stage(TEXT.stageRead, 5);
     var zip = null;
     var text;
+    var chatName = file.name;
     try {
       if (/\.txt$/i.test(file.name)) {
         text = await file.text();
+        chatName = file.name;
       } else {
         zip = await timed("read_zip", function () { return ZipRead.open(file); }, { mb: Math.round(file.size / 1048576) });
         await stage(TEXT.stageRead, 15);
@@ -106,6 +110,7 @@
           .sort(function (a, b) { return Number(/chat/i.test(base(b.name))) - Number(/chat/i.test(base(a.name))); });
         if (!txts.length) return say(TEXT.noChat, true);
         text = await timed("read_chat", function () { return zip.text(txts[0]); });
+        chatName = txts[0].name;
       }
     } catch (err) {
       flush();
@@ -124,16 +129,46 @@
     }
     state = { file: file, zip: zip, text: text, byName: byName, byLower: byLower, mode: mode, units: units, aliases: {}, assigned: {}, pick: {}, files: {}, drops: {}, olds: {}, skipped: {}, discarded: {}, sumFailed: false, sumCache: {}, fields: {}, modal: null, codeInfo: null, codeState: null };
     if (file.size > 1024 * 1024 * 1024 && /Mobi|Android|iPhone/i.test(navigator.userAgent)) state.bigWarn = true;
+    await rememberChat(chatName, text);
     compute();
   }
 
   var entryOf = function (name) { return state.byName[name] || state.byLower[String(name).toLowerCase()] || null; };
 
+  // The date range: the same options and the same code (ChatParse.rangeBounds) as the group form and the app.
+  function bounds() {
+    var kind = $("range") ? $("range").value : "custom";
+    var custom = root.querySelector("[data-range-custom]");
+    if (custom) custom.hidden = kind !== "custom";
+    return window.ChatParse && ChatParse.rangeBounds ? ChatParse.rangeBounds(kind, { lastImportAt: state && state.lastImportAt, since: $("since") ? $("since").value : null, until: $("until") ? $("until").value : null }) : { since: $("since") && $("since").value || null, until: null };
+  }
+
+  // The chat's own id (file name + first message header, domain/chatFingerprint.js) and what the agency decided about it before.
+  async function rememberChat(name, text) {
+    if (!window.ChatFingerprint) return;
+    state.chatFp = ChatFingerprint.chatFingerprint(name, ChatFingerprint.firstHeaderOf(text));
+    var url = root.getAttribute("data-decisions-url");
+    if (!url || state.mode !== "posts") return;
+    try {
+      var r = await fetch(url + "?chat_fp=" + state.chatFp, { credentials: "same-origin" });
+      var j = r.ok ? await r.json() : {};
+      state.lastImportAt = j.last_import_at || null;
+    } catch (e) { state.lastImportAt = null; }
+    var sel = $("range");
+    var opt = sel && sel.querySelector('option[value="last"]');
+    if (opt && state.lastImportAt) {
+      opt.hidden = false; opt.disabled = false;
+      sel.value = "last";
+      var note = $("last-note");
+      if (note) note.textContent = TEXT.lastImport + " " + String(state.lastImportAt).slice(0, 10);
+    } else if (opt) { opt.hidden = true; opt.disabled = true; if (sel.value === "last") sel.value = "30"; }
+  }
+
   function compute() {
     var codes = state.units ? state.units.map(function (u) { return u.code; }) : null;
     var t0 = Date.now();
     state.res = ChatMatch.match(state.text, {
-      since: $("since").value || null, windowMin: Number($("window").value) || 10, sameSender: $("same").checked, pattern: $("pattern").value, codes: codes, aliases: state.aliases
+      since: bounds().since, until: bounds().until, windowMin: Number($("window").value) || 10, sameSender: $("same").checked, pattern: $("pattern").value, codes: codes, aliases: state.aliases
     });
     state.files = {};
     steps.push({ step: "match", ms: Date.now() - t0, ok: true, meta: { messages: state.res.stats.messages, photos: state.res.stats.photos, dividers: state.res.stats.dividers || 0, tray: state.res.tray.length } });
@@ -723,7 +758,7 @@
       await stage(TEXT.stagePosts + " (" + chosen.length + ")", 35);
       try {
         j0 = await timed("plan", async function () {
-          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: textOf(x), orig: origOf(x), fields: fieldsOf(x) }; }) }) });
+          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, chat_fp: state.chatFp || null, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: textOf(x), orig: origOf(x), fields: fieldsOf(x) }; }) }) });
           var j = await r0.json().catch(function () { return {}; });
           if (!r0.ok || !j.id) { var e = new Error(j.message || (r0.status === 422 ? TEXT.noPosts : TEXT.planFail)); e.code = j.error || "http_" + r0.status; throw e; }
           return j;
@@ -738,8 +773,10 @@
       chosen.forEach(function (x, k) { index[String(x.i)] = k; });
       // A post the plan found to be an existing unit with no changes (or not the person's) is not saved: its photos are not uploaded.
       var kinds = j0.kinds || {};
+      var memory = j0.remembered || {};
       var before = p.tasks.length;
-      p.tasks = p.tasks.filter(function (t) { var kd = kinds[String(index[t.id] + 1)]; return kd !== "unchanged" && kd !== "forbidden"; });
+      // A post saved or discarded in an earlier import of this chat is not saved again: its photos are not uploaded either.
+      p.tasks = p.tasks.filter(function (t) { var row = String(index[t.id] + 1); var kd = kinds[row]; return kd !== "unchanged" && kd !== "forbidden" && memory[row] !== "saved" && memory[row] !== "discarded"; });
       untouched = before - p.tasks.filter(function (t) { return index[t.id] !== undefined; }).length;
       p.tasks = p.tasks.filter(function (t) { return index[t.id] !== undefined; }).map(function (t) { t.url = root.getAttribute("data-plan-photo-url").replace("{id}", importId).replace("{row}", index[t.id] + 1); return t; });
     } else {
@@ -843,6 +880,6 @@
     Promise.resolve(load()).finally(function () { b.classList.remove("busy"); b.disabled = false; });
   });
   if ($("ai")) $("ai").addEventListener("change", refreshApply);
-  ["window", "pattern", "same", "since"].forEach(function (n) { $(n).addEventListener("change", function () { if (state) compute(); }); });
+  ["window", "pattern", "same", "since", "until", "range"].forEach(function (n) { $(n).addEventListener("change", function () { if (state) compute(); else bounds(); }); });
   });
 })();

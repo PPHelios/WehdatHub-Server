@@ -40,6 +40,8 @@ function cspWithMap() {
 
 /** Security headers for HTML pages and static files of the web app and the public pages. */
 function securityHeaders(_req, res, next) {
+  // HSTS only in production (a plain-http dev server must not pin the browser to https).
+  if (process.env.NODE_ENV === "production") res.set("Strict-Transport-Security", "max-age=15552000");
   res.set({
     "Content-Security-Policy": cspWithMap(),
     "X-Content-Type-Options": "nosniff",

@@ -83,6 +83,7 @@ async function approve(pool, agencyId, { now = new Date(), username = getConfig(
     brokers.sort((x, y) => new Date(x.created_at) - new Date(y.created_at));
     return { ok: true, agency: rows[0], broker: brokers[0] || null };
   });
+  if (res.ok) require("../lib/planGuard").forget(agencyId);
   if (!res.ok || !res.broker) return res;
   const url = TgLink.startLink(username, "x") ? TgLink.startLink(username, await TgLink.issueLinkToken(pool, res.broker)) : null;
   return { ...res, url };
@@ -90,6 +91,7 @@ async function approve(pool, agencyId, { now = new Date(), username = getConfig(
 
 async function reject(db, agencyId) {
   const { rows } = await db.query("UPDATE agencies SET approval = 'rejected', updated_at = NOW() WHERE id = $1 AND approval = 'pending' RETURNING id, name", [agencyId]);
+  if (rows[0]) require("../lib/planGuard").forget(agencyId);
   return rows[0] ? { ok: true, agency: rows[0] } : { error: "not_pending" };
 }
 

@@ -53,3 +53,45 @@ test("something that is not a workbook is refused", async () => {
   await expect(XlsxRead.readWorkbook({ entries: [], text: async () => "" })).rejects.toMatchObject({ code: "NOT_XLSX" });
   expect(wb).toBeTruthy();
 });
+
+test("a vertical merge is filled down on rows that have data; horizontal merges are left alone", async () => {
+  const wb = new ExcelJS.Workbook();
+  const s = wb.addWorksheet("Merged");
+  s.addRow(["compound", "code", "price"]);
+  s.addRow(["Hyde Park", "A1", 1]);
+  s.addRow([null, "A2", 2]);
+  s.addRow([null, "A3", 3]);
+  s.mergeCells("A2:A4");
+  s.addRow(["Title across", null, null]);
+  s.mergeCells("A5:C5");
+  const out = await XlsxRead.readWorkbook(await ZipRead.open(new Blob([Buffer.from(await wb.xlsx.writeBuffer())])));
+  expect(out.tabs[0].rows.map((r) => r.v[0])).toEqual(["compound", "Hyde Park", "Hyde Park", "Hyde Park", "Title across"]);
+  expect(out.tabs[0].rows[4].v).toEqual(["Title across"]);
+});
+
+test("a label merged down from a header that is not on row 1 is not copied into the data rows", async () => {
+  const wb = new ExcelJS.Workbook();
+  const s = wb.addWorksheet("Offset");
+  s.addRow(["Hyde Park inventory"]);
+  s.addRow([null]);
+  s.addRow(["code", "compound", "price"]);
+  s.addRow(["A1", null, 1]);
+  s.addRow(["A2", null, 2]);
+  s.addRow(["A3", null, 3]);
+  s.mergeCells("B3:B5");
+  const out = await XlsxRead.readWorkbook(await ZipRead.open(new Blob([Buffer.from(await wb.xlsx.writeBuffer())])));
+  const rows = out.tabs[0].rows;
+  expect(rows.map((r) => r.v[0])).toEqual(["Hyde Park inventory", "code", "A1", "A2", "A3"]);
+  expect(rows[2].v[1] ?? null).toBeNull();
+  expect(rows[3].v[1] ?? null).toBeNull();
+});
+
+test("progress follows the bytes of the tabs (known from the zip directory) and ends complete", async () => {
+  const zip = await ZipRead.open(new Blob([await workbook()]));
+  const events = [];
+  await XlsxRead.readWorkbook(zip, { onProgress: (p) => events.push(p) });
+  const bytes = events.map((p) => p.bytesDone);
+  expect([...bytes].sort((a, b) => a - b)).toEqual(bytes);
+  expect(events[0].bytesTotal).toBeGreaterThan(0);
+  expect(events[events.length - 1].bytesDone).toBe(events[0].bytesTotal);
+});

@@ -4,6 +4,7 @@
 const { html, raw, moreGroups } = require("../html");
 const Swallow = require("../../lib/swallow");
 const { icon } = require("../icons");
+const { searchBar } = require("../views/searchBar");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
 const Today = require("../../services/today");
@@ -144,10 +145,7 @@ function todayPage({ broker, agency, welcome, day, now, en }) {
   return html`<section class="today-head">
   <span class="today-meta">${fmtDay(now, en)} · ${agency.name}</span>
   <h1>${greet}</h1>
-  <form method="get" action="/app/search" class="searchbox" role="search">
-    ${icon("search", 20)}<input name="q" aria-label="${en ? "Search" : "بحث"}" placeholder="${en ? "Search: 3-bed flat in New Cairo under 5M" : "دوّر: شقة 3 غرف في التجمع تحت 5 مليون"}" enterkeyhint="search">
-    <a class="mic" href="/app/search?voice=1" aria-label="${en ? "Search by voice" : "بحث بالصوت"}">${icon("mic", 20)}</a>
-  </form>
+  ${searchBar({ lang: en ? "en" : "ar", label: en ? "Search" : "بحث", placeholder: en ? "Search: 3-bed flat in New Cairo under 5M" : "دوّر: شقة 3 غرف في التجمع تحت 5 مليون" })}
 </section>
 <div class="counts">
   ${count(d.counts.followUpsToday, en ? "Follow-ups today" : "متابعات النهارده", "/app/leads?tab=due_today", "calendar")}

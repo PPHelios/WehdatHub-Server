@@ -23,8 +23,7 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const text = String(req.query.q || "").trim().slice(0, 500);
     if (!text) return res.status(400).json({ error: "empty" });
-    const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker))) return;
     const t0 = Date.now();
     const forceAi = req.query.ai === "1";
     // "Search without them": the broker saw which words were not understood and chose to search anyway.
@@ -60,7 +59,8 @@ function register(api, { pool }) {
     const photoOf = new Map(photos.map((p) => [p.listing_id, Storage.photoUrl(p.url)]));
     const thumbOf = new Map(photos.map((p) => [p.listing_id, Storage.thumbUrl(p.url)]));
     const counts = { active: 0, sold: 0, archived: 0, [st]: out.total };
-    for (const other of Search.SEARCH_STATUSES.filter((x) => x !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, found.parsed, other);
+    const others = Search.SEARCH_STATUSES.filter((x) => x !== st);
+    (await Promise.all(others.map((other) => Search.countByStatus(pool, broker.agency_id, found.parsed, other, found.fx)))).forEach((n, i) => (counts[others[i]] = n));
     return res.json({
       ...base,
       status: out.rows.length ? "results" : "none",
@@ -82,8 +82,7 @@ function register(api, { pool }) {
     const lang = broker.preferred_lang === "en" ? "en" : "ar";
     const voice = req.files && req.files.voice && req.files.voice[0];
     if (!voice) return res.status(400).json({ error: "no_audio" });
-    const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker))) return;
     try {
       const heard = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], { pool, AI, broker, agency: req.session.agency, lang }) || "").trim();
       // A search is a few words. A long transcript from silence is the model making up speech, so it is not used.

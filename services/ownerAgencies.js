@@ -37,8 +37,10 @@ async function get(db, agencyId, { now = new Date() } = {}) {
   const all = await list(db, { now });
   const a = all.find((x) => x.id === agencyId);
   if (!a) return null;
-  const { rows: brokers } = await db.query("SELECT id, name, role, is_active, preferred_lang, created_at FROM brokers WHERE agency_id = $1 ORDER BY role, name", [agencyId]);
-  const payments = await Billing.paymentsOf(db, agencyId, { limit: 10 });
+  const [{ rows: brokers }, payments] = await Promise.all([
+    db.query("SELECT id, name, role, is_active, preferred_lang, created_at FROM brokers WHERE agency_id = $1 ORDER BY role, name", [agencyId]),
+    Billing.paymentsOf(db, agencyId, { limit: 10 })
+  ]);
   return { ...a, team: brokers, payments };
 }
 
@@ -62,6 +64,7 @@ async function setPlan(db, owner, agencyId, { plan, months = null, until = null,
     [agencyId, p.id, paidUntil ? paidUntil.toISOString() : null, pilot === null ? null : Boolean(pilot)]
   );
   if (!rows[0]) return { error: "not_found" };
+  require("../lib/planGuard").forget(agencyId);
   logOperation(db, { agency_id: agencyId, broker_id: owner.id, operation_type: "owner_plan", status: "success", metadata: { plan: p.id, paid_until: rows[0].paid_until, pilot: rows[0].pilot } });
   return { ok: true, agency: rows[0] };
 }
@@ -90,6 +93,7 @@ async function setFounding(pool, owner, agencyId, on) {
     await client.query("UPDATE agencies SET founding_partner = $2, updated_at = now() WHERE id = $1", [agencyId, want]);
     return { ok: true, founding: want, ...(await foundingCount(client)) };
   });
+  if (out.ok) require("../lib/planGuard").forget(agencyId);
   if (out.ok) logOperation(pool, { agency_id: agencyId, broker_id: owner.id, operation_type: "owner_founding", status: "success", metadata: { founding: out.founding } });
   return out;
 }

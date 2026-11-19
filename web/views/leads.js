@@ -8,7 +8,7 @@ const Phone = require("../../domain/phone");
 const Credits = require("../../services/credits");
 const { html, raw } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const sel = (on) => (on ? raw(" selected") : "");
 const chk = (on) => (on ? raw(" checked") : "");
 const when = (d, lang) =>

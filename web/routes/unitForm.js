@@ -34,7 +34,7 @@ const Uploads = require("../../lib/unitUploads");
 const { placeList } = require("../views/searchForm");
 const { imagesOf } = require("./units");
 
-const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L: L10n } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const upload = uploads([PHOTO, VOICE_MANY]);
 

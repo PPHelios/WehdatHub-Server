@@ -108,7 +108,7 @@ describe("what Save writes", () => {
   test("the review's defaults: new and changed ticked, a code clash not ticked, an invalid unit has a disabled box; the line above Save says what is skipped", async () => {
     const { agent, id, kinds } = await seed();
     const page = (await agent.get(`/app/import/${id}`)).text;
-    const box = (row) => new RegExp(`<input type="checkbox" name="rows" value="${row}"( checked)?>`).exec(page);
+    const box = (row) => new RegExp(`<input type="checkbox" name="rows" value="${row}"(?: aria-label="[^"]*")?( checked)?>`).exec(page);
     expect(box(4)?.[1]).toBeTruthy(); // new: on
     if (kinds[2] === "review") expect(box(2)?.[1]).toBeFalsy(); // same code, another unit: needs a choice first
     else expect(box(2)?.[1]).toBeTruthy(); // changed: on

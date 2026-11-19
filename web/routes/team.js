@@ -20,7 +20,7 @@ const Audit = require("../../services/audit");
 const { html, raw } = require("../html");
 const { tabs } = require("../views/tabs");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const ROLE_LABEL = { broker: ["بروكر", "Broker"], manager: ["مدير", "Manager"], owner: ["مالك الشركة", "Agency owner"], admin: ["مدير", "Manager"], data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قائد فريق", "Team lead"] };
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };

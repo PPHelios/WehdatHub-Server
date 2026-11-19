@@ -23,13 +23,14 @@ const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
 const Privacy = require("../../services/unitPrivacy");
 const { refineForm } = require("../views/searchForm");
+const { searchBar } = require("../views/searchBar");
 
 const WEB_PAGE_SIZE = 20;
 const MAX_SAVED = Saved.MAX_SAVED;
 const MAX_SPOKEN_SEARCH = 200;
 const FORM_KEYS = ["code", "listing_type", "market", "type", "place", "price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "floor_max", "finishing", "furnishing", "ready", "by_year", "cash", "installments", "max_down_payment", "max_installment", "feature", "other"];
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const stripStars = (s) => String(s || "").replace(/\*/g, "");
 
@@ -52,11 +53,7 @@ function statusSwitch({ token, st, counts, lang, sl = null }) {
 }
 
 function searchBox(q, lang, { voice = false } = {}) {
-  return html`<form method="get" action="/app/search" class="searchbox float" role="search" data-search-form>
-  <span class="search-icon" aria-hidden="true">${icon("search", 20)}</span><input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
-  <button type="button" class="mic" data-ai="voice_search" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
-  <button type="submit" class="search-go" data-search-go>${L(lang, "بحث", "Search")}</button>
-</form>
+  return html`${searchBar({ lang, q, float: true, voiceStart: voice, label: L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot"), placeholder: L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M") })}
 <p class="row between small"><span class="muted">${L(lang, "اكتب أو اتكلم زي ما بتكلم البوت.", "Type or speak as you would to the bot.")}</span><a href="/app/searches">${icon("star", 16)} ${L(lang, "البحث المحفوظ", "Saved searches")}</a></p>
 `;
 }
@@ -230,12 +227,14 @@ function register(web, { pool, page }) {
       let switcher = "";
       if (!out.ask) {
         const counts = { active: 0, sold: 0, archived: 0, [st]: out.total };
-        for (const other of Search.SEARCH_STATUSES.filter((s) => s !== st)) counts[other] = await Search.countByStatus(pool, broker.agency_id, { filters }, other);
+        const others = Search.SEARCH_STATUSES.filter((s) => s !== st);
+        (await Promise.all(others.map((other) => Search.countByStatus(pool, broker.agency_id, { filters }, other, out.fx)))).forEach((n, i) => (counts[others[i]] = n));
         switcher = statusSwitch({ token, st, counts, lang, sl: logId });
       }
+      const [covers, asks] = out.ask ? [] : await Promise.all([Store.coverImages(pool, broker.agency_id, out.rows), Privacy.askStates(pool, broker, out.rows)]);
       results = out.ask
         ? askCard({ ask: out.ask, filters, q, lang, understood, logId })
-        : resultsSection({ covers: await Store.coverImages(pool, broker.agency_id, out.rows), res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows), understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
+        : resultsSection({ covers, res: out, filters, token, page: pageNo, lang, asks, understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
       searchUrl = `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,

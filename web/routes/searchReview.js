@@ -10,7 +10,7 @@ const Vocab = require("../../services/searchVocab");
 const Period = require("../../lib/period");
 const { html, raw } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const short = (v) => (v ? JSON.stringify(v).replace(/"[a-z_]+":(null|\[\]|""),?/g, "").slice(0, 400) : "—");
 const VIEWS = ["queue", "vocab", "cases"];
@@ -129,9 +129,9 @@ ${card("فتح أو بعت مشروع", "Opened or sent a project", n.ask_used, 
 <nav class="seg" data-queue>${tab("queue", "الطابور", "Queue", sum.open.reports + sum.open.audit)}${tab("vocab", "الكلمات", "Vocabulary", sum.open.words)}${tab("cases", "حالات الاختبار", "Test cases", 0)}</nav>${noteBox}
 ${view === "vocab" ? "" : html`<form method="get" action="${PATH}" class="row" data-filters>
 <input type="hidden" name="period" value="${p.key}"><input type="hidden" name="view" value="${view}">
-<input type="search" name="q" value="${text}" placeholder="${L(lang, "دوّر في البحث", "Search text")}">
-${view === "cases" ? "" : html`<select name="status"><option value="open"${status === "open" ? raw(" selected") : ""}>${L(lang, "مفتوح", "Open")}</option><option value="done"${status === "done" ? raw(" selected") : ""}>${L(lang, "اتقفل", "Done")}</option><option value="all"${status === "all" ? raw(" selected") : ""}>${L(lang, "الكل", "All")}</option></select>`}
-${view === "queue" ? html`<select name="type"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Object.keys(Review.TYPES).map((t) => html`<option value="${t}"${t === type ? raw(" selected") : ""}>${t}</option>`)}</select>` : ""}
+<input type="search" name="q" value="${text}" aria-label="${L(lang, "دوّر في البحث", "Search text")}" placeholder="${L(lang, "دوّر في البحث", "Search text")}">
+${view === "cases" ? "" : html`<select name="status" aria-label="${L(lang, "الحالة", "Status")}"><option value="open"${status === "open" ? raw(" selected") : ""}>${L(lang, "مفتوح", "Open")}</option><option value="done"${status === "done" ? raw(" selected") : ""}>${L(lang, "اتقفل", "Done")}</option><option value="all"${status === "all" ? raw(" selected") : ""}>${L(lang, "الكل", "All")}</option></select>`}
+${view === "queue" ? html`<select name="type" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Object.keys(Review.TYPES).map((t) => html`<option value="${t}"${t === type ? raw(" selected") : ""}>${t}</option>`)}</select>` : ""}
 <label class="row"><input type="checkbox" name="changed" value="1"${changed ? raw(" checked") : ""}> ${L(lang, "اتغير آخر يوم", "Changed in the last day")}</label>
 <button class="secondary">${L(lang, "فلتر", "Filter")}</button></form>`}
 <section class="card stack" data-view-body="${view}">${content}</section>

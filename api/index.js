@@ -110,6 +110,7 @@ function mountApi(app, { pool }) {
   // Data entry works on units and owners only: leads, deals, viewings, Ask and the rest are refused to that role.
   const NOT_FOR_DATA_ENTRY = /^\/(leads|deals|commissions|links|opened-links|viewings|ask|compare)(\/|$)/;
   priv.use((req, res, next) => (NOT_FOR_DATA_ENTRY.test(req.path) && require("../lib/authz").isDataEntry(req.session.broker) ? res.status(403).json({ error: "forbidden" }) : next()));
+  require("./chatDecisions").register(priv, { pool });
   require("./units").register(priv, { pool });
   require("./today").register(priv, { pool });
   require("./search").register(priv, { pool });

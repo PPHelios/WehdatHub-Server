@@ -16,8 +16,7 @@ function register(api, { pool }) {
     const lang = broker.preferred_lang === "en" ? "en" : "ar";
     const question = String((req.body && req.body.question) || "").trim();
     if (!question) return res.status(400).json({ error: "empty" });
-    const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker))) return;
     // The AI answers first; the line written from the results by code is the second opinion (kept for the comparison) and, with the AI off or
     // out of credit, the answer itself (source: "local").
     const data = await ProjectSearch.fromQuery(pool, broker, { q: question }, { AI }).catch(() => null);

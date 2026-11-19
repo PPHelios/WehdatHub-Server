@@ -40,12 +40,15 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
   // tapGuard drops repeated button taps (double taps, re-taps while a slow review runs): lib/tapGuard.js.
 
   const app = express();
+  app.disable("x-powered-by");
   // Smaller pages and downloads over slow mobile connections (images and other already-compressed types are skipped by default).
   app.use(require("compression")());
 
   // Plans, bundles and credits per action come from the database (owner page); keep the in-memory copy fresh.
   app.use((_req, _res, next) => {
-    Credits.ensureFresh(pool).finally(next);
+    // Fire and forget (it never throws): a TTL refresh must not stall the request.
+    Credits.ensureFresh(pool);
+    next();
   });
 
   // Capture raw body for cryptographic HMAC verification
@@ -53,9 +56,9 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     express.json({
       limit: config.bodyLimit,
       // The Excel grid (every tab, read in the browser) is bigger than a webhook ever is: its own route reads it with its own limit.
-      type: (req) => req.path !== "/app/import/excel/grid" && Boolean(require("type-is")(req, "application/json")),
+      type: (req) => req.path !== "/app/import/excel/grid" && Boolean(req.is("application/json")),
       verify: (req, _res, buf) => {
-        req.rawBody = buf;
+        if (req.path === "/webhook") req.rawBody = buf;
       }
     })
   );
@@ -85,6 +88,13 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     }
   }
 
+  // Constant-time compare: unequal lengths are rejected up front (timingSafeEqual throws on them).
+  function safeEqual(a, b) {
+    const x = Buffer.from(a, "utf8");
+    const y = Buffer.from(b, "utf8");
+    return x.length === y.length && crypto.timingSafeEqual(x, y);
+  }
+
   /**
    * Meta Webhook Verification Endpoint (GET)
    */
@@ -94,7 +104,7 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && VERIFY_TOKEN && token === VERIFY_TOKEN) {
+    if (mode === "subscribe" && VERIFY_TOKEN && typeof token === "string" && safeEqual(token, VERIFY_TOKEN)) {
       return res.status(200).send(challenge);
     }
     return res.sendStatus(403);
