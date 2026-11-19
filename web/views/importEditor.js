@@ -11,7 +11,7 @@ const { html, raw } = require("../html");
 const { unitBox } = require("./unitForm");
 const { cellsFromForm, boxValues, MANAGED } = require("../../domain/importEditorCells");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const pick = (pair, lang) => (pair ? (lang === "en" ? pair[1] : pair[0]) : "");
 
 const FURNISHING = [["furnished", ["مفروشة", "Furnished"]], ["semi_furnished", ["نصف فرش", "Semi-furnished"]], ["unfurnished", ["بدون فرش", "Unfurnished"]], ["kitchen_and_ac", ["مطبخ وتكييف", "Kitchen and AC"]]];

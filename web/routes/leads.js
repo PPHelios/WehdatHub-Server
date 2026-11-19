@@ -40,7 +40,7 @@ const { templatesFor } = require("../../domain/clientMessageTemplates");
 const { refineForm } = require("../views/searchForm");
 const Vis = require("../../lib/visibility");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const PAGE = 20;
 /** The ⓘ beside a WhatsApp send: the message with {placeholders} for what it fills in (in the client's language). */

@@ -8,7 +8,7 @@ const Describe = require("../../domain/describe");
 const { html, raw } = require("../html");
 const { unitBox, input, select, head, ICON } = require("./unitForm");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const pick = (pair, lang) => (pair ? (lang === "en" ? pair[1] : pair[0]) : "");
 const chk = (on) => (on ? raw(" checked") : "");
 const val = (v) => (v === null || v === undefined ? "" : String(v));

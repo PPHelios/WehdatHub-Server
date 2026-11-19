@@ -15,7 +15,7 @@ const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
 const { MARK } = require("../icons");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const ERRORS = {
   agency: ["اكتب اسم الشركة.", "Enter the agency name."],
   name: ["اكتب اسمك.", "Enter your name."],

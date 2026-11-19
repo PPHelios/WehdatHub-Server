@@ -12,8 +12,7 @@ function register(api, { pool }) {
   const decisionsGate = async (req, res) => {
     const { broker } = req.session;
     if (!(await Rights.mayWrite(pool, broker))) return void res.status(403).json({ error: "writes_off" });
-    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
-    if (!gate.allowed) return void res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
     return true;
   };
   api.get("/units/chat-decisions", async (req, res) => {

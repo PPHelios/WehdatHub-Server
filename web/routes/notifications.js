@@ -6,7 +6,7 @@ const { MANAGER_ROLES } = require("../../lib/authz");
 const { html } = require("../html");
 const { refLabel } = require("../../domain/leadCard");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const isManager = (b) => MANAGER_ROLES.includes(String(b.role || "").toLowerCase());
 const PAGE = 20;

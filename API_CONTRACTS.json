@@ -77,6 +77,14 @@
       "atMs": ["at", "order"],
       "parseWithAttachments": ["text"]
     },
+    "domain/chatFingerprint.js": {
+      "postFingerprint": ["sender", "at", "text"],
+      "chatFingerprint": ["chatFileName", "firstHeader"],
+      "firstHeaderOf": ["text"],
+      "isChatFp": ["v"],
+      "isPostFp": ["v"],
+      "foldArabic": ["t"]
+    },
     "domain/chatListing.js": {
       "parsePost": ["text", "places", "from"],
       "fillFromAi": ["cells", "fields"],
@@ -655,12 +663,6 @@
       "resolve": ["text", "lists", "lang"],
       "NOT_FOR_BOX": "Set"
     },
-    "domain/unitFilters.js": {
-      "read": ["q", "params"],
-      "conditions": ["f", "params"],
-      "appendTo": ["where", "args", "list"],
-      "OLD_AFTER_DAYS": "Number"
-    },
     "domain/unitCode.js": {
       "TYPE_LETTER": "Object",
       "typeLetter": ["propertyType"],
@@ -675,6 +677,12 @@
       "sameUnit": ["a", "b"],
       "sameCompound": ["a", "b"],
       "catalogueMatch": ["a", "b"]
+    },
+    "domain/unitFilters.js": {
+      "read": ["q", "params"],
+      "conditions": ["f", "params"],
+      "appendTo": ["where", "args", "list"],
+      "OLD_AFTER_DAYS": "Number"
     },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
@@ -768,6 +776,7 @@
     "lib/copy.js": {
       "COPY": "Object",
       "t": ["key", "lang", "vars"],
+      "L": ["lang", "ar", "en"],
       "soloWords": ["text", "lang"],
       "soloPage": ["htmlText"]
     },
@@ -791,7 +800,6 @@
       "TYPE_OVERRIDES": "Object",
       "query": ["pool", "text", "params"],
       "withTransaction": ["pool", "workFn"],
-      "withAdvisoryLock": ["pool", "key1", "key2", "workFn"],
       "logOperation": ["pool", "p"],
       "logStdout": ["level", "msg", "meta"],
       "als": "Object",
@@ -850,19 +858,12 @@
       "claimLimitWarning": ["pool", "brokerId", "sessionType"],
       "appendVoice": ["pool", "brokerId", "params", "sessionType"],
       "appendMedia": ["pool", "brokerId", "params", "sessionType"],
-      "stageDraftReview": ["pool", "brokerId", "reviewPayload"],
-      "getStagedReview": ["pool", "brokerId"],
-      "invalidateStagedReview": ["pool", "brokerId"],
       "reviewDraft": ["broker", "ctx"],
       "answerInstallments": ["broker", "ctx", "yes"],
       "answerOwner": ["broker", "ctx", "choice"],
       "answerCompound": ["broker", "ctx", "choice"],
       "commitStagedReview": ["broker", "ctx"],
-      "commitDraftToDatabase": ["broker", "_draft", "ctx"],
-      "commitDraftToListing": ["broker", "_draft", "ctx"],
-      "appendToDraft": ["pool", "broker", "params"],
-      "MAX_IMAGES": "Number",
-      "DRAFT_TTL_MS": "Number"
+      "commitDraftToDatabase": ["broker", "_draft", "ctx"]
     },
     "lib/edits.js": {
       "quickUpdate": ["broker", "params", "ctx"],
@@ -900,7 +901,6 @@
       "buildAgencyInventoryWorkbook": ["params"],
       "buildMultiPlanWorkbook": ["params"],
       "buildRejectionWorkbook": ["params"],
-      "buildBulkIngestionReport": ["params"],
       "sanitizeCellValue": ["val"]
     },
     "lib/failureLog.js": {
@@ -915,10 +915,8 @@
       "addMonths": ["date", "months"],
       "formatDate": ["d"],
       "calculatePlanSummary": ["basePrice", "plan"],
-      "calculateDeveloperPaymentPlans": ["basePrice", "plans", "maintenancePct"],
       "filterMatchingPlans": ["basePrice", "plans", "constraints"],
       "generateDetailedSchedule": ["basePrice", "plan", "startDate"],
-      "reconcileResaleBalance": ["params"],
       "calculateResaleFinancials": ["listing"],
       "formatSinglePlanAdCopy": ["listing", "broker", "selectedPlanIdOrYears", "lang"]
     },
@@ -1005,17 +1003,6 @@
     "lib/importFailed.js": {
       "failedRowsWorkbook": ["payload", "params"]
     },
-    "lib/importRows.js": {
-      "TABS": "Array",
-      "KINDS": "Array",
-      "PAGE": "Number",
-      "replaceRows": ["pool", "importId", "agencyId", "rows"],
-      "counts": ["pool", "importId", "agencyId"],
-      "page": ["pool", "importId", "agencyId", "tab", "params"],
-      "setTicked": ["pool", "importId", "agencyId", "seqs", "ticked"],
-      "getRow": ["pool", "importId", "agencyId", "seq"],
-      "tickedRows": ["pool", "importId", "agencyId"]
-    },
     "lib/importTemplate.js": {
       "build": ["params"]
     },
@@ -1100,6 +1087,9 @@
       "coverPhotos": ["db", "agencyId", "listings"],
       "findByCode": ["db", "agencyId", "code", "params"],
       "findDuplicate": ["db", "agencyId", "l", "params"],
+      "duplicateIndex": ["db", "agencyId"],
+      "batchContext": ["db", "broker"],
+      "codeSequence": ["db", "agencyId"],
       "createListing": ["db", "broker", "params"],
       "nextUnitCode": ["db", "agencyId", "propertyType"],
       "addPhotos": ["db", "listing", "urls"],
@@ -1169,6 +1159,7 @@
       "brokersWithRoles": ["pool", "agencyId", "roles"],
       "ownChoiceOf": ["broker", "kind"],
       "effectiveFor": ["pool", "broker", "kind"],
+      "effectiveFrom": ["policy", "broker", "kind"],
       "KINDS": "Array",
       "CHANNELS": "Array",
       "KINDS_BY_ROLE": "Object",
@@ -1236,6 +1227,7 @@
     },
     "lib/planGuard.js": {
       "stateOf": ["pool", "agencyId", "params"],
+      "forget": ["agencyId"],
       "stateFrom": ["eff"],
       "webDecision": ["source", "method", "path"],
       "apiDecision": ["source", "method", "path"],
@@ -1252,6 +1244,8 @@
     },
     "lib/rateLimit.js": {
       "hit": ["pool", "bucket", "params"],
+      "apiGate": ["pool", "res", "bucket", "limit"],
+      "sweep": ["pool"],
       "LIMITS": "Object"
     },
     "lib/readCaps.js": {
@@ -1346,12 +1340,15 @@
       "MAX_BYTES": "Number",
       "MAX_ROWS": "Number",
       "readInventorySheet": ["buffer"],
+      "readInventoryGrid": ["buffer", "params"],
       "readTable": ["buffer", "opts"],
       "parseCsv": ["text", "limitRows"],
       "decodeText": ["buffer"],
       "mapTable": ["rows", "params"],
       "xlsxRows": ["buffer"],
-      "xlsxSheets": ["buffer"]
+      "xlsxSheets": ["buffer"],
+      "xlsxGrid": ["buffer"],
+      "csvGrid": ["buffer"]
     },
     "lib/slowRequests.js": {
       "threshold": [],
@@ -1496,7 +1493,6 @@
       "createLimiter": ["concurrency", "params"],
       "createSerializer": [],
       "createRateGate": ["perMinute"],
-      "createCounter": ["windowMs", "max"],
       "cleanAudioMime": ["raw"],
       "isValidZipBuffer": ["buf"]
     },
@@ -1514,7 +1510,6 @@
       "allUnits": [],
       "allLeads": [],
       "run": ["viewer", "fn"],
-      "asSystem": ["fn"],
       "viewer": []
     },
     "lib/vision.js": {
@@ -1546,8 +1541,7 @@
       "consumeLoginToken": ["pool", "token"],
       "createSession": ["pool", "broker", "params"],
       "getSession": ["pool", "sid"],
-      "revokeSession": ["pool", "sid"],
-      "revokeAllSessions": ["pool", "brokerId"]
+      "revokeSession": ["pool", "sid"]
     },
     "lib/whatsapp.js": {
       "sendWhatsAppText": ["recipient", "text", "opts"],
@@ -1790,6 +1784,14 @@
       "card": ["u", "lang"],
       "errorText": ["out", "lang"]
     },
+    "services/chatDecisions.js": {
+      "list": ["pool", "agencyId", "chatFp"],
+      "record": ["pool", "agencyId", "brokerId", "chatFp", "items"],
+      "forget": ["pool", "agencyId", "chatFp", "postFps"],
+      "OUTCOMES": "Array",
+      "MAX_PER_CHAT": "Number",
+      "MAX_PER_REQUEST": "Number"
+    },
     "services/chatImportReport.js": {
       "report": ["pool", "params"]
     },
@@ -1963,7 +1965,15 @@
       "planExcel": ["pool", "broker", "sheet", "params"],
       "savePlan": ["pool", "broker", "kind", "payload", "params"],
       "loadImport": ["pool", "broker", "id"],
-      "applyExcel": ["pool", "broker", "id", "params"],
+      "applyExcel": ["pool", "broker", "id", "opts"],
+      "startApplyExcel": ["pool", "broker", "id", "params"],
+      "applyStatus": ["pool", "broker", "id", "params"],
+      "waitForApply": ["id"],
+      "remainingRows": ["imp"],
+      "appliedRows": ["imp"],
+      "failReason": ["reason", "lang"],
+      "failedLine": ["f", "lang"],
+      "failedCode": ["f"],
       "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
       "batchExcel": ["pool", "broker", "id", "params", "params"],
       "batchStats": ["payload"],
@@ -2080,6 +2090,7 @@
       "pipeline": ["pool", "actor", "params"],
       "findByPhone": ["pool", "actor", "raw"],
       "listLeads": ["pool", "actor", "f", "params"],
+      "countTabs": ["pool", "actor", "f", "tabs", "params"],
       "timeline": ["pool", "actor", "key", "params"],
       "releaseBrokerLeads": ["pool", "agencyId", "brokerId", "params"]
     },
@@ -2321,9 +2332,6 @@
       "purgeInboundPayloads": ["pool", "params"],
       "privacyJob": []
     },
-    "services/quickFill.js": {
-      "draftFromText": ["pool", "text", "lang"]
-    },
     "services/privatePortfolio.js": {
       "setPrivate": ["pool", "owner", "kind", "id", "value"]
     },
@@ -2381,6 +2389,9 @@
       "EXPLICIT": "Object",
       "DROPS": "Object"
     },
+    "services/quickFill.js": {
+      "draftFromText": ["pool", "text", "lang"]
+    },
     "services/quotas.js": {
       "forAgency": ["db", "agencyId", "params"]
     },
@@ -2414,7 +2425,7 @@
       "parseRequest": ["AI", "params"],
       "SEARCH_STATUSES": "Array",
       "buildSearchQuery": ["agencyId", "parsedOrFilters", "params"],
-      "countByStatus": ["pool", "agencyId", "parsed", "status"],
+      "countByStatus": ["pool", "agencyId", "parsed", "status", "fx"],
       "runSearch": ["pool", "agencyId", "parsed", "params"],
       "pageByIds": ["pool", "agencyId", "ids", "offset", "pageSize", "params"],
       "search": ["params"]
@@ -2669,6 +2680,8 @@
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],
+      "themeToggle": ["lang"],
+      "brandLink": ["href", "lang", "params"],
       "withCsrf": ["pageHtml", "csrf"],
       "navFor": ["broker"],
       "tabOf": ["path", "nav"],
@@ -2677,7 +2690,8 @@
     "web/icons.js": {
       "icon": ["name", "size"],
       "MARK": "Object",
-      "PATHS": "Object"
+      "PATHS": "Object",
+      "SPRITE": "String"
     },
     "web/index.js": {
       "MANIFEST": "Object",
@@ -2950,6 +2964,9 @@
     "web/views/quotas.js": {
       "quotaSection": ["items", "lang"]
     },
+    "web/views/searchBar.js": {
+      "searchBar": ["params"]
+    },
     "web/views/searchForm.js": {
       "refineForm": ["filters", "lang", "params"],
       "placeList": []
@@ -2978,22 +2995,6 @@
       "stripMarkdown": ["s"],
       "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"]
-    },
-    "domain/chatFingerprint.js": {
-      "postFingerprint": ["sender", "at", "text"],
-      "chatFingerprint": ["chatFileName", "firstHeader"],
-      "firstHeaderOf": ["text"],
-      "isChatFp": ["v"],
-      "isPostFp": ["v"],
-      "foldArabic": ["t"]
-    },
-    "services/chatDecisions.js": {
-      "list": ["pool", "agencyId", "chatFp"],
-      "record": ["pool", "agencyId", "brokerId", "chatFp", "items"],
-      "forget": ["pool", "agencyId", "chatFp", "postFps"],
-      "OUTCOMES": "Array",
-      "MAX_PER_CHAT": "Number",
-      "MAX_PER_REQUEST": "Number"
     }
   },
   "invariant_variable_names": {

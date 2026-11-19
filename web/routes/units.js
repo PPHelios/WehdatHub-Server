@@ -31,7 +31,7 @@ const { resultItem, factList } = require("../views/units");
 const { carousel } = require("../views/carousel");
 const Vis = require("../../lib/visibility");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const STATUSES = ["active", "sold", "archived"];
 const UNITS_PAGE = 20;

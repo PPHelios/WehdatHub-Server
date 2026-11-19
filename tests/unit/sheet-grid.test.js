@@ -150,3 +150,86 @@ describe("compound column that says no compound", () => {
     expect(sheet.rows.map((r) => r.cells.compound)).toEqual(["Rehab 1, 3rd floor", "Mivida"]);
   });
 });
+
+describe("header synonyms and cleaner header choice", () => {
+  const key = (h) => SheetImport.columnFor(h);
+
+  test("rent, size, rooms and phone words are known; 'Area name' is a place, not the size", () => {
+    for (const h of ["Rent", "الإيجار", "Monthly rent", "سعر البيع", "Selling price"]) expect([h, key(h)]).toEqual([h, "price_value"]);
+    for (const h of ["Size", "م2", "Built up area", "Area", "Area (sqm)", "المساحة بالمتر"]) expect([h, key(h)]).toEqual([h, "area_value"]);
+    expect(key("Area name")).toBe("district");
+    expect(key("Rooms")).toBe("bedrooms");
+    expect(key("Bathrooms")).toBe("bathrooms");
+    for (const h of ["WhatsApp", "الهاتف", "Mobile number"]) expect([h, key(h)]).toEqual([h, "owner_phone"]);
+    expect(key("Rent / Sale")).toBe("listing_type");
+  });
+
+  test("installment years are the length, not the amount; Arabic typos are still the column", () => {
+    expect(key("Installment years")).toBe("installment_years");
+    expect(key("سنوات القسط")).toBe("installment_years");
+    expect(key("Installment")).toBe("installment_value");
+    expect(key("الكمبواند")).toBe("compound");
+    expect(key("المساحة")).toBe("area_value");
+  });
+
+  test("an 'Area' column full of place names is the district", () => {
+    const head = ["code", "area", "price", "size", "type"];
+    const sheet = buildSheet([{ name: "x", rows: [row(1, ...head), row(2, "A1", "Fifth Settlement", "5m", 120, "apartment"), row(3, "A2", "Sheikh Zayed", "6m", 130, "apartment"), row(4, "A3", "Rehab", "7m", 140, "apartment")] }]);
+    expect(sheet.rows[0].cells).toMatchObject({ district: "Fifth Settlement", area_value: 120 });
+  });
+
+  test("the best header row wins, not the first that qualifies; group labels above name the sub-headers", () => {
+    const sheet = buildSheet([
+      {
+        name: "Hyde Park",
+        rows: [
+          row(1, "code", "price", "type"),
+          row(2, null, null, null, null, "Payment", null),
+          row(3, "code", "compound", "price", "area", "Down", "Years", "type"),
+          row(4, "A1", "Hyde", "8m", 150, "1m", 5, "apartment")
+        ]
+      }
+    ]);
+    expect(sheet.tabs[0].mapped).toEqual(expect.arrayContaining(["down_payment_value", "installment_years", "area_value"]));
+    expect(sheet.rows[0].cells).toMatchObject({ code: "A1", price_value: "8m", down_payment_value: "1m", installment_years: 5 });
+  });
+
+  test("the re-uploaded 'rows not imported' file does not turn its tab name into a compound", () => {
+    for (const name of ["Not imported", "مش متسجل"]) {
+      const sheet = buildSheet([{ name, rows: [row(1, "code", "price", "area"), row(2, "A1", "5m", 100)] }]);
+      expect(sheet.rows[0].cells.compound).toBeUndefined();
+    }
+  });
+});
+
+describe("numbers in cells", () => {
+  const draft = (cells) => SheetImport.rowToDraft(cells);
+
+  test("no code column is fine: price and area are the only required columns", () => {
+    expect(SheetImport.REQUIRED).toEqual(["price_value", "area_value"]);
+    expect(SheetImport.emptyRequired([{ cells: { price_value: "5m", area_value: 100 } }])).toEqual([]);
+  });
+
+  test("'3+1' rooms is 3 with a note; ranges take the low value with a note and are never joined", () => {
+    const a = draft({ bedrooms: "3+1", area_value: "120-130" });
+    expect(a.draft).toMatchObject({ bedrooms: 3, area_value: 120 });
+    expect(a.draft.details.notes).toMatch(/3\+1/);
+    expect(a.draft.details.notes).toMatch(/120-130/);
+    expect(draft({ bedrooms: "3-4" }).draft.bedrooms).toBe(3);
+    expect(draft({ bedrooms: "3" }).draft.details.notes).toBeUndefined();
+  });
+
+  test("Persian and Arabic digits, ٫ decimals and ٬ thousands", () => {
+    expect(draft({ area_value: "۱۲۰" }).draft.area_value).toBe(120);
+    expect(draft({ area_value: "١٢٠٫٥" }).draft.area_value).toBe(120.5);
+    expect(SheetImport.money("٨٫٥ مليون")).toBe(8500000);
+    expect(SheetImport.money("٨٬٥٠٠٬٠٠٠")).toBe(8500000);
+  });
+
+  test("a single comma before a unit word is a decimal mark", () => {
+    expect(SheetImport.money("8,5 مليون")).toBe(8500000);
+    expect(SheetImport.money("2,25 million")).toBe(2250000);
+    expect(SheetImport.money("8,500,000")).toBe(8500000);
+    expect(SheetImport.money("65,000")).toBe(65000);
+  });
+});

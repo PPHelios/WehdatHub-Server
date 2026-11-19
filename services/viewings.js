@@ -18,7 +18,7 @@ const Vis = require("../lib/visibility");
 const HOUR = 3600 * 1000;
 const DURATION_MS = HOUR;
 const OPEN = ["proposed", "confirmed", "reschedule"];
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../lib/copy");
 const tokenHash = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
 const clean = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n) || null;
 

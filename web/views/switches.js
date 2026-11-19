@@ -7,7 +7,7 @@
 
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 
 /**
  * An on/off switch. Checked posts `value` (default "on"); unchecked posts nothing.

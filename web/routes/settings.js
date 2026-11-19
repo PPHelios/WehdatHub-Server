@@ -19,7 +19,7 @@ const { uploads } = require("../uploads");
 const uploadLogo = uploads([{ name: "logo", maxCount: 1, accept: /^image\/(png|jpeg|webp)$/ }], { maxMb: 2 });
 Session.allowMultipart(/^\/settings\/logo$/);
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h) => `${String(h).padStart(2, "0")}:00`;

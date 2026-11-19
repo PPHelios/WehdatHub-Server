@@ -6,7 +6,7 @@
 
 const { html, raw } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const money = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 /** 3,500,000 → "3.5M"; 850,000 → "850K". */
 const short = (n, lang) => {

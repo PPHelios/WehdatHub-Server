@@ -9,6 +9,8 @@
     (root || document).querySelectorAll("[data-ai]").forEach(function (el) {
       if (off.indexOf(el.getAttribute("data-ai")) < 0 || el.hasAttribute("data-ai-off")) return;
       el.setAttribute("data-ai-off", "");
+      // The search bar's round button also sends typed text: it stays usable, only its voice side is off (see listen()).
+      if (el.hasAttribute("data-mic")) return;
       el.setAttribute("aria-disabled", "true");
       if (el.tagName === "BUTTON") el.disabled = true;
       if (el.tagName === "A") el.removeAttribute("href");
@@ -547,14 +549,16 @@
     var n = parseInt(bg.slice(1), 16);
     var lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
     document.documentElement.setAttribute("data-theme", lum < 0.5 ? "dark" : "light");
+    document.documentElement.setAttribute("data-tg-theme", lum < 0.5 ? "dark" : "light");
   })();
   // Appearance: System (the phone's, or Telegram's) unless the user picked Light or Dark on the More page; kept on this device.
   (function () {
-    var root = document.documentElement, auto = root.getAttribute("data-theme");
+    var root = document.documentElement;
     function stored() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
     function apply(v) {
       if (v === "light" || v === "dark") root.setAttribute("data-theme", v);
-      else if (auto) root.setAttribute("data-theme", auto);
+      else if (root.getAttribute("data-tg-theme")) root.setAttribute("data-theme", root.getAttribute("data-tg-theme"));
+      else if (window.whTheme) window.whTheme.apply("system");
       else root.removeAttribute("data-theme");
       document.querySelectorAll("[data-theme-set]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-theme-set") === v)); });
     }
@@ -658,9 +662,11 @@
   function toast(text, bad) {
     var box = document.querySelector("[data-toast-box]");
     if (!box || !text) return;
-    box.textContent = text;
+    // Unhide first, then set the text: a live region announces text changed after it is shown.
     box.className = "toast" + (bad ? " bad" : "");
+    box.setAttribute("role", bad ? "alert" : "status");
     box.hidden = false;
+    box.textContent = text;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { box.hidden = true; }, bad ? 6000 : 4000);
   }
@@ -1320,6 +1326,48 @@
     btn.classList.toggle("recording", state === "recording");
     btn.classList.toggle("busy", state === "busy");
     btn.setAttribute("aria-pressed", state === "recording" ? "true" : "false");
+    if (state !== "recording") railOff(btn);
+    labelAct(btn);
+  }
+  // The round button's name follows what it does now: voice (empty box), search (typed text) or send (recording).
+  function labelAct(btn) {
+    var form = btn.form || btn.closest("form");
+    var input = form && form.querySelector("input[name=q]");
+    var typed = !!(input && input.value.trim());
+    if (form) form.classList.toggle("has-text", typed);
+    btn.setAttribute("aria-label", btn.classList.contains("recording") ? btn.getAttribute("data-l-send") : typed ? btn.getAttribute("data-l-go") : btn.getAttribute("data-l-mic"));
+  }
+  // The recording rail (voice.js) replaces the input while a note is recorded; Esc or the bin throws it away.
+  function railOn(btn, form, input) {
+    var prev = input.value;
+    form.classList.add("is-rec");
+    btn._railCtl = window.WHRail.open({ parent: form, before: btn, send: false, onDiscard: function () { discardNote(btn, form, input, prev); } });
+    btn.focus();
+  }
+  function railOff(btn) {
+    var ctl = btn._railCtl;
+    if (!ctl) return;
+    btn._railCtl = null;
+    ctl.close();
+    (btn.form || btn.closest("form")).classList.remove("is-rec");
+  }
+  function discardNote(btn, form, input, prev) {
+    var rec = btn._rec;
+    var ctl = btn._railCtl;
+    if (!rec || !ctl) return;
+    btn._railCtl = null;
+    btn._discard = !rec.abort; // a MediaRecorder cannot abort: its stop handler must then skip the upload
+    btn._rec = null;
+    if (rec.abort) { try { rec.abort(); } catch (_) {} } else { try { rec.stop(); } catch (_) {} }
+    btn.classList.remove("recording");
+    btn.setAttribute("aria-pressed", "false");
+    ctl.discard(function () {
+      form.classList.remove("is-rec");
+      input.value = prev;
+      labelAct(btn);
+      input.focus();
+      window.WHRail.announce(window.WHRail.text.gone);
+    });
   }
   function pickType() {
     var types = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
@@ -1368,11 +1416,13 @@
       rec.onstop = function () {
         btn._rec = null;
         stream.getTracks().forEach(function (t) { t.stop(); });
+        if (btn._discard) { btn._discard = false; return; }
         transcribe(btn, form, new Blob(chunks, { type: rec.mimeType || type || "audio/webm" }));
       };
       btn._rec = rec;
       rec.start();
       setMic(btn, "recording");
+      railOn(btn, form, form.querySelector("input[name=q]"));
     }).catch(function () {
       toast(EN ? VOICE_ERRORS["not-allowed"][0] : VOICE_ERRORS["not-allowed"][1], true);
     });
@@ -1424,6 +1474,7 @@
     try {
       rec.start();
       setMic(btn, "recording");
+      railOn(btn, form, input);
       rec.guard(12000);
     } catch (_) {
       btn._rec = null;
@@ -1458,15 +1509,25 @@
     if (!input) return;
     e.preventDefault();
     input.blur();
-    // The form's own submit path (its Search button is the submitter), so the button shows its spinner and the search is sent.
-    if (input.value.trim()) { var go = input.form.querySelector("[data-search-go]"); if (input.form.requestSubmit) input.form.requestSubmit(go || undefined); else send(input.form); }
+    if (input.value.trim()) { busyBox(input.form, true); if (input.form.requestSubmit) input.form.requestSubmit(); else send(input.form); }
   });
-  if (Speech) {
-    var mics = document.querySelectorAll("[data-mic]");
-    for (var m = 0; m < mics.length; m++) {
-      mics[m].hidden = false;
-      mics[m].addEventListener("click", function () { listen(this); });
-    }
+  // The round button: typed text searches (a normal submit); an empty box records. Its label follows the text.
+  var mics = document.querySelectorAll("[data-mic]");
+  for (var m = 0; m < mics.length; m++) {
+    (function (btn) {
+      var form = btn.form || btn.closest("form");
+      var input = form && form.querySelector("input[name=q]");
+      if (input) input.addEventListener("input", function () { labelAct(btn); });
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (!btn._rec && input && input.value.trim()) { busyBox(form, true); if (form.requestSubmit) form.requestSubmit(); else form.submit(); return; }
+        if (btn.classList.contains("busy")) return;
+        if (!btn._rec && btn.hasAttribute("data-ai-off")) return toast(document.body.getAttribute("data-ai-off-hint") || "", true);
+        if (!btn._rec && !Speech && !canRecord()) return toast(EN ? "Voice is not supported here. Type your search." : "الصوت مش مدعوم هنا. اكتب بحثك.", true);
+        if (btn._rec) window.WHRail.announce(window.WHRail.text.sent);
+        listen(btn);
+      });
+    })(mics[m]);
   }
   // A voice file picked on the unit form runs the same "fill from a voice note" request as the record button.
   document.addEventListener("change", function (e) {

@@ -18,8 +18,8 @@
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB --testPathIgnorePatterns /node_modules/ tests/e2e.test.js tests/browser/ tests/heavy/ tests/parsers/",
     "test:fast": "node --test tests/e2e.test.js tests/parsers/regression.test.js && node --experimental-vm-modules node_modules/jest/bin/jest.js --maxWorkers=4 --workerIdleMemoryLimit=1500MB tests/parity tests/security tests/contract-guard tests/visibility-guard tests/safeguards tests/api tests/unit tests/web/unit tests/web/search tests/web/data-entry",
     "test:heavy": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/heavy",
-    "test:main-paths": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/main-paths.test.js' --testPathIgnorePatterns /node_modules/",
-    "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
+    "test:main-paths": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"**/tests/browser/main-paths.test.js\" --testPathIgnorePatterns /node_modules/",
+    "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"**/tests/browser/**/*.test.js\" --testPathIgnorePatterns /node_modules/",
     "test:ci": "npm run test:unit && npm run test:jest && npm run test:heavy",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
     "migrate": "node --env-file=.env scripts/migrate.js",
@@ -47,14 +47,12 @@
   },
   "dependencies": {
     "@google/genai": "2.30.0",
-    "@resvg/resvg-js": "2.6.2",
     "@supabase/supabase-js": "2.118.0",
     "compression": "1.8.2",
     "dotenv": "18.0.8",
     "exceljs": "4.4.0",
     "express": "5.3.0",
     "heic2any": "^0.0.4",
-    "html-react-parser": "5.2.17",
     "htmx.org": "2.0.11",
     "jszip": "3.10.2",
     "leaflet": "^1.9.4",
@@ -73,8 +71,7 @@
     "pbf": "^5.1.2",
     "playwright": "^1.63.0",
     "pmtiles": "^4.5.0",
-    "supertest": "7.3.1",
-    "typescript": "7.0.2"
+    "supertest": "7.3.1"
   },
   "overrides": {
     "uuid": "11.1.1",

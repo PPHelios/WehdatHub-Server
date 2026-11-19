@@ -2,6 +2,7 @@
 // next to each icon is the accessible name, so every svg is aria-hidden.
 "use strict";
 
+const crypto = require("crypto");
 const { raw } = require("./html");
 
 const PATHS = {
@@ -16,6 +17,7 @@ const PATHS = {
   back: '<path d="m9 18 6-6-6-6"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
   deal: '<path d="m11 17 2 2a1 1 0 0 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 0 0 3-3l-3.9-3.9a2 2 0 0 0-2.8 0L12 10.4a1 1 0 0 1-3-3L11.8 4.6a2 2 0 0 1 2.8 0L21 11"/><path d="M3 11 7 7l4 4M3 16l3 3"/>',
   money: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
@@ -61,11 +63,16 @@ const PATHS = {
   moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>'
 };
 
-/** An inline icon; unknown names render nothing. */
+// One cached sprite (served immutable by web/assets.js as icons.svg) instead of the same paths inlined on every page.
+// The stroke settings stay on each <svg class="ico"> and inherit into the symbol, so currentColor keeps working.
+const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg">${Object.entries(PATHS).map(([name, p]) => `<symbol id="i-${name}" viewBox="0 0 24 24">${p}</symbol>`).join("")}</svg>`;
+const SPRITE_HASH = crypto.createHash("sha256").update(SPRITE).digest("hex").slice(0, 10);
+const SPRITE_URL = `/app/static/icons.svg?v=${SPRITE_HASH}`;
+
+/** An icon drawn from the sprite; unknown names render nothing. */
 function icon(name, size = 24) {
-  const p = PATHS[name];
-  if (!p) return raw("");
-  return raw(`<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${p}</svg>`);
+  if (!PATHS[name]) return raw("");
+  return raw(`<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="${SPRITE_URL}#i-${name}"/></svg>`);
 }
 
 /** The invariant WehdatHub mark (always the same in light and dark: outer 4 towers Satin Gold, middle tower Cobalt Blue). */
@@ -73,4 +80,4 @@ const MARK = raw(
   '<svg class="mark" viewBox="0 15 154 140" aria-hidden="true" focusable="false"><polygon points="10,20 32,55 32,150 10,150" fill="#C29741"/><polygon points="38,95 60,70 60,150 38,150" fill="#C29741"/><polygon points="66,62 88,35 88,150 66,150" fill="#4B83D4"/><polygon points="94,70 116,95 116,150 94,150" fill="#C29741"/><polygon points="122,55 144,20 144,150 122,150" fill="#C29741"/></svg>'
 );
 
-module.exports = { icon, MARK, PATHS };
+module.exports = { icon, MARK, PATHS, SPRITE };

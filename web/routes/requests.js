@@ -7,7 +7,7 @@ const Requests = require("../../services/clientRequests");
 const Card = require("../../domain/leadCard");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const day = (d) => new Date(d).toISOString().slice(0, 10);
 

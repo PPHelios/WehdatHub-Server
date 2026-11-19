@@ -57,10 +57,11 @@ test("Arabic by default, English with ?lang=en and no Arabic left; plans, Telegr
   expect(en.text).toContain('id="try"');
 });
 
-test("brand.css carries the brand colours and every page links it before app.css", async () => {
+test("app.css starts with the brand colours (brand.css is folded into it) and every page links it", async () => {
   const page = await request(h.app.app).get("/app/login");
-  const m = page.text.match(/href="(\/app\/static\/brand\.css\?v=\w+)"[\s\S]*?href="\/app\/static\/app\.css/);
+  const m = page.text.match(/href="(\/app\/static\/app\.css\?v=\w+)"/);
   expect(m).not.toBeNull();
+  expect(page.text).not.toContain("brand.css");
   const css = await request(h.app.app).get(m[1]);
   expect(css.text).toContain(`--brand: ${BRAND.colors.brand}`);
   expect(css.text).toContain(`--accent: ${BRAND.colors.accent}`);

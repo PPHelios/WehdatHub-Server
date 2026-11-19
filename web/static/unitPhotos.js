@@ -258,9 +258,21 @@
     });
   }
 
+  // The next photo is reduced (two at a time at most) while the current one uploads; the uploads themselves stay one at a time.
+  // shortcut: uploads serial because Render + Supabase are on free plans, parallelize when upgraded to paid
+  var MAX_SHRINK = 2, shrinking = 0;
+  function precompress(it) {
+    if (!it || it.pre || !it.file || shrinking >= MAX_SHRINK) return;
+    shrinking++;
+    it.pre = reduce(it.file);
+    it.pre.then(function () { shrinking--; });
+  }
+
   function processItem(it) {
     it.state = "working"; it.pct = 1; showState(it);
-    return reduce(it.file).then(function (r) {
+    var shrunk = it.pre || reduce(it.file);
+    it.pre = null;
+    return shrunk.then(function (r) {
       if (!r) { it.state = "local"; return null; } // a type the browser cannot reduce: goes with the form
       it.small = r.small;
       return signOne().then(function (u) {
@@ -273,14 +285,17 @@
     }).catch(function () { it.state = "failed"; }).then(function () { showState(it); });
   }
 
-  // One photo at a time (phones run out of memory with many); the next starts as soon as one is done.
+  // One photo uploads at a time (phones run out of memory with many); the next starts as soon as one is done.
   function pump() {
     if (pumping) return;
     pumping = true;
     (function next() {
-      var it = tray && tray.items.filter(function (x) { return x.state === "queued" && x.keep; })[0];
+      var queued = tray ? tray.items.filter(function (x) { return x.state === "queued" && x.keep; }) : [];
+      var it = queued[0];
       if (!it) { pumping = false; if (tray) sync(); return; }
       if (!direct) { it.state = "local"; showState(it); return next(); }
+      precompress(it);
+      precompress(queued[1]);
       processItem(it).then(function () { sync(); next(); });
     })();
   }
@@ -330,17 +345,18 @@
       .catch(function () { tray.restoring = false; });
   }
 
-  // The photos in the tray, one at a time (phones run out of memory with many at once); onStep(done, total) for the percent.
+  // The photos in the tray; onStep(done, total) feeds the percent. They are shrunk two at a time at most (the upload of the form itself is one request).
+  // shortcut: uploads serial because Render + Supabase are on free plans, parallelize when upgraded to paid
   function prepare(form, onStep) {
-    var items = chosen(), i = 0;
+    var items = chosen(), at = 0, done = 0;
     var step = function () {
-      if (i >= items.length) return Promise.resolve();
-      var it = items[i];
-      if (it.key || !it.file) { i++; return step(); } // already in storage
-      onStep(i, items.length);
-      return (it.small ? Promise.resolve(it.small) : compress(it.file)).then(function (s) { it.small = s; i++; return step(); });
+      if (at >= items.length) return Promise.resolve();
+      var it = items[at++];
+      if (it.key || !it.file) { done++; return step(); } // already in storage
+      onStep(done, items.length);
+      return (it.small ? Promise.resolve(it.small) : compress(it.file)).then(function (s) { it.small = s; done++; return step(); });
     };
-    return step().then(function () { onStep(items.length, items.length); sync(); });
+    return Promise.all([step(), step()]).then(function () { onStep(items.length, items.length); sync(); });
   }
 
   // Only as many photos as the unit has room for are added; the rest are counted and said out loud.

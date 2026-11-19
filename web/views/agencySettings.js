@@ -5,7 +5,7 @@
 
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const back = (ret) => (ret ? html`<input type="hidden" name="return" value="${ret}">` : "");
 
 /** The dollar and euro rates: { lang, rates: { USD, EUR }, bad, ret, id }. */

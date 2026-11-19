@@ -17,7 +17,7 @@ const Session = require("../session");
 const { uploads } = require("../uploads");
 const { html, raw, phoneLtr } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const SHOWN = 200; // rows listed per section; the counts cover all of them
 // Browsers send a CSV as text/csv, application/vnd.ms-excel (Windows) or nothing useful.

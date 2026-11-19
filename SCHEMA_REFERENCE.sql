@@ -2238,7 +2238,7 @@ ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRA
 ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_status_check CHECK ((status = ANY (ARRAY['proposed'::text, 'confirmed'::text, 'reschedule'::text, 'cancelled'::text])));
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_kind_check CHECK ((kind = ANY (ARRAY['excel'::text, 'group'::text, 'leads'::text])));
-ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applied'::text, 'failed'::text])));
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applying'::text, 'applied'::text, 'failed'::text])));
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text, 'code'::text])));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES brokers(id) ON DELETE SET NULL;

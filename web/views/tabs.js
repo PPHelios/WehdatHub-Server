@@ -9,7 +9,7 @@ function tabs(name, panels, { open = 0, cls = "" } = {}) {
   const at = Math.min(Math.max(0, open), panels.length - 1);
   return html`<div class="tabs otabs${cls ? ` ${cls}` : ""}">
   ${panels.map((_, i) => html`<input type="radio" name="${name}" id="${name}-${i + 1}" class="tab-radio t${i + 1}"${i === at ? html` checked` : ""}>`)}
-  <div class="tab-bar" role="tablist">${panels.map(([label], i) => html`<label for="${name}-${i + 1}" role="tab" class="l${i + 1}">${label}</label>`)}</div>
+  <div class="tab-bar">${panels.map(([label], i) => html`<label for="${name}-${i + 1}" class="l${i + 1}">${label}</label>`)}</div>
   ${panels.map(([, body], i) => html`<div class="tab-panel p${i + 1}" data-tab="${name}-${i + 1}">${body}</div>`)}
 </div>`;
 }

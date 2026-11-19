@@ -5,7 +5,7 @@ const ErrorReports = require("../../lib/errorReports");
 const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 
 /** The page the broker came from (path only: query strings may carry tokens). */

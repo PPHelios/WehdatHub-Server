@@ -3,7 +3,7 @@
 
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const num = (n) => Number(n).toLocaleString("en-US");
 const UNLIMITED = require("../../domain/plans").UNLIMITED;
 const cap = (n, lang) => (Number(n) >= UNLIMITED ? (lang === "en" ? "Unlimited" : "بلا حد") : num(n));

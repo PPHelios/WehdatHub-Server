@@ -9,7 +9,7 @@ const Credits = require("../../services/credits");
 const { html, raw } = require("../html");
 const { factList } = require("./units");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const pick = (pair, lang) => (pair ? (lang === "en" ? pair[1] : pair[0]) : "");
 const sel = (on) => (on ? raw(" selected") : "");
 const chk = (on) => (on ? raw(" checked") : "");

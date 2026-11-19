@@ -8,7 +8,7 @@ const Stages = require("../../domain/leadStages");
 const Commission = require("../../domain/commission");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const money = (n, lang) => (n === null || n === undefined ? "—" : Commission.money(n, lang));
 

@@ -204,14 +204,14 @@ async function voice(pg, who, name, path) {
     const url = await btn.getAttribute("data-voice-url");
     await btn.tap();
     // Wait until the browser really records (permission and MediaRecorder start take a moment) before stopping.
-    const recording = await pg.waitForSelector("[data-voice-target].recording", { timeout: 8000 }).then(() => true, () => false);
+    const recording = await pg.waitForSelector("[data-voice-target].recording", { state: "attached", timeout: 8000 }).then(() => true, () => false);
     if (!recording) {
       note(where, "tapping the voice button did not start a recording");
       continue;
     }
     await pg.waitForTimeout(500);
     const sent = pg.waitForResponse((r) => r.url().includes(url) && r.request().method() === "POST", { timeout: 10000 }).catch(() => null);
-    await btn.tap().catch(() => {});
+    await pg.tap(".vrail [data-vr-send]").catch(() => {});
     const resp = await sent;
     if (!resp) note(where, "stopping the recording sent nothing");
     else if (resp.status() >= 500) note(where, `HTTP ${resp.status()} on ${url}`);

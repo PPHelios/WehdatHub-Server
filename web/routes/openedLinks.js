@@ -9,7 +9,7 @@ const Authz = require("../../lib/authz");
 const { html } = require("../html");
 const { icon } = require("../icons");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const STATUS_LABEL = {
   all: ["الكل", "All"],

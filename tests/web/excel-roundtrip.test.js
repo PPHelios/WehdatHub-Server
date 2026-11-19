@@ -10,6 +10,15 @@ const ExcelJS = require("exceljs");
 const { createHarness, closeHarness } = require("../harness/app");
 const { signIn } = require("../harness/web");
 
+const Imports = require("../../services/imports");
+
+// The Excel apply runs in the background: wait for it, then look.
+async function applyRows(agent, csrf, id, body) {
+  const res = await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send(body);
+  await Imports.waitForApply(id);
+  return res;
+}
+
 jest.setTimeout(90000);
 
 let h;
@@ -74,7 +83,7 @@ test("fake inventory: upload, preview, apply two new units; the manager's export
   expect((await agent.get(preview.headers.location)).text).toMatch(/data-kind="new"/);
   expect(await unit("FX-1")).toBeUndefined();
 
-  const apply = await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2&rows=3&rows=4");
+  const apply = await applyRows(agent, csrf, id, "rows=2&rows=3&rows=4");
   expect(apply.status).toBe(303);
   expect(await unit("FX-1")).toMatchObject({ price_value: 8.5e6, area_value: 150, bedrooms: 3 });
   expect(await unit("FX-2")).toMatchObject({ property_type: "villa", price_value: 2.1e7 });

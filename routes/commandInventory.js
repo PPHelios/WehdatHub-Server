@@ -185,14 +185,10 @@ async function startInventoryExport(broker, ctx) {
     const exportStartTime = Date.now();
     try {
       await require("../services/audit").recordStrict(pool, { agencyId: broker.agency_id, brokerId: broker.id, action: "command_inventory_export", payload: { channel: "bot" } });
-      const { rows: listings } = await pool.query(
-        "SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
-        [broker.agency_id]
-      );
-      const { rows: agencies } = await pool.query(
-        "SELECT * FROM agencies WHERE id = $1",
-        [broker.agency_id]
-      );
+      const [{ rows: listings }, { rows: agencies }] = await Promise.all([
+        pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' ORDER BY created_at DESC", [broker.agency_id]),
+        pool.query("SELECT * FROM agencies WHERE id = $1", [broker.agency_id])
+      ]);
       const Excel = require("../lib/excel");
       const buf = await Excel.buildAgencyInventoryWorkbook({
         listings,
