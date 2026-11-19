@@ -1955,3 +1955,31 @@
     if (ta) a.href = base.split("?")[0] + "?text=" + encodeURIComponent(ta.value);
   });
 })();
+
+// Import review: a tab or page link reloads the whole review (it can take a while on a big file). The click shows a bar at the
+// top, dims the page and turns every button off until the next page arrives, so nothing is pressed twice.
+(function () {
+  "use strict";
+  var links = "nav[data-kind-nav] a, nav[data-pager] a";
+  function busy() {
+    document.documentElement.classList.add("nav-busy");
+    [].forEach.call(document.querySelectorAll("form button, form input[type=submit], nav[data-kind-nav] a, nav[data-pager] a"), function (b) {
+      b.setAttribute("data-was-disabled", b.disabled ? "1" : "0");
+      if (b.tagName === "A") b.setAttribute("aria-disabled", "true"); else b.disabled = true;
+    });
+  }
+  function idle() {
+    document.documentElement.classList.remove("nav-busy");
+    [].forEach.call(document.querySelectorAll("[data-was-disabled]"), function (b) {
+      if (b.tagName === "A") b.removeAttribute("aria-disabled"); else b.disabled = b.getAttribute("data-was-disabled") === "1";
+      b.removeAttribute("data-was-disabled");
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest(links) : null;
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || a.getAttribute("aria-disabled") === "true") return;
+    if (document.documentElement.classList.contains("nav-busy")) { e.preventDefault(); return; }
+    setTimeout(busy, 0); // after the click is handled, so the link still opens
+  });
+  window.addEventListener("pageshow", idle); // back button: the page comes from the cache with the bar still on
+})();

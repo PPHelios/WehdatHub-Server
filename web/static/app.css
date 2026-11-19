@@ -2603,3 +2603,11 @@ form[data-word-form] label { font-weight: 600; color: var(--ink); }
 form[data-word-form] select, form[data-word-form] input:not([type="hidden"]) { border-color: var(--accent); background: var(--card); }
 form[data-word-form] .row > button:not(.secondary), form[data-batch-form] .row > button:not(.secondary) { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
 form[data-batch-form] .row > button.secondary { border-color: var(--accent); color: var(--ink); }
+
+/* The bar and the dimmed page while an import tab or page loads. */
+html.nav-busy::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 4px; z-index: 9999; background: linear-gradient(90deg, transparent, var(--brand), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: nav-bar 1s linear infinite; }
+html.nav-busy body { cursor: progress; }
+html.nav-busy main, html.nav-busy .card { opacity: .6; transition: opacity .15s; }
+nav[data-kind-nav] a[aria-disabled="true"], nav[data-pager] a[aria-disabled="true"] { pointer-events: none; }
+@keyframes nav-bar { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@media (prefers-reduced-motion: reduce) { html.nav-busy::before { animation: none; background-size: 100% 100%; } }
