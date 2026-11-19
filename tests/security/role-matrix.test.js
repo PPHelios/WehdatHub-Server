@@ -36,7 +36,8 @@ async function as(role) {
 }
 
 test("every role opens the pages on its menu and is refused the others", async () => {
-  const items = Nav.ITEMS.filter((it) => it.web && !it.roles.every((r) => r === "crm"));
+  // "market" shows only while the owner has switched market analytics on for the agency: tests/web/analytics.test.js covers it.
+  const items = Nav.ITEMS.filter((it) => it.web && it.key !== "market" && !it.roles.every((r) => r === "crm"));
   expect(items.length).toBeGreaterThan(20);
   const wrong = [];
   for (const role of ROLES) {

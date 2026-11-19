@@ -3,6 +3,7 @@
 "use strict";
 
 const { alertOwner } = require("../lib/errorReports");
+const { SEVERITIES, SEVERITY_SQL } = require("../lib/failureInfo");
 
 const TYPES = ["web_failed", "app_failed", "unit_write_refused", "swallowed_error"];
 const KEEP_DAYS = 30;
@@ -10,7 +11,7 @@ const PAGE = 50;
 const DAY = 24 * 3600 * 1000;
 
 /** @returns {Promise<Object[]>} newest first; filters: { agency, person, from, to (Date), offset } */
-async function list(pool, { agency = null, person = null, from = null, to = null, offset = 0 } = {}) {
+async function list(pool, { agency = null, person = null, from = null, to = null, offset = 0, severity = null } = {}) {
   const { rows } = await pool.query(
     `SELECT o.id, o.created_at, o.operation_type, o.error_code, o.listing_code, o.metadata,
             a.name AS agency_name, b.name AS broker_name
@@ -22,8 +23,9 @@ async function list(pool, { agency = null, person = null, from = null, to = null
         AND ($3::uuid IS NULL OR o.broker_id = $3)
         AND ($4::timestamptz IS NULL OR o.created_at >= $4)
         AND ($5::timestamptz IS NULL OR o.created_at < $5)
+        AND ($8::text IS NULL OR (${SEVERITY_SQL}) = $8)
       ORDER BY o.created_at DESC LIMIT $6 OFFSET $7`,
-    [TYPES, agency, person, from, to, PAGE + 1, offset]
+    [TYPES, agency, person, from, to, PAGE + 1, offset, SEVERITIES.includes(severity) ? severity : null]
   );
   return rows;
 }
@@ -50,7 +52,13 @@ async function summaryText(pool, now = new Date()) {
   if (!rows.length) return null;
   const total = rows.reduce((s, r) => s + r.n, 0);
   const lines = rows.slice(0, 12).map((r) => `${r.n} × ${r.reason || "?"} (${r.agency})`);
-  return [`📋 WehdatHub failures, last 24 h: ${total}`, ...lines, "Details: /app/failures"].join("\n");
+  const sev = { high: 0, medium: 0, low: 0 };
+  const { rows: bySev } = await pool.query(
+    `SELECT (${SEVERITY_SQL}) AS sev, count(*)::int AS n FROM operation_logs o WHERE o.operation_type = ANY($1) AND o.created_at >= $2 GROUP BY 1`,
+    [TYPES, since]
+  );
+  for (const r of bySev) if (r.sev in sev) sev[r.sev] = r.n;
+  return [`📋 WehdatHub failures, last 24 h: ${total} (${sev.high} high, ${sev.medium} medium, ${sev.low} low)`,...lines, "Details: /app/failures"].join("\n");
 }
 
 /** Daily: the summary to the owner on Telegram, and rows older than KEEP_DAYS removed. */
@@ -61,7 +69,7 @@ function summaryJob() {
     run: async ({ pool, now }) => {
       const at = now ? new Date(now) : new Date();
       const text = await summaryText(pool, at);
-      const sent = text ? await alertOwner(text) : false;
+      const sent = text ? await alertOwner(text, { category: "failures_digest", pool }) : false;
       const del = await pool.query("DELETE FROM operation_logs WHERE operation_type = ANY($1) AND created_at < $2", [TYPES, new Date(at.getTime() - KEEP_DAYS * DAY)]);
       return { counts: { sent: sent ? 1 : 0, purged: del.rowCount || 0 } };
     }

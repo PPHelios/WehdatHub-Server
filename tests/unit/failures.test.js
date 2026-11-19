@@ -21,9 +21,9 @@ test("daily summary: nothing to say sends nothing; rows are purged either way", 
 });
 
 test("daily summary lists counts by reason and agency", async () => {
-  const pool = { query: jest.fn().mockResolvedValueOnce({ rows: [{ agency: "NCH", reason: "http_404", n: 4 }, { agency: "NCH", reason: "writes_off", n: 1 }] }).mockResolvedValueOnce({ rowCount: 0 }) };
+  const pool = { query: jest.fn().mockResolvedValueOnce({ rows: [{ agency: "NCH", reason: "http_404", n: 4 }, { agency: "NCH", reason: "writes_off", n: 1 }] }).mockResolvedValueOnce({ rows: [{ sev: "low", n: 4 }, { sev: "medium", n: 1 }] }).mockResolvedValueOnce({ rowCount: 0 }) };
   const out = await Failures.summaryJob().run({ pool, now: Date.now() });
-  expect(alertOwner.mock.calls[0][0]).toMatch(/failures, last 24 h: 5[\s\S]*4 × http_404 \(NCH\)/);
+  expect(alertOwner.mock.calls[0][0]).toMatch(/failures, last 24 h: 5 \(0 high, 1 medium, 4 low\)[\s\S]*4 × http_404 \(NCH\)/);
   expect(out.counts.sent).toBe(1);
 });
 

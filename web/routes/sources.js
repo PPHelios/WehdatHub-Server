@@ -29,7 +29,7 @@ const OUTCOMES = {
   error: ["خطأ مؤقت", "Temporary error"]
 };
 
-/** L7: the agency's automatic sources (Make lead ads, forms) and their newest requests (no phones). */
+/** L7: the agency's automatic sources (Facebook lead ads) and their newest requests (no phones). */
 function intakeSection(intakes, log, lang) {
   if (!intakes.length) return "";
   const at = (d) => (d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") : "—");
@@ -37,7 +37,7 @@ function intakeSection(intakes, log, lang) {
   <h2>📨 ${L(lang, "مصادر أوتوماتيك", "Automatic sources")}</h2>
   <div class="scroll"><table>
   <thead><tr><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "آخر عميل", "Last lead")}</th><th>${L(lang, "30 يوم", "30 days")}</th></tr></thead>
-  <tbody>${intakes.map((i) => html`<tr data-intake="${i.id}"><td>${i.name}${i.revoked_at ? html` <span class="muted">(${L(lang, "متوقف", "stopped")})</span>` : ""}</td><td>${Stages.sourceLabel(i.source, lang)}</td><td dir="ltr">${at(i.last_lead_at)}</td><td>${i.created_30}${i.failed_30 ? html` · <span class="bad">${i.failed_30} ${L(lang, "فشل", "failed")}</span>` : ""}</td></tr>`)}</tbody></table></div>
+  <tbody>${intakes.map((i) => html`<tr data-intake="${i.id}"><td>${i.name}${i.revoked_at ? html` <span class="muted">(${L(lang, "متوقف", "stopped")})</span>` : i.status === "disconnected" ? html` <span class="bad">(${L(lang, "واقف", "disconnected")})</span>` : ""}</td><td>${Stages.sourceLabel(i.source, lang)}</td><td dir="ltr">${at(i.last_lead_at)}</td><td>${i.created_30}${i.failed_30 ? html` · <span class="bad">${i.failed_30} ${L(lang, "فشل", "failed")}</span>` : ""}</td></tr>`)}</tbody></table></div>
   ${log.length
     ? html`<h3>${L(lang, "آخر الطلبات", "Latest requests")}</h3><div class="scroll"><table>
   <thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "النتيجة", "Result")}</th><th>${L(lang, "العميل", "Lead")}</th></tr></thead>
@@ -51,8 +51,11 @@ function intakeSection(intakes, log, lang) {
 function sourcesPage(r, lang, { notice = null, intakes = [], log = [] } = {}) {
   const ym = r.month.slice(0, 7);
   const name = (s) => (s === Sources.NONE ? L(lang, "من غير مصدر", "No source") : Stages.sourceLabel(s, lang));
+  const down = intakes.filter((i) => i.status === "disconnected" && !i.revoked_at);
+  const why = (i) => (Intake.REASONS[i.disconnect_reason] || Intake.REASONS.token_invalid)[lang === "en" ? 1 : 0];
   return html`<h1>📣 ${L(lang, "مصادر العملاء", "Lead sources")}</h1>
 ${notice || ""}
+${down.map((i) => html`<p class="card notice bad" role="alert" data-intake-banner>🔌 ${L(lang, `ربط «${i.name}» مع فيسبوك وقف: العملاء الجداد مش بيوصلوا.`, `The "${i.name}" Facebook connection stopped: new leads are not arriving.`)} ${why(i)} <strong>${L(lang, "ابعت لدعم WehdatHub توصّل الصفحة تاني.", "Ask WehdatHub support to reconnect the Page.")}</strong></p>`)}
 <nav class="row" aria-label="${L(lang, "الشهر", "Month")}">
   <a class="btn secondary" href="/app/sources?month=${shift(r.month, -1)}">‹</a>
   <strong dir="ltr">${ym}</strong>

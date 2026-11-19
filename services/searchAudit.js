@@ -186,7 +186,7 @@ const auditJob = () => ({
     if (watermark.audit === day.date || day.hour < 3) return { counts: {}, watermark };
     const counts = await run(pool, { now: new Date(now) });
     const approved = await require("./searchLearn").autoApprove(pool, new Date(now));
-    if (counts.searches || approved) await Errors.alertOwner(`${await summary(pool, counts)}${approved ? `\nWords approved automatically: ${approved}` : ""}`);
+    if (counts.searches || approved) await Errors.alertOwner(`${await summary(pool, counts)}${approved ? `\nWords approved automatically: ${approved}` : ""}`, { category: "search_audit", pool });
     const { examples, ...numbers } = counts;
     return { counts: { ...numbers, auto_approved: approved }, watermark: { ...watermark, audit: day.date } };
   }

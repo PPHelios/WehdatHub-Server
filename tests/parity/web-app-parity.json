@@ -68,6 +68,8 @@
  "/owner": "api:/platform",
  "/owner/agencies/:id": "api:/platform/agencies/:id",
  "/owner/board": "web-only: platform owner tools",
+ "/owner/analytics/:table": "web-only: platform owner CSV export of the market analytics tables",
+ "/market": "web-only: market analytics page for managers (the owner switches it on per agency); no mobile API yet",
  "/owner/library": "web-only: platform owner tools",
  "/owner/library/:id/edit": "web-only: platform owner tools",
  "/owner/map": "web-only: platform owner tools",
