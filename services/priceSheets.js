@@ -93,6 +93,12 @@ async function recordPrice(db, { agencyId, listingId, price, source, sheetId = n
     const { rows } = await db.query("SELECT 1 FROM listing_prices WHERE listing_id = $1 LIMIT 1", [listingId]);
     if (!rows.length) await db.query("INSERT INTO listing_prices (agency_id, listing_id, price, source, changed_at) VALUES ($1, $2, $3, 'edit', $4)", [agencyId, listingId, Math.round(previous), new Date(at.getTime() - 1000).toISOString()]);
   }
+  // The trigger on listings (migration 137) may already have recorded this price as source 'edit': tag that row instead of adding a second one.
+  const tagged = await db.query(
+    "UPDATE listing_prices SET source = $3, sheet_id = $4, changed_by = $5, changed_at = $6 WHERE id = (SELECT id FROM listing_prices WHERE listing_id = $1 AND price = $2 AND source = 'edit' AND changed_by IS NULL AND sheet_id IS NULL AND changed_at > now() - interval '30 seconds' ORDER BY id DESC LIMIT 1)",
+    [listingId, Math.round(price), source, sheetId, by, at.toISOString()]
+  );
+  if (tagged.rowCount) return;
   await db.query(
     "INSERT INTO listing_prices (agency_id, listing_id, price, source, sheet_id, changed_by, changed_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
     [agencyId, listingId, Math.round(price), source, sheetId, by, at.toISOString()]

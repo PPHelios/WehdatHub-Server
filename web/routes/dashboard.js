@@ -34,6 +34,8 @@ const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
 const Rights = require("../../services/unitRights");
 const OwnerAgencies = require("../../services/ownerAgencies");
+const Analytics = require("../../services/analytics");
+const AnalyticsView = require("../views/analytics");
 const AgencyCreate = require("../../services/agencyCreate");
 const { isManager, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
@@ -277,38 +279,69 @@ function readingSection(rows, lang) {
 </section>`;
 }
 
-/** L1/L2: each agency's lead intake URLs (Make.com lead ads, forms): make one, test it, stop it. */
-function intakeSection(rows, lang) {
+/** Red banner while a Facebook intake is disconnected (owner dashboard and the agency's sources page use the same idea). */
+function intakeBanner(rows, lang) {
+  const down = rows.filter((r) => r.status === "disconnected" && !r.revoked_at);
+  if (!down.length) return "";
+  return html`<p class="card notice bad" role="alert" data-intake-banner>🔌 ${L(lang, `${down.length} ربط فيسبوك واقف: العملاء الجداد مش بيوصلوا. افتح تاب «ليدز فيسبوك» وحدّث التوكن.`, `${down.length} Facebook connection(s) stopped: new leads are not arriving. Open the "Facebook leads" tab and update the token.`)}</p>`;
+}
+
+/** L1/L2: the owner's Facebook leads tab: totals, one row per connected Page (health, counts, Test and Update token), the newest log rows and the connect form. */
+function intakeSection(t, lang, { baseUrl = "" } = {}) {
   const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
+  const time = (d) => (d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") : "—");
+  const { rows, summary, agencies, log } = t;
+  const why = (r) => (Intake.REASONS[r] || Intake.REASONS.token_invalid)[lang === "en" ? 1 : 0];
+  const OUT = { created: ["عميل جديد", "New lead"], merged: ["اتضاف لعميل", "Merged"], colleague: ["مع زميل", "Colleague"], repeat: ["مكرر", "Repeat"], erased_before: ["اتمسح قبل كده", "Erased before"], invalid: ["رقم غلط", "Invalid"], test: ["تجربة", "Test"], error: ["خطأ", "Error"] };
   return html`<section class="card" id="lead-intake">
-  <h2>📨 ${L(lang, "استقبال العملاء الأوتوماتيك (Make / فورم)", "Automatic lead intake (Make / forms)")}</h2>
-  <p class="muted">${L(lang, "لكل شركة لينك سري. في Make: سيناريو Facebook Lead Ads ← HTTP POST على اللينك ده (JSON). العميل بياخد المصدر، وبيروح للبروكر اللي عليه الدور، والبروكر بيوصله تنبيه. اللينك بيظهر مرة واحدة بس.", "One secret URL per source. In Make: a Facebook Lead Ads scenario → HTTP POST (JSON) to this URL. Leads get the source and go to the next broker in turn, who is alerted. The URL is shown once only.")}
-</p>
-  <details><summary>${L(lang, "خطوات ربط شركة (Make + إعلانات فيسبوك)", "Agency setup steps (Make + Facebook lead ads)")}</summary><ol>
-    <li>${L(lang, "الشركة تضيف حسابك على فيسبوك لصفحتها بصلاحية العملاء (Leads)، ولو «Leads Access Manager» مقفول تسمح لـ Make.", "The agency adds your Facebook account to its Page with leads access; if Leads Access Manager is restricted, it also allows Make.")}</li>
-    <li>${L(lang, "اعمل لينك جديد هنا للشركة وانسخه.", "Make a new URL here for the agency and copy it.")}</li>
-    <li>${L(lang, "في Make: انسخ سيناريو القالب (docs/make-lead-ads.md)، اختار صفحة الشركة والفورم، وحط اللينك في موديول HTTP.", "In Make: clone the template scenario (docs/make-lead-ads.md), pick the agency's Page and form, and paste the URL into the HTTP module.")}</li>
-    <li>${L(lang, "دوس 🧪 تجربة هنا، وبعدها ابعت عميل تجربة من أداة Meta Lead Ads Testing Tool واتأكد إنه ظهر عند بروكر.", "Press 🧪 Test here, then send a test lead from Meta's Lead Ads Testing Tool and check it reaches a broker.")}</li>
-    <li>${L(lang, "شغّل السيناريو (Immediately). خطة Make المجانية فيها سيناريوهين شغالين بس.", "Turn the scenario on (Immediately). Make's free plan runs 2 active scenarios only.")}</li>
+  <h2>📨 ${L(lang, "ليدز فيسبوك (أوتوماتيك)", "Facebook leads (automatic)")}</h2>
+  <p class="muted">${L(lang, "كل شركة بتربط صفحتها هنا بالـ Page ID وتوكن الصفحة. أي عميل يملا فورم الإعلان بيوصل لوحده، ياخد المصدر، وبيروح للبروكر اللي عليه الدور. التوكن بيتحفظ مشفّر ومش بيظهر تاني.", "Connect an agency's Facebook Page here with its Page ID and Page access token. Every lead-ad form fill arrives by itself, gets the source and goes to the next broker in turn. The token is kept encrypted and never shown again.")}</p>
+  <div class="grid" data-intake-summary>
+    <div class="card" data-figure><span class="muted">${L(lang, "شغالة", "Active")}</span><strong>${summary.active}</strong></div>
+    <div class="card" data-figure><span class="muted">${L(lang, "واقفة", "Disconnected")}</span><strong${summary.disconnected ? html` class="bad"` : ""}>${summary.disconnected}</strong></div>
+    <div class="card" data-figure><span class="muted">${L(lang, "عملاء (30 يوم)", "Leads (30 days)")}</span><strong>${summary.leads30}</strong></div>
+    <div class="card" data-figure><span class="muted">${L(lang, "فشل (30 يوم)", "Failed (30 days)")}</span><strong>${summary.failed30}</strong></div>
+    <div class="card" data-figure><span class="muted">${L(lang, "طلبات لفيسبوك (30 يوم، تقريبي)", "Facebook calls (30 days, estimate)")}</span><strong>${summary.graphCalls30}</strong></div>
+  </div>
+  ${rows.length
+    ? html`<div class="scroll"><table>
+  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "الصفحة", "Page")}</th><th>${L(lang, "الحالة", "Status")}</th><th>${L(lang, "آخر عميل", "Last lead")}</th><th>${L(lang, "24س / 7 أيام / 30 يوم", "24h / 7d / 30d")}</th><th>${L(lang, "فشل 30 يوم", "Failed 30d")}</th><th>${L(lang, "مكرر", "Repeats")}</th><th>${L(lang, "آخر خطأ", "Last error")}</th><th>${L(lang, "التوكن", "Token")}</th><th></th></tr></thead>
+  <tbody>${rows.map(
+    (i) => html`<tr data-intake="${i.id}"${i.status === "disconnected" ? html` class="bad"` : ""}><td>${i.agency_name}</td><td>${i.page_name || i.name} <span class="muted" dir="ltr">${i.page_id || ""}</span><br><span class="muted">${i.source}</span></td>
+      <td>${i.status === "disconnected"
+        ? html`<span class="bad" data-status="disconnected">🔴 ${L(lang, "واقفة", "Disconnected")}</span><br><span class="small">${why(i.disconnect_reason)}</span><br><span class="muted small" dir="ltr">${time(i.disconnected_at)}</span>`
+        : html`<span data-status="active">🟢 ${L(lang, "شغالة", "Active")}</span>`}<br><span class="muted small">${i.subscribed_at ? `✅ ${L(lang, "مشتركة", "Subscribed")} ${day(i.subscribed_at)}` : L(lang, "مش مشتركة", "Not subscribed")}</span></td>
+      <td dir="ltr">${time(i.last_lead_at)}</td><td dir="ltr">${i.leads_24h} / ${i.leads_7d} / ${i.leads_30d}</td>
+      <td>${i.failed_30d ? html`<span class="bad">${i.failed_30d}</span>` : "0"}</td><td>${i.repeats_30d}</td>
+      <td dir="ltr">${i.last_error_code ? html`${i.last_error_code}<br><span class="muted small">${time(i.last_error_at)}</span>` : "—"}</td><td dir="ltr">${i.token_hint ? html`…${i.token_hint}` : "—"}</td>
+      <td><div class="stack">
+        <form method="post" action="/app/owner/intake/${i.id}/test"><button type="submit" class="secondary">🧪 ${L(lang, "تجربة", "Test")}</button></form>
+        <form method="post" action="/app/owner/intake/${i.id}/token" class="row" autocomplete="off"><input name="page_token" type="password" required autocomplete="off" dir="ltr" placeholder="${L(lang, "توكن جديد", "New token")}" aria-label="${L(lang, "توكن جديد", "New token")}"><button type="submit" class="secondary">🔑 ${L(lang, "حدّث التوكن", "Update token")}</button></form>
+        <form method="post" action="/app/owner/intake/${i.id}/revoke" data-confirm="${L(lang, "الربط هيقف والتوكن هيتمسح. متأكد؟", "The connection will stop and the token will be deleted. Sure?")}"><button type="submit" class="secondary">⛔ ${L(lang, "وقّف", "Revoke")}</button></form>
+      </div></td></tr>`
+  )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش صفحات مربوطة لسه.", "No Pages connected yet.")}</p>`}
+  ${log.length
+    ? html`<h3>${L(lang, "آخر 20 طلب", "Latest 20 requests")}</h3><div class="scroll"><table>
+  <thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "النتيجة", "Result")}</th><th>${L(lang, "تفاصيل", "Detail")}</th></tr></thead>
+  <tbody>${log.map((g) => html`<tr data-intake-log="${g.id}"><td dir="ltr">${time(g.received_at)}</td><td>${g.agency_name}</td><td>${g.intake_name}</td><td>${(OUT[g.outcome] || [g.outcome, g.outcome])[lang === "en" ? 1 : 0]}</td><td dir="ltr">${g.phone_tail ? `…${g.phone_tail} ` : ""}${g.detail || ""}</td></tr>`)}</tbody></table></div>`
+    : ""}
+  <details><summary>${L(lang, "خطوات الربط", "Setup steps")}</summary><ol>
+    <li>${L(lang, "الشركة تدّيك صلاحية العملاء (Leads) على صفحتها في فيسبوك.", "The agency gives you Leads access on its Facebook Page.")}</li>
+    <li>${L(lang, "اعمل توكن صفحة طويل المدة بالصلاحيات: pages_show_list, pages_manage_metadata, leads_retrieval, pages_read_engagement.", "Create a long-lived Page access token with: pages_show_list, pages_manage_metadata, leads_retrieval, pages_read_engagement.")}</li>
+    <li>${L(lang, "مرة واحدة بس في تطبيق Meta: Webhooks ← Page ← Callback URL:", "Once in the Meta app: Webhooks → Page → Callback URL:")} <code dir="ltr">${baseUrl}/webhook/leadgen</code>, ${L(lang, "و Verify token = قيمة WHATSAPP_VERIFY_TOKEN، واشترك في الحقل", "Verify token = the WHATSAPP_VERIFY_TOKEN value, and subscribe to the field")} <code dir="ltr">leadgen</code>.</li>
+    <li>${L(lang, "املا الفورم تحت (Page ID + التوكن) واضغط ربط. التطبيق بيتأكد من التوكن ويشترك في الصفحة لوحده.", "Fill the form below (Page ID + token) and press Connect. The app checks the token and subscribes the Page by itself.")}</li>
+    <li>${L(lang, "دوس 🧪 تجربة، وبعدها ابعت عميل تجربة من Meta Lead Ads Testing Tool واتأكد إنه وصل لبروكر. (صفحات برّه شركتك محتاجة Advanced access / App Review.)", "Press 🧪 Test, then send a test lead from Meta's Lead Ads Testing Tool and check it reaches a broker. (Pages outside your own business need Advanced access / App Review.)")}</li>
+    <li>${L(lang, "لو الربط وقف (باسورد اتغير، حد اتشال من الصفحة): هات توكن جديد من الشركة واضغط 🔑 حدّث التوكن.", "If a connection stops (password changed, someone removed from the Page): get a new token from the agency and press 🔑 Update token.")}</li>
   </ol></details>
-  <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الشركة", "Agency")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "آخر عميل", "Last lead")}</th><th>${L(lang, "30 يوم", "30 days")}</th><th></th></tr></thead>
-  <tbody>${rows.flatMap(({ agency, intakes }) =>
-    intakes.map(
-      (i) => html`<tr data-intake="${i.id}"${i.revoked_at ? html` class="muted"` : ""}><td>${agency.name}</td><td>${i.name} <span class="muted" dir="ltr">…${i.token_hint}</span></td><td>${i.source}</td><td dir="ltr">${day(i.last_lead_at)}</td>
-      <td>${i.created_30} ${L(lang, "جديد", "new")}${i.failed_30 ? html` · <span class="bad">${i.failed_30} ${L(lang, "فشل", "failed")}</span>` : ""}</td>
-      <td>${i.revoked_at
-        ? L(lang, "متوقف", "Stopped")
-        : html`<div class="row"><form method="post" action="/app/owner/intake/${i.id}/test"><button type="submit" class="secondary">🧪 ${L(lang, "تجربة", "Test")}</button></form>
-        <form method="post" action="/app/owner/intake/${i.id}/revoke" data-confirm="${L(lang, "اللينك هيبطل يشتغل. متأكد؟", "The URL will stop working. Sure?")}"><button type="submit" class="secondary">⛔ ${L(lang, "وقّف", "Stop")}</button></form></div>`}</td></tr>`
-    )
-  )}</tbody></table></div>
-  <form method="post" action="/app/owner/intake" class="row">
-    <label>${L(lang, "الشركة", "Agency")} <select name="agency" required>${rows.map(({ agency }) => html`<option value="${agency.id}">${agency.name}</option>`)}</select></label>
-    <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="60" value="Facebook ads (Make)"></label>
+  <form method="post" action="/app/owner/intake" class="row" autocomplete="off">
+    <label>${L(lang, "الشركة", "Agency")} <select name="agency" required>${agencies.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
+    <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="60" value="Facebook ads"></label>
     <label>${L(lang, "المصدر", "Source")} <input name="source" required maxlength="60" value="Facebook"></label>
+    <label>Page ID <input name="page_id" required inputmode="numeric" pattern="[0-9]{5,30}" dir="ltr"></label>
+    <label>${L(lang, "توكن الصفحة (Page access token)", "Page access token")} <input name="page_token" type="password" required autocomplete="off" dir="ltr"></label>
     <label>${L(lang, "تنبيه لو مفيش عملاء (أيام)", "Alert after quiet days")} <input name="quiet_days" type="number" min="1" max="60" value="3" size="3"></label>
-    <button type="submit">➕ ${L(lang, "لينك جديد", "New URL")}</button>
+    <button type="submit">➕ ${L(lang, "ربط الصفحة", "Connect Page")}</button>
   </form>
 </section>`;
 }
@@ -486,6 +519,13 @@ ${notice || ""}
     <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
   </form>
 </section>
+<section class="card stack" id="analytics" data-analytics-enabled="${a.analytics_enabled ? "1" : "0"}"><h2>📈 ${L(lang, "تحليلات السوق", "Market analytics")}</h2>
+  <p class="muted">${L(lang, "لو فتحتها، مديرين الشركة (مش البروكرز) بيشوفوا صفحة «السوق»: مسار عملائهم جنب وسيط السوق وتقارير المناطق اللي عندهم فيها وحدات. الأرقام مجمّعة ومجهولة.", "When on, the agency's managers (not brokers) see the Market page: their own lead funnel next to the market median and reports for the places where they have units. The numbers are anonymous aggregates.")}</p>
+  <form method="post" action="/app/owner/agencies/${a.id}/analytics" class="stack">${hidden}
+    ${switchField({ name: "on", value: "1", on: a.analytics_enabled, lang, label: L(lang, "تحليلات السوق", "Market analytics"), sentence: L(lang, "الشركة تشوف صفحة السوق.", "The agency sees the Market page.") })}
+    <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
+  </form>
+</section>
 <section class="card stack" id="extra-seats" data-extra-seats="${a.extra_seats || 0}"><h2>${L(lang, "مستخدمين إضافيين (إداري)", "Extra seats (admin)")}</h2>
   <p class="muted">${L(lang, `حاليا: ${a.extra_seats || 0} من ${Plans.EXTRA_SEAT.max}. ${Plans.EXTRA_SEAT.priceEgp} ج.م للمستخدم في الشهر، بتتحاسب مقدماً على الشهور اللي فاضلة، وكل مستخدم بيزود ${Plans.EXTRA_SEAT.credits} رصيد في الشهر. مش ظاهرة للشركة غير في الإجماليات. بتتصفر لما تبدأ فترة مدفوعة جديدة بعد الانتهاء.`, `Now: ${a.extra_seats || 0} of ${Plans.EXTRA_SEAT.max}. ${Plans.EXTRA_SEAT.priceEgp} EGP a seat a month, billed up front for the months left; each seat adds ${Plans.EXTRA_SEAT.credits} credits a month. Agencies only see it in their seat and credit totals. Reset when a new paid period starts after expiry.`)}</p>
   <form method="post" action="/app/owner/agencies/${a.id}/extra-seats" class="row" data-confirm="${L(lang, "تسجّل دفعة مؤكدة وتزود المستخدمين؟", "Record a confirmed payment and add the seats?")}">${hidden}
@@ -504,7 +544,7 @@ ${a.payments.length ? html`<section class="card list"><h2>${L(lang, "المدف�
 
 /** Owner: an announcement to every manager, and the owner's own action log. */
 function announceSection(log, lang, csrf) {
-  const label = { owner_plan: L(lang, "تغيير باقة", "Plan change"), owner_suspend: L(lang, "إيقاف", "Suspend"), owner_resume: L(lang, "رجوع", "Resume"), owner_announcement: L(lang, "إعلان", "Announcement"), owner_founding: L(lang, "شريك مؤسس", "Founding Partner"), owner_extra_seats: L(lang, "مستخدمين إضافيين", "Extra seats") };
+  const label = { owner_plan: L(lang, "تغيير باقة", "Plan change"), owner_suspend: L(lang, "إيقاف", "Suspend"), owner_resume: L(lang, "رجوع", "Resume"), owner_announcement: L(lang, "إعلان", "Announcement"), owner_founding: L(lang, "شريك مؤسس", "Founding Partner"), owner_extra_seats: L(lang, "مستخدمين إضافيين", "Extra seats"), owner_analytics: L(lang, "تحليلات السوق", "Market analytics") };
   return html`<section class="card stack" id="announce"><h2>${L(lang, "إعلان لكل المديرين", "Announcement to every manager")}</h2>
   <form method="post" action="/app/owner/announce" class="stack" data-confirm="${L(lang, "تبعت الإعلان لكل المديرين؟", "Send this to every manager?")}"><input type="hidden" name="_csrf" value="${csrf}">
     <label>${L(lang, "العنوان", "Title")}<input name="title" required maxlength="120"></label>
@@ -531,17 +571,20 @@ function demosSection(demos, lang, csrf) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "", places = { groups: [], topAreas: [], subzones: [] } } = {}) {
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = { rows: [], summary: { active: 0, disconnected: 0, leads30: 0, failed30: 0, graphCalls30: 0 }, agencies: [], log: [] }, openTab = 0, stuck = [], agencies = [], log = [], csrf = "", places = { groups: [], topAreas: [], subzones: [] }, analytics = null } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
+${intakeBanner(intakes.rows, lang)}
 ${tabs("owner_tab", [
   [L(lang, "الشركات", "Agencies"), html`${agenciesSection(agencies, lang)}${demosSection(d.demos, lang, csrf)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
   [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${credits ? creditsSection(credits, lang) : ""}`],
-  [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}`],
+  [L(lang, "ليدز فيسبوك", "Facebook leads"), intakeSection(intakes, lang, { baseUrl: require("../../lib/links").siteOrigin() })],
+  [L(lang, "الأدوات", "Tools"), readingSection(reading, lang)],
   [L(lang, "الأماكن", "Places"), require("../views/placeReview").placesSection(places, lang, csrf)],
-  [L(lang, "الصحة", "Health"), healthSections(d, lang, usd)]
-])}`;
+  [L(lang, "الصحة", "Health"), healthSections(d, lang, usd)],
+  [L(lang, "تحليلات السوق", "Market analytics"), analytics ? AnalyticsView.ownerTab(analytics.data, analytics.status, lang, csrf) : ""]
+], { open: openTab })}`;
 }
 
 function healthSections(d, lang, usd) {
@@ -689,16 +732,20 @@ function register(web, { pool, page }) {
       .send(buf);
   });
 
-  const ownerView = async (req, res, notice = null, status = 200) => {
+  const ownerView = async (req, res, notice = null, status = 200, { tab: tab0 = 0 } = {}) => {
+    let tab = tab0;
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
     const per = Period.parse(req.query.period);
     const pf = await Dash.ownerPeriod(pool, req.session.broker, per);
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
     const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("بروكرز نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
-    const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits, lapsed] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool), Billing.lapsedAgencies(pool)]);
+    const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits, lapsed] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.tracking(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool), Billing.lapsedAgencies(pool)]);
     const [agencies, log, places] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, lapsed, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);
+    const anPick = /^[0-9a-f-]{36}$/i.test(String(req.query.an_agency || "")) ? String(req.query.an_agency) : null;
+    if (anPick) tab = 6;
+    const analytics = { data: await Analytics.forOwner(pool, req.session.broker, { agencyId: anPick }), status: await Analytics.status(pool) };
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, lapsed, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, openTab: tab, stuck, agencies, log, places, analytics, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -731,6 +778,19 @@ function register(web, { pool, page }) {
     if (r.error === "not_found") return notFound(req, res, page);
     if (r.error === "full") return agencyView(req, res, lang, bad(L(lang, `وصلت لـ ${r.max} شريك مؤسس. مفيش أماكن تانية.`, `All ${r.max} Founding Partner places are taken.`)), 409);
     return agencyView(req, res, lang, ok(r.founding ? L(lang, "الشركة بقت شريك مؤسس.", "The agency is now a Founding Partner.") : L(lang, "اتشالت من الشركاء المؤسسين.", "Removed from the Founding Partners.")));
+  }));
+  web.post("/owner/agencies/:id/analytics", ownerOnly(async (req, res, lang) => {
+    if (!uuidParam(req)) return notFound(req, res, page);
+    const r = await Analytics.setEnabled(pool, req.session.broker, req.params.id, req.body.on === "1");
+    if (r.error) return notFound(req, res, page);
+    const note = ok(r.enabled ? L(lang, "تحليلات السوق اتفتحت للشركة.", "Market analytics is on for the agency.") : L(lang, "تحليلات السوق اتقفلت للشركة.", "Market analytics is off for the agency."));
+    return req.body.from === "tab" ? ownerView(req, res, note, 200, { tab: 6 }) : agencyView(req, res, lang, note);
+  }));
+  web.get("/owner/analytics/:table", ownerOnly(async (req, res) => {
+    const name = String(req.params.table).replace(/.csv$/, "");
+    const r = await Analytics.exportCsv(pool, req.session.broker, name);
+    if (r.error) return notFound(req, res, page);
+    return res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="analytics_${name}_${new Date().toISOString().slice(0, 10)}.csv"` }).send("﻿" + r.csv);
   }));
   web.post("/owner/agencies/:id/extra-seats", ownerOnly(async (req, res, lang) => {
     if (!uuidParam(req)) return notFound(req, res, page);
@@ -937,27 +997,58 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     return creditsDone(req, res, lang, r, L(lang, "الرصيد اتضاف للشركة.", "Credits added to the agency."), L(lang, "اختار شركة ورصيد من 1 لـ 1,000,000.", "Pick an agency and credits from 1 to 1,000,000."));
   }));
 
+  // The intake actions return to the Facebook leads tab (tab 2).
+  const FB_TAB = { tab: 2 };
   web.post("/owner/intake", ownerOnly(async (req, res, lang) => {
     const id = /^[0-9a-f-]{36}$/i.test(String(req.body.agency || "")) ? req.body.agency : null;
-    const r = id ? await Intake.create(pool, id, { name: req.body.name, source: req.body.source, quietDays: req.body.quiet_days }) : { error: "not_found" };
-    if (r.error) return ownerView(req, res, bad(L(lang, "اكتب الاسم والمصدر، والأيام من 1 لـ 60.", "Fill in the name and source; quiet days 1 to 60.")), 400);
-    return ownerView(req, res, html`<section class="card notice ok" role="status" data-intake-created="${r.intake.id}"><h2>✅ ${L(lang, `لينك ${r.agency.name} جاهز`, `${r.agency.name}'s URL is ready`)}</h2>
-<p>${L(lang, "انسخه دلوقتي: مش هيظهر تاني. حطه في Make (HTTP ← Make a request، POST، Body JSON).", "Copy it now: it won't be shown again. Put it in Make (HTTP → Make a request, POST, JSON body).")}</p>
-<p class="row" dir="ltr"><input readonly value="${r.url}" id="intake-url" aria-label="URL"> <button type="button" class="secondary" data-copy="#intake-url">📋 ${L(lang, "نسخ", "Copy")}</button></p></section>`);
+    const r = id ? await Intake.create(pool, id, { name: req.body.name, source: req.body.source, quietDays: req.body.quiet_days, pageId: req.body.page_id, pageToken: req.body.page_token }) : { error: "not_found" };
+    if (r.error) {
+      const msg = {
+        fields: L(lang, "اكتب الاسم والمصدر والـ Page ID (أرقام) والتوكن.", "Fill in the name, source, Page ID (digits) and the token."),
+        quiet_days: L(lang, "الأيام من 1 لـ 60.", "Quiet days must be 1 to 60."),
+        page_token: L(lang, "فيسبوك رفض التوكن أو الـ Page ID. اتأكد إن التوكن بتاع نفس الصفحة وصلاحياته كاملة.", "Facebook rejected the token or Page ID. Check the token belongs to that Page and has all permissions."),
+        subscribe: L(lang, "التوكن سليم بس الاشتراك في الصفحة فشل. اتأكد من صلاحية pages_manage_metadata.", "The token works but subscribing the Page failed. Check the pages_manage_metadata permission."),
+        encryption_key: L(lang, "مفتاح تشفير التوكن (TOKEN_ENCRYPTION_KEY) مش متظبط على السيرفر.", "The token encryption key (TOKEN_ENCRYPTION_KEY) is not set on the server."),
+        duplicate: L(lang, "الصفحة دي مربوطة بالفعل.", "That Page is already connected."),
+        not_found: L(lang, "الشركة مش موجودة.", "Agency not found.")
+      }[r.error];
+      return ownerView(req, res, bad(msg), 400, FB_TAB);
+    }
+    return ownerView(req, res, ok(L(lang, `صفحة «${r.intake.page_name || r.intake.page_id}» اتربطت بـ ${r.agency.name}. دوس تجربة وبعدها جرّب Lead Ads Testing Tool.`, `Page "${r.intake.page_name || r.intake.page_id}" is connected to ${r.agency.name}. Press Test, then try Meta's Lead Ads Testing Tool.`)), 200, FB_TAB);
   }));
 
   web.post("/owner/intake/:id/test", ownerOnly(async (req, res, lang) => {
     const id = uuidParam(req);
-    const r = id ? await Intake.testIntake(pool, id) : { json: { ok: false } };
-    return r.json.ok
-      ? ownerView(req, res, ok(L(lang, `التجربة نجحت: اللينك شغال (المصدر ${r.json.source}). مفيش عميل اتسجل.`, `Test passed: the URL works (source ${r.json.source}). No lead was saved.`)))
-      : ownerView(req, res, bad(L(lang, "التجربة فشلت: اللينك متوقف أو مش موجود.", "Test failed: the URL is stopped or missing.")), 400);
+    const r = id ? await Intake.testIntake(pool, id) : { ok: false, error: "not_found" };
+    if (r.ok) return ownerView(req, res, ok(L(lang, `التجربة نجحت: التوكن شغال والصفحة «${r.name || ""}» مشتركة في العملاء. مفيش عميل اتسجل.`, `Test passed: the token works and Page "${r.name || ""}" is subscribed to leads. No lead was saved.`)), 200, FB_TAB);
+    const msg = r.error === "not_subscribed"
+      ? L(lang, "التوكن شغال بس الصفحة مش مشتركة في leadgen. دوس حدّث التوكن.", "The token works but the Page is not subscribed to leadgen. Press Update token.")
+      : r.error === "page_token"
+        ? L(lang, "فيسبوك رفض التوكن (يمكن انتهى). هات توكن جديد ودوس حدّث التوكن.", "Facebook rejected the token (it may have expired). Get a new token and press Update token.")
+        : L(lang, "التجربة فشلت: الربط متوقف أو مش موجود.", "Test failed: the connection is stopped or missing.");
+    return ownerView(req, res, bad(msg), 400, FB_TAB);
+  }));
+
+  web.post("/owner/intake/:id/token", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Intake.updateToken(pool, id, req.body.page_token) : { error: "not_found" };
+    if (r.error) {
+      const msg = {
+        fields: L(lang, "الصق التوكن الجديد (من غير مسافات).", "Paste the new token (no spaces)."),
+        page_token: L(lang, "فيسبوك رفض التوكن الجديد. اتأكد إنه بتاع نفس الصفحة وصلاحياته كاملة.", "Facebook rejected the new token. Check it belongs to that Page and has all permissions."),
+        subscribe: L(lang, "التوكن سليم بس الاشتراك في الصفحة فشل. اتأكد من صلاحية pages_manage_metadata.", "The token works but subscribing the Page failed. Check the pages_manage_metadata permission."),
+        encryption_key: L(lang, "مفتاح تشفير التوكن (TOKEN_ENCRYPTION_KEY) مش متظبط على السيرفر.", "The token encryption key (TOKEN_ENCRYPTION_KEY) is not set on the server."),
+        not_found: L(lang, "الربط متوقف أو مش موجود.", "The connection is stopped or missing.")
+      }[r.error];
+      return ownerView(req, res, bad(msg), 400, FB_TAB);
+    }
+    return ownerView(req, res, ok(L(lang, `التوكن اتغيّر والربط رجع شغال لـ «${r.intake.name}».`, `Token updated and "${r.intake.name}" is connected again.`)), 200, FB_TAB);
   }));
 
   web.post("/owner/intake/:id/revoke", ownerOnly(async (req, res, lang) => {
     const id = uuidParam(req);
     const r = id ? await Intake.revoke(pool, id) : { error: "not_found" };
-    return r.error ? ownerView(req, res, bad(L(lang, "اللينك متوقف بالفعل.", "That URL is already stopped.")), 400) : ownerView(req, res, ok(L(lang, `«${r.intake.name}» اتوقف.`, `"${r.intake.name}" stopped.`)));
+    return r.error ? ownerView(req, res, bad(L(lang, "الربط متوقف بالفعل.", "That connection is already stopped.")), 400, FB_TAB) : ownerView(req, res, ok(L(lang, `«${r.intake.name}» اتوقف والتوكن اتمسح.`, `"${r.intake.name}" stopped and its token deleted.`)), 200, FB_TAB);
   }));
 
   web.post("/owner/pay-to", ownerOnly(async (req, res, lang) => {

@@ -6,13 +6,14 @@ const { BRAND } = require("../../domain/brand");
 const { securityHeaders } = require("../security");
 const { html, layout } = require("../html");
 
+// DRAFT: the aggregated-statistics clauses (Terms 11, Privacy 12, added 19 Nov 2026) were drafted without a lawyer and need counsel's review (docs/analytics-plan.md).
 const CONTACT = "wehdat.hub@gmail.com";
 const T = (lang, pair) => pair[lang === "en" ? 1 : 0];
 
 const TERMS = {
   path: "/terms",
   title: ["شروط الخدمة", "Terms of Service"],
-  updated: ["آخر تحديث: ١٠ نوفمبر ٢٠٢٦", "Last updated: 10 November 2026"],
+  updated: ["آخر تحديث: ١٩ نوفمبر ٢٠٢٦", "Last updated: 19 November 2026"],
   sections: [
     {
       h: ["١. قبول الشروط", "1. Acceptance of Terms"],
@@ -65,7 +66,12 @@ const TERMS = {
       en: ["These Terms are governed by the laws of the Arab Republic of Egypt. The competent courts of Cairo have exclusive jurisdiction over any dispute arising from them."]
     },
     {
-      h: ["١١. التواصل", "11. Contact"],
+      h: ["١١. إحصاءات السوق المجمّعة", "11. Aggregated Market Statistics"],
+      ar: ["تنشئ «وحدات هَب» إحصاءات مجمّعة ومجهولة من النشاط داخل المنصة (الوحدات وأسعارها وعمليات البحث وأعداد العملاء والصفقات)، بلا أي بيانات شخصية وبلا ذكر لاسم أي شركة. لا نعرض رقمًا إلا إذا كان وراءه عدد كافٍ من الشركات والسجلات (حد أدنى للمجموعة).", "نستخدم هذه الإحصاءات لتحسين الخدمة ولتقديم تقارير السوق للشركات. تبقى بيانات شركتك الخاصة سرّية عنك وحدك، ولا يراها غيرك إلا ضمن رقم مجمّع. لا نبيع البيانات الشخصية. بالاستمرار في استخدام المنصة توافق على هذا الاستخدام."],
+      en: ["Wehdat Hub creates anonymised aggregate statistics from activity in the Platform (listings and their prices, searches, and counts of leads and deals), with no personal data and no agency identity. We show a figure only when enough agencies and records stand behind it (a minimum group size).", "We use these statistics to improve the service and to offer market reports to agencies. Your agency's own data stays private to you and is seen by others only inside an aggregate figure. We do not sell personal data. By continuing to use the Platform you accept this use."]
+    },
+    {
+      h: ["١٢. التواصل", "12. Contact"],
       ar: ["للاستفسارات القانونية والتعاقدية وإشعارات الخدمة: " + CONTACT + "."],
       en: ["For legal questions, contract clarifications and service notices: " + CONTACT + "."]
     }
@@ -75,7 +81,7 @@ const TERMS = {
 const PRIVACY = {
   path: "/privacy",
   title: ["سياسة الخصوصية", "Privacy Policy"],
-  updated: ["تاريخ السريان: ١٠ نوفمبر ٢٠٢٦", "Effective date: 10 November 2026"],
+  updated: ["تاريخ السريان: ١٩ نوفمبر ٢٠٢٦", "Effective date: 19 November 2026"],
   sections: [
     {
       h: ["١. المقدمة ونطاق التطبيق", "1. Introduction and Scope"],
@@ -133,7 +139,12 @@ const PRIVACY = {
       en: ["Wehdat Hub is for professionals aged 18 and over. We do not knowingly collect data from children."]
     },
     {
-      h: ["١٢. التعديلات", "12. Changes"],
+      h: ["١٢. الإحصاءات المجمّعة", "12. Aggregated Statistics"],
+      ar: ["نُنشئ إحصاءات مجمّعة ومجهولة من نشاط المنصة (أعداد وأسعار الوحدات، وعمليات البحث، وأعداد العملاء والصفقات) من غير أي بيانات شخصية ومن غير هوية الشركة، ولا نعرض أي رقم إلا إذا كان وراءه عدد كافٍ من الشركات والسجلات. لا نحفظ في هذه الإحصاءات الأسماء ولا أرقام الهواتف ولا نصوص البحث ولا الملاحظات.", "نستخدمها لتحسين الخدمة ولتقديم تقارير السوق. بيانات كل شركة تبقى خاصة بها، ولا نبيع بيانات شخصية. للاستفسار عن ذلك: " + CONTACT + "."],
+      en: ["We create anonymised aggregate statistics from activity in the Platform (numbers and prices of units, searches, and counts of leads and deals) with no personal data and no agency identity, and we show a figure only when enough agencies and records stand behind it. These statistics never hold names, phone numbers, search text or notes.", "We use them to improve the service and to offer market reports. Each agency's own data stays private to it, and we do not sell personal data. Questions about this: " + CONTACT + "."]
+    },
+    {
+      h: ["١٣. التعديلات", "13. Changes"],
       ar: ["ننشر أي تعديل في هذه الصفحة مع تحديث تاريخ السريان. للتغييرات الجوهرية نُخطر مديري الشركات بالبريد الإلكتروني أو تنبيه المنصة."],
       en: ["We post any change on this page with an updated effective date. For major changes we notify agency administrators by email or in-app alert."]
     }

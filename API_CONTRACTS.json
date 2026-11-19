@@ -695,6 +695,42 @@
       "label": ["key", "lang"],
       "winRate": ["won", "lost"]
     },
+    "domain/analyticsBands.js": {
+      "BEDROOM_BANDS": "Array",
+      "BUDGET_EDGES": "Object",
+      "budgetBands": ["listingType"],
+      "bedroomBand": ["n"],
+      "budgetBand": ["listingType", "amount"],
+      "searchCell": ["used"],
+      "sourceKey": ["source"],
+      "lostKey": ["reason"],
+      "percentile": ["values", "p"],
+      "median": ["values"],
+      "round": ["n", "d"],
+      "cairoDay": ["d"],
+      "cairoHour": ["d"],
+      "addDays": ["day", "n"]
+    },
+    "domain/analyticsFunnel.js": {
+      "agencyRows": ["leads", "dealsByAgency", "month"],
+      "marketRow": ["rows", "month"]
+    },
+    "domain/analyticsMarket.js": {
+      "computeCells": ["rows", "day"],
+      "MIN_SOLD": "Number"
+    },
+    "domain/analyticsPrivacy.js": {
+      "MIN_AGENCIES": "Number",
+      "MIN_ROWS": "Number",
+      "MIN_LEADS_PER_AGENCY": "Number",
+      "MIN_SEARCHES": "Number",
+      "FORBIDDEN": "Array",
+      "passes": ["cell"],
+      "suppress": ["cell"],
+      "keepPassing": ["cells"],
+      "problems": ["value", "path"],
+      "assertClean": ["value"]
+    },
     "lib/ai.js": {
       "TIERS": "Array",
       "TEXT_TIERS": "Array",
@@ -1311,6 +1347,11 @@
       "handleMore": ["broker", "ctx"],
       "handleStatus": ["broker", "status", "ctx"]
     },
+    "lib/secretBox.js": {
+      "encrypt": ["plain", "params"],
+      "decrypt": ["stored", "params"],
+      "hasKey": ["config"]
+    },
     "lib/shareLinks.js": {
       "ALERT_EVERY_HOURS": "Number",
       "HOT_OPENS": "Number",
@@ -1631,6 +1672,36 @@
       "overview": ["db", "broker", "params"],
       "save": ["pool", "actor", "changes"],
       "setManagerCanEdit": ["pool", "owner", "allowed"]
+    },
+    "services/analytics.js": {
+      "isEnabled": ["pool", "agencyId"],
+      "gate": ["pool", "broker"],
+      "setEnabled": ["pool", "owner", "agencyId", "on"],
+      "status": ["pool"],
+      "agencySwitches": ["pool"],
+      "agencyAreaIds": ["pool", "agencyId"],
+      "marketReports": ["pool", "params"],
+      "marketFunnel": ["pool"],
+      "funnelOf": ["pool", "agencyId"],
+      "forOwner": ["pool", "owner", "params"],
+      "forAgency": ["pool", "broker", "params"],
+      "exportCsv": ["pool", "owner", "table"],
+      "CSV_TABLES": "Object",
+      "isAgencyManager": ["broker"]
+    },
+    "services/analyticsCollect.js": {
+      "analyticsJob": [],
+      "runOnce": ["pool", "params"],
+      "runMarket": ["pool", "day"],
+      "runFunnel": ["pool", "month"],
+      "tableCounts": ["pool"],
+      "NIGHT_HOUR": "Number",
+      "MAX_MS": "Number",
+      "MAX_ROWS": "Number"
+    },
+    "services/analyticsSearch.js": {
+      "rollThrough": ["pool", "params"],
+      "MARKER": "String"
     },
     "services/areaSearch.js": {
       "scope": ["pool", "terms"],
@@ -1996,15 +2067,15 @@
     "services/leadIntake.js": {
       "PER_HOUR": "Object",
       "SAMPLE": "Object",
-      "hashToken": ["token"],
-      "intakeUrl": ["token"],
-      "create": ["pool", "agencyId", "params"],
+      "REASONS": "Object",
+      "create": ["pool", "agencyId", "params", "params"],
       "revoke": ["pool", "intakeId", "params"],
+      "updateToken": ["pool", "intakeId", "pageToken", "params"],
       "readBody": ["body"],
-      "receive": ["pool", "token", "body", "params"],
+      "handleLeadgen": ["pool", "change", "params"],
       "testIntake": ["pool", "intakeId", "params"],
       "listForAgency": ["pool", "agencyId"],
-      "overview": ["pool"],
+      "tracking": ["pool", "params"],
       "log": ["pool", "agencyId", "params"],
       "sourcesFor": ["pool", "agencyId"],
       "quietCheck": ["pool", "params"],
@@ -2793,6 +2864,9 @@
       "words": ["lang"],
       "MapRules": "Object"
     },
+    "web/routes/market.js": {
+      "register": ["web", "params"]
+    },
     "web/routes/matchPhotos.js": {
       "register": ["web", "params"]
     },
@@ -2916,6 +2990,12 @@
     "web/views/agencySettings.js": {
       "fxForm": ["params"],
       "capsForm": ["params"]
+    },
+    "web/views/analytics.js": {
+      "ownerTab": ["data", "st", "lang", "csrf"],
+      "agencyPage": ["data", "lang"],
+      "reports": ["r", "lang"],
+      "funnelSection": ["market", "own", "lang", "params"]
     },
     "web/views/carousel.js": {
       "carousel": ["srcs", "lang"]
