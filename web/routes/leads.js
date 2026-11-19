@@ -30,7 +30,7 @@ const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const ErrorText = require("../../lib/errorText");
-const { html } = require("../html");
+const { html, phoneLtr } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
@@ -74,7 +74,7 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang, pickedAt =
     <p>${VIEWING_STATUS[v.status][lang === "en" ? 1 : 0]}</p>
     ${v.status === "reschedule" && v.client_proposed_at ? html`<p>${L(lang, "الميعاد اللي اقترحه", "Suggested time")}: <strong>${Viewings.whenLabel(v.client_proposed_at, lang)}</strong></p>` : ""}
     ${v.status === "reschedule" && v.client_note ? html`<p>💬 ${v.client_note}</p>` : ""}
-    ${open ? html`<div class="row"><a class="btn secondary" href="${path}/viewing.ics">📆 ${L(lang, "أضف لتقويمي", "Add to my calendar")}</a><a class="btn secondary" href="${Viewings.googleCalendarUrl(entry)}" target="_blank" rel="noopener">Google Calendar</a></div>` : ""}
+    ${open ? html`<div class="row"><a class="btn secondary" href="${path}/viewing.ics">📆 ${L(lang, "ضيفها للتقويم", "Add to my calendar")}</a><a class="btn secondary" href="${Viewings.googleCalendarUrl(entry)}" target="_blank" rel="noopener">Google Calendar</a></div>` : ""}
   </div>`
     : html`<p class="muted">${L(lang, "حدد ميعاد ووحدة ومكان، وهيتفتح واتساب على شات العميل برسالة فيها لينك يأكد منه أو يختار ميعاد تاني.", "Set a time, unit and place; WhatsApp opens on the client's chat with a link to confirm or pick another time.")}</p>`}
   <form method="post" action="${path}/viewing" class="grid">${hidden}
@@ -113,7 +113,7 @@ function inputOf(body, manager) {
 async function duplicateNotice(pool, broker, body, lang) {
   for (const raw of [body.phone1, body.phone2].filter(Boolean)) {
     const e164 = Phone.toE164(raw);
-    if (!e164) return html`<p class="notice bad">⚠️ ${L(lang, `الرقم «${raw}» مش مظبوط.`, `"${raw}" isn't a valid number.`)}</p>`;
+    if (!e164) return html`<p class="notice bad">⚠️ ${lang === "en" ? html`"${phoneLtr(raw)}" isn't a valid number.` : html`الرقم «${phoneLtr(raw)}» مش مظبوط.`}</p>`;
     const found = await Leads.findByPhone(pool, broker, e164);
     if (found.lead) {
       return html`<p class="notice">📇 ${L(lang, "الرقم ده متسجل بالفعل:", "This number is already saved:")} <a href="${V.leadPath(found.lead)}">${Card.refLabel(found.lead.ref)} · ${Card.displayName(found.lead, lang)}</a>. ${L(lang, "الحفظ هيضيف للعميل ده.", "Saving adds to that lead.")}</p>`;
@@ -159,7 +159,7 @@ function register(web, { pool, page }) {
       body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1>${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
 ${moved ? html`<p class="card notice ok" role="status">✅ ${L(lang, `${moved} اتنقل.`, `${moved} moved.`)}${req.query.undo ? html` <a href="/app/leads/${moved}">${L(lang, "افتحه للتراجع", "Open it to undo")}</a>` : ""}</p>` : ""}
 ${manager
-  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId && req.query.broker !== "me" ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
+  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "عملائي", "Assigned to me")}</option>` : ""}<option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId && req.query.broker !== "me" ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
   : ""}
 <p class="muted small">${L(lang, "اسحب العميل لعمود تاني، أو اختار المرحلة واضغط «انقل». «ضاع» من صفحة العميل عشان سبب الضياع.", "Drag a lead to another column, or pick a stage and tap Move. Mark Lost from the lead page (it needs a reason).")}</p>
 <div class="board-wrap"><button type="button" class="board-nav" data-board-step="-1" aria-label="${L(lang, "العمود اللي قبله", "Previous column")}">‹</button><div class="board-cols" data-board>${cols.map(([s, r]) => html`<section class="bcol" id="col-${s}" data-stage="${s}"><h2>${Stages.stageLabel(s, lang)} <b>${r.rows.length}${r.more ? "+" : ""}</b></h2><ol>${r.rows.map(card)}</ol></section>`)}</div><button type="button" class="board-nav" data-board-step="1" aria-label="${L(lang, "العمود اللي بعده", "Next column")}">›</button></div>`
@@ -177,7 +177,7 @@ ${manager
     const canHandle = requests.some((r) => !r.mine);
     const who = (r) => `${r.broker_name || ""} · ${r.to_role === "owner" ? L(lang, "للمالك", "to the owner") : L(lang, "للمدير", "to a manager")}`;
     return html`${requests.length ? html`<section class="card notice" data-flag><p>🙋 <b>${L(lang, "محتاج مساعدة", "Needs help")}</b></p><ul class="stack">${requests.map((r) => html`<li data-request="${r.id}"><p>${r.note} <span class="muted small">· ${who(r)} · ${V.when(r.created_at, lang)}</span></p></li>`)}</ul>${canHandle
-      ? html`<form method="post" action="${path}/flag/handle" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "رد (اختياري)", "Reply (optional)")} <input name="reply" maxlength="500"></label><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark done")}</button></form>`
+      ? html`<form method="post" action="${path}/flag/handle" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "رد (اختياري)", "Reply (optional)")} <input name="reply" maxlength="500"></label><button type="submit">${L(lang, "✅ تم", "✅ Mark done")}</button></form>`
       : ""}</section>` : ""}${hasMine || !canEditLead(broker, lead)
       ? ""
       : html`<details class="card"><summary>🙋 ${L(lang, "اطلب مساعدة", "Ask for help")}</summary><form method="post" action="${path}/flag" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "اطلب من", "Ask")} <select name="to"><option value="manager">${L(lang, "المدير", "A manager")}</option><option value="owner">${L(lang, "المالك", "The owner")}</option></select></label><label>${L(lang, "محتاج إيه؟", "What do you need?")} <textarea name="text" rows="2" maxlength="1000" required></textarea></label><button type="submit" class="secondary">${L(lang, "ابعت", "Send")}</button></form></details>`}`;
@@ -193,7 +193,7 @@ ${manager
       nav: "leads",
       body: html`<h1>🙋 ${L(lang, "محتاجين مدير", "Needs my action")} (${rows.length})</h1>
 ${rows.length
-  ? html`<ul class="stack" data-flags>${rows.map((r) => html`<li class="card" data-lead="${Card.refLabel(r.ref)}"><p><b>${Card.displayName(r, lang)}</b> <span class="chip" dir="ltr">${Card.refLabel(r.ref)}</span></p><p>${r.request_note}</p><p class="muted small">${r.flagged_by_name || ""} · ${r.to_role === "owner" ? L(lang, "للمالك", "to the owner") : L(lang, "للمدير", "to a manager")} · ${V.when(r.requested_at, lang)}</p><div class="row"><a class="btn secondary" href="${V.leadPath(r)}">${L(lang, "افتح العميل", "Open lead")}</a></div><form method="post" action="${V.leadPath(r)}/flag/handle" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${r.version}"><input name="reply" maxlength="500" placeholder="${L(lang, "رد (اختياري)", "Reply (optional)")}"><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark handled")}</button></form></li>`)}</ul>`
+  ? html`<ul class="stack" data-flags>${rows.map((r) => html`<li class="card" data-lead="${Card.refLabel(r.ref)}"><p><b>${Card.displayName(r, lang)}</b> <span class="chip" dir="ltr">${Card.refLabel(r.ref)}</span></p><p>${r.request_note}</p><p class="muted small">${r.flagged_by_name || ""} · ${r.to_role === "owner" ? L(lang, "للمالك", "to the owner") : L(lang, "للمدير", "to a manager")} · ${V.when(r.requested_at, lang)}</p><div class="row"><a class="btn secondary" href="${V.leadPath(r)}">${L(lang, "افتح العميل", "Open lead")}</a></div><form method="post" action="${V.leadPath(r)}/flag/handle" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${r.version}"><input name="reply" maxlength="500" placeholder="${L(lang, "رد (اختياري)", "Reply (optional)")}"><button type="submit">${L(lang, "✅ تم", "✅ Mark handled")}</button></form></li>`)}</ul>`
   : html`<p class="muted">${L(lang, "مفيش حاجة مستنياك.", "Nothing is waiting on you.")}</p>`}`
     });
   });
@@ -247,9 +247,9 @@ ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="sta
   <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
   <select name="source" aria-label="${L(lang, "المصدر", "Source")}"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
-    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل البروكرز", "All brokers")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
+    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل البروكرز", "All brokers")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "عملائي", "Assigned to me")}</option>` : ""}<option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
     : seeAll
-    ? html`<label class="row"><input type="checkbox" name="mine" value="1"${f.mine ? html` checked` : ""}> ${L(lang, "المسلّمة ليّ بس", "Assigned to me only")}</label>`
+    ? html`<label class="row"><input type="checkbox" name="mine" value="1"${f.mine ? html` checked` : ""}> ${L(lang, "عملائي بس", "Assigned to me only")}</label>`
     : ""}
   </div>
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
@@ -494,7 +494,7 @@ ${manager
   : ""}
 ${manager
   ? html`<section class="card" id="merge"><h2>🔗 ${L(lang, "دمج عميل مكرر", "Merge a duplicate")}</h2>
-  <p class="muted">${L(lang, "لو العميل ده متسجل مرتين برقمين مختلفين: اكتب رقم السجل التاني (L-…) مرتين، وكل حاجة فيه (أرقامه، تاريخه، طلباته، معايناته، صفقاته) هتتنقل هنا، والسجل التاني هيتمسح. مينفعش يترجع.", "If this client is saved twice under two numbers: type the other record's reference (L-…) twice; everything on it (numbers, history, requests, viewings, deals) moves here and the other record is deleted. This can't be undone.")}</p>
+  <p class="muted">${L(lang, "لو العميل ده متسجل مرتين برقمين مختلفين: اكتب رقم السجل التاني (L-…) مرتين، وكل حاجة فيه (أرقامه، تاريخه، طلباته، معايناته، صفقاته) هتتنقل هنا، والسجل التاني هيتمسح. مش هينفع تتراجع بعد كده.", "If this client is saved twice under two numbers: type the other record's reference (L-…) twice; everything on it (numbers, history, requests, viewings, deals) moves here and the other record is deleted. This can't be undone.")}</p>
   <form method="post" action="${path}/merge" class="row">${hidden}
     <label>${L(lang, "السجل التاني", "The other record")}<input name="other" required dir="ltr" placeholder="L-0042" size="8"></label>
     <label>${L(lang, "اكتبه تاني للتأكيد", "Type it again to confirm")}<input name="confirm" required dir="ltr" size="8"></label>
@@ -502,7 +502,7 @@ ${manager
   </form>
 </section>
 <section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
-  <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (zip)", "Export their data (zip)")}</a></p>
+  <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (ملف مضغوط)", "Export their data (zip)")}</a></p>
   <form method="post" action="${path}/erase" class="row">${hidden}
     <label>${L(lang, "للمسح النهائي اكتب آخر 4 أرقام من رقمه", "To erase for good, type the last 4 digits of their number")}<input name="confirm" inputmode="numeric" maxlength="4" pattern="[0-9٠-٩]{4}" required dir="ltr"></label>
     <button type="submit" class="danger">🗑️ ${L(lang, "امسح العميل", "Erase the client")}</button>
@@ -558,7 +558,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       title,
       nav: "leads",
       body: html`<h1>🕓 ${title}</h1>
-<p><a class="btn secondary small" href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "← رجوع للعميل", "← Back to the lead")}</a></p>
+<p><a class="btn secondary small" href="/app/leads/${Card.refLabel(h.lead.ref)}">${L(lang, "→ رجوع للعميل", "← Back to the lead")}</a></p>
 <form method="get" action="${base}" class="row" data-history-filter>
   <label>${L(lang, "من", "From")} <input type="date" name="from" value="${fromDay || ""}"></label>
   <label>${L(lang, "لغاية", "To")} <input type="date" name="to" value="${toDay || ""}"></label>
@@ -591,7 +591,7 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
       request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed."),
       flag: L(lang, "🙋 المدير اتبلّغ.", "🙋 The manager has been told."),
       lang: L(lang, "🌐 لغة الرسائل للعميل اتحفظت.", "🌐 Client message language saved."),
-      flag_handled: L(lang, "✅ اتعلّم إنه اتعالج.", "✅ Marked as handled."),
+      flag_handled: L(lang, "✅ اتقفل الطلب.", "✅ Marked as handled."),
       viewing: L(lang, "✅ المعاينة اتحفظت. الرقم ده أرضي، ابعت اللينك بنفسك.", "✅ Viewing saved. This number is a landline; send the link yourself.")
     };
     const key = req.query.saved ? "saved" : req.query.known ? "known" : req.query.done;

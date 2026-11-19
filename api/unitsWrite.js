@@ -235,7 +235,7 @@ function register(api, { pool }) {
     }
     const ok = blockers.length === 0;
     const duplicate = ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
-    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing), place: placed ? { area_id: placed.area_id || null, subzone_id: placed.subzone_id || null, compound: placed.compound || null, compound_state: placed.compound_state || null } : null });
+    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing, lang), place: placed ? { area_id: placed.area_id || null, subzone_id: placed.subzone_id || null, compound: placed.compound || null, compound_state: placed.compound_state || null } : null });
   });
 
   // The unit's fields as the form names them, for the edit screen. Whoever may edit the unit may open this.
@@ -245,7 +245,7 @@ function register(api, { pool }) {
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing) return res.status(404).json({ error: "not_found" });
     if (!Authz.canEdit(broker, listing)) return res.status(403).json({ error: "forbidden" });
-    return res.json({ code: listing.code, version: listing.version, fields: Form.formFromUnit(listing) });
+    return res.json({ code: listing.code, version: listing.version, updated_at: listing.updated_at || null, compound: listing.compound || null, compound_en: listing.compound_en || null, area_id: listing.area_id || null, subzone_id: listing.subzone_id || null, fields: Form.formFromUnit(listing) });
   });
 
   // Save changes to one unit: the version the screen was opened at must still be current (409 otherwise). Photos are not

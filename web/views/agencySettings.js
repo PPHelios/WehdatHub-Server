@@ -10,7 +10,7 @@ const back = (ret) => (ret ? html`<input type="hidden" name="return" value="${re
 
 /** The dollar and euro rates: { lang, rates: { USD, EUR }, bad, ret, id }. */
 function fxForm({ lang, rates = {}, bad = false, ret = null, id = null }) {
-  return html`<form method="post" action="/app/usage/fx" class="card stack" data-fx-rates${id ? html` id="${id}"` : ""}>${back(ret)}
+  return html`<form method="post" action="/app/usage/fx" class="card stack" data-fx-rates data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}" data-savebar-name="${L(lang, "سعر العملات", "Currency rates")}"${id ? html` id="${id}"` : ""}>${back(ret)}
   <h2>${L(lang, "سعر الدولار واليورو", "Dollar and euro rates")}</h2>
   ${bad ? html`<p class="bad" role="alert">${L(lang, "السعر لازم يكون رقم بين 1 و 1000، أو فاضي.", "The rate must be a number from 1 to 1000, or blank.")}</p>` : ""}
   <p class="muted">${L(lang, "بالجنيه لكل وحدة. الوحدات والميزانيات بالدولار أو اليورو بتتحول بيه في البحث. لو فاضي، الوحدات دي مش هتتطابق مع الأسعار.", "In EGP per unit. Dollar and euro units and budgets convert at this rate in search. Blank means those units do not match prices.")}</p>
@@ -22,9 +22,9 @@ function fxForm({ lang, rates = {}, bad = false, ret = null, id = null }) {
 
 /** The unit code letters: { lang, codePrefix, ret, id }. */
 function capsForm({ lang, codePrefix = "", ret = null, id = null }) {
-  return html`<form method="post" action="/app/usage/agency" class="card stack" data-agency-caps${id ? html` id="${id}"` : ""}>${back(ret)}
+  return html`<form method="post" action="/app/usage/agency" class="card stack" data-agency-caps data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}" data-savebar-name="${L(lang, "حروف الأكواد", "Code letters")}"${id ? html` id="${id}"` : ""}>${back(ret)}
   <h2>${L(lang, "حروف أكواد الوحدات", "Unit code letters")}</h2>
-  <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
+  <label>${L(lang, "حروف أكواد الوحدات (مثال NH → NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
   <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>`;

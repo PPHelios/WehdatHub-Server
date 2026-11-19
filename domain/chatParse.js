@@ -11,11 +11,17 @@ const BIDI = /[‎‏‪-‮⁦-⁩]/g;
 const AR = "٠١٢٣٤٥٦٧٨٩";
 const latin = (s) => String(s).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d)));
 
-// [24/10/2026, 10:15:32] Name: text   (iOS)
-const IOS = /^\[(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[APap]\.?[Mm]\.?|\s*[صم])?)\]\s*([^:]{1,80}?):\s?([\s\S]*)$/;
+const DATE = String.raw`\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}`;
+const TIME = String.raw`\d{1,2}:\d{2}`;
+const AMPM = String.raw`(?:\s*[APap]\.?[Mm]\.?|\s*[صم])?`;
+// [24/10/2026, 10:15:32] Name: text   (iOS; "," or Arabic "،" between date and time; year-first and en-US M/D/YY too)
+const IOS = new RegExp(String.raw`^\[(${DATE})[,،]?\s+(${TIME}(?::\d{2})?${AMPM})\]\s*([^:]{1,80}?):\s?([\s\S]*)$`);
 // 24/10/2026, 10:15 - Name: text   (Android; "ص"/"م" or AM/PM)
-const ANDROID = /^(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}),?\s+(\d{1,2}:\d{2}(?:\s*[APap]\.?[Mm]\.?|\s*[صم])?)\s+-\s+([^:]{1,80}?):\s?([\s\S]*)$/;
-const HEAD = /^\[?\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4},?\s+\d{1,2}:\d{2}/;
+const ANDROID = new RegExp(String.raw`^(${DATE})[,،]?\s+(${TIME}${AMPM})\s+-\s+([^:]{1,80}?):\s?([\s\S]*)$`);
+// A line that starts like a header (iOS "[date, time]" or Android "date, time - "). One that merely starts with a date and has
+// no sender is a continuation of the message above (parseWithAttachments), a system notice only when it has the " - " / "]" shape.
+const HEAD = new RegExp(String.raw`^(?:\[${DATE}[,،]?\s+${TIME}(?::\d{2})?${AMPM}\]|${DATE}[,،]?\s+${TIME}(?::\d{2})?${AMPM}\s+-\s)`);
+const EDITED = /\s*<(?:this message was edited|تم تعديل هذه الرسالة)>\s*$/i;
 // A photo in an export with media: "IMG-20261024-WA0001.jpg (file attached)" (Android, Arabic "(ملف مرفق)") or
 // "<attached: 00000012-PHOTO-2026-10-24-10-15-32.jpg>" (iOS, Arabic "<مرفق: …>"). HEIC/HEIF are read too (the browser converts them to JPEG before upload).
 const ATTACHED = /^(?:<(?:attached|مرفق)\s*:\s*([^>]+?\.(?:jpe?g|png|webp|heic|heif))\s*>|([^\s<>]+?\.(?:jpe?g|png|webp|heic|heif))\s*\((?:file attached|ملف مرفق)\))\s*$/i;
@@ -30,30 +36,69 @@ const CUE_DOWN = /(?:\u2b07|\u{1F447})\uFE0F?|(?:\u0635\u0648\u0631\u0647?\u0629
 const cuesOf = (text) => ({ up: CUE_UP.test(String(text || "")), down: CUE_DOWN.test(String(text || "")) });
 const SKIP = /^(<media omitted>|<الوسائط محذوفة>|image omitted|video omitted|sticker omitted|this message was deleted|تم حذف هذه الرسالة|null)$/i;
 
-/** "24/10/2026 10:15:32 PM" (day first, as Egyptian phones write it) → a comparable number of ms, or null. */
-function atMs(at) {
-  const m = String(at || "").match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([APap]\.?[Mm]\.?|[صم])?/);
+const AT = /^(\d{1,4})[/.-](\d{1,2})[/.-](\d{1,4})[,،]?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([APap]\.?[Mm]\.?|[صم])?/;
+
+/**
+ * "24/10/2026 10:15:32 PM" → a comparable number of ms (the clock as written, read as UTC), or null.
+ * order: "dmy" (default, as Egyptian phones write it), "mdy" (en-US) or "ymd"; a year-first date is always ymd.
+ */
+function atMs(at, order = "dmy") {
+  const m = latin(at || "").match(AT);
   if (!m) return null;
-  const [, d, mo, y, hh, mm, ss] = m;
+  const [a, b, c] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  let y, mo, d;
+  if (m[1].length === 4 || order === "ymd") [y, mo, d] = [a, b, c];
+  else if (order === "mdy") [mo, d, y] = [a, b, c];
+  else [d, mo, y] = [a, b, c];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   const ampm = (m[7] || "").toLowerCase().replace(/\./g, "");
-  let hour = Number(hh);
+  let hour = Number(m[4]);
   if ((ampm === "pm" || ampm === "م") && hour < 12) hour += 12;
   if ((ampm === "am" || ampm === "ص") && hour === 12) hour = 0;
-  const year = Number(y) < 100 ? 2000 + Number(y) : Number(y);
-  return Date.UTC(year, Number(mo) - 1, Number(d), hour, Number(mm), Number(ss || 0));
+  if (y < 100) y += 2000;
+  return Date.UTC(y, mo - 1, d, hour, Number(m[5]), Number(m[6] || 0));
 }
 
-/** "2026-07-30" (a date input) → ms at the start of that day, or null; and the default "last 30 days" start. */
+/** The date order of a whole file, decided once from all its header times: "ymd", "dmy" or "mdy" (default dmy). */
+function detectDateOrder(ats) {
+  const parts = [];
+  for (const at of ats) {
+    const m = latin(at || "").match(AT);
+    if (m) parts.push({ at, a: Number(m[1]), b: Number(m[2]), four: m[1].length === 4 });
+  }
+  if (parts.some((p) => p.four)) return "ymd";
+  if (parts.some((p) => p.a > 12)) return "dmy";
+  if (parts.some((p) => p.b > 12)) return "mdy";
+  const backwards = (order) => {
+    let n = 0;
+    let prev = null;
+    for (const p of parts) {
+      const t = atMs(p.at, order);
+      if (t === null) continue;
+      if (prev !== null && t < prev) n++;
+      prev = t;
+    }
+    return n;
+  };
+  return backwards("mdy") < backwards("dmy") ? "mdy" : "dmy";
+}
+
+/** A start/end bound → ms or null: epoch ms (number), "2026-07-30" or "2026-07-30T14:30" (a space works too; Arabic digits too). */
 const sinceMs = (v) => {
-  const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = latin(String(v ?? "")).trim();
+  if (/^\d{9,}$/.test(s)) return Number(s);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0)) : null;
 };
+const untilMs = sinceMs;
 const DEFAULT_DAYS = 30;
 const defaultSince = (now = new Date()) => new Date(now.getTime() - DEFAULT_DAYS * 86400000).toISOString().slice(0, 10);
-/** Messages older than since are dropped; a message whose time can't be read is kept. */
-const notOlder = (since) => (m) => {
-  const t = atMs(m.at);
-  return since === null || t === null || t >= since;
+/** Messages before since, or at/after until (exclusive), are dropped; a message whose time can't be read is kept. Bounds are ms or null. */
+const notOlder = (since, until = null) => (m) => {
+  const t = typeof m.t === "number" ? m.t : atMs(m.at);
+  if (t === null || t === undefined) return true;
+  return (since === null || since === undefined || t >= since) && (until === null || until === undefined || t < until);
 };
 
 /**
@@ -62,7 +107,15 @@ const notOlder = (since) => (m) => {
  */
 function parseWithAttachments(text) {
   const out = [];
-  for (const raw of String(text || "").replace(BIDI, "").split(/\r?\n/)) {
+  const rawLines = String(text || "").replace(BIDI, "").split(/\r?\n/);
+  const heads = [];
+  for (const r of rawLines) {
+    const hm = latin(r).trim().match(IOS) || latin(r).trim().match(ANDROID);
+    if (hm) heads.push(`${hm[1]} ${hm[2]}`);
+  }
+  const order = detectDateOrder(heads);
+  for (const raw0 of rawLines) {
+    const raw = raw0.replace(EDITED, "");
     const line = latin(raw).trimEnd();
     const m = line.trim().match(IOS) || line.trim().match(ANDROID);
     if (m) {
@@ -71,10 +124,10 @@ function parseWithAttachments(text) {
       // `orig`: the message as it was written (Arabic digits, spacing and blank lines kept); `text` is the cleaned copy the readers use.
       const rt = raw.trim();
       const rawFirst = rt.slice(rt.length - m[4].length).trim();
-      if (DIVIDER.test(first)) out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: "", orig: "", files: [], divider: true });
-      else out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), text: file ? "" : first, orig: file ? "" : rawFirst, files: file ? [(file[1] || file[2]).trim()] : [] });
+      if (DIVIDER.test(first)) out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), t: atMs(`${m[1]} ${m[2]}`, order), text: "", orig: "", files: [], divider: true });
+      else out.push({ sender: m[3].trim(), at: `${m[1]} ${m[2]}`.trim(), t: atMs(`${m[1]} ${m[2]}`, order), text: file ? "" : first, orig: file ? "" : rawFirst, files: file ? [(file[1] || file[2]).trim()] : [] });
     } else if (HEAD.test(line.trim())) {
-      out.push({ sender: null, at: null, text: "", orig: "", files: [], system: true });
+      out.push({ sender: null, at: null, t: null, text: "", orig: "", files: [], system: true });
     } else if (out.length && !line.trim()) {
       // A blank line inside a message is kept in its original text (trailing ones are trimmed at the end).
       const last = out[out.length - 1];
@@ -83,11 +136,11 @@ function parseWithAttachments(text) {
       let last = out[out.length - 1];
       if (DIVIDER.test(line.trim())) {
         // A separator line inside a message (a forward's own divider): a boundary, then the rest is a new part of that message.
-        if (!last.divider) out.push({ sender: last.sender, at: last.at, text: "", orig: "", files: [], divider: true });
+        if (!last.divider) out.push({ sender: last.sender, at: last.at, t: last.t, text: "", orig: "", files: [], divider: true });
         continue;
       }
       if (last.divider) {
-        out.push({ sender: last.sender, at: last.at, text: line.trim(), orig: raw.trim(), files: [] });
+        out.push({ sender: last.sender, at: last.at, t: last.t, text: line.trim(), orig: raw.trim(), files: [] });
         continue;
       }
       last.text = last.text ? `${last.text}\n${line.trim()}` : line.trim();
@@ -109,5 +162,5 @@ function looksLikeListing(text) {
 }
 
 
-return { BIDI, latin, IOS, ANDROID, HEAD, SKIP, DIVIDER, cuesOf, PHOTO_WINDOW_MS, MAX_PHOTOS, DEFAULT_DAYS, atMs, sinceMs, defaultSince, notOlder, parseWithAttachments, looksLikeListing };
+return { BIDI, latin, IOS, ANDROID, HEAD, SKIP, DIVIDER, cuesOf, PHOTO_WINDOW_MS, MAX_PHOTOS, DEFAULT_DAYS, atMs, detectDateOrder, sinceMs, untilMs, defaultSince, notOlder, parseWithAttachments, looksLikeListing };
 });

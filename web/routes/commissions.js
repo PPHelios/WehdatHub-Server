@@ -91,8 +91,8 @@ function termsSection(lang, projectId, terms, notice = "") {
       <label>${L(lang, "النسبة %", "Rate %")} <input name="pct" inputmode="decimal" dir="ltr" size="5" value="${t.pct ?? ""}"></label>
       <label>${L(lang, "المبلغ", "Amount")} <input name="amount" inputmode="numeric" dir="ltr" size="10" value="${t.amount ?? ""}"></label>
     </div>
-    <fieldset class="row"><legend>${L(lang, "شرايح السنة (من عدد وحدات → نسبة)", "Yearly tiers (from units sold → rate)")}</legend>
-      ${tiers.map((x) => html`<span class="row"><input name="tier_min" inputmode="numeric" dir="ltr" size="3" placeholder="${L(lang, "وحدات", "units")}" value="${x.min_units ?? ""}"> → <input name="tier_pct" inputmode="decimal" dir="ltr" size="4" placeholder="%" value="${x.pct ?? ""}"></span>`)}
+    <fieldset class="row"><legend>${L(lang, "شرايح السنة (من عدد وحدات ← نسبة)", "Yearly tiers (from units sold → rate)")}</legend>
+      ${tiers.map((x) => html`<span class="row"><input name="tier_min" inputmode="numeric" dir="ltr" size="3" placeholder="${L(lang, "وحدات", "units")}" value="${x.min_units ?? ""}"> ${L(lang, "←", "→")} <input name="tier_pct" inputmode="decimal" dir="ltr" size="4" placeholder="%" value="${x.pct ?? ""}"></span>`)}
     </fieldset>
     <div class="row">
       <label>${L(lang, "تتطالب بعد", "Claimable after")} <select name="claim_trigger">${opt("contract", L(lang, "العقد", "the contract"), t.claim_trigger || "contract")}${opt("down_payment", L(lang, "دفع المقدم", "the down payment"), t.claim_trigger)}${opt("paid_pct", L(lang, "دفع نسبة من السعر", "a % of the price paid"), t.claim_trigger)}</select></label>

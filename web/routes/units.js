@@ -99,7 +99,7 @@ function marketLine(m, listing, lang) {
 
 /** The lease's buttons: message the tenant or the owner on WhatsApp, and mark the lease handled so the reminders stop. */
 function leaseActions(listing, lease, lang, csrf, contacts) {
-  const wa = (c, ar, en) => (c ? html`<a class="btn secondary" href="https://wa.me/${c.phone}" target="_blank" rel="noopener" data-lease-wa>${icon("chat", 18)} ${L(lang, ar, en)}${c.name ? ` · ${c.name}` : ""}</a>` : "");
+  const wa = (c, ar, en) => (c ? html`<a class="btn secondary btn-wa" href="https://wa.me/${c.phone}" target="_blank" rel="noopener" data-lease-wa>${icon("chat", 18)} ${L(lang, ar, en)}${c.name ? ` · ${c.name}` : ""}</a>` : "");
   const path = `/app/units/${encodeURIComponent(listing.code)}/lease/done`;
   const kinds = [["renewed", "اتجدد", "Renewed"], ["leaving", "المستأجر ماشي", "Tenant leaving"], ["relist", "هنعرضها تاني", "Re-list"]];
   return html`<div class="row actions" data-lease-actions>${wa(contacts.tenant, "واتساب المستأجر", "WhatsApp tenant")}${wa(contacts.owner, "واتساب المالك", "WhatsApp owner")}</div>
@@ -113,8 +113,8 @@ function leaseSection(listing, lease, lang, csrf, notice, tenants = [], contacts
   return html`<section class="card stack" id="lease" data-lease="${lease ? "yes" : "no"}">
   <h2>🔑 ${L(lang, "عقد الإيجار والتذكير بالتجديد", "Lease and renewal reminders")}</h2>
   ${notice && notes[notice] ? html`<p class="notice" data-lease-notice="${notice}">${notes[notice]}</p>` : ""}
-  <p class="muted">${L(lang, "سجل بداية العقد ومدته. التذكير بيوصل تلقائي قبل النهاية بـ 3 شهور وشهرين، لك ولمديرك والمدير، وقبل كل زيادة سنوية بـ 30 يوم.", "Enter the lease start and length. Reminders go out automatically 3 and 2 months before the end to you, your team lead and the managers, and 30 days before each yearly increase.")}</p>
-  ${lease ? html`<p data-lease-end>${L(lang, `العقد بيخلص ${end}`, `The lease ends ${end}`)}${lease.done_at ? ` · ✅ ${L(lang, "اتعامل معاه", "Handled")}` : " · 🔔"}</p>` : ""}
+  <p class="muted">${L(lang, "سجل بداية العقد ومدته. التذكير بيوصل تلقائي قبل النهاية بـ 3 شهور وشهرين، لك ولقائد الفريق والمديرين، وقبل كل زيادة سنوية بـ 30 يوم.", "Enter the lease start and length. Reminders go out automatically 3 and 2 months before the end to you, your team lead and the managers, and 30 days before each yearly increase.")}</p>
+  ${lease ? html`<p data-lease-end>${L(lang, `العقد بيخلص ${end}`, `The lease ends ${end}`)}${lease.done_at ? ` · ✅ ${L(lang, "تم التعامل", "Handled")}` : " · 🔔"}</p>` : ""}
   ${lease ? leaseActions(listing, lease, lang, csrf, contacts) : ""}
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease" class="grid">
     <input type="hidden" name="_csrf" value="${csrf}">
@@ -311,11 +311,11 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   <div class="stack" data-msg-box>
     <label class="stack">${L(lang, "الرسالة (تقدر تعدلها قبل الإرسال)", "The message (edit it before sending)")}<textarea rows="9" data-share-copy data-ar="${copyIn("ar")}" data-en="${copyIn("en")}">${copyIn(fresh.lang)}</textarea></label>
     <label>${L(lang, "لغة الرسالة", "Message language")} <select data-msg-lang><option value="ar"${fresh.lang === "en" ? "" : raw(" selected")}>العربية</option><option value="en"${fresh.lang === "en" ? raw(" selected") : ""}>English</option></select></label>
-    <p><a class="btn" href="${waBase}" data-wa-base="${waBase}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
+    <p><a class="btn btn-wa" href="${waBase}" data-wa-base="${waBase}" rel="noopener" data-send-whatsapp>${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
   </div>`
     : ""}
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="stack" data-share-form>
-    <label>${L(lang, "لمين؟ رقم العميل أو رقم العميل في النظام (L-0042). اختياري.", "To whom? Client's number or lead reference (L-0042). Optional.")}
+    <label>${L(lang, "لمين؟ موبايل العميل أو كوده (L-0042) — اختياري.", "To whom? Client's number or lead reference (L-0042). Optional.")}
       <input name="to" dir="ltr" inputmode="tel" maxlength="40" placeholder="01xxxxxxxxx · L-0042" autocomplete="off"></label>
     <label>${L(lang, "ملاحظة (اختياري)", "Note (optional)")} <input name="note" maxlength="200"></label>
     <div class="row">
@@ -375,8 +375,8 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   <div class="row">
     ${link("dark", false, L(lang, "غامق", "Dark"))}${link("light", false, L(lang, "فاتح", "Light"))}${link("dark", true, L(lang, "غامق من غير بيانات الشركة", "Dark, no brand"))}${link("light", true, L(lang, "فاتح من غير بيانات الشركة", "Light, no brand"))}
   </div>
-  ${!out ? html`<p class="muted">${L(lang, "اختار الشكل. الفلاير بيتعمل لما تدوس على واحد.", "Pick a style. The flyer is made when you tap one.")}</p><p class="muted small" data-flyer-cost>${L(lang, `أول فلاير للوحدة (أو بعد صور جديدة) بياخد ${flyerCredits} رصيد ذكاء. الفلاير اللي اتعمل قبل كده بيتفتح ببلاش من الذاكرة.`, `The first flyer for a unit (or after new photos) uses ${flyerCredits} AI credits. A flyer made before opens free from the cache.`)}</p><a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a>` : out.url
-    ? html`<p class="muted small" data-flyer-cost>${out.cached ? L(lang, "من الذاكرة، ببلاش.", "From the cache, free.") : L(lang, `اتعمل دلوقتي. الصور اتتحسب ${flyerCredits} رصيد لو كانت أول مرة أو بعد صور جديدة.`, `Made just now. Photo ordering costs ${flyerCredits} AI credits when it is the first flyer or after new photos.`)}</p>
+  ${!out ? html`<p class="muted">${L(lang, "اختار الشكل. الفلاير بيتعمل لما تدوس على واحد.", "Pick a style. The flyer is made when you tap one.")}</p><p class="muted small" data-flyer-cost>${L(lang, `أول فلاير للوحدة (أو بعد صور جديدة) بياخد ${flyerCredits} رصيد ذكاء. الفلاير اللي اتعمل قبل كده بيتفتح من غير رصيد.`, `The first flyer for a unit (or after new photos) uses ${flyerCredits} AI credits. A flyer made before opens free from the cache.`)}</p><a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a>` : out.url
+    ? html`<p class="muted small" data-flyer-cost>${out.cached ? L(lang, "جاهز قبل كده، من غير رصيد.", "From the cache, free.") : L(lang, `اتعمل دلوقتي. الصور اتتحسب ${flyerCredits} رصيد لو كانت أول مرة أو بعد صور جديدة.`, `Made just now. Photo ordering costs ${flyerCredits} AI credits when it is the first flyer or after new photos.`)}</p>
   <a href="${out.url}" target="_blank" rel="noopener" data-no-lock><img src="${out.url}" alt="" style="max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain" data-flyer-image></a>
   <div class="row"><button type="button" data-share-image="${out.url}" data-share-name="${listing.code}-flyer.jpg">📤 ${L(lang, "شارك الفلاير", "Share flyer")}</button> <a class="btn secondary" href="${out.url}" download="${listing.code}-flyer.jpg" target="_blank" rel="noopener" data-download-image data-download-name="${listing.code}-flyer.jpg">⬇️ ${L(lang, "نزّل الفلاير", "Download flyer")}</a>
   <a class="btn secondary" href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></div>`
@@ -564,7 +564,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       nav: "units",
       body: html`<article class="card unit-card" data-code="${listing.code}">
   ${req.query.saved ? html`<div class="notice card ok" data-saved>✅ ${L(lang, "تم الحفظ", "Saved")} <a class="btn secondary" href="/app/units/new">➕ ${L(lang, "ضيف وحدة تانية", "Add another unit")}</a></div>` : ""}
-  <div class="unit-head"><h1 dir="ltr">${listing.code}</h1><span class="unit-pill">${status}</span>${conf ? html`<span class="muted">${conf[0]}</span>` : ""}${listing.is_private ? html`<span class="unit-pill">⭐ VIP</span>` : ""}</div>
+  <div class="unit-head"><h1 dir="ltr">${listing.code}</h1><span class="unit-pill">${status}</span>${listing.property_type && Describe.TYPE_LABELS[String(listing.property_type).toLowerCase()] ? html`<span class="unit-pill" data-property-type="${listing.property_type}">${Describe.typeLabel(listing, lang)}</span>` : ""}${conf ? html`<span class="muted">${conf[0]}</span>` : ""}${listing.is_private ? html`<span class="unit-pill">⭐ VIP</span>` : ""}</div>
   ${carousel(images.map((i) => i.url), lang)}
   ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
@@ -582,7 +582,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/flyer">🖼 ${L(lang, "الفلاير", "Flyer")}</a>` : ""}
       ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
       ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button></form>` : ""}
-      ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة ١٠ أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
+      ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة 10 أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
   </div>
 </article>
 <div class="unit-sections">

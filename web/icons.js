@@ -53,7 +53,12 @@ const PATHS = {
   inbox: '<path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1 3h6l1-3h5"/>',
   building: '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M3 21h18"/>',
   compare: '<path d="M7 4v16M17 4v16M3 8l4-4 4 4M13 16l4 4 4-4"/>',
-  check: '<path d="m5 12 5 5 9-10"/>'
+  check: '<path d="m5 12 5 5 9-10"/>',
+  send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  spark: '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9z"/>',
+  shield: '<path d="M12 3l7 3v5c0 5-3.2 8.7-7 10-3.8-1.3-7-5-7-10V6z"/><path d="m9.5 12 1.8 1.8L15 10"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>'
 };
 
 /** An inline icon; unknown names render nothing. */
@@ -63,9 +68,9 @@ function icon(name, size = 24) {
   return raw(`<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${p}</svg>`);
 }
 
-/** The WehdatHub mark (five rising bars, the middle one azure). */
+/** The invariant WehdatHub mark (always the same in light and dark: outer 4 towers Satin Gold, middle tower Cobalt Blue). */
 const MARK = raw(
-  '<svg class="mark" viewBox="0 15 154 140" aria-hidden="true" focusable="false"><polygon points="10,20 32,55 32,150 10,150" fill="var(--accent)"/><polygon points="38,95 60,70 60,150 38,150" fill="var(--accent)"/><polygon points="66,62 88,35 88,150 66,150" fill="var(--brand)"/><polygon points="94,70 116,95 116,150 94,150" fill="var(--accent)"/><polygon points="122,55 144,20 144,150 122,150" fill="var(--accent)"/></svg>'
+  '<svg class="mark" viewBox="0 15 154 140" aria-hidden="true" focusable="false"><polygon points="10,20 32,55 32,150 10,150" fill="#C29741"/><polygon points="38,95 60,70 60,150 38,150" fill="#C29741"/><polygon points="66,62 88,35 88,150 66,150" fill="#4B83D4"/><polygon points="94,70 116,95 116,150 94,150" fill="#C29741"/><polygon points="122,55 144,20 144,150 122,150" fill="#C29741"/></svg>'
 );
 
 module.exports = { icon, MARK, PATHS };

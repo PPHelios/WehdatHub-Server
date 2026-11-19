@@ -52,7 +52,9 @@ async function planChat(pool, broker, posts, { lang = "ar", filename = null } = 
     { filename }
   );
   await ParseLog.posts(pool, broker, id, logs);
-  return { id, posts: list.length, ai: aiCalls, aiBlocked: blocked, counts: plan.counts };
+  // What each post turned out to be (new, changed, unchanged, invalid…): the browser skips the photos of units the save will not touch.
+  const kinds = Object.fromEntries(plan.items.map((i) => [i.row, i.kind]));
+  return { id, posts: list.length, ai: aiCalls, aiBlocked: blocked, counts: plan.counts, kinds };
 }
 
 module.exports = { planChat, loadPlaces, MAX_POSTS };

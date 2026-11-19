@@ -67,7 +67,7 @@ describe("preview", () => {
     const kindOf = (n) => (page.text.match(new RegExp(`data-kind="(\\w+)"(?:(?!data-kind).)*?data-row="${n}"`, "s")) || [])[1];
     expect([2, 3, 4, 5, 6, 7, 8].map(kindOf)).toEqual(["new", "new", "repeated", "invalid", "merge", "colleague", "erased_before"]);
     expect(page.text).toContain("زي صف 2");
-    expect(page.text).toMatch(/L-0001[^<]*هيتكمّل: المصدر، الملاحظات، رقم جديد/);
+    expect(page.text).toMatch(/L-0001[^]*?هيتكمّل: المصدر، الملاحظات، رقم جديد/);
     expect(page.text).not.toContain("Their Client");
     expect(await leadCount()).toBe(before);
     const ops = await h.query("SELECT metadata FROM operation_logs WHERE operation_type = 'web_import_plan'");

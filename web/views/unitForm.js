@@ -237,7 +237,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
         )}</ol>`
       : ""}
     <input type="file" name="photos" accept="image/*" multiple data-photo-tray>
-    <label class="muted">${L(lang, "أو زيب من \"تحميل الكل\" في واتساب (صور الوحدة دي بس؛ الفيديوهات بتتشال):", "Or a zip from WhatsApp \"Download all\" (this unit's photos; videos are dropped):")} <input type="file" accept=".zip,application/zip" data-photo-zip></label>
+    <label class="muted">${L(lang, "أو الملف المضغوط من \"تحميل الكل\" في واتساب (صور الوحدة دي بس؛ الفيديوهات بتتشال):", "Or a zip from WhatsApp \"Download all\" (this unit's photos; videos are dropped):")} <input type="file" accept=".zip,application/zip" data-photo-zip></label>
     <p class="notice warn" data-photo-note hidden></p>
     <ol data-sortable data-photo-preview class="photo-order" hidden></ol>
     <p class="muted" data-photo-preview-hint hidden>${L(lang, "اسحب الصور (أو الأسهم) لترتيبها قبل الحفظ؛ الأولى هي الغلاف.", "Drag the photos (or arrows) to order them before saving; the first is the cover.")}</p>
