@@ -144,6 +144,9 @@
   "viewing.js": {
     "app": "Viewings"
   },
+  "market.js": {
+    "web": "market analytics for managers: a web-only page for now (the owner switches it on per agency)"
+  },
   "winLoss.js": {
     "app": "Win and loss (PR 3)"
   }

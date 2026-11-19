@@ -10,6 +10,7 @@ const Q = require("../domain/searchQuery");
 const Storage = require("../lib/supabase");
 const AiBlock = require("../lib/aiBlock");
 const { isAgencyOwner } = require("../lib/authz");
+const ViewGuard = require("../lib/viewGuard");
 const { uploads, VOICE } = require("../web/uploads");
 const { unitView } = require("./units");
 const SearchLink = require("../domain/searchLink");
@@ -83,8 +84,10 @@ function register(api, { pool }) {
     const voice = req.files && req.files.voice && req.files.voice[0];
     if (!voice) return res.status(400).json({ error: "no_audio" });
     if (!(await RateLimit.apiGate(pool, res, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker))) return;
+    // Viewing another agency: no pool or broker in the AI context, so no usage is logged or charged there (same as Ask).
+    const tctx = ViewGuard.active() ? { lang } : { pool, AI, broker, agency: req.session.agency, lang };
     try {
-      const heard = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], { pool, AI, broker, agency: req.session.agency, lang }) || "").trim();
+      const heard = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], tctx) || "").trim();
       // A search is a few words. A long transcript from silence is the model making up speech, so it is not used.
       const q = heard.length > MAX_SPOKEN_SEARCH ? "" : heard.slice(0, 500);
       if (!q) return res.status(422).json({ error: "not_heard" });

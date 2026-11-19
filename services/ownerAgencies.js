@@ -11,14 +11,14 @@ const { withTransaction, logOperation } = require("../lib/db");
 const Vis = require("../lib/visibility");
 
 const DAY = 86400000;
-const ACTIONS = ["owner_plan", "owner_suspend", "owner_resume", "owner_announcement", "owner_founding", "owner_extra_seats"];
+const ACTIONS = ["owner_plan", "owner_suspend", "owner_resume", "owner_announcement", "owner_founding", "owner_extra_seats", "owner_analytics"];
 // The first agencies on the Founding Partner list (flag set here; the extras are operational: no setup fee, migration help).
 const FOUNDING_MAX = 20;
 
 /** Every approved or pending agency with its plan in force and its size. */
 async function list(db, { now = new Date() } = {}) {
   const { rows } = await db.query(
-    `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.created_at, a.signed_up_at, a.grace_extra_until, a.extra_seats, a.founding_partner, a.lock_until, a.locked_prices IS NOT NULL AS price_locked,
+    `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.created_at, a.signed_up_at, a.grace_extra_until, a.extra_seats, a.founding_partner, a.analytics_enabled, a.lock_until, a.locked_prices IS NOT NULL AS price_locked,
             (SELECT p.months FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'confirmed' ORDER BY p.confirmed_at DESC NULLS LAST LIMIT 1) AS last_months,
             (SELECT min(p.created_at) FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'pending') AS pending_plan_at,
             a.crm_settings->>'suspended_at' AS suspended_at,

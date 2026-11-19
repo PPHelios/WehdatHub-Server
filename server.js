@@ -58,7 +58,7 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
       // The Excel grid (every tab, read in the browser) is bigger than a webhook ever is: its own route reads it with its own limit.
       type: (req) => req.path !== "/app/import/excel/grid" && Boolean(req.is("application/json")),
       verify: (req, _res, buf) => {
-        if (req.path === "/webhook") req.rawBody = buf;
+        if (req.path === "/webhook" || req.path === "/webhook/leadgen") req.rawBody = buf;
       }
     })
   );
@@ -133,6 +133,34 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     await handleWebhookBody(req.body);
   });
 
+  /**
+   * Facebook Lead Ads webhook (the same Meta app and secret as /webhook): GET is Meta's verify handshake; POST carries
+   * { object: "page", entry: [{ changes: [{ field: "leadgen", value }] }] }. Each lead is fetched and saved by
+   * services/leadIntake.js handleLeadgen (it never throws). Always 200 once the signature is good, so Meta does not retry.
+   */
+  app.get("/webhook/leadgen", (req, res) => {
+    const token = req.query["hub.verify_token"];
+    if (req.query["hub.mode"] === "subscribe" && VERIFY_TOKEN && typeof token === "string" && safeEqual(token, VERIFY_TOKEN)) {
+      return res.status(200).send(req.query["hub.challenge"]);
+    }
+    return res.sendStatus(403);
+  });
+
+  app.post("/webhook/leadgen", async (req, res) => {
+    if (state.isDraining) return res.status(503).send("SERVICE_DRAINING");
+    if (!req.rawBody || !verifyWebhookSignature(req)) return res.status(401).send("Invalid signature");
+    const { handleLeadgen } = require("./services/leadIntake");
+    if (req.body?.object === "page") {
+      for (const entry of Array.isArray(req.body.entry) ? req.body.entry : []) {
+        for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+          if (change?.field !== "leadgen") continue;
+          await handleLeadgen(pool, change.value || {}).catch((err) => console.error("Leadgen failed:", err.code || err.message));
+        }
+      }
+    }
+    return res.status(200).send("EVENT_RECEIVED");
+  });
+
   // "📤 Send on WhatsApp" from Telegram when the wa.me link is too long for a button: a redirect to the stored link.
   app.get("/go/wa/:token", async (req, res) => {
     const url = await TgLink.waLinkOf(pool, req.params.token);
@@ -173,16 +201,6 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     } catch (err) {
       console.warn("Health check failed:", err.message);
       res.status(503).json({ status: "degraded" });
-    }
-  });
-
-  // L1: per-agency lead intake (Make.com lead ads, forms): POST JSON or form fields to the agency's secret URL.
-  app.post("/intake/:token", express.urlencoded({ extended: false, limit: "64kb" }), async (req, res, next) => {
-    try {
-      const r = await require("./services/leadIntake").receive(pool, req.params.token, req.body || {});
-      res.status(r.status).json(r.json);
-    } catch (err) {
-      next(err);
     }
   });
 
