@@ -94,6 +94,26 @@ const sinceMs = (v) => {
 const untilMs = sinceMs;
 const DEFAULT_DAYS = 30;
 const defaultSince = (now = new Date()) => new Date(now.getTime() - DEFAULT_DAYS * 86400000).toISOString().slice(0, 10);
+/**
+ * The import date range the website and the app both offer: "last" (since the last import of this chat, from its remembered
+ * decisions; a day earlier so nothing at the edge is missed: posts already decided are skipped anyway), "7" / "30" / "90" days,
+ * "all", or "custom" (a since date and an inclusive until date). Anything else is the default 30 days.
+ * @returns {{ since: string|null, until: string|null }} bounds for notOlder(sinceMs(since), sinceMs(until)); until is exclusive
+ */
+function rangeBounds(kind, { now = new Date(), lastImportAt = null, since = null, until = null } = {}) {
+  const day = 86400000;
+  const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const k = String(kind || "");
+  if (k === "all") return { since: null, until: null };
+  if (k === "custom") {
+    const u = untilMs(until);
+    return { since: sinceMs(since) === null ? null : String(since).trim(), until: u === null ? null : iso(u + day) };
+  }
+  const last = k === "last" && lastImportAt ? Date.parse(lastImportAt) : NaN;
+  if (Number.isFinite(last)) return { since: iso(last - day), until: null };
+  const days = { 7: 7, 30: 30, 90: 90 }[k] || DEFAULT_DAYS;
+  return { since: iso(now.getTime() - days * day), until: null };
+}
 /** Messages before since, or at/after until (exclusive), are dropped; a message whose time can't be read is kept. Bounds are ms or null. */
 const notOlder = (since, until = null) => (m) => {
   const t = typeof m.t === "number" ? m.t : atMs(m.at);
@@ -162,5 +182,5 @@ function looksLikeListing(text) {
 }
 
 
-return { BIDI, latin, IOS, ANDROID, HEAD, SKIP, DIVIDER, cuesOf, PHOTO_WINDOW_MS, MAX_PHOTOS, DEFAULT_DAYS, atMs, detectDateOrder, sinceMs, untilMs, defaultSince, notOlder, parseWithAttachments, looksLikeListing };
+return { BIDI, latin, IOS, ANDROID, HEAD, SKIP, DIVIDER, cuesOf, PHOTO_WINDOW_MS, MAX_PHOTOS, DEFAULT_DAYS, atMs, detectDateOrder, sinceMs, untilMs, defaultSince, rangeBounds, notOlder, parseWithAttachments, looksLikeListing };
 });

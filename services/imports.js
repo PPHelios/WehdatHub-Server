@@ -23,6 +23,7 @@ const { normalizeSearch } = require("../domain/searchText");
 const Supabase = require("../lib/supabase");
 const PhotoHash = require("./photoHash");
 const ParseLog = require("./chatParseLog");
+const Decisions = require("./chatDecisions");
 const { MAX_PHOTOS } = require("../lib/images");
 const Vis = require("../lib/visibility");
 
@@ -488,6 +489,7 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
   // the person may not change; discarded: rows the person threw away in the review. None of these is written, even when ticked.
   const result = { created: [], updated: [], conflicts: [], failed: [], unchanged: [], blocked: [], discarded: [], undo: { made: [], changed: [], photos: [] } };
   const thrown = new Set((imp.payload.discarded || []).map(Number));
+  const savedRows = new Set();
   const photoMap = imp.payload.photos || {};
   const used = new Set();
   const withPhotos = async (item, listing) => {
@@ -505,6 +507,7 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
   const merge = async (item) => {
     const res = await patchOne(pool, broker, item.merge?.code || item.code, item.merge?.patch || item.patch, item.merge?.version ?? item.version);
     if (res.outcome === "updated") {
+      savedRows.add(item.row);
       result.updated.push(res.listing.code);
       result.undo.changed.push({ code: res.listing.code, before: item.merge?.before || item.before || {}, version: res.listing.version });
       await withPhotos(item, res.listing);
@@ -513,6 +516,7 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
   const insert = async (item, code) => {
     const res = await insertOne(pool, broker, item.fields, code, lang, `import:${id}`);
     if (res.listing) {
+      savedRows.add(item.row);
       result.created.push(res.listing.code);
       result.undo.made.push({ id: res.listing.id, code: res.listing.code, version: res.listing.version });
       const np = (imp.payload.newPlaces || {})[String(item.row)];
@@ -552,8 +556,20 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar", resolution
   const unused = Object.values(photoMap).flat().map((x) => x?.url).filter((u) => u && !used.has(u));
   if (unused.length) await Supabase.deleteStorageFiles(unused).catch(() => {});
   await pool.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
-  if (imp.payload.source === "chat") ParseLog.applied(pool, broker, id, imp.payload, wanted, Date.now() - started);
+  if (imp.payload.source === "chat") {
+    ParseLog.applied(pool, broker, id, imp.payload, wanted, Date.now() - started);
+    // Remembered for the next import of this chat (website and app): what was saved, and what the chat said nothing new about.
+    const unchanged = imp.payload.items.filter((i) => i.kind === "unchanged" && !thrown.has(i.row)).map((i) => i.row);
+    await rememberRows(pool, broker, imp.payload, [...[...savedRows].map((r) => [r, "saved"]), ...unchanged.filter((r) => !savedRows.has(r)).map((r) => [r, "unchanged"])]);
+  }
   return result;
+}
+
+/** Writes the outcome of chat plan rows ([[row, outcome]]) to the agency's remembered decisions, by the posts' fingerprints. Never breaks an import. */
+async function rememberRows(pool, broker, payload, pairs) {
+  if (!payload?.chat_fp || !pairs.length) return;
+  const items = pairs.map(([row, outcome]) => ({ post_fp: payload.posts?.[row - 1]?.pfp, outcome })).filter((x) => x.post_fp);
+  for (let i = 0; i < items.length; i += Decisions.MAX_PER_REQUEST) await Decisions.record(pool, broker.agency_id, broker.id, payload.chat_fp, items.slice(i, i + Decisions.MAX_PER_REQUEST)).catch(() => {});
 }
 
 /**
@@ -1098,11 +1114,36 @@ async function setDiscarded(pool, broker, id, { rows = [], scope = null, on = tr
   const next = new Set(have);
   for (const n of target) (on ? next.add(n) : next.delete(n));
   const changed = [...next].filter((n) => !have.has(n)).length + [...have].filter((n) => !next.has(n)).length;
+  // The same choice is remembered for the chat (Restore forgets it), so another import of this chat starts the same way.
+  const pfpsOf = (rowsList) => rowsList.map((n) => imp.payload.posts?.[n - 1]?.pfp).filter(Boolean);
+  if (imp.payload.chat_fp) {
+    await rememberRows(pool, broker, imp.payload, [...next].filter((n) => !have.has(n)).map((n) => [n, "discarded"]));
+    const back = pfpsOf([...have].filter((n) => !next.has(n)));
+    if (back.length) await Decisions.forget(pool, broker.agency_id, imp.payload.chat_fp, back).catch(() => {});
+  }
   await pool.query(
     "UPDATE web_imports SET payload = jsonb_set(payload, '{discarded}', $2::jsonb, true) WHERE id = $1 AND agency_id = $3 AND broker_id = $4 AND status = 'ready' AND kind = 'excel'",
     [id, JSON.stringify([...next].sort((a, b) => a - b)), broker.agency_id, broker.id]
   );
   return changed;
+}
+
+/**
+ * "Forget remembered decisions for this chat": every remembered decision of the chat is removed (for the whole agency), and this plan
+ * goes back to a plain one: posts that started discarded because of a memory are restored, nothing is hidden or unticked.
+ * @returns {Promise<number|null>} decisions removed, null when the plan is not a ready chat plan
+ */
+async function forgetChatDecisions(pool, broker, id) {
+  const imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel" || imp.status !== "ready" || imp.payload?.source !== "chat") return null;
+  const removed = imp.payload.chat_fp ? await Decisions.forget(pool, broker.agency_id, imp.payload.chat_fp) : 0;
+  const was = imp.payload.remembered || {};
+  const discarded = (imp.payload.discarded || []).map(Number).filter((n) => was[n] !== "discarded");
+  await pool.query(
+    "UPDATE web_imports SET payload = jsonb_set(jsonb_set(payload, '{remembered}', '{}'::jsonb, true), '{discarded}', $2::jsonb, true) WHERE id = $1 AND agency_id = $3 AND broker_id = $4 AND status = 'ready' AND kind = 'excel'",
+    [id, JSON.stringify(discarded), broker.agency_id, broker.id]
+  );
+  return removed;
 }
 
 /** The Arabic name and map link asked for a new compound on a chat plan's row, kept in the plan until the unit is saved. */
@@ -1132,6 +1173,7 @@ module.exports = {
   escapeRegex,
   escapeLike,
   describeChanges,
+  forgetChatDecisions,
   planExcel,
   savePlan,
   loadImport,

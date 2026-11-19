@@ -8,6 +8,8 @@ const ChatListing = require("../domain/chatListing");
 const Imports = require("./imports");
 const ParseLog = require("./chatParseLog");
 const Cells = require("../domain/importEditorCells");
+const FP = require("../domain/chatFingerprint");
+const Decisions = require("./chatDecisions");
 
 const MAX_POSTS = 40;
 
@@ -21,7 +23,7 @@ async function loadPlaces(pool) {
  * @param {Array<{ sender?: string, at?: string, text: string }>} posts at most 40
  * @returns {Promise<{ id: string, posts: number, ai: number, aiBlocked: string|null, counts: object }>}
  */
-async function planChat(pool, broker, posts, { lang = "ar", filename = null } = {}) {
+async function planChat(pool, broker, posts, { lang = "ar", filename = null, chatFp = null } = {}) {
   const list = posts.slice(0, MAX_POSTS);
   const places = await loadPlaces(pool).catch(() => null);
   const logs = [];
@@ -44,17 +46,25 @@ async function planChat(pool, broker, posts, { lang = "ar", filename = null } = 
   const rows = cells.map((c, i) => ({ rowNumber: i + 1, cells: c }));
   const plan = await Imports.planExcel(pool, broker, { rows, skipped: [] }, { lang, source: "chat" });
   const columns = [...new Set(rows.flatMap((r) => Object.keys(r.cells)))];
+  // What the agency decided about these posts in an earlier import of the same chat (services/chatDecisions.js): a saved post is
+  // hidden by default, a discarded one starts discarded, an unchanged one starts unticked. Every post carries its fingerprint.
+  const fpOk = FP.isChatFp(chatFp);
+  const pfps = list.map((p) => FP.postFingerprint(p.sender || null, p.at || null, p.orig || p.text));
+  const known = fpOk ? (await Decisions.list(pool, broker.agency_id, chatFp).catch(() => ({ decisions: {} }))).decisions : {};
+  const remembered = {};
+  pfps.forEach((fp, i) => { if (known[fp]) remembered[i + 1] = known[fp].outcome; });
+  const discarded = Object.keys(remembered).filter((r) => remembered[r] === "discarded").map(Number);
   const id = await Imports.savePlan(
     pool,
     broker,
     "excel",
-    { ...plan, rows, columns, skipped: [], source: "chat", posts: list.map((p) => ({ sender: p.sender || null, at: p.at || null, text: String(p.text || '').slice(0, 4000), orig: String(p.orig || '').slice(0, 4000) })), parsed: first, photos: {}, newPlaces },
+    { ...plan, rows, columns, skipped: [], source: "chat", posts: list.map((p, i) => ({ sender: p.sender || null, at: p.at || null, text: String(p.text || '').slice(0, 4000), orig: String(p.orig || '').slice(0, 4000), pfp: pfps[i] })), chat_fp: fpOk ? chatFp : null, remembered, ...(discarded.length ? { discarded } : {}), parsed: first, photos: {}, newPlaces },
     { filename }
   );
   await ParseLog.posts(pool, broker, id, logs);
   // What each post turned out to be (new, changed, unchanged, invalid…): the browser skips the photos of units the save will not touch.
   const kinds = Object.fromEntries(plan.items.map((i) => [i.row, i.kind]));
-  return { id, posts: list.length, ai: aiCalls, aiBlocked: blocked, counts: plan.counts, kinds };
+  return { id, posts: list.length, ai: aiCalls, aiBlocked: blocked, counts: plan.counts, kinds, remembered };
 }
 
 // ---- The app's per-post plan (POST /units/chat-plan): the same planner, one post at a time, answered in the add-unit form's names.

@@ -111,6 +111,7 @@
       "sinceMs": ["v"],
       "untilMs": ["v"],
       "defaultSince": ["now"],
+      "rangeBounds": ["kind", "params"],
       "notOlder": ["since", "until"],
       "parseWithAttachments": ["text"],
       "looksLikeListing": ["text"]
@@ -1958,6 +1959,7 @@
       "escapeRegex": ["v"],
       "escapeLike": ["v"],
       "describeChanges": ["listing", "patch", "lang"],
+      "forgetChatDecisions": ["pool", "broker", "id"],
       "planExcel": ["pool", "broker", "sheet", "params"],
       "savePlan": ["pool", "broker", "kind", "payload", "params"],
       "loadImport": ["pool", "broker", "id"],
@@ -2976,6 +2978,22 @@
       "stripMarkdown": ["s"],
       "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"]
+    },
+    "domain/chatFingerprint.js": {
+      "postFingerprint": ["sender", "at", "text"],
+      "chatFingerprint": ["chatFileName", "firstHeader"],
+      "firstHeaderOf": ["text"],
+      "isChatFp": ["v"],
+      "isPostFp": ["v"],
+      "foldArabic": ["t"]
+    },
+    "services/chatDecisions.js": {
+      "list": ["pool", "agencyId", "chatFp"],
+      "record": ["pool", "agencyId", "brokerId", "chatFp", "items"],
+      "forget": ["pool", "agencyId", "chatFp", "postFps"],
+      "OUTCOMES": "Array",
+      "MAX_PER_CHAT": "Number",
+      "MAX_PER_REQUEST": "Number"
     }
   },
   "invariant_variable_names": {

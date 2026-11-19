@@ -31,6 +31,7 @@ const FILES = {
   "zipread.js": path.join(STATIC_DIR, "zipread.js"),
   "chatparse.js": path.join(__dirname, "..", "domain", "chatParse.js"),
   "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
+  "chatfingerprint.js": path.join(__dirname, "..", "domain", "chatFingerprint.js"),
   "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
   "chatreview.js": path.join(STATIC_DIR, "chatreview.js"),
   "wordfields.js": path.join(STATIC_DIR, "wordfields.js"),

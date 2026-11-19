@@ -16,6 +16,9 @@ const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
 const SheetImport = require("../../domain/sheetImport");
 const Chat = require("../../domain/chatExport");
+const ChatFp = require("../../domain/chatFingerprint");
+const ChatParse = require("../../domain/chatParse");
+const Decisions = require("../../services/chatDecisions");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
 const { uploads } = require("../uploads");
@@ -86,7 +89,13 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const chat = imp.payload.source === "chat";
   // Units the person threw away (Discard) are not shown and never saved; they are listed in one bar with a Restore.
   const gone = new Set((imp.payload.discarded || []).map(Number));
-  const items = imp.payload.items.filter((i) => !gone.has(i.row));
+  // What the agency decided about these posts in an earlier import of the same chat (services/chatDecisions.js): posts saved before are
+  // hidden unless asked for, posts discarded before start in the discarded bar, posts found unchanged before start unticked.
+  const remembered = chat ? imp.payload.remembered || {} : {};
+  const showSaved = query.show_saved === "1";
+  const savedBefore = chat && !applied ? imp.payload.items.filter((i) => remembered[i.row] === "saved" && !gone.has(i.row)).map((i) => i.row) : [];
+  const hiddenSaved = new Set(showSaved ? [] : savedBefore);
+  const items = imp.payload.items.filter((i) => !gone.has(i.row) && !hiddenSaved.has(i.row));
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
   // A chat plan is at most 40 posts: every kind on one page, so the "will save" line counts the whole plan.
   const paged = items.length > PAGED_FROM;
@@ -214,7 +223,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     const kindChip = L(lang, KIND_LABEL[i.kind][0], KIND_LABEL[i.kind][1]);
     return html`<article class="unit-card${bad ? " is-bad" : ""}" data-row="${i.row}" data-card-kind="${i.kind}">
   <header class="uc-head">
-    ${applied ? "" : bad || i.kind === "forbidden" ? html`<input type="checkbox" disabled aria-label="${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Cannot be added until the details are completed")}" title="${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Cannot be added until the details are completed")}">` : box(i, i.kind === "new" || i.kind === "changed")}
+    ${applied ? "" : bad || i.kind === "forbidden" ? html`<input type="checkbox" disabled aria-label="${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Cannot be added until the details are completed")}" title="${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Cannot be added until the details are completed")}">` : box(i, (i.kind === "new" || i.kind === "changed") && remembered[i.row] !== "unchanged")}
     <div class="uc-title"><strong>${title || L(lang, "وحدة من غير بيانات", "Unit with no details")}</strong>
       <span class="muted">${L(lang, "بوست", "Post")} ${i.row}${post.sender ? html` · ${/^[+\d\s().-]+$/.test(post.sender) ? phoneLtr(post.sender) : post.sender}` : ""}${post.at ? ` · ${post.at}` : ""}</span></div>
     <span class="chip${bad ? " bad" : ""}">${kindChip}</span>
@@ -318,13 +327,24 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
       : "";
   const ready = (counts.new || 0) + (counts.changed || 0);
   // What Save does by default: only new and changed units are ticked. Errors (and units that are not the person's) never are.
-  const readyNew = counts.new || 0;
-  const readyChanged = counts.changed || 0;
+  const earlierUnchanged = (kind) => items.filter((i) => i.kind === kind && remembered[i.row] === "unchanged").length;
+  const readyNew = (counts.new || 0) - earlierUnchanged("new");
+  const readyChanged = (counts.changed || 0) - earlierUnchanged("changed");
   const errorsN = (counts.invalid || 0) + (counts.forbidden || 0);
+  const goneEarlier = [...gone].filter((n) => remembered[n] === "discarded").length;
+  // "N already imported · Show": the posts saved by an earlier import of this chat are out of the way until asked for.
+  const savedBar =
+    chat && !applied && savedBefore.length
+      ? html`<p class="card notice row" role="status" data-saved-bar data-saved="${savedBefore.length}">✅ ${L(lang, `${savedBefore.length} بوست اتحمل قبل كده`, `${savedBefore.length} already imported`)} · <a class="chip" href="${showSaved ? `/app/import/${imp.id}` : `/app/import/${imp.id}?show_saved=1`}" data-saved-toggle>${showSaved ? L(lang, "اخفيهم", "Hide") : L(lang, "اعرضهم", "Show")}</a></p>`
+      : "";
+  const forgetBar =
+    chat && !applied && imp.payload.chat_fp
+      ? html`<form method="post" action="/app/import/${imp.id}/forget-decisions" class="row" data-forget-form><button type="submit" class="secondary small" data-forget-decisions>🧹 ${L(lang, "انسَ القرارات المحفوظة للشات ده", "Forget remembered decisions for this chat")}</button></form>`
+      : "";
   const discardedBar =
     chat && !applied && gone.size
       ? html`<form method="post" action="/app/import/${imp.id}/discard" class="card stack" data-discarded-bar><input type="hidden" name="on" value="0">
-  <div class="row"><span>🗑 ${L(lang, `${gone.size} وحدة متجاهلة`, `${gone.size} discarded`)}</span><button type="submit" name="scope" value="all" class="secondary small" data-restore-all>${L(lang, "رجّع الكل", "Restore all")}</button></div>
+  <div class="row"><span>🗑 ${L(lang, `${gone.size} وحدة متجاهلة${goneEarlier ? ` (${goneEarlier} من تحميل قبل كده)` : ""}`, `${gone.size} discarded${goneEarlier ? ` (${goneEarlier} discarded earlier)` : ""}`)}</span><button type="submit" name="scope" value="all" class="secondary small" data-restore-all>${L(lang, "رجّع الكل", "Restore all")}</button></div>
   <details><summary>${L(lang, "اعرضهم", "Show them")}</summary><ul>${[...gone].sort((a, b) => a - b).map((n) => {
     const c = (sheetRows || []).find((r) => r.rowNumber === n)?.cells || {};
     return html`<li><span class="muted">${L(lang, "بوست", "Post")} ${n} · ${[c.property_type, c.compound].filter(Boolean).join(" · ")}</span> <button type="submit" name="row" value="${n}" class="secondary small" data-restore="${n}">↩️ ${L(lang, "رجّعها", "Restore")}</button></li>`;
@@ -337,7 +357,7 @@ ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
 ${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
 ${kindNav}${tabsNav}
-${discardedBar}
+${savedBar}${discardedBar}${forgetBar}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
 <button type="submit" hidden tabindex="-1" aria-hidden="true"></button><input type="hidden" name="back" value="${href({ page })}">
 ${chat && !applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-valid>${L(lang, "اختار كل الصالح", "Select all valid")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button>${errorsN ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="errors" data-discard-errors>🗑 ${L(lang, `تجاهل الوحدات اللي فيها أخطاء (${errorsN})`, `Discard units with errors (${errorsN})`)}</button>` : ""}${counts.unchanged ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="unchanged" data-discard-unchanged>🗑 ${L(lang, `تجاهل الوحدات اللي مفيش تغيير فيها (${counts.unchanged})`, `Discard units with no changes (${counts.unchanged})`)}</button>` : ""}<span class="muted">${L(lang, "الوحدات الناقصة أو اللي فيها أخطاء أو مفيش فيها تغيير مش بتتحفظ.", "Units with errors, missing details or no changes are not saved.")}</span></p>` : ""}
@@ -442,6 +462,28 @@ ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار
 </form></div>`;
 }
 
+/**
+ * The import date range, the same options as the app: since the last import of this chat (only once the chat is known), the last 7, 30 or 90
+ * days, everything, or a custom range. The bounds come from domain/chatParse.js rangeBounds (the browser and the group form both use it).
+ * data: the box is read by chatphotos.js (data-cp-range / data-cp-since / data-cp-until), else the plain form fields range / since / until.
+ */
+function rangeControls(lang, { data = false, last = true } = {}) {
+  const sel = data ? raw("data-cp-range") : raw('name="range"');
+  const since = data ? raw("data-cp-since") : raw('name="since"');
+  const until = data ? raw("data-cp-until") : raw('name="until"');
+  return html`<fieldset class="stack" data-range><legend>${L(lang, "حمّل البوستات من", "Import posts from")}</legend>
+  <select ${sel} aria-label="${L(lang, "المدى", "Range")}">
+    ${last ? html`<option value="last"${data ? raw(" hidden disabled") : ""}>${L(lang, "من آخر تحميل", "Since last import")}</option>` : ""}
+    <option value="7">${L(lang, "آخر 7 أيام", "Last 7 days")}</option>
+    <option value="30" selected>${L(lang, "آخر 30 يوم", "Last 30 days")}</option>
+    <option value="90">${L(lang, "آخر 90 يوم", "Last 90 days")}</option>
+    <option value="all">${L(lang, "الكل", "All")}</option>
+    <option value="custom">${L(lang, "تاريخ محدد", "Custom range")}</option>
+  </select>
+  <span class="row" data-range-custom${data ? raw(" hidden") : ""}><label>${L(lang, "من", "From")}<input type="date" ${since} value="${Chat.defaultSince()}"></label><label>${L(lang, "لحد", "Until")}<input type="date" ${until}></label></span>
+  ${data ? html`<span class="muted" data-cp-last-note></span>` : ""}</fieldset>`;
+}
+
 function register(web, { pool, page, assets }) {
   const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "تحميل", "Import"), nav: "import", body }, status);
 
@@ -455,10 +497,10 @@ function register(web, { pool, page, assets }) {
     const err = (n) => (notice && tab === n ? notice : "");
     // The chat-export reader. "posts": the units are read from the posts (the WhatsApp import); "codes": photos go to units
     // already in the app by the code in the description. The date comes first; the order/gap settings sit under Advanced.
-    const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-summary-url="/app/import/match/summary" data-editor-url="/app/import/match/editor" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
+    const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-decisions-url="/app/import/decisions" data-summary-url="/app/import/match/summary" data-editor-url="/app/import/match/editor" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
   <h2>${mode === "posts" ? html`💬 ${L(lang, "تحميل وحدات من شات واتساب بالصور", "Import units from a WhatsApp chat, with photos")}` : html`📷 ${L(lang, "تطابق الصور مع وحدات موجودة", "Match photos to units already in the app")}`}</h2>
   <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيتحمل، فمفيش حد أقصى لحجمه. بنوزع كل صورة على بوستها، وإنت بتراجع وتعدّل وترتب الصور قبل أي حفظ. الفيديوهات مش بتتحمل. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its post, and you review, edit and order the photos before anything is saved. Videos are not uploaded. Only the photos you choose are saved.")}</p>
-  <label>${L(lang, "من تاريخ", "From date")}<input type="date" data-cp-since value="${Chat.defaultSince()}"></label>
+  ${rangeControls(lang, { data: true, last: mode === "posts" })}
   <input type="file" accept=".zip,.txt,application/zip,text/plain" data-cp-file>
   <input type="hidden" data-cp-mode value="${mode}">
   <details class="stack" data-cp-advanced><summary>${L(lang, "إعدادات متقدمة", "Advanced")}</summary>
@@ -475,7 +517,7 @@ function register(web, { pool, page, assets }) {
   <button type="button" data-cp-read>${L(lang, "اقرأ الملف", "Read the file")}</button>
   <div data-cp-out></div>
 </div>`;
-    const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
+    const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("chatfingerprint.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
     return html`<h1>${L(lang, "تحميل", "Import")}</h1>
 ${tabs("import_tab", [...(dataEntry ? [] : [
   [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-progress data-grid-url="/app/import/excel/grid">
@@ -493,7 +535,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     <summary>${L(lang, "من غير صور: الصق البوستات أو حمل شات (.txt)", "Without photos: paste the posts or upload a chat (.txt)")}</summary>
     <form method="post" action="/app/import/group" enctype="multipart/form-data" class="stack" data-progress>
       <input type="hidden" name="_csrf" value="${req.session.csrf}">
-      <label>${L(lang, "حمّل البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
+      ${rangeControls(lang)}
       <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
       <label>${L(lang, "أو حمل تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
       <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
@@ -505,6 +547,8 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   };
 
   web.get("/import", (req, res) => importPage(req, res, importHub(req)));
+
+
 
   web.get("/import/template.xlsx", async (_req, res) => {
     const buf = await ImportTemplate.build({
@@ -624,7 +668,11 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
-    const found = Chat.candidatePosts(text, { since: req.body.since });
+    // The range: the same options as the app. "Since last import" needs the chat's remembered decisions (its fingerprint from the file name and first message).
+    const range = String(req.body.range || (req.body.since ? "custom" : "30"));
+    const chatFp = file && ChatFp.isChatFp(ChatFp.chatFingerprint(file.originalname || "", ChatFp.firstHeaderOf(text))) ? ChatFp.chatFingerprint(file.originalname || "", ChatFp.firstHeaderOf(text)) : null;
+    const lastImportAt = range === "last" && chatFp ? (await Decisions.list(pool, broker.agency_id, chatFp)).last_import_at : null;
+    const found = Chat.candidatePosts(text, ChatParse.rangeBounds(range, { lastImportAt, since: req.body.since, until: req.body.until }));
     if (file && isZip(file.buffer)) {
       return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert" data-import-error="zip">⚠️ ${L(lang, "الـ zip بالصور بيتفتح من الجزء الأول في الصفحة (تحميل من واتساب).", "A zip with photos goes in the file box at the top of this tab.")}</p>` }), 422);
     }
@@ -679,6 +727,14 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     const out = await Imports.undoExcel(pool, req.session.broker, req.params.id);
     if (!out) return next();
     return res.redirect(303, `/app/import/${req.params.id}?undone=1#import-result`);
+  });
+
+  // The remembered decisions of a chat (the browser asks before reading the zip: "since the last import" needs the date). Same service as the app's API.
+  web.get("/import/decisions", importersOnly, async (req, res) => {
+    const fp = String(req.query.chat_fp || "");
+    if (!ChatFp.isChatFp(fp)) return res.status(400).json({ error: "bad_chat_fp" });
+    const out = await Decisions.list(pool, req.session.broker.agency_id, fp);
+    return res.set("Cache-Control", "no-store").json({ last_import_at: out.last_import_at, count: Object.keys(out.decisions).length });
   });
 
   web.get("/import/:id", async (req, res, next) => {
@@ -778,12 +834,19 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     return res.redirect(303, `/app/import/${req.params.id}`);
   });
 
+  // Forget what the agency remembered about this chat's posts (every broker, the website and the app): the plan starts plain again.
+  web.post("/import/:id/forget-decisions", importersOnly, async (req, res, next) => {
+    const n = await Imports.forgetChatDecisions(pool, req.session.broker, req.params.id);
+    if (n === null) return next();
+    return res.redirect(303, `/app/import/${req.params.id}`);
+  });
+
   web.post("/import/:id/apply", importersOnly, async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
     const imp = await Imports.loadImport(pool, broker, req.params.id);
     if (!imp || imp.kind === "leads") return next();
-    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => ["new", "changed"].includes(i.kind)).map((i) => i.row) : [].concat(req.body.rows || []);
+    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => ["new", "changed"].includes(i.kind) && !["saved", "unchanged"].includes((imp.payload.remembered || {})[i.row])).map((i) => i.row) : [].concat(req.body.rows || []);
     // Chat imports: per row the choice (merge or a new code) and the photos to keep or remove.
     const resolutions = {};
     const photoChoices = {};

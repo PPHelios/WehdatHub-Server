@@ -100,6 +100,7 @@ test("with unit codes: the zip is read in the browser, photos are placed, the tr
   for (const code of ["NH-V1", "NH-V2", "NH-V3", "NH-V4"]) await h.insertListing({ code });
   const { ctx, pg, errors, zipUploads } = await openPage();
   await pg.setInputFiles("[data-cp-file]", await makeZip());
+  await pg.selectOption("[data-cp-range]", "custom");
   await pg.fill("[data-cp-since]", "2026-01-01");
   await pg.click("[data-cp-read]");
   await pg.waitForSelector("[data-cp-unit]");
@@ -128,6 +129,7 @@ test("with unit codes: the zip is read in the browser, photos are placed, the tr
   await pg.reload({ waitUntil: "networkidle" });
   await showBox(pg, "codes");
   await pg.setInputFiles("[data-cp-file]", path.join(dir, "export.zip"));
+  await pg.selectOption("[data-cp-range]", "custom");
   await pg.fill("[data-cp-since]", "2026-01-01");
   await pg.click("[data-cp-read]");
   await pg.waitForSelector("[data-cp-unit]");
@@ -140,6 +142,7 @@ test("with unit codes: the zip is read in the browser, photos are placed, the tr
 test("with no codes: the posts and their photos become an import plan for review (parser first, photos to pick)", async () => {
   const { ctx, pg, errors } = await openPage("posts");
   await pg.setInputFiles("[data-cp-file]", path.join(dir, "export.zip"));
+  await pg.selectOption("[data-cp-range]", "custom");
   await pg.fill("[data-cp-since]", "2026-01-01");
   await pg.click("[data-cp-read]");
   await pg.waitForSelector("[data-cp-unit]");
