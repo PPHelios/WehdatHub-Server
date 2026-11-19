@@ -2611,3 +2611,13 @@ html.nav-busy main, html.nav-busy .card { opacity: .6; transition: opacity .15s;
 nav[data-kind-nav] a[aria-disabled="true"], nav[data-pager] a[aria-disabled="true"] { pointer-events: none; }
 @keyframes nav-bar { from { background-position: -40% 0; } to { background-position: 140% 0; } }
 @media (prefers-reduced-motion: reduce) { html.nav-busy::before { animation: none; background-size: 100% 100%; } }
+
+/* Edit window: the Deal block (sale / rent). Missing = a clear red card and a badge, not a heavy outline; the choice is a wide two-colour switch. */
+.ie-block > .ie-label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.ie-miss { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--bad); color: #fff; font-size: .75rem; font-weight: 700; }
+.ie-block.missing { padding: 12px 14px; outline: 0; border: 1px solid var(--bad); border-inline-start: 5px solid var(--bad); border-radius: 14px; background: var(--bad-soft); }
+.ie-seg { max-width: none; width: 100%; gap: 8px; padding: 6px; background: var(--card); border: 1px solid var(--line); }
+.ie-seg span { min-height: 52px; font-size: 1.05rem; border: 2px solid transparent; background: var(--soft); }
+.ie-seg input[value="sale"]:checked + span { background: var(--ok-soft); color: var(--ok-ink); border-color: var(--ok); box-shadow: none; }
+.ie-seg input[value="rent"]:checked + span { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); box-shadow: none; }
+.ie-block.missing .ie-seg { border-style: dashed; border-color: var(--bad); }

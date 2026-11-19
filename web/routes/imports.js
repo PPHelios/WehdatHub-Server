@@ -158,6 +158,18 @@ const SKIP_WHY = {
 /** The tabs of the file that were not read, with why: [{ name, reason }] from the browser's read and the mapping. */
 const tabsNotRead = (payload) => (Array.isArray(payload.skipped_tabs) ? payload.skipped_tabs : []);
 
+/** The inside of one unit's Edit window (the form): used in the page for chat units and sent on request for Excel rows. */
+function editDialogForm(imp, i, cells, lang, extra, { chat = false, missing = [], original = "" } = {}) {
+  return html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}" class="stack" data-unit-edit-form>
+  <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
+  <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
+  ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
+  ${chat ? original : ""}
+  ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
+  <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
+</form>`;
+}
+
 function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const { rows: sheetRows, columns, tabs: tabInfos, defaults } = imp.payload;
   const { applied, chat, gone, remembered, showSaved, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice } = viewOf(imp, query);
@@ -214,18 +226,14 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     const text = originalOf(i);
     return text ? html`<details class="ie-original" data-original="${i.row}"${open ? raw(" open") : ""}><summary>💬 ${L(lang, "الرسالة الأصلية", "Original message")}</summary><p dir="auto">${text}</p></details>` : "";
   };
+  // A chat unit's window is in the page. An Excel row's window is fetched when its button is pressed (editDialogForm below): 50 rows
+  // of windows made every tab and page change render and send half a megabyte nobody had asked for.
   const chatDialogs = structured
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => {
+        if (!chat) return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}" data-lazy="/app/import/${imp.id}/dialog/${i.row}"></dialog>`;
         const cells = cellsOf.get(i.row) || {};
         const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
-        return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}"><form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}" class="stack" data-unit-edit-form>
-  <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
-  <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
-  ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
-  ${chat ? originalBox(i, true) : ""}
-  ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
-  <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
-</form></dialog>`;
+        return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}">${editDialogForm(imp, i, cells, lang, extra, { chat, missing, original: originalBox(i, true) })}</dialog>`;
       })
     : "";
   const editForms = canEdit && !structured
@@ -319,7 +327,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const chatList = (rows) => html`<div class="uc-list">${rows.map(chatCard)}</div>`;
 
   // Fix-many-rows-at-once (and the failed-rows download) are manager tools: data entry gets the plain review.
-  const stats = !applied && sheetRows && !extra.dataEntry ? Imports.batchStats(imp.payload) : null;
+  const stats = !applied && sheetRows && !extra.dataEntry ? extra.stats || Imports.batchStats(imp.payload) : null;
   const batch =
     stats && (stats.no_type || stats.several_prices || stats.dollars || stats.unknown_types.length || stats.status_hints.length || Object.keys(stats.remembered).length)
       ? html`<section class="card stack" data-batch>
@@ -917,6 +925,22 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     return res.set("Cache-Control", "no-store").json({ last_import_at: out.last_import_at, count: Object.keys(out.decisions).length });
   });
 
+  // One Excel row's Edit window, fetched when its button is pressed (the page holds an empty shell for it).
+  web.get("/import/:id/dialog/:row", importersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
+    const row = Number(req.params.row);
+    if (!imp || imp.kind !== "excel" || imp.status !== "ready" || !imp.payload || imp.payload.source === "chat") return next();
+    const i = (imp.payload.items || []).find((x) => x.row === row);
+    const cells = ((imp.payload.rows || []).find((r) => r.rowNumber === row) || {}).cells;
+    if (!i || !cells) return next();
+    const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
+    const place = cells.compound ? await require("../../services/placeSuggest").placeChip(pool, { compound: cells.compound }, lang).catch(() => null) : null;
+    const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
+    res.set("Cache-Control", "no-store");
+    return res.type("html").send(String(editDialogForm(imp, i, cells, lang, { areas, places: new Map([[row, place]]), csrf: req.session.csrf }, { missing })));
+  });
+
   web.get("/import/:id", async (req, res, next) => {
     const lang = langOf(req);
     let imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
@@ -941,12 +965,14 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       const places = await placesOf(pool, imp, lang, req.query || {});
       return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { existing, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script>`);
     }
-    const typePlaces = imp.kind === "excel" ? await Imports.typeWordPlaces(pool, Imports.batchStats(imp.payload).unknown_types.map((u) => u.value)) : {};
+    const stats = imp.kind === "excel" ? Imports.batchStats(imp.payload) : null; // worked out once: the page reuses it
+    const typePlaces = imp.kind === "excel" ? await Imports.typeWordPlaces(pool, stats.unknown_types.map((u) => u.value)) : {};
     if (imp.kind === "excel") {
-      // Excel rows use the same Edit window as the WhatsApp import: the compound is searched in the list (suggestions, chips), not typed.
+      // Excel rows use the same Edit window as the WhatsApp import (the compound is searched in the list). The window is fetched when
+      // its button is pressed, with its own place chip, so the page itself needs no place lookups: they were one query per compound.
       const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
-      const places = await placesOf(pool, imp, lang, req.query || {});
-      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script><script src="${assets.url("wordfields.js")}"></script>`);
+      const places = new Map();
+      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, areas, places, stats, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script><script src="${assets.url("wordfields.js")}"></script>`);
     }
     return importPage(req, res, groupPage(imp, lang));
   });

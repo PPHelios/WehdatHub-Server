@@ -38,7 +38,7 @@ function importEditor({ cells = {}, areas = [], place = null, lang = "ar", missi
     ${need.has("compound") ? html`<em class="ie-miss">⚠️ ${L(lang, "ناقص: اختار الكمبوند أو المنطقة", "Missing: pick the compound or area")}</em>` : ""}
     ${unitBox(boxValues(cells), areas, lang, place, {})}</div>`)}
   ${sec("🏷️", L(lang, "الصفقة", "Deal"), html`<div class="ie-block${need.has("listing_type") ? " missing" : ""}" data-field="listing_type">
-    <span class="ie-label">${L(lang, "بيع أو إيجار", "Sale or rent")} *${need.has("listing_type") ? html` <em class="ie-miss">⚠️ ${L(lang, "ناقص", "Missing")}</em>` : ""}</span>
+    <span class="ie-label">${L(lang, "بيع أو إيجار", "Sale or rent")} *${need.has("listing_type") ? html` <em class="ie-miss">⚠️ ${L(lang, "ناقص: اختار واحد", "Missing: pick one")}</em>` : ""}</span>
     <div class="ie-seg" role="radiogroup" aria-label="${L(lang, "بيع أو إيجار", "Sale or rent")}">
       <label><input type="radio" name="c_listing_type" value="sale"${purpose === "sale" ? raw(" checked") : ""}><span>🏠 ${L(lang, "بيع", "Sale")}</span></label>
       <label><input type="radio" name="c_listing_type" value="rent"${purpose === "rent" ? raw(" checked") : ""}><span>🔑 ${L(lang, "إيجار", "Rent")}</span></label>

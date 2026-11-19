@@ -10,10 +10,29 @@
     var close = ev.target.closest && ev.target.closest("[data-edit-close]");
     if (open) {
       var dlg = document.querySelector('[data-edit-dialog="' + open.getAttribute("data-edit-open") + '"]');
-      var uform = dlg && dlg.querySelector("[data-unit-edit-form]");
-      if (uform && window.UnitBox) window.UnitBox.init(uform);
-      if (dlg && dlg.showModal) dlg.showModal();
-      else if (dlg) dlg.setAttribute("open", "");
+      var show = function () {
+        var uform = dlg && dlg.querySelector("[data-unit-edit-form]");
+        if (uform && window.UnitBox) window.UnitBox.init(uform);
+        if (dlg && dlg.showModal) dlg.showModal();
+        else if (dlg) dlg.setAttribute("open", "");
+      };
+      var lazy = dlg && dlg.getAttribute("data-lazy");
+      if (lazy && !dlg.firstElementChild) {
+        // An Excel row's window is fetched now: the button waits (turned off) until it arrives.
+        if (open.disabled) return;
+        open.disabled = true;
+        fetch(lazy, { credentials: "same-origin", headers: { Accept: "text/html" } })
+          .then(function (r) { if (!r.ok) throw new Error("dialog"); return r.text(); })
+          .then(function (htmlText) {
+            dlg.innerHTML = htmlText;
+            dlg.dispatchEvent(new CustomEvent("htmx:load", { bubbles: true }));
+            show();
+          })
+          .catch(function () { window.location.reload(); })
+          .then(function () { open.disabled = false; });
+        return;
+      }
+      show();
     } else if (close) {
       var d = close.closest("dialog");
       if (d && d.close) d.close();

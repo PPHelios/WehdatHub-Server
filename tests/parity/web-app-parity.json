@@ -33,6 +33,7 @@
  "/import": "web-only: inventory imports",
  "/import/:id": "web-only: inventory imports",
  "/import/:id/apply-status": "web-only: inventory imports",
+ "/import/:id/dialog/:row": "web-only: inventory imports",
  "/import/:id/failed.xlsx": "web-only: inventory imports",
  "/import/:id/undo": "web-only: inventory imports",
  "/import/decisions": "api:/units/chat-decisions",
