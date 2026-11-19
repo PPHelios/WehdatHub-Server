@@ -483,9 +483,15 @@
       "UNLIMITED": "Number",
       "unitLimitText": ["limit", "lang"],
       "hydrate": ["params"],
+      "periodsOf": ["plan"],
+      "priceFor": ["plan", "months"],
+      "perMonth": ["price", "months"],
+      "tierOf": ["id"],
+      "EXTRA_SEAT": "Object",
       "ALL": "Array",
       "PLANS": "Array",
       "FREE": "Object",
+      "TRIAL_PLAN": "Object",
       "BUNDLES": "Array",
       "TRIAL": "Object",
       "planById": ["id"],
@@ -696,6 +702,7 @@
       "transcribeAudio": ["audioBuffer", "mimeType", "ctx"]
     },
     "lib/aiBlock.js": {
+      "BLOCKS": "Array",
       "kindOf": ["err"],
       "resetOn": ["lang", "now"],
       "text": ["kind", "lang", "params"]
@@ -1226,6 +1233,22 @@
       "resetCache": [],
       "approved": ["pool"]
     },
+    "lib/planGuard.js": {
+      "stateOf": ["pool", "agencyId", "params"],
+      "stateFrom": ["eff"],
+      "webDecision": ["source", "method", "path"],
+      "apiDecision": ["source", "method", "path"],
+      "bannerText": ["state", "lang", "params"],
+      "bannerFor": ["state", "lang", "broker"],
+      "refusalText": ["state", "lang", "broker"],
+      "web": ["pool", "params"],
+      "api": ["pool", "params"],
+      "assertCanCreate": ["pool", "broker", "params"],
+      "botAllowsReadOnly": ["message", "canonical"],
+      "botBlockedText": ["state", "lang", "broker"],
+      "botGraceLine": ["state", "lang", "broker"],
+      "bot": ["pool", "broker", "message", "lang", "params"]
+    },
     "lib/rateLimit.js": {
       "hit": ["pool", "bucket", "params"],
       "LIMITS": "Object"
@@ -1573,7 +1596,8 @@
     "services/agencyCreate.js": {
       "createAgency": ["pool", "actor", "input", "params"],
       "cleanLogo": ["raw"],
-      "PLANS": "Array"
+      "PLANS": "Array",
+      "PILOT_DAYS": "Number"
     },
     "services/agencyLogo.js": {
       "setLogo": ["pool", "broker", "file"],
@@ -1643,6 +1667,19 @@
       "cleanupJob": []
     },
     "services/billing.js": {
+      "GRACE_EXTEND_DAYS": "Array",
+      "LADDER": "Object",
+      "LAPSED": "Array",
+      "PENDING_HOLD_MS": "Number",
+      "ladderOf": ["agency", "now"],
+      "ladderNotices": ["l"],
+      "ladderNoticeDue": ["agency", "now"],
+      "lapsedForNotices": ["db", "params"],
+      "lapsedAgencies": ["db", "params"],
+      "extendGrace": ["db", "agencyId", "days", "params"],
+      "graceAiPct": ["db"],
+      "creditState": ["db", "agency", "eff", "params"],
+      "agencyRow": ["db", "agencyId"],
       "EXTEND_DAYS": "Array",
       "trialAgencies": ["db", "params"],
       "extendTrial": ["db", "agencyId", "days", "params"],
@@ -1654,23 +1691,39 @@
       "seatAvailable": ["db", "agencyId", "params"],
       "planLimits": [],
       "unitCapacity": ["db", "agencyId", "params"],
+      "unitStatus": ["db", "agencyId", "params"],
+      "unitLevel": ["params"],
+      "UNIT_HINT_LEVELS": "Array",
       "getSetting": ["db", "key", "fallback"],
       "setSetting": ["db", "key", "value"],
       "payTo": ["db"],
       "savePayTo": ["db", "params"],
       "priceOf": ["params"],
-      "requestPayment": ["db", "manager", "input"],
+      "priceAt": ["agency", "planId", "months", "now"],
+      "planChangeError": ["agency", "eff", "planId", "months"],
+      "quoteUpgrade": ["agency", "planId", "now"],
+      "upgradeQuotes": ["agency", "now"],
+      "addExtraSeats": ["pool", "owner", "agencyId", "seats", "params"],
+      "requestPayment": ["db", "manager", "input", "params"],
       "paymentsOf": ["db", "agencyId", "params"],
+      "publicAllowance": ["a"],
+      "publicPayment": ["p"],
       "pendingPayments": ["db"],
       "confirmPayment": ["pool", "id", "params"],
       "cancelPayment": ["db", "id"],
-      "endingSoon": ["db", "params"]
+      "endingSoon": ["db", "params"],
+      "reminderDue": ["kind", "remainingMs"],
+      "REMINDER_DAYS": "Object"
     },
     "services/billingNotices.js": {
       "paymentRequested": ["payment", "agency", "manager"],
       "signupRequested": ["agency", "broker", "referrer"],
       "paymentConfirmed": ["pool", "params", "params"],
       "remindEnding": ["pool", "params"],
+      "remindLapsed": ["pool", "params"],
+      "restored": ["pool", "params", "params"],
+      "ladderText": ["id", "kind", "l", "m"],
+      "warnUnits": ["pool", "params"],
       "reminderJob": []
     },
     "services/brochure.js": {
@@ -1778,6 +1831,8 @@
       "suggest": ["db", "typed", "limit"]
     },
     "services/credits.js": {
+      "parsePrices": ["v"],
+      "pricesText": ["prices"],
       "costOf": ["action"],
       "ownerOverview": ["db"],
       "savePlans": ["db", "body"],
@@ -2113,6 +2168,10 @@
     },
     "services/ownerAgencies.js": {
       "ACTIONS": "Array",
+      "FOUNDING_MAX": "Number",
+      "foundingCount": ["db"],
+      "setFounding": ["pool", "owner", "agencyId", "on"],
+      "addExtraSeats": ["pool", "owner", "agencyId", "seats", "params"],
       "list": ["db", "params"],
       "get": ["db", "agencyId", "params"],
       "setPlan": ["db", "owner", "agencyId", "params"],
@@ -2478,6 +2537,19 @@
       "oldUnitsFor": ["pool", "viewer", "now"],
       "OLD_AFTER_DAYS": "Number"
     },
+    "services/trialSignup.js": {
+      "TOKEN_PREFIX": "String",
+      "TTL_MS": "Number",
+      "MAX_ATTEMPTS": "Number",
+      "LIMITS": "Object",
+      "isSignupToken": ["t"],
+      "claimed": ["db", "params"],
+      "start": ["pool", "input", "params"],
+      "begin": ["pool", "token", "ids", "params"],
+      "pendingFor": ["pool", "userId"],
+      "verifyContact": ["pool", "contact", "ids", "params"],
+      "purge": ["pool"]
+    },
     "services/unitChecks.js": {
       "ASK_AFTER_DAYS": "Number",
       "askStale": ["pool", "params"],
@@ -2727,7 +2799,8 @@
     },
     "web/routes/plan.js": {
       "register": ["web", "params"],
-      "sectionsFor": ["pool", "req", "extra"]
+      "sectionsFor": ["pool", "req", "extra"],
+      "unitBanner": ["units", "lang"]
     },
     "web/routes/portalEnquiries.js": {
       "register": ["web", "params"],

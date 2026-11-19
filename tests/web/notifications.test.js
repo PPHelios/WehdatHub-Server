@@ -327,3 +327,19 @@ describe("migration 122: WhatsApp is no notification channel", () => {
     expect(a.notify_policy).toEqual({ match: { lock: "owner", on: true }, assignment: { channel: "telegram" } });
   });
 });
+
+test("credit warnings (80% / 100%) reach the agency owner and the managers, each once", async () => {
+  await h.seedBroker("owner");
+  const who = ["admin", "owner"];
+  for (const w of who) expect((await brokerRow(w)).role).toMatch(/admin|owner/);
+  const ids = (await N.managersOf(h.pool, h.AGENCY_A)).map((m) => m.id);
+  expect(ids).toContain(h.BROKERS.owner.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  await N.creditWarning(h.pool, h.AGENCY_A, { level: 80, state: { used: 80, limit: 100 } });
+  await N.creditWarning(h.pool, h.AGENCY_A, { level: 80, state: { used: 81, limit: 100 } });
+  await N.creditWarning(h.pool, h.AGENCY_A, { level: 100, state: { used: 100, limit: 100 } });
+  const rows = await h.query("SELECT broker_id, dedupe_key FROM notifications WHERE dedupe_key LIKE 'credits_warn:%'");
+  const owner = rows.filter((r) => r.broker_id === h.BROKERS.owner.id).map((r) => r.dedupe_key.split(":")[2]).sort();
+  expect(owner).toEqual(["100", "80"]);
+  expect(rows.length).toBe(ids.length * 2);
+});

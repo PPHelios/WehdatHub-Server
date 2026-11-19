@@ -262,8 +262,11 @@ async function ownerDashboard(pool, broker, { weeks = 8, now = new Date(), confi
     [new Date(now.getTime() - 7 * DAY).toISOString()]
   );
   const { rows: jobs } = await pool.query("SELECT name, last_status, last_finished_at, last_error FROM crm_jobs ORDER BY name");
-  const { rows: trials } = await pool.query("SELECT id, name, agency_name, phone_e164, team_size, created_at FROM demo_requests ORDER BY created_at DESC LIMIT 20");
-  return { weeks: rows, agencies, topErrors, recentErrors, jobs, trials, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
+  const { rows: trials } = await pool.query("SELECT id, name, agency_name, phone_e164, team_size, created_at FROM demo_requests WHERE kind = 'trial' ORDER BY created_at DESC LIMIT 20");
+  const { rows: demos } = await pool.query(
+    "SELECT id, name, agency_name, phone_e164, team_size, created_at, pilot_agency_id FROM demo_requests WHERE kind = 'demo' ORDER BY created_at DESC LIMIT 30"
+  );
+  return { weeks: rows, agencies, topErrors, recentErrors, jobs, trials, demos, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
 }
 
 /** The app in one period (owner only): active agencies and brokers, new units, leads, deals, errors and reports; and the period before. */

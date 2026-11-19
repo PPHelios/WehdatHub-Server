@@ -76,7 +76,7 @@ function leaseEnds(rows, lang) {
 </section>`;
 }
 
-function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0 } = {}) {
+function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0, unitWarning = "" } = {}) {
   const kpi = (label, value, attr) => html`<div class="kpi" data-kpi="${attr}"><span class="muted small">${label}</span><strong>${value}</strong></div>`;
   const q = d.brokerId ? `&broker=${d.brokerId}` : d.teamLeadId ? `&team=${d.teamLeadId}` : "";
   const todo = [
@@ -88,6 +88,7 @@ function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0 } = {
   const maxStage = Math.max(1, ...Object.values(d.pipeline));
   const maxWeek = Math.max(1, ...(d.weekly || []));
   return html`<h1>${L(lang, "لوحة الشركة", "Agency dashboard")}</h1>
+${unitWarning}
 <form method="get" action="/app/dashboard" class="stack" data-dash-filters>
   <nav class="seg" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
     (p) => html`<a href="/app/dashboard?days=${p}${q}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
@@ -198,6 +199,7 @@ function newAgencySection(lang, csrf) {
     <label>${L(lang, "موبايل المالك", "Owner's mobile")} <input name="ownerPhone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="20"></label>
     <fieldset class="row"><legend>${L(lang, "الباقة", "Plan")}</legend>
       <label><input type="radio" name="plan" value="pilot" checked> ${L(lang, "تجريبي مجاني (Office لحد ما الـPOC يخلص)", "Pilot (free Office until the POC ends)")}</label>
+      <label><input type="radio" name="plan" value="pilot14"> ${L(lang, `تجريبي موجّه ${AgencyCreate.PILOT_DAYS} يوم (Office متعدد المستخدمين)`, `Guided ${AgencyCreate.PILOT_DAYS}-day pilot (Office, multi-seat)`)}</label>
       <label><input type="radio" name="plan" value="trial"> ${L(lang, `تجربة ${Plans.TRIAL.days} يوم`, `${Plans.TRIAL.days}-day trial`)}</label>
     </fieldset>
     <button type="submit">${L(lang, "اعمل الشركة وطلّع اللينك", "Create agency and get the link")}</button>
@@ -231,11 +233,20 @@ function billingSections(b, lang) {
       )}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
 </section>
+<section class="card" id="grace-agencies">
+  <h2>🕓 ${L(lang, "شركات انتهت باقتها (سماح / قراءة فقط / متوقفة)", "Agencies whose paid plan ended (grace / read-only / stopped)")}</h2>
+  ${(b.lapsed || []).length
+    ? html`<div class="scroll"><table><tbody>${b.lapsed.map(
+        (t) => html`<tr data-grace-agency="${t.id}" data-phase="${t.phase}"><td>${t.name}</td><td>${{ grace: L(lang, "سماح", "Grace"), readonly: L(lang, "قراءة فقط", "Read-only"), blocked: L(lang, "متوقفة", "Stopped") }[t.phase]} <span dir="ltr" class="muted">${day(t.end)} → ${day(t.graceEnd)} → ${day(t.readonlyEnd)}</span></td>
+  <td class="row">${Billing.GRACE_EXTEND_DAYS.map((n) => html`<form method="post" action="/app/owner/grace/${t.id}/extend"><input type="hidden" name="days" value="${n}"><button type="submit" class="secondary">+${n} ${L(lang, "يوم سماح", "grace days")}</button></form>`)}</td></tr>`
+      )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
+</section>
 <section class="card" id="payments">
   <h2>💳 ${L(lang, "مدفوعات مستنية التأكيد", "Payments to confirm")}</h2>
   ${b.payments.length
     ? html`<div class="scroll"><table><tbody>${b.payments.map(
-        (p) => html`<tr data-payment="${p.reference}"><td dir="ltr">${p.reference}</td><td>${p.agency_name}</td><td>${p.kind === "credit_bundle" ? L(lang, `رصيد زيادة ${Plans.bundleById(p.bundle_id)?.credits ?? ""}`, `Extra credits ${Plans.bundleById(p.bundle_id)?.credits ?? ""}`) : p.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : `${Plans.planName(Plans.planById(p.plan), lang)} × ${p.months}`}</td><td>${p.amount_egp} ${L(lang, "ج.م", "EGP")}</td><td dir="ltr">${day(p.created_at)}</td>
+        (p) => html`<tr data-payment="${p.reference}"><td dir="ltr">${p.reference}</td><td>${p.agency_name}</td><td>${p.kind === "credit_bundle" ? L(lang, `رصيد زيادة ${Plans.bundleById(p.bundle_id)?.credits ?? ""}`, `Extra credits ${Plans.bundleById(p.bundle_id)?.credits ?? ""}`) : p.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : p.kind === "upgrade" ? L(lang, `ترقية لـ ${Plans.planName(Plans.planById(p.plan), lang)}`, `Upgrade to ${Plans.planName(Plans.planById(p.plan), lang)}`) : `${Plans.planName(Plans.planById(p.plan), lang)} × ${p.months}`}</td><td>${p.amount_egp} ${L(lang, "ج.م", "EGP")}</td><td dir="ltr">${day(p.created_at)}</td>
   <td class="row"><form method="post" action="/app/owner/payments/${p.id}/confirm" data-confirm="${L(lang, `وصلك ${p.amount_egp} ج.م بالمرجع ${p.reference}؟`, `Did ${p.amount_egp} EGP with reference ${p.reference} arrive?`)}"><button type="submit">✅ ${L(lang, "وصل", "Received")}</button></form>
   <form method="post" action="/app/owner/payments/${p.id}/cancel" data-confirm="${L(lang, `تلغي الدفعة ${p.reference}؟ مش هينفع ترجع.`, `Cancel payment ${p.reference}? This can't be undone.`)}"><button type="submit" class="secondary">✖ ${L(lang, "الغِ", "Cancel")}</button></form></td></tr>`
       )}</tbody></table></div>`
@@ -373,13 +384,14 @@ function creditsSection(o, lang) {
   <h2>💳 ${L(lang, "الباقات والرصيد", "Plans and credits")}</h2>
   <p class="muted">${L(lang, "كل الأرقام هنا من قاعدة البيانات وبتتطبق على الموقع والبوت فورًا. الهامش = السعر مقابل تكلفة الرصيد كله لو اتستخدم بالكامل.", "Every number here is stored in the database and applies to the site and the bot at once. Margin = price against the cost of the whole pool if fully used.")}</p>
   <div class="scroll"><table>
-  <thead><tr><th>ID</th><th>${L(lang, "الاسم (ع)", "Name (ar)")}</th><th>${L(lang, "الاسم (إنجليزي)", "Name (en)")}</th><th>${L(lang, "السعر (ج.م/شهر)", "Price (EGP/month)")}</th><th>${L(lang, "مقاعد", "Seats")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "رصيد/شهر", "Credits/month")}</th><th>${L(lang, "التكلفة", "Cost")}</th><th>${L(lang, "الهامش", "Margin")}</th><th>${L(lang, "مفعّلة", "On")}</th></tr></thead>
+  <thead><tr><th>ID</th><th>${L(lang, "الاسم (ع)", "Name (ar)")}</th><th>${L(lang, "الاسم (إنجليزي)", "Name (en)")}</th><th>${L(lang, "السعر (ج.م/شهر)", "Price (EGP/month)")}</th><th>${L(lang, "مقاعد", "Seats")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "رصيد/شهر", "Credits/month")}</th><th>${L(lang, "الأسعار حسب المدة (شهور:سعر)", "Prices by period (months:EGP)")}</th><th>${L(lang, "التكلفة", "Cost")}</th><th>${L(lang, "الهامش", "Margin")}</th><th>${L(lang, "مفعّلة", "On")}</th></tr></thead>
   <tbody>${o.plans.map(
     (p) => html`<tr data-credit-plan="${p.id}"><td dir="ltr">${p.id}</td>
     <td><input name="p_${p.id}_name_ar" value="${p.name_ar}" maxlength="40" required></td><td><input name="p_${p.id}_name_en" value="${p.name_en}" maxlength="40" required></td>
     <td>${num(`p_${p.id}_price`, p.price_egp)}</td><td>${num(`p_${p.id}_seats`, p.seats)}</td><td>${num(`p_${p.id}_units`, p.units)}</td><td>${num(`p_${p.id}_credits`, p.credits)}</td>
+    <td>${p.id === "free" || p.id === "trial" ? "—" : html`<input name="p_${p.id}_prices" value="${Credits.pricesText(p.prices)}" size="22" dir="ltr" placeholder="1:199, 6:1075, 12:1990" data-plan-prices="${p.id}">`}</td>
     <td>${p.cost_egp}</td><td>${p.price_egp ? pct(p.margin) : "—"}</td>
-    <td>${p.id === "free" ? "✔" : html`<input type="checkbox" name="p_${p.id}_active" value="on"${p.active ? html` checked` : ""}>`}</td></tr>`
+    <td>${p.id === "free" ? "✔" : p.id === "trial" ? "—" : html`<input type="checkbox" name="p_${p.id}_active" value="on"${p.active ? html` checked` : ""}>`}</td></tr>`
   )}</tbody></table></div>
   <details><summary>➕ ${L(lang, "باقة جديدة", "Add a plan")}</summary><div class="row">
     <label>ID <input name="new_id" maxlength="20" pattern="[a-z0-9_]+" placeholder="team"></label>
@@ -389,8 +401,16 @@ function creditsSection(o, lang) {
     <label>${L(lang, "مقاعد", "Seats")} <input name="new_seats" type="number" min="1" size="4"></label>
     <label>${L(lang, "وحدات", "Units")} <input name="new_units" type="number" min="1" size="6"></label>
     <label>${L(lang, "رصيد/شهر", "Credits/month")} <input name="new_credits" type="number" min="0" size="6"></label>
+    <label>${L(lang, "الأسعار حسب المدة", "Prices by period")} <input name="new_prices" size="22" dir="ltr" placeholder="1:199, 6:1075, 12:1990"></label>
   </div></details>
+  <p class="muted">${L(lang, "الأسعار حسب المدة: شهور:سعر بفاصلة (مثال 1:199, 6:1075, 12:1990). المدة اللي مش مكتوبة مش متاحة للشراء. الباقة من غير أسعار مش بتتباع.", "Prices by period: months:price, comma separated (e.g. 1:199, 6:1075, 12:1990). A period left out is not sold; a plan with no prices cannot be bought.")}</p>
   <button type="submit">${L(lang, "احفظ الباقات", "Save plans")}</button>
+</form>
+<form method="post" action="/app/owner/grace-ai" class="card stack" id="grace-ai" data-grace-ai>
+  <h2>⏳ ${L(lang, "رصيد الذكاء الاصطناعي في فترة السماح (باقات 6 و12 شهر)", "AI credits in the grace period (6 and 12 month plans)")}</h2>
+  <p class="muted">${L(lang, "من غير تجديد شهري. الرصيد = الأكبر بين المتبقي من آخر شهر مدفوع ونسبة من رصيد شهر واحد (مش الاتنين مع بعض). الباقات الشهرية: المتبقي بس.", "No monthly refill. Credits = the greater of what is left of the last paid month and this share of one month's pool (not both). Monthly plans get only what is left.")}</p>
+  <label>${L(lang, "النسبة %", "Share %")} <input name="grace_ai_pct" type="number" min="0" max="100" value="${o.graceAiPct}" size="4" required></label>
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
 </form>
 <form method="post" action="/app/owner/credit-bundles" class="card stack" id="credit-bundles" data-credit-bundles>
   <h2>🧾 ${L(lang, "حزم الرصيد الإضافي", "Extra credit bundles")}</h2>
@@ -425,16 +445,18 @@ function creditsSection(o, lang) {
 
 /** Owner: every agency at a glance (plan in force, size, last seen), each linking to its own page. */
 function agenciesSection(agencies, lang) {
-  const src = { pilot: L(lang, "تجريبي مجاني", "Pilot"), paid: L(lang, "مدفوع", "Paid"), trial: L(lang, "تجربة", "Trial"), free: L(lang, "مجاني", "Free") };
+  const src = { pilot: L(lang, "تجريبي مجاني", "Pilot"), paid: L(lang, "مدفوع", "Paid"), trial: L(lang, "تجربة", "Trial"), free: L(lang, "مجاني", "Free"), grace: L(lang, "سماح", "Grace"), readonly: L(lang, "قراءة فقط", "Read-only"), blocked: L(lang, "متوقفة", "Stopped") };
   const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
+  const founding = agencies.filter((a) => a.founding_partner).length;
   return html`<section class="card list" id="agencies"><h2>${L(lang, `الشركات (${agencies.length})`, `Agencies (${agencies.length})`)}</h2>
+  <p class="muted small" data-founding-count="${founding}">⭐ ${L(lang, `شركاء مؤسسين: ${founding} من ${OwnerAgencies.FOUNDING_MAX}. بيتحدد من صفحة الشركة. المميزات التشغيلية (صفر رسوم تأسيس ومساعدة في نقل البيانات) بتتم يدوي، والكود بيثبّت سعر أول تجديد بس.`, `Founding Partners: ${founding} of ${OwnerAgencies.FOUNDING_MAX}. Set on the agency's page. The extras (no setup fee, migration help) are handled by hand; the code only locks the first renewal's price.`)}</p>
   <ul class="rows">${agencies.map(
     (a) => html`<li data-agency-row="${a.id}"><a class="listrow" href="/app/owner/agencies/${a.id}"><span><strong>${a.name}</strong><br><span class="muted small">${Plans.planName(a.effective.plan, lang)} · ${src[a.effective.source]}${a.effective.until ? ` ${L(lang, "لحد", "until")} ${day(a.effective.until)}` : ""} · ${L(lang, `${a.brokers} بروكر · ${a.units} وحدة · ${a.leads30} عميل/30 يوم`, `${a.brokers} brokers · ${a.units} units · ${a.leads30} leads/30d`)}</span></span>${a.suspended_at ? html`<b class="chip late">${L(lang, "موقوفة", "Suspended")}</b>` : a.approval === "pending" ? html`<b class="chip new">${L(lang, "مستنية", "Pending")}</b>` : html`<b class="muted small">${day(a.last_seen)}</b>`}</a></li>`
   )}</ul></section>`;
 }
 
 /** Owner: one agency's page with its controls. */
-function agencyControlPage(a, lang, csrf, notice) {
+function agencyControlPage(a, lang, csrf, notice, founding = { used: 0, max: OwnerAgencies.FOUNDING_MAX }) {
   const hidden = html`<input type="hidden" name="_csrf" value="${csrf}">`;
   const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
   return html`<h1>${a.name}</h1>
@@ -457,6 +479,20 @@ ${notice || ""}
   </form>
   <p class="muted small">${L(lang, "الأسعار في ملف الباقات؛ هنا بتغير باقة الشركة ومدتها بس.", "Prices live in the plans file; this only changes this agency's plan and dates.")}</p>
 </section>
+<section class="card stack" id="founding" data-founding-partner="${a.founding_partner ? "1" : "0"}"><h2>⭐ ${L(lang, "شريك مؤسس", "Founding Partner")}</h2>
+  <p class="muted">${L(lang, `أول ${founding.max} شركة بس. المستخدمين: ${founding.used} من ${founding.max}. الشريك المؤسس بيتثبّت له سعر أول تجديد؛ الباقي (صفر رسوم تأسيس، مساعدة نقل البيانات) تشغيلي بإيدك.`, `First ${founding.max} agencies only. Used: ${founding.used} of ${founding.max}. A Founding Partner keeps the price for the first renewal cycle; the rest (no setup fee, migration help) is done by hand.`)}</p>
+  <form method="post" action="/app/owner/agencies/${a.id}/founding" class="stack">${hidden}
+    ${switchField({ name: "founding", value: "1", on: a.founding_partner, lang, label: L(lang, "شريك مؤسس", "Founding Partner"), sentence: L(lang, "تثبيت سعر التجديد الأول.", "Locks the price for the first renewal cycle.") })}
+    <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
+  </form>
+</section>
+<section class="card stack" id="extra-seats" data-extra-seats="${a.extra_seats || 0}"><h2>${L(lang, "مستخدمين إضافيين (إداري)", "Extra seats (admin)")}</h2>
+  <p class="muted">${L(lang, `حاليا: ${a.extra_seats || 0} من ${Plans.EXTRA_SEAT.max}. ${Plans.EXTRA_SEAT.priceEgp} ج.م للمستخدم في الشهر، بتتحاسب مقدماً على الشهور اللي فاضلة، وكل مستخدم بيزود ${Plans.EXTRA_SEAT.credits} رصيد في الشهر. مش ظاهرة للشركة غير في الإجماليات. بتتصفر لما تبدأ فترة مدفوعة جديدة بعد الانتهاء.`, `Now: ${a.extra_seats || 0} of ${Plans.EXTRA_SEAT.max}. ${Plans.EXTRA_SEAT.priceEgp} EGP a seat a month, billed up front for the months left; each seat adds ${Plans.EXTRA_SEAT.credits} credits a month. Agencies only see it in their seat and credit totals. Reset when a new paid period starts after expiry.`)}</p>
+  <form method="post" action="/app/owner/agencies/${a.id}/extra-seats" class="row" data-confirm="${L(lang, "تسجّل دفعة مؤكدة وتزود المستخدمين؟", "Record a confirmed payment and add the seats?")}">${hidden}
+    <label>${L(lang, "عدد المستخدمين", "Seats")} <input name="seats" type="number" min="1" max="${Plans.EXTRA_SEAT.max}" required size="3"></label>
+    <button type="submit">${L(lang, "ضيف", "Add")}</button>
+  </form>
+</section>
 <section class="card list" id="team"><h2>${L(lang, "الفريق", "Team")}</h2><ul class="rows">${a.team.map((b) => html`<li class="listrow">${b.name} <span class="muted small">${b.role}</span><b class="${b.is_active ? "muted small" : "chip late"}">${b.is_active ? L(lang, "نشط", "Active") : L(lang, "مقفول", "Off")}</b></li>`)}</ul></section>
 ${a.payments.length ? html`<section class="card list"><h2>${L(lang, "المدفوعات", "Payments")}</h2><ul class="rows">${a.payments.map((p) => html`<li class="listrow"><span dir="ltr">${p.reference}</span> ${money(p.amount_egp, lang)}<b class="muted small">${p.status}</b></li>`)}</ul></section>` : ""}
 <section class="card stack" id="suspend"><h2>${a.suspended_at ? L(lang, "الشركة موقوفة", "Suspended") : L(lang, "إيقاف الشركة", "Suspend the agency")}</h2>
@@ -468,7 +504,7 @@ ${a.payments.length ? html`<section class="card list"><h2>${L(lang, "المدف�
 
 /** Owner: an announcement to every manager, and the owner's own action log. */
 function announceSection(log, lang, csrf) {
-  const label = { owner_plan: L(lang, "تغيير باقة", "Plan change"), owner_suspend: L(lang, "إيقاف", "Suspend"), owner_resume: L(lang, "رجوع", "Resume"), owner_announcement: L(lang, "إعلان", "Announcement") };
+  const label = { owner_plan: L(lang, "تغيير باقة", "Plan change"), owner_suspend: L(lang, "إيقاف", "Suspend"), owner_resume: L(lang, "رجوع", "Resume"), owner_announcement: L(lang, "إعلان", "Announcement"), owner_founding: L(lang, "شريك مؤسس", "Founding Partner"), owner_extra_seats: L(lang, "مستخدمين إضافيين", "Extra seats") };
   return html`<section class="card stack" id="announce"><h2>${L(lang, "إعلان لكل المديرين", "Announcement to every manager")}</h2>
   <form method="post" action="/app/owner/announce" class="stack" data-confirm="${L(lang, "تبعت الإعلان لكل المديرين؟", "Send this to every manager?")}"><input type="hidden" name="_csrf" value="${csrf}">
     <label>${L(lang, "العنوان", "Title")}<input name="title" required maxlength="120"></label>
@@ -480,12 +516,27 @@ function announceSection(log, lang, csrf) {
 </section>`;
 }
 
+/** Demo requests from the landing page (offices of 15+ seats): the owner can start a guided 14-day pilot from each. */
+function demosSection(demos, lang, csrf) {
+  return html`<section class="card" id="demos">
+  <h2>📅 ${L(lang, "طلبات العرض المباشر (مكاتب ١٥+)", "Demo requests (offices 15+)")}</h2>
+  ${(demos || []).length
+    ? html`<div class="scroll"><table><tbody>${demos.map(
+        (t) => html`<tr data-demo="${t.id}"><td dir="ltr">#D${t.id}</td><td>${t.name}</td><td>${t.agency_name || "—"}</td><td dir="ltr"><a href="tel:${t.phone_e164}">${t.phone_e164}</a></td><td>${t.team_size ?? "—"}</td><td dir="ltr">${new Date(t.created_at).toISOString().slice(0, 10)}</td>
+  <td>${t.pilot_agency_id
+          ? html`<a href="/app/owner/agencies/${t.pilot_agency_id}">${L(lang, "تجريبي اتعمل", "Pilot created")}</a>`
+          : html`<form method="post" action="/app/owner/demos/${t.id}/pilot" data-confirm="${L(lang, `تعمل تجريبي ${AgencyCreate.PILOT_DAYS} يوم لـ ${t.agency_name || t.name}؟`, `Create a ${AgencyCreate.PILOT_DAYS}-day pilot for ${t.agency_name || t.name}?`)}"><input type="hidden" name="_csrf" value="${csrf}"><button type="submit" class="secondary">${L(lang, `تجريبي ${AgencyCreate.PILOT_DAYS} يوم`, `${AgencyCreate.PILOT_DAYS}-day pilot`)}</button></form>`}</td></tr>`
+      )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش لسه.", "None yet.")}</p>`}
+</section>`;
+}
+
 function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "", places = { groups: [], topAreas: [], subzones: [] } } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${tabs("owner_tab", [
-  [L(lang, "الشركات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
+  [L(lang, "الشركات", "Agencies"), html`${agenciesSection(agencies, lang)}${demosSection(d.demos, lang, csrf)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
   [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${credits ? creditsSection(credits, lang) : ""}`],
   [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}`],
   [L(lang, "الأماكن", "Places"), require("../views/placeReview").placesSection(places, lang, csrf)],
@@ -535,7 +586,7 @@ function healthSections(d, lang, usd) {
     : html`<p class="muted">✅ ${L(lang, "مفيش أخطاء في آخر 7 أيام.", "No errors in the last 7 days.")}</p>`}
 </section>
 <section class="card" id="trials">
-  <h2>🤝 ${L(lang, "طلبات التجربة", "Trial requests")}</h2>
+  <h2>🤝 ${L(lang, "طلبات التجربة (القديمة)", "Trial requests (legacy form)")}</h2>
   ${d.trials.length
     ? html`<div class="scroll"><table><tbody>${d.trials.map(
         (t) => html`<tr data-trial="${t.id}"><td dir="ltr">#T${t.id}</td><td>${t.name}</td><td>${t.agency_name || "—"}</td><td dir="ltr"><a href="tel:${t.phone_e164}">${t.phone_e164}</a></td><td>${t.team_size ?? "—"}</td><td dir="ltr">${new Date(t.created_at).toISOString().slice(0, 10)}</td></tr>`
@@ -590,7 +641,8 @@ function register(web, { pool, page }) {
       team: html`${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}`,
       ai: html`${aiPeopleSection(aiPeople, lang) || html`<p class="muted">${L(lang, "مفيش استخدام.", "No AI use yet.")}</p>`}${importSection(importReport, lang)}`,
       settings: html`${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${leadScopeSection(await require("../../services/leadScope").brokersSeeAll(pool, req.session.broker.agency_id), lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}`,
-      open: req.query.privacy ? 3 : 0
+      open: req.query.privacy ? 3 : 0,
+      unitWarning: require("./plan").unitBanner(await Billing.unitStatus(pool, req.session.broker.agency_id), lang)
     })}` });
   });
 
@@ -644,9 +696,9 @@ function register(web, { pool, page }) {
     const pf = await Dash.ownerPeriod(pool, req.session.broker, per);
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
     const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("بروكرز نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
-    const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
+    const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits, lapsed] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool), Billing.lapsedAgencies(pool)]);
     const [agencies, log, places] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, lapsed, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, places, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -663,7 +715,7 @@ function register(web, { pool, page }) {
   const agencyView = async (req, res, lang, notice = null, status = 200) => {
     const a = uuidParam(req) ? await OwnerAgencies.get(pool, req.params.id) : null;
     if (!a) return notFound(req, res, page);
-    return page(req, res, { title: a.name, nav: "owner", body: agencyControlPage(a, lang, req.session.csrf, notice) }, status);
+    return page(req, res, { title: a.name, nav: "owner", body: agencyControlPage(a, lang, req.session.csrf, notice, await OwnerAgencies.foundingCount(pool)) }, status);
   };
   web.get("/owner/agencies/:id", ownerOnly((req, res, lang) => agencyView(req, res, lang)));
   web.post("/owner/agencies/:id/plan", ownerOnly(async (req, res, lang) => {
@@ -672,6 +724,23 @@ function register(web, { pool, page }) {
     if (r.error === "not_found") return notFound(req, res, page);
     if (r.error) return agencyView(req, res, lang, bad(L(lang, "راجع الباقة والتاريخ.", "Check the plan and the date.")), 422);
     return agencyView(req, res, lang, ok(L(lang, "الباقة اتحفظت.", "Plan saved.")));
+  }));
+  web.post("/owner/agencies/:id/founding", ownerOnly(async (req, res, lang) => {
+    if (!uuidParam(req)) return notFound(req, res, page);
+    const r = await OwnerAgencies.setFounding(pool, req.session.broker, req.params.id, req.body.founding === "1");
+    if (r.error === "not_found") return notFound(req, res, page);
+    if (r.error === "full") return agencyView(req, res, lang, bad(L(lang, `وصلت لـ ${r.max} شريك مؤسس. مفيش أماكن تانية.`, `All ${r.max} Founding Partner places are taken.`)), 409);
+    return agencyView(req, res, lang, ok(r.founding ? L(lang, "الشركة بقت شريك مؤسس.", "The agency is now a Founding Partner.") : L(lang, "اتشالت من الشركاء المؤسسين.", "Removed from the Founding Partners.")));
+  }));
+  web.post("/owner/agencies/:id/extra-seats", ownerOnly(async (req, res, lang) => {
+    if (!uuidParam(req)) return notFound(req, res, page);
+    const r = await OwnerAgencies.addExtraSeats(pool, req.session.broker, req.params.id, req.body.seats);
+    if (r.error === "not_found") return notFound(req, res, page);
+    if (r.error) {
+      const msg = { invalid: L(lang, `اكتب من 1 لـ ${Plans.EXTRA_SEAT.max} مستخدم.`, `Enter 1 to ${Plans.EXTRA_SEAT.max} seats.`), pilot: L(lang, "الشركة تجريبية (Pilot): مفيش مستخدمين إضافيين.", "A pilot agency can't have extra seats."), lapsed: L(lang, "الباقة خلصت (سماح / قراءة فقط / متوقفة): لازم تتجدد الأول.", "The plan has ended (grace / read-only / stopped): it must be renewed first."), not_paid: L(lang, "الشركة مش على باقة مدفوعة شغالة.", "The agency is not on a running paid plan."), limit: L(lang, `الحد الأقصى ${Plans.EXTRA_SEAT.max} مستخدمين إضافيين.`, `At most ${Plans.EXTRA_SEAT.max} extra seats in all.`), forbidden: L(lang, "مش مسموح.", "Not allowed.") }[r.error] || r.error;
+      return agencyView(req, res, lang, bad(msg), r.error === "forbidden" ? 403 : 422);
+    }
+    return agencyView(req, res, lang, ok(L(lang, `اتضاف ${r.payment.seats} مستخدم. الدفعة ${r.payment.reference}: ${r.payment.amount_egp} ج.م.`, `Added ${r.payment.seats} seat(s). Payment ${r.payment.reference}: ${r.payment.amount_egp} EGP.`)));
   }));
   web.post("/owner/agencies/:id/suspend", ownerOnly(async (req, res, lang) => {
     if (!uuidParam(req)) return notFound(req, res, page);
@@ -707,6 +776,24 @@ function register(web, { pool, page }) {
       : html`<p class="muted">${L(lang, "اللينك مش متعمل: TELEGRAM_BOT_USERNAME مش متظبط.", "No link made: TELEGRAM_BOT_USERNAME isn't set.")}</p>`;
     return ownerView(req, res, html`<section class="card notice ok" role="status" data-new-agency-done="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name} اتعملت (${r.agency.pilot ? "تجريبي" : "تجربة"}).`, `${r.agency.name} is created (${r.agency.pilot ? "pilot" : "trial"}).`)}</h2>
       <p>${L(lang, "ابعت اللينك ده للمالك بنفسك. يتفتح مرة واحدة، وبيفتح البوت؛ من البوت يفتح الموقع.", "Send this link to the owner yourself. It works once and opens the bot; from the bot the website opens.")}</p>${link}</section>`);
+  }));
+
+  // CRM owner only: a guided 14-day multi-seat pilot from a demo request (Office, paid_until = now + 14 days); the owner's start link is shown once.
+  web.post("/owner/demos/:id/pilot", ownerOnly(async (req, res, lang) => {
+    const id = idParam(req);
+    const { rows } = id ? await pool.query("SELECT id, name, agency_name, phone_e164 FROM demo_requests WHERE id = $1 AND kind = 'demo'", [id]) : { rows: [] };
+    if (!rows[0]) return ownerView(req, res, bad(L(lang, "الطلب مش موجود.", "Request not found.")), 404);
+    const dr = rows[0];
+    const r = await AgencyCreate.createAgency(pool, req.session.broker, { agency: dr.agency_name || dr.name, ownerName: dr.name, ownerPhone: dr.phone_e164, plan: "pilot14", demoId: dr.id });
+    if (r.error) {
+      const msg = { phone: L(lang, "رقم الطلب مش موبايل مصري.", "The request's number is not an Egyptian mobile."), phone_taken: L(lang, "الرقم ده مسجل بالفعل في شركة.", "That number is already registered to an agency."), demo: L(lang, "اتعمل تجريبي للطلب ده قبل كده.", "A pilot was already created for this request."), forbidden: L(lang, "مش مسموح.", "Not allowed.") }[r.error] || r.error;
+      return ownerView(req, res, bad(msg), r.error === "forbidden" ? 403 : 409);
+    }
+    const link = r.url
+      ? html`<p class="row" dir="ltr"><input readonly value="${r.url}" id="owner-start-link" aria-label="${L(lang, "لينك المالك", "Owner's link")}"> <button type="button" class="secondary" data-copy="#owner-start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>`
+      : html`<p class="muted">${L(lang, "اللينك مش متعمل: TELEGRAM_BOT_USERNAME مش متظبط.", "No link made: TELEGRAM_BOT_USERNAME isn't set.")}</p>`;
+    return ownerView(req, res, html`<section class="card notice ok" role="status" data-new-agency-done="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name}: تجريبي ${AgencyCreate.PILOT_DAYS} يوم اتعمل.`, `${r.agency.name}: ${AgencyCreate.PILOT_DAYS}-day pilot created.`)}</h2>
+      <p>${L(lang, "ابعت اللينك ده للمالك بنفسك. يتفتح مرة واحدة.", "Send this link to the owner yourself. It works once.")}</p>${link}</section>`);
   }));
 
   // The owner decides on new places: approve as a new place, link to an existing one, or reject with a reason.
@@ -746,8 +833,8 @@ function register(web, { pool, page }) {
     if (r.error) return ownerView(req, res, bad(L(lang, "الطلب مش مستني.", "That request isn't waiting.")), 400);
     const b = r.broker;
     const text = b.preferred_lang === "en"
-      ? `Hi ${b.name}! ${r.agency.name} is on WehdatHub: a ${Plans.TRIAL.days}-day free trial on the Office plan. Tap this link to start on Telegram (works once, for 7 days): ${r.url || ""}`
-      : `أهلاً ${b.name}! ${r.agency.name} اتفعّلت على WehdatHub: ${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب. دوس على اللينك ده عشان تبدأ على تيليجرام (يشتغل مرة واحدة، لمدة ٧ أيام): ${r.url || ""}`;
+      ? `Hi ${b.name}! ${r.agency.name} is on WehdatHub: a ${Plans.TRIAL.days}-day free trial (1 user, ${Plans.TRIAL.units} units, ${Plans.TRIAL.credits} AI credits). Tap this link to start on Telegram (works once, for 7 days): ${r.url || ""}`
+      : `أهلاً ${b.name}! ${r.agency.name} اتفعّلت على WehdatHub: ${Plans.TRIAL.days} يوم تجربة مجانية (مستخدم واحد، ${Plans.TRIAL.units} وحدة، ${Plans.TRIAL.credits} رصيد ذكاء اصطناعي). دوس على اللينك ده عشان تبدأ على تيليجرام (يشتغل مرة واحدة، لمدة ٧ أيام): ${r.url || ""}`;
     const wa = r.url ? Phone.waMeUrl(b.phone_number, text) : null;
     return ownerView(req, res, html`<section class="card notice ok" role="status" data-approved="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name} اتوافق عليها؛ التجربة شغالة.`, `${r.agency.name} approved; the trial has started.`)}</h2>
 ${r.url ? html`<p class="row" dir="ltr"><input readonly value="${r.url}" id="start-link" aria-label="${L(lang, "لينك البداية", "Start link")}"> <button type="button" class="secondary" data-copy="#start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>` : html`<p class="muted">${L(lang, "بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME).")}</p>`}
@@ -763,6 +850,7 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
   web.post("/owner/payments/:id/confirm", ownerOnly(async (req, res, lang) => {
     const id = idParam(req);
     const r = id ? await Billing.confirmPayment(pool, id) : { error: "not_found" };
+    if (r.error === "upgrade_stale" || r.error === "not_allowed") return ownerView(req, res, bad(L(lang, "الدفع ده مبقاش ينفع يتأكد (الباقة اتغيرت أو الفترة خلصت). الغيه أو كلّم الشركة.", "This payment can no longer be confirmed (the plan changed or the period ended). Cancel it or contact the agency.")), 409);
     if (r.error) return ownerView(req, res, bad(L(lang, "الدفع ده مش مستني.", "That payment isn't waiting.")), 400);
     await BillingNotices.paymentConfirmed(pool, r).catch((e) => console.warn("Payment notice failed:", e.message));
     return ownerView(req, res, ok(L(lang, `${r.payment.reference} اتأكد.`, `${r.payment.reference} confirmed.`)));
@@ -780,6 +868,14 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     if (r.error) return ownerView(req, res, bad(L(lang, "مينفعش تمدّد دي.", "That trial can't be extended.")), 400);
     const until = new Date(r.agency.trial_ends_at).toISOString().slice(0, 10);
     return ownerView(req, res, ok(L(lang, `تجربة ${r.agency.name} اتمدّت لحد ${until}.`, `${r.agency.name}'s trial now ends ${until}.`)));
+  }));
+
+  web.post("/owner/grace/:id/extend", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Billing.extendGrace(pool, id, req.body.days) : { error: "not_found" };
+    if (r.error) return ownerView(req, res, bad(L(lang, "مينفعش تمدّد السماح دي (لازم باقة مدفوعة انتهت).", "That grace can't be extended (it needs a paid plan that ended).")), 400);
+    const until = new Date(r.agency.grace_extra_until).toISOString().slice(0, 10);
+    return ownerView(req, res, ok(L(lang, `سماح ${r.agency.name} اتمدّد لحد ${until}.`, `${r.agency.name}'s grace now runs to ${until}.`)));
   }));
 
   web.post("/owner/referrals", ownerOnly(async (req, res, lang) => {
@@ -810,6 +906,13 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
   web.post("/owner/credit-plans", ownerOnly(async (req, res, lang) =>
     creditsDone(req, res, lang, await Credits.savePlans(pool, req.body), L(lang, "الباقات اتحفظت.", "Plans saved."), L(lang, "راجع أرقام الباقات: الاسم والسعر والمقاعد والوحدات والرصيد (ID الجديد حروف إنجليزي صغيرة وأرقام ومش مكرر).", "Check the plan numbers: names, price, seats, units, credits (a new ID is lowercase letters and digits and not already used)."))
   ));
+
+  web.post("/owner/grace-ai", ownerOnly(async (req, res, lang) => {
+    const n = /^\d{1,3}$/.test(String(req.body.grace_ai_pct || "").trim()) ? Number(req.body.grace_ai_pct) : null;
+    if (n === null || n > 100) return creditsDone(req, res, lang, { error: true }, "", L(lang, "النسبة من 0 لـ 100.", "The share is 0 to 100."));
+    await Billing.setSetting(pool, "grace_ai_pct", n);
+    return creditsDone(req, res, lang, {}, L(lang, "النسبة اتحفظت.", "Share saved."), "");
+  }));
 
   web.post("/owner/credit-bundles", ownerOnly(async (req, res, lang) =>
     creditsDone(req, res, lang, await Credits.saveBundles(pool, req.body), L(lang, "الحزم اتحفظت.", "Bundles saved."), L(lang, "راجع أرقام الحزم: الاسم والسعر والرصيد.", "Check the bundle numbers: name, price, credits."))

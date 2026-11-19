@@ -253,7 +253,7 @@ function register(web, { pool, page, assets }) {
         logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_unit_quick_fill", metadata: { why } });
         const merged = L.composeFields({ existing: base, draft: quick.draft, lang });
         const lead = why !== "ai" ? AiBlock.text(why, lang, { owner: Authz.isAgencyOwner(broker) }) : L10n(lang, "الذكاء الاصطناعي مش بيرد.", "The AI is not answering.");
-        return send(200, { ...Form.formFromUnit(merged), code: mode === "edit" ? existing.code : form.code || quick.code || "" }, { notice: `${lead} ${L10n(lang, "⚡ القراءة السريعة ملت اللي قدرت عليه: راجع كل الخانات قبل الحفظ.", "⚡ The quick reader filled what it could: check every field before saving.")}` });
+        return send(200, { ...Form.formFromUnit(merged), code: mode === "edit" ? existing.code : form.code || quick.code || "" }, { showAll: true, notice: `${lead} ${L10n(lang, "⚡ القراءة السريعة ملت اللي قدرت عليه: راجع كل الخانات قبل الحفظ.", "⚡ The quick reader filled what it could: check every field before saving.")}` });
       }
       return send(200, Form.formFromUnit({ ...base, code: form.code }), {
         error: why !== "ai"

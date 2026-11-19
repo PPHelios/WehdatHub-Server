@@ -7,6 +7,7 @@ jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
 const { createHarness, closeHarness } = require("../harness/app");
 const Credits = require("../../services/credits");
+const Plans = require("../../domain/plans");
 
 jest.setTimeout(90000);
 
@@ -30,13 +31,33 @@ describe("AI credit pool (053)", () => {
     expect(byId.free).toMatchObject({ price_egp: 0, units: 50, credits: 80 });
   });
 
-  test("seeds the three extra bundles", async () => {
+  test("the explicit price table per plan and period, and the trial row (migration 128)", async () => {
+    const byId = Object.fromEntries((await Credits.plans(h.pool)).map((p) => [p.id, p]));
+    expect(byId.solo.prices).toEqual({ 1: 199, 6: 1075, 12: 1990 });
+    expect(byId.team.prices).toEqual({ 1: 599, 6: 3235, 12: 5990 });
+    expect(byId.office.prices).toEqual({ 1: 1790, 6: 9666, 12: 17900 });
+    expect(byId.agency.prices).toEqual({ 6: 16146, 12: 29900 });
+    expect(byId.enterprise.prices).toEqual({ 6: 29900, 12: 53900 });
+    expect(byId.trial).toMatchObject({ price_egp: 0, seats: 1, units: 50, credits: 80, active: false, prices: {} });
+    // Hydrated into domain/plans.js: the seed copy and the database agree; trial and enterprise are not sold.
+    await Credits.refresh(h.pool);
+    for (const id of ["solo", "team", "office", "agency"]) expect(Plans.planById(id).prices).toEqual(byId[id].prices);
+    expect(Plans.PLANS.map((p) => p.id)).toEqual(["solo", "team", "office", "agency"]);
+    expect(Plans.planById("trial")).toMatchObject({ seats: 1, units: 50, credits: 80 });
+    expect(Plans.planById("enterprise")).toBeNull();
+    expect(Plans.periodsOf(Plans.planById("agency"))).toEqual([6, 12]);
+  });
+
+  test("seeds the four extra bundles (migration 128)", async () => {
     const list = (await Credits.bundles(h.pool)).map((b) => [b.credits, b.price_egp]);
     expect(list).toEqual([
-      [200, 79],
-      [500, 175],
-      [1000, 349]
+      [200, 99],
+      [500, 229],
+      [1000, 399],
+      [2500, 899]
     ]);
+    expect((await Credits.bundles(h.pool)).find((b) => b.credits === 2500)).toMatchObject({ id: "agency", name_en: "Agency Pack", name_ar: "باقة الشركات" });
+    expect(Plans.BUNDLES.map((b) => [b.credits, b.priceEgp])).toEqual([[200, 99], [500, 229], [1000, 399], [2500, 899]]);
   });
 
   test("prices each action in credits and reads 0 for an unknown action", async () => {
@@ -117,7 +138,7 @@ describe("bundle validity and big reads", () => {
     const agency = h.AGENCY_A;
     await h.query("UPDATE agencies SET pilot = false, plan = 'solo', paid_until = '2027-12-31' WHERE id = $1", [agency]);
     const at = new Date("2026-10-26T10:00:00Z");
-    await h.query("INSERT INTO payments (agency_id, kind, plan, months, amount_egp, reference, status, bundle_id, confirmed_at) VALUES ($1, 'credit_bundle', NULL, 1, 349, 'WH-T1', 'confirmed', 'large', $2)", [agency, at.toISOString()]);
+    await h.query("INSERT INTO payments (agency_id, kind, plan, months, amount_egp, reference, status, bundle_id, confirmed_at) VALUES ($1, 'credit_bundle', NULL, 1, 399, 'WH-T1', 'confirmed', 'large', $2)", [agency, at.toISOString()]);
     const bundleCredits = (await Credits.bundles(h.pool)).find((b) => b.id === "large").credits;
     // 100 text requests above the plan's 400 in the purchase month.
     for (let i = 0; i < 500; i++) await h.query("INSERT INTO operation_logs (agency_id, operation_type, status, model_used, created_at) VALUES ($1, 'listing_extraction', 'success', 'm', $2)", [agency, new Date("2026-10-27T10:00:00Z").toISOString()]);
