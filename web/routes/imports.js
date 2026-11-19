@@ -355,13 +355,13 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
       <label data-word-val="finishing">${L(lang, "التشطيب", "Finishing")}<select name="v_finishing">${Imports.FINISHING_KEYS.map((k) => html`<option value="${k}"${val("finishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FINISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
       <label data-word-val="furnishing">${L(lang, "الفرش", "Furnishing")}<select name="v_furnishing">${Imports.FURNISHING_KEYS.map((k) => html`<option value="${k}"${val("furnishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FURNISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
       <label data-word-val="features">${L(lang, "الميزة", "Feature")}<input name="v_features" value="${val("features") || u.value}" maxlength="120"></label>
-      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></div></form>`;
+      <button>${L(lang, "طبّق", "Apply")}</button></div></form>`;
     })}</div>`
     : ""}
   ${stats.status_hints.length
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="status_words"><input type="hidden" name="action" value="status_words">
     <p>${L(lang, `ملاحظات ${stats.status_hints.reduce((n, h) => n + h.count, 0)} صف بتقول إن الوحدة اتأجرت أو اتباعت أو مش متاحة (${stats.status_hints.map((h) => `${h.count} ${h.status === "sold" ? "اتأجرت/اتباعت" : "مش متاحة"}`).join("، ")}). نسجلهم بالحالة دي؟`, `${stats.status_hints.reduce((n, h) => n + h.count, 0)} rows say in their notes the unit is rented, sold or not available (${stats.status_hints.map((h) => `${h.count} ${h.status === "sold" ? "rented or sold" : "not available"}`).join(", ")}). Save them with that status?`)}</p>
-    <div class="row"><button name="value" value="yes" class="secondary">${L(lang, "أيوه، سجلهم بالحالة", "Yes, save them with that status")}</button><button name="value" value="no" class="secondary">${L(lang, "لا، سيبهم متاحين", "No, leave them available")}</button></div>
+    <div class="row"><button name="value" value="yes">${L(lang, "أيوه، سجلهم بالحالة", "Yes, save them with that status")}</button><button name="value" value="no" class="secondary">${L(lang, "لا، سيبهم متاحين", "No, leave them available")}</button></div>
     <p class="muted"${stats.remembered.status_words !== undefined ? raw(' data-remembered="status"') : ""}>${stats.remembered.status_words !== undefined ? L(lang, `المرة اللي فاتت اخترت: ${stats.remembered.status_words ? "أيوه" : "لا"}. بنسألك كل مرة.`, `Last time you chose: ${stats.remembered.status_words ? "yes" : "no"}. We still ask each time.`) : L(lang, "إجابتك بتتحفظ كاقتراح للمرة الجاية.", "Your answer is kept as a suggestion for the next upload.")}</p></form>`
     : ""}
   ${Object.keys(stats.remembered).length
