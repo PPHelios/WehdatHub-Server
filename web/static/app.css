@@ -631,7 +631,7 @@ body:has(input.pick:checked) .bulkbar { display: flex; }
 .stageform .lost-reason { display: none; }
 .stageform:has(input[value="lost"]:checked) .lost-reason { display: grid; }
 .ltabs .tab-bar { scrollbar-width: none; }
-.ltabs #lt-next:checked ~ [data-tab="lt-next"], .ltabs #lt-req:checked ~ [data-tab="lt-req"], .ltabs #lt-hist:checked ~ [data-tab="lt-hist"], .ltabs #lt-more:checked ~ [data-tab="lt-more"] { display: block; }
+.ltabs #lt-next:checked ~ [data-tab="lt-next"], .ltabs #lt-req:checked ~ [data-tab="lt-req"], .ltabs #lt-hist:checked ~ [data-tab="lt-hist"], .ltabs #lt-more:checked ~ [data-tab="lt-more"] { display: grid; }
 .ltabs #lt-next:checked ~ .tab-bar label[for="lt-next"], .ltabs #lt-req:checked ~ .tab-bar label[for="lt-req"], .ltabs #lt-hist:checked ~ .tab-bar label[for="lt-hist"], .ltabs #lt-more:checked ~ .tab-bar label[for="lt-more"] { background: var(--card); color: var(--brand-ink); box-shadow: 0 1px 3px rgba(10, 17, 31, 0.12); }
 
 /* Dashboard: 2-up numbers, weekly bars, funnel, leaderboard rows */
@@ -1254,7 +1254,7 @@ label:has(> [data-area-list]) { position: relative; }
 .actions3 .btn, .actions3 button { width: 100%; min-height: 48px; margin: 0; justify-content: center; }
 .ltabs .tab-bar { display: flex; gap: 6px; padding: 4px; border-radius: var(--radius-btn); background: var(--soft); overflow-x: auto; }
 .ltabs .tab-bar label { flex: 1 0 auto; text-align: center; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.ltabs .tab-panel { display: grid; gap: 12px; margin-top: 12px; }
+.ltabs .tab-panel { gap: 12px; margin-top: 12px; }
 .ltabs .tab-panel > .card { margin: 0; }
 .ltabs form.grid, .ltabs form.stack { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-btn); background: var(--soft); }
 .ltabs form.grid > button { grid-column: 1 / -1; }
