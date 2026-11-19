@@ -24,7 +24,7 @@ Written from the NCH "RENT - All compounds" workbook (29 tabs, 3,751 rows, 26 vi
 | No code | Rows without a code | If the tab's own codes follow a pattern (`NH-9`, `VR12`; three or more, a clear majority) the next number in that pattern is used, past the agency's highest with the same letters; otherwise the app makes a code when the unit is created | A note on the row; `(auto)` without a pattern |
 | A code that breaks the tab's pattern | `XX99` among `VR-1…` | Kept as written | A note, not an error |
 | Type with a typo | `apatment`, `penthous`, `twon house` | Auto-fixed | Nothing |
-| Type word the app does not know | `triplex`, `sky loft`, `mazonette` | **Batch** per word: pick a type once | A row per word with its count |
+| Type word the app does not know | `triplex`, `sky loft`, `mezzanine` | **Batch** per word: pick a type once | A row per word with its count |
 | Type column holds something else | `hyde park` in the type column | Flagged | Reason and the edit form |
 | Compound spelled differently from the agency's own | `UPtown` vs `UPtown cairo` | Auto-fixed to the agency's spelling | A note on the row |
 | Missing price, area or rooms | An owner's phone and nothing else (about 900 of the 3,720 NCH rows) | Flagged | The edit form opens on exactly the missing fields (sale or rent as a choice) |

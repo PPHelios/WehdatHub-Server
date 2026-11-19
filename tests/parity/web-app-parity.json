@@ -104,6 +104,7 @@
  "/units/:code/share-media": "app-only: the phone's share sheet",
  "/units/new": "api:/units",
  "/units/save-status": "api:/units/save-status",
+ "/units/owner-lookup": "api:/units/owner-lookup",
  "/usage": "api:/usage",
  "/usage/ai": "api:/usage",
  "/v/:token": "web-only: public client page",

@@ -44,7 +44,7 @@ function importEditor({ cells = {}, areas = [], place = null, lang = "ar", missi
     </div></div>
     <div class="ie-grid">
       ${select("property_type", L(lang, "النوع", "Type"), Rules.PROPERTY_TYPES.map((t) => [t, pick(Describe.TYPE_LABELS[t], lang)]), { star: true })}
-      ${input("price_value", purpose === "rent" ? L(lang, "الإيجار", "Rent") : L(lang, "السعر", "Price"), { star: true, extra: ` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}
+      ${input("price_value", purpose === "rent" ? L(lang, "الإيجار", "Rent") : L(lang, "السعر", "Price"), { star: true, extra: ` inputmode="decimal" data-money placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}
     </div>`)}
   ${sec("📐", L(lang, "المساحة والغرف", "Size and rooms"), html`<div class="ie-grid">
     ${input("area_value", L(lang, "المساحة م² (المباني للفيلات)", "Area m² (BUA for villas)"), { star: true, type: "number", extra: ' min="0" step="any"' })}

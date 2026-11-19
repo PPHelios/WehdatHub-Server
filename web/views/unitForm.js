@@ -28,8 +28,8 @@ function ruleAttrs(rule) {
 function input(name, label, value, { type = "text", dir = null, extra = "", rule = null } = {}) {
   return html`<label${req(label)}${ruleAttrs(rule)}>${label}<input name="${name}" type="${type}" value="${value}"${dir ? html` dir="${dir}"` : ""}${raw(extra)}></label>`;
 }
-function select(name, label, value, options, { rule = null } = {}) {
-  return html`<label${req(label)}${ruleAttrs(rule)}>${label}<select name="${name}">${options.map(([v, t]) => html`<option value="${v}"${sel(String(value) === String(v))}>${t}</option>`)}</select></label>`;
+function select(name, label, value, options, { rule = null, extra = "" } = {}) {
+  return html`<label${req(label)}${ruleAttrs(rule)}>${label}<select name="${name}"${raw(extra)}>${options.map(([v, t]) => html`<option value="${v}"${sel(String(value) === String(v))}>${t}</option>`)}</select></label>`;
 }
 
 const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Describe.frequencyLabel(f, lang)])];
@@ -157,7 +157,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   </section>
 
   <section class="card uf-card" data-step="2" id="uf-2">${head(2, steps[1])}<div class="grid">
-    ${input("price_value", L(lang, v.listing_type === "rent" ? "الإيجار الشهري *" : "السعر *", v.listing_type === "rent" ? "Monthly rent *" : "Price *"), v.price_value, { extra: html` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}" data-label-sale="${L(lang, "السعر *", "Price *")}" data-label-rent="${L(lang, "الإيجار الشهري *", "Monthly rent *")}"` })}
+    ${input("price_value", L(lang, v.listing_type === "rent" ? "الإيجار الشهري *" : "السعر *", v.listing_type === "rent" ? "Monthly rent *" : "Price *"), v.price_value, { extra: html` inputmode="decimal" data-money placeholder="${L(lang, "8.5 مليون", "8.5M")}" data-label-sale="${L(lang, "السعر *", "Price *")}" data-label-rent="${L(lang, "الإيجار الشهري *", "Monthly rent *")}"` })}
     ${select("currency", L(lang, "العملة", "Currency"), v.currency, [["", "EGP"], ["USD", "USD"], ["EUR", "EUR"]])}
     ${select("rent_period", L(lang, "الإيجار", "Rent period"), v.rent_period, [["", "—"], ["monthly", L(lang, "شهري", "Monthly")], ["yearly", L(lang, "سنوي", "Yearly")]], { rule: { showIf: "listing_type=rent" } })}
     ${input("area_value", L(lang, "المساحة م² * (المباني للفيلات)", "Area m² * (BUA for villas)"), v.area_value, { type: "number", extra: ' min="0" step="any"' })}
@@ -165,7 +165,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("bathrooms", L(lang, "الحمامات", "Bathrooms"), v.bathrooms, { type: "number", extra: ' min="0"' })}
     ${input("floor_level", L(lang, "الدور (0 = أرضي)", "Floor (0 = ground)"), v.floor_level, { type: "number", rule: { types: Rules.FIELD_TYPES.floor_level } })}
     ${select("finishing", L(lang, "التشطيب", "Finishing"), v.finishing, [["", "—"], ...Object.entries(Describe.FINISHING_LABELS).map(([k, p]) => [k, pick(p, lang)])])}
-    ${select("furnishing", L(lang, "الفرش", "Furnishing"), v.furnishing, [["", "—"], ["furnished", L(lang, "مفروشة", "Furnished")], ["semi_furnished", L(lang, "نصف فرش", "Semi-furnished")], ["unfurnished", L(lang, "بدون فرش", "Unfurnished")], ["kitchen_and_ac", L(lang, "مطبخ وتكييف", "Kitchen and AC")], ["ac_only", L(lang, "تكييف بس", "AC only")], ["kitchen_only", L(lang, "مطبخ بس", "Kitchen only")]])}
+    ${select("furnishing", L(lang, "الفرش", "Furnishing"), v.furnishing, [["", "—"], ["furnished", L(lang, "مفروشة", "Furnished")], ["semi_furnished", L(lang, "نصف فرش", "Semi-furnished")], ["unfurnished", L(lang, "بدون فرش", "Unfurnished")], ["kitchen_and_ac", L(lang, "مطبخ وتكييف", "Kitchen and AC")], ["ac_only", L(lang, "تكييف بس", "AC only")], ["kitchen_only", L(lang, "مطبخ بس", "Kitchen only")]], { extra: html` data-feature-sync data-kitchen-label="${Features.featureLabel("kitchen_installed", lang)}" data-ac-label="${Features.featureLabel("ac_installed", lang)}"` })}
     ${input("land_area", L(lang, "مساحة الأرض م²", "Land area m²"), v.land_area, { type: "number", extra: ' min="0" step="any"', rule: { types: Rules.FIELD_TYPES.land_area } })}
     ${input("garden_area", L(lang, "الجنينة م²", "Garden m²"), v.garden_area, { type: "number", extra: html` min="0" step="any" data-feature-label="${Features.featureLabel("private_garden", lang)}"`, rule: { types: Rules.FIELD_TYPES.garden_area } })}
     ${input("roof_area", L(lang, "الروف م²", "Roof m²"), v.roof_area, { type: "number", extra: html` min="0" step="any" data-feature-label="${Features.featureLabel("roof", lang)}"`, rule: { types: Rules.FIELD_TYPES.roof_area } })}
@@ -183,16 +183,16 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <div class="tab-bar" role="tablist"><label for="pay-tab-resale" role="tab">${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</label><label for="pay-tab-primary" role="tab">${L(lang, "برايمري", "Primary")}</label></div>` : ""}
     <div class="${isPrimary ? "tab-panel panel-resale" : ""}" role="tabpanel">
       <div class="grid">
-      ${input("down_payment_value", L(lang, "المدفوع (الكاش المطلوب)", "Paid (cash required)"), v.down_payment_value, { extra: ' inputmode="decimal"' })}
-      ${input("remaining_amount", L(lang, "المتبقي أقساط", "Remaining installments"), v.remaining_amount, { extra: ' inputmode="decimal"' })}
-      ${input("installment_value", L(lang, "قيمة القسط", "Installment amount"), v.installment_value, { extra: ' inputmode="decimal"' })}
+      ${input("down_payment_value", L(lang, "المدفوع (الكاش المطلوب)", "Paid (cash required)"), v.down_payment_value, { extra: ' inputmode="decimal" data-money' })}
+      ${input("remaining_amount", L(lang, "المتبقي أقساط", "Remaining installments"), v.remaining_amount, { extra: ' inputmode="decimal" data-money' })}
+      ${input("installment_value", L(lang, "قيمة القسط", "Installment amount"), v.installment_value, { extra: ' inputmode="decimal" data-money' })}
       ${select("payment_frequency", L(lang, "دورية القسط", "Frequency"), v.payment_frequency, freqOptions(lang))}
       ${input("installments_end", L(lang, "آخر قسط", "Last installment"), v.installments_end, { type: "month" })}
       </div>
     </div>
     ${isPrimary ? html`<div class="tab-panel panel-primary" role="tabpanel">
       <div class="grid">
-      ${input("cash_price", L(lang, "سعر الكاش", "Cash price"), v.cash_price, { extra: ' inputmode="decimal"' })}
+      ${input("cash_price", L(lang, "سعر الكاش", "Cash price"), v.cash_price, { extra: ' inputmode="decimal" data-money' })}
       ${input("maintenance_pct", L(lang, "الصيانة %", "Maintenance %"), v.maintenance_pct, { type: "number", extra: ' min="0" step="any"' })}
       ${input("maintenance_terms", L(lang, "شروط الصيانة", "Maintenance terms"), v.maintenance_terms)}
       ${input("project", L(lang, "المشروع", "Project"), v.project)}

@@ -254,6 +254,23 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
   const compoundCheck = new Map(); // compound key → { unknown, near } (one lookup per distinct name)
   const items = [];
   const sheetNew = [];
+  // Earlier new rows of this sheet, kept by type and bedrooms (what sameUnit checks first): a 3,000-row sheet compared
+  // every row with every earlier one took minutes on the small server. Numbers are checked before the text compare.
+  const newByKind = new Map();
+  const kindKey = (l) => `${l.listing_type || "sale"}|${l.bedrooms ?? -1}`;
+  const rememberNew = (item) => {
+    sheetNew.push(item);
+    const k = kindKey(item.fields || {});
+    if (!newByKind.has(k)) newByKind.set(k, []);
+    newByKind.get(k).push(item);
+  };
+  const twinOf = (l) => {
+    if (!Dup.comparable(l)) return undefined;
+    const a = Number(l.area_value);
+    const p = Number(l.price_value);
+    const nearBy = (x, y) => Math.abs(x - y) <= y * Dup.TOLERANCE;
+    return (newByKind.get(kindKey(l)) || []).find((o) => nearBy(a, Number(o.fields.area_value)) && nearBy(p, Number(o.fields.price_value)) && Dup.sameUnit(l, o.fields));
+  };
   // Rows that had text but no known column are shown with their reason, never dropped.
   for (const s of sheet.skipped || []) items.push({ row: s.rowNumber, tab: s.tab || null, sheet_row: s.sheetRow || null, code: null, kind: "invalid", reasons: [lang === "en" ? "No value in a known column" : "مفيش قيمة في عمود معروف"], needs: [], notes: [] });
 
@@ -388,17 +405,17 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
             existing_line: stripLine(Describe.compactLine({ ...ex }, lang)),
             merge: { listing_id: ex.id, version: ex.version, code: ex.code, patch: patchM, before: Object.fromEntries(Object.keys(patchM).map((k) => [k, ex[k] === undefined ? null : ex[k]])), changes: describeChanges(ex, patchM, lang) }
           };
-          sheetNew.push(item);
+          rememberNew(item);
           items.push(item);
           continue;
         }
       }
       if (!dup) {
-        const twin = sheetNew.find((o) => Dup.sameUnit(ev.listing, o.fields));
+        const twin = twinOf(ev.listing);
         if (twin) warnings.push(NOTE.dupRow(twin.row, lang));
       }
       const item = { ...base, kind: "new", fields: ev.listing, warnings, ...(unknownCompound ? { unknown_compound: true } : {}) };
-      sheetNew.push(item);
+      rememberNew(item);
       items.push(item);
     }
   }
@@ -1035,7 +1052,7 @@ function suggestWordField(word, place = null) {
   if (fur) return { field: "furnishing", payload: fur };
   return { field: "notes", payload: "" };
 }
-const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "commercial", "land", "roof"];
+const TYPE_KEYS = ["apartment", "duplex", "penthouse", "chalet", "studio", "villa", "townhouse", "triplex", "triplex_roof", "sky_loft", "basement", "i_villa", "twin_villa", "maisonette", "office", "shop", "clinic", "commercial", "land", "roof"];
 
 /**
  * Which of the unknown type-column words are approved places (the source list: compounds, areas), so the review offers

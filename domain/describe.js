@@ -24,10 +24,9 @@ const TYPE_LABELS = {
   triplex_roof: ["تريبلكس روف", "Triplex with roof"],
   sky_loft: ["سكاي لوفت", "Sky loft"],
   basement: ["بدروم", "Basement"],
-  mazonette: ["مازونيت", "Mazonette"],
   i_villa: ["آي فيلا", "I Villa"],
   twin_villa: ["توين فيلا", "Twin villa"],
-  maisonette: ["ميزونيت", "Maisonette"],
+  maisonette: ["مازونيت", "Maisonette"],
   roof: ["روف", "Roof unit"]
 };
 

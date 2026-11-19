@@ -232,8 +232,49 @@
       });
     });
 
+    function removeFeature(key) {
+      var c = chips.querySelector('[data-ubox-chip="feature"][data-key="' + key + '"]');
+      if (!c) return;
+      c.remove();
+      changed();
+    }
+
+    // The fitted kitchen and ACs features and the Furnishing field are one fact: a change in either shows in the other.
+    // kitchen + AC = "kitchen and AC", AC only, kitchen only; "furnished" and "semi-furnished" already mean more, so they stay.
+    var furn = form.querySelector("select[data-feature-sync]");
+    if (furn) {
+      var KITCHEN = "kitchen_installed", AC = "ac_installed";
+      var HALF = { kitchen_and_ac: [1, 1], ac_only: [0, 1], kitchen_only: [1, 0] };
+      var busy = false;
+      var prev = furn.value;
+      var sync = function (fn) { if (busy) return; busy = true; try { fn(); } finally { busy = false; prev = furn.value; } };
+      var setFurn = function (v) { if (furn.value !== v) { furn.value = v; furn.dispatchEvent(new Event("change", { bubbles: true })); } };
+      // Features changed: the field follows (only while it is empty, unfurnished or one of the three kitchen/AC statuses).
+      new MutationObserver(function () {
+        sync(function () {
+          var k = hasFeature(KITCHEN), a = hasFeature(AC), cur = furn.value;
+          if (cur === "furnished" || cur === "semi_furnished") return;
+          var next = k && a ? "kitchen_and_ac" : a ? "ac_only" : k ? "kitchen_only" : HALF[cur] ? "" : cur;
+          setFurn(next);
+        });
+      }).observe(chips, { childList: true });
+      // The field changed: the two features follow.
+      furn.addEventListener("change", function () {
+        sync(function () {
+          var v = furn.value, want = HALF[v];
+          if (want) {
+            if (want[0]) addFeature(KITCHEN, furn.getAttribute("data-kitchen-label")); else removeFeature(KITCHEN);
+            if (want[1]) addFeature(AC, furn.getAttribute("data-ac-label")); else removeFeature(AC);
+          } else if (v === "unfurnished" || (v === "" && HALF[prev])) {
+            removeFeature(KITCHEN);
+            removeFeature(AC);
+          }
+        });
+      });
+    }
+
     // Other scripts on the page (the project form's reader) set the box's chips through these.
-    box.uboxApi = { pickPlace: pickPlace, addFeature: addFeature, hasPlace: function () { return Boolean(placeChip()); } };
+    box.uboxApi = { pickPlace: pickPlace, addFeature: addFeature, removeFeature: removeFeature, hasPlace: function () { return Boolean(placeChip()); } };
 
     input.addEventListener("input", function () {
       var q = input.value.trim();

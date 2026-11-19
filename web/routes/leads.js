@@ -408,11 +408,13 @@ ${tab === "portal" ? portalHtml : rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
-<form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة البروكر", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة البروكر", "Now: the broker's language")}</span>`}</form>
 ${flagBox(lead, broker, await Leads.openRequestsOn(pool, broker, lead.id), lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
+<details class="card lead-extra"><summary>⚙️ ${L(lang, "خيارات تانية", "More options")}</summary>
+<form method="post" action="${path}/lang" class="row" data-lang-switch>${hidden}<span class="muted small">🌐 ${L(lang, "لغة الرسائل للعميل", "Language of messages to the client")}</span>${["ar", "en"].map((code) => html`<button type="submit" name="lang" value="${code}" class="${lead.lang === code ? "btn small" : "secondary small"}" aria-pressed="${lead.lang === code ? "true" : "false"}">${code === "en" ? L(lang, "إنجليزي", "English") : L(lang, "عربي", "Arabic")}</button>`)}${lead.lang ? html`<button type="submit" name="lang" value="" class="link small">${L(lang, "استخدم لغة البروكر", "Use the broker's language")}</button>` : html`<span class="muted small">${L(lang, "دلوقتي: لغة البروكر", "Now: the broker's language")}</span>`}</form>
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليه VIP", "Make VIP")}</button>${lead.is_private ? html`<span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
+</details>
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
   <form method="post" action="${path}/draft" class="row">${hidden}<button type="submit" class="secondary" data-ai="follow_up">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button>${tip(templatesFor(clientLangOf(lead, lang)).draft, lang)}</form>
   <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">${icon("deal", 20)} ${L(lang, "سجل صفقة", "Record deal")}</a></div>
@@ -430,6 +432,9 @@ ${draft
     <label class="lost-reason">${L(lang, "سبب الضياع", "Why lost")}<input name="lost_reason" maxlength="200" placeholder="${L(lang, "سبب الضياع (لو ضاع)", "Why lost (if lost)")}" value="${lead.lost_reason || ""}"></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form>
+</section>
+<section class="card" id="note"><h2>📝 ${L(lang, "تحديث للعميل", "Add update")}</h2>
+  <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "سجّل التحديث", "Save update")}</button></form>
 </section>
 <div class="tabs ltabs">
   <input type="radio" name="lead_tab" id="lt-next" class="tab-radio" checked>
@@ -478,9 +483,6 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
 ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length ? "" : html`<p class="card muted">${L(lang, "العميل ده مش بيدور على وحدة.", "This client isn't looking for a unit.")}</p>`}
   </div>
   <div class="tab-panel" data-tab="lt-hist">
-<section class="card" id="note"><h2>📝 ${L(lang, "تحديث للعميل", "Add update")}</h2>
-  <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "سجّل التحديث", "Save update")}</button></form>
-</section>
 ${tl ? V.timelineList(tl.rows, lang, { more: tl.more, lead }) : ""}
   </div>
   <div class="tab-panel" data-tab="lt-more">

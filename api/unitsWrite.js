@@ -218,6 +218,14 @@ function register(api, { pool }) {
     return res.json(plan);
   });
 
+  // The owner's phone is already one of this broker's clients: the app fills the owner's name and the lead code (nothing is saved).
+  api.get("/units/owner-lookup", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const found = await require("../services/leads").findByPhone(pool, req.session.broker, String(req.query.phone || "").slice(0, 30));
+    const lead = found && found.lead;
+    return res.json(lead ? { found: true, ref: require("../domain/leadCard").refLabel(lead.ref), name: lead.name || "" } : { found: false });
+  });
+
   // What is still missing, warnings, and a duplicate, without saving.
   api.post("/units/review", async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });

@@ -12,7 +12,7 @@ const { TYPE_TERMS } = require("../../domain/vocabulary");
 const Gallery = require("../../domain/gallery");
 const Q = require("../../domain/searchQuery");
 
-const NEW_TYPES = ["triplex", "triplex_roof", "sky_loft", "basement", "mazonette"];
+const NEW_TYPES = ["triplex", "triplex_roof", "sky_loft", "basement"];
 
 describe("recognition by name", () => {
   test.each([
@@ -26,8 +26,14 @@ describe("recognition by name", () => {
     ["sky loft", "sky_loft"],
     ["basement", "basement"],
     ["بدروم", "basement"],
-    ["mazonette", "mazonette"],
-    ["مازونيت", "mazonette"],
+    ["mazonette", "maisonette"],
+    ["mazonet", "maisonette"],
+    ["mizonette", "maisonette"],
+    ["mizonett", "maisonette"],
+    ["maisonette", "maisonette"],
+    ["مازونيت", "maisonette"],
+    ["ميزونيت", "maisonette"],
+    ["مزونيت", "maisonette"],
     ["ground with garden", "apartment"],
     ["Ground Floor with Garden", "apartment"],
   ])("%s is %s", (text, key) => {
@@ -37,7 +43,7 @@ describe("recognition by name", () => {
   test("a typo of a new type is still that type", () => {
     expect(SheetImport.propertyType("triplx")).toBe("triplex");
     expect(SheetImport.propertyType("basment")).toBe("basement");
-    expect(SheetImport.propertyType("mazonete")).toBe("mazonette");
+    expect(SheetImport.propertyType("mazonete")).toBe("maisonette");
   });
 
   test("the existing types are unchanged", () => {
@@ -153,10 +159,10 @@ describe("the type lists", () => {
     expect(UnitCode.format("NH", "triplex", 4)).toBe("NH-X4");
     expect(UnitCode.format("NH", "sky_loft", 5)).toBe("NH-K5");
     expect(UnitCode.format("NH", "basement", 6)).toBe("NH-B6");
-    expect(UnitCode.format("NH", "mazonette", 7)).toBe("NH-M7");
+    expect(UnitCode.format("NH", "maisonette", 7)).toBe("NH-N7");
   });
 
-  test("field groups: triplex, triplex with roof, sky loft, basement and mazonette are apartment-like", () => {
+  test("field groups: triplex, triplex with roof, sky loft, and basement are apartment-like", () => {
     for (const key of NEW_TYPES) expect(Rules.unitKind(key)).toBe("apartment");
     expect(Rules.unitKind("villa")).toBe("villa");
     for (const k of ["i_villa", "twin_villa", "maisonette"]) expect(Rules.unitKind(k)).toBe("villa");

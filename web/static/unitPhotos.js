@@ -173,7 +173,8 @@
     if (hint) hint.hidden = tray.items.length < 2;
     sync();
     // The review (and Save) must look at the photos as they are now.
-    tray.form.dispatchEvent(new CustomEvent("photos:changed"));
+    var only = Boolean(tray.reorder); tray.reorder = false;
+    tray.form.dispatchEvent(new CustomEvent("photos:changed", { detail: { reorder: only } }));
   }
 
   // Every photo that is going to be saved is reduced in the browser first, to what the server used to do: longest side
@@ -419,6 +420,7 @@
         tray.items = order.map(function (i) { return tray.items[i]; });
         var manual = tray.form.querySelector("[data-photo-manual]");
         if (manual) manual.checked = true;
+        tray.reorder = true; // the order alone never changes what blocks Save: the review is not run again
         render();
       });
       list.addEventListener("click", function (e) {
