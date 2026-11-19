@@ -2937,6 +2937,9 @@
       "boxValues": ["cells"],
       "MANAGED": "Array"
     },
+    "web/views/phoneHelp.js": {
+      "phoneHelp": ["lang"]
+    },
     "web/views/leads.js": {
       "leadRow": ["lead", "lang", "params"],
       "leadForm": ["params"],
