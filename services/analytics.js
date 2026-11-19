@@ -34,6 +34,7 @@ async function setEnabled(pool, owner, agencyId, on) {
   if (!isPlatformOwner(owner)) return { error: "forbidden" };
   const { rows } = await pool.query("UPDATE agencies SET analytics_enabled = $2, updated_at = now() WHERE id = $1 RETURNING analytics_enabled", [agencyId, Boolean(on)]);
   if (!rows[0]) return { error: "not_found" };
+  require("../lib/workspace").forget(agencyId); // the menu reads the flag from the cached workspace state
   logOperation(pool, { agency_id: agencyId, broker_id: owner.id, operation_type: "owner_analytics", status: "success", metadata: { enabled: rows[0].analytics_enabled } });
   return { ok: true, enabled: rows[0].analytics_enabled };
 }
