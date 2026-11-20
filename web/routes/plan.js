@@ -223,7 +223,7 @@ function register(web, { pool, page }) {
       const msg = (r.error === "lapsed" && upgrade ? UPGRADE_LAPSED : ERRORS[r.error] || ERRORS.plan)[lang === "en" ? 1 : 0];
       return render(req, res, { notice: html`<p class="card notice bad" role="alert" data-plan-error="${r.error}">❌ ${msg}</p>` }, r.error === "forbidden" ? 403 : 400);
     }
-    BillingNotices.paymentRequested(r.payment, r.agency, broker);
+    BillingNotices.paymentRequested(r.payment, r.agency, broker, pool);
     return render(req, res, { created: r.payment });
   });
 }

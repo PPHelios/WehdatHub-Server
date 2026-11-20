@@ -334,18 +334,25 @@ async function sendBriefs(pool, { now = new Date(), agencyId = null, ...opts } =
   const budget = budgetFor(opts);
   let sent = 0;
   let empty = 0;
+  let errors = 0;
   for (const broker of brokers) {
-    const data = await briefData(pool, broker, now);
-    data.ops = await opsFor(pool, broker, now);
-    const m = briefMessage(broker, data);
-    if (!m) {
-      empty++;
-      continue;
+    // One person's failure (their data, their row) never stops the others; they are tried again on the next pass.
+    try {
+      const data = await briefData(pool, broker, now);
+      data.ops = await opsFor(pool, broker, now);
+      const m = briefMessage(broker, data);
+      if (!m) {
+        empty++;
+        continue;
+      }
+      const r = await paced(pool, broker, { kind: "daily_brief", dedupeKey: key, ...m, now }, budget);
+      if (r && !r.duplicate) sent++;
+    } catch (err) {
+      errors++;
+      console.warn("Daily brief failed for one person:", err.message);
     }
-    const r = await paced(pool, broker, { kind: "daily_brief", dedupeKey: key, ...m, now }, budget);
-    if (r && !r.duplicate) sent++;
   }
-  return { sent, empty, skipped: false, pending: budget.left > 0 };
+  return { sent, empty, errors, skipped: false, pending: budget.left > 0 || errors > 0 };
 }
 
 /**
@@ -372,21 +379,32 @@ async function sendDigests(pool, { now = new Date(), agencyId = null, ...opts } 
   const byTeam = new Map();
   const budget = budgetFor(opts);
   let sent = 0;
+  let errors = 0;
   for (const m of managers) {
-    if (!byAgency.has(m.agency_id)) byAgency.set(m.agency_id, await digestData(pool, m.agency_id, now));
-    const msg = digestMessage(m, byAgency.get(m.agency_id));
-    if (!msg) continue;
-    const r = await paced(pool, m, { kind: "daily_digest", dedupeKey: key, ...msg, now }, budget);
-    if (r && !r.duplicate) sent++;
+    try {
+      if (!byAgency.has(m.agency_id)) byAgency.set(m.agency_id, await digestData(pool, m.agency_id, now));
+      const msg = digestMessage(m, byAgency.get(m.agency_id));
+      if (!msg) continue;
+      const r = await paced(pool, m, { kind: "daily_digest", dedupeKey: key, ...msg, now }, budget);
+      if (r && !r.duplicate) sent++;
+    } catch (err) {
+      errors++;
+      console.warn("Daily digest failed for one person:", err.message);
+    }
   }
   for (const t of teamLeads) {
-    if (!byTeam.has(t.id)) byTeam.set(t.id, await digestData(pool, t.agency_id, now, t.id));
-    const msg = digestMessage(t, byTeam.get(t.id));
-    if (!msg) continue;
-    const r = await paced(pool, t, { kind: "daily_digest", dedupeKey: key, ...msg, now }, budget);
-    if (r && !r.duplicate) sent++;
+    try {
+      if (!byTeam.has(t.id)) byTeam.set(t.id, await digestData(pool, t.agency_id, now, t.id));
+      const msg = digestMessage(t, byTeam.get(t.id));
+      if (!msg) continue;
+      const r = await paced(pool, t, { kind: "daily_digest", dedupeKey: key, ...msg, now }, budget);
+      if (r && !r.duplicate) sent++;
+    } catch (err) {
+      errors++;
+      console.warn("Daily digest failed for one person:", err.message);
+    }
   }
-  return { sent, skipped: false, pending: budget.left > 0 };
+  return { sent, errors, skipped: false, pending: budget.left > 0 || errors > 0 };
 }
 
 /** The scheduler job entry (lib/jobs.js): every 5 minutes; each pass is cheap outside the windows. */
@@ -399,12 +417,12 @@ const digestJob = () => ({
     const counts = {};
     if (watermark.brief !== date) {
       const b = await sendBriefs(pool, { now });
-      Object.assign(counts, { briefs: b.sent, empty_briefs: b.empty, briefs_pending: b.pending ? 1 : 0 });
+      Object.assign(counts, { briefs: b.sent, empty_briefs: b.empty, briefs_pending: b.pending ? 1 : 0, brief_errors: b.errors });
       if (!b.skipped && !b.pending) out.brief = date;
     }
     if (watermark.digest !== date) {
       const d = await sendDigests(pool, { now });
-      Object.assign(counts, { digests: d.sent, digests_pending: d.pending ? 1 : 0 });
+      Object.assign(counts, { digests: d.sent, digests_pending: d.pending ? 1 : 0, digest_errors: d.errors });
       if (!d.skipped && !d.pending) out.digest = date;
     }
     return { counts, watermark: out };

@@ -88,9 +88,19 @@ async function pins(pool, broker, query = {}) {
     else unmapped += r.n;
   }
   const byId = new Map(places.map((p) => [p.id, p]));
-  const out = [...counts.entries()]
-    .map(([id, n]) => ({ id, n, name: byId.get(id).name_en || byId.get(id).name_ar, name_ar: byId.get(id).name_ar, name_en: byId.get(id).name_en, developer: byId.get(id).developer, district: byId.get(id).district, lat: byId.get(id).lat, lng: byId.get(id).lng, terms: termsFor(byId.get(id), aliasRows) }))
-    .sort((a, b) => b.n - a.n);
+  // A unit with a phase (Madinaty B6) and no compound of its own is drawn at the phase's pin when it has one; with a compound it stays on the compound's pin.
+  const phasePins = (
+    await pool.query(
+      `SELECT a.id, a.name_en, a.name_ar, a.lat, a.lng, count(*)::int AS n
+         FROM listings l JOIN areas a ON a.id = l.subzone_id AND a.place_type = 'phase' AND a.lat IS NOT NULL
+        WHERE ${FILTER_SQL} AND ${Vis.units("l")} AND coalesce(btrim(l.compound), '') = '' AND coalesce(btrim(l.compound_en), '') = ''
+        GROUP BY a.id, a.name_en, a.name_ar, a.lat, a.lng`,
+      args(broker.agency_id, f)
+    )
+  ).rows.map((r) => ({ id: r.id, n: r.n, name: r.name_en || r.name_ar, name_ar: r.name_ar, name_en: r.name_en, developer: null, district: null, lat: r.lat, lng: r.lng, terms: "", phase: true }));
+  unmapped -= phasePins.reduce((s, r) => s + r.n, 0);
+  const out = [...phasePins, ...[...counts.entries()]
+    .map(([id, n]) => ({ id, n, name: byId.get(id).name_en || byId.get(id).name_ar, name_ar: byId.get(id).name_ar, name_en: byId.get(id).name_en, developer: byId.get(id).developer, district: byId.get(id).district, lat: byId.get(id).lat, lng: byId.get(id).lng, terms: termsFor(byId.get(id), aliasRows) }))].sort((a, b) => b.n - a.n);
   // Approved places with a position but no visible units under the filters: not drawn, but found by the search box.
   const idle = places
     .filter((p) => p.approved && p.lat != null && !counts.has(p.id))
@@ -130,6 +140,19 @@ async function facets(pool, broker, query = {}) {
 /** Visible units of one place (the drawer), newest first. */
 async function unitsAt(pool, broker, placeId, query = {}, limit = 40) {
   const f = cleanFilters(query);
+  // A phase pin (see pins): the units filed under the phase with no compound of their own.
+  if ((await phasePlace(pool, placeId))) {
+    return (
+      await pool.query(
+        `SELECT l.id, l.code, l.title, l.property_type, l.listing_type, l.bedrooms, l.bathrooms, l.area_value, l.price_value, l.price_display, l.compound, l.compound_en,
+                (SELECT li.url FROM listing_images li WHERE li.listing_id = l.id AND li.agency_id = l.agency_id ORDER BY li.position LIMIT 1) AS photo
+           FROM listings l
+          WHERE ${FILTER_SQL} AND ${Vis.units("l")} AND l.subzone_id = $10 AND coalesce(btrim(l.compound), '') = '' AND coalesce(btrim(l.compound_en), '') = ''
+          ORDER BY l.created_at DESC LIMIT ${Math.min(Math.max(1, limit), 100)}`,
+        [...args(broker.agency_id, f), placeId]
+      )
+    ).rows;
+  }
   const { index } = await allPlaces(pool);
   const names = await pool.query(
     `SELECT l.compound, l.compound_en FROM listings l WHERE ${FILTER_SQL} AND ${Vis.units("l")} GROUP BY l.compound, l.compound_en`,
@@ -166,11 +189,18 @@ async function findByName(pool, text) {
   return like.rows.length === 1 ? like.rows[0].id : null;
 }
 
-/** One place by id (the drawer title). */
+/** A phase (areas row) by id, shaped like a place for the drawer; null when the id is not a phase. */
+async function phasePlace(pool, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return null;
+  const { rows } = await pool.query("SELECT id, name_en, name_ar, lat, lng FROM areas WHERE id = $1 AND place_type = 'phase'", [id]);
+  return rows[0] || null;
+}
+
+/** One place by id (the drawer title); a phase pin's id gives the phase. */
 async function place(pool, id) {
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ""))) return null;
   const { rows } = await pool.query("SELECT * FROM map_places WHERE id = $1", [id]);
-  return rows[0] || null;
+  return rows[0] || (await phasePlace(pool, id));
 }
 
 // ---- The CRM owner's window ------------------------------------------------

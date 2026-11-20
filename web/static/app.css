@@ -1136,6 +1136,11 @@ input, select, textarea { min-height: 46px; border-color: var(--line-strong); }
 .ubox .ubox-opt.ubox-act strong { color: var(--brand-ink); font-weight: 700; }
 .ubox-context { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 0.9rem; }
 .ubox-context .ic { color: var(--ok); }
+.ubox-phases { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ubox-phases[hidden] { display: none; }
+.ubox-phases-label { color: var(--muted); font-size: 0.9rem; }
+.chip-phase { cursor: pointer; border: 1px solid var(--line, var(--accent)); background: var(--card); color: inherit; min-height: 36px; }
+.chip-phase[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ubox-warn { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 0.9rem; }
 .ubox-new { display: grid; gap: 10px; margin: 0; padding: 14px; border: 1px solid var(--accent); border-radius: var(--radius-btn); background: var(--card); }
 .ubox-new legend { padding-inline: 6px; font-weight: 700; }
@@ -1475,6 +1480,12 @@ form.card.row { align-items: flex-end; }
 form.card.row > label:has(select, input:not([type=checkbox], [type=radio])) { display: flex; flex-direction: column; gap: 4px; }
 form.card.row > label select, form.card.row > label input:not([type=checkbox], [type=radio]) { min-height: var(--btn-md); margin: 0; box-sizing: border-box; }
 form.card.row > button, form.card.row > .btn { min-height: var(--btn-md); }
+
+/* Failures page: severity badge. */
+.sev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
+.sev-high { background: #fde2e1; color: #9b1c1c; }
+.sev-medium { background: #fdf0d2; color: #8a5a00; }
+.sev-low { background: var(--soft); color: var(--ink); }
 
 /* Button rows (kind, period, pager): one even gap between rows and under the last one. */
 nav.row { margin-block: 0 12px; }

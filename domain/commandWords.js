@@ -49,7 +49,7 @@ const COMMANDS = [
   { id: "links", group: "leads", ar: ["روابط"], en: ["links"], help: ["الروابط اللي اتبعتت للعملاء: اتفتحت ولا لأ، ولينك الصفحة الكاملة", "Links sent to clients: opened or not, and the full page link"] },
   { id: "followups", group: "leads", ar: ["متابعات"], en: ["followups"], help: ["متابعاتك", "Your follow-ups"] },
   { id: "request", group: "leads", ar: ["طلب"], en: ["request"], arg: "L-0042 …", help: ["احفظ اللي العميل عايزه وتتبلغ لما تنزل وحدة تناسبه", "Save what the client wants; you hear when a unit fits"] },
-  { id: "assign", group: "leads", ar: ["حول"], en: ["assign"], arg: "L-0042 لـ سارة", argEn: "L-0042 to Sara", manager: true, help: ["حوّل عميل لبروكر", "Hand a lead to a broker"] },
+  { id: "assign", group: "leads", ar: ["حول"], en: ["assign"], arg: "L-0042 لـ سارة", argEn: "L-0042 to Sara", manager: true, feature: "assignLeads", help: ["حوّل عميل لبروكر", "Hand a lead to a broker"] },
   { id: "lead_ref", group: "leads", ar: [], en: [], example: "L-0042", help: ["رقم العميل لوحده: كارت العميل", "The lead ref alone: the lead's card"] },
   { id: "phone", group: "leads", ar: [], en: [], example: "01012345678", help: ["رقم تليفون لوحده: مين بيتصل؟", "A phone number alone: who is calling?"] },
   { id: "portal_enquiry", group: "leads", ar: [], en: [], manager: true, example: "Bayut", help: ["استفسار من Bayut أو Dubizzle أو Nawy: الصق الرسالة الجاية من البوابة، وبعدين ابعت الرقم والوسيط", "A Bayut, Dubizzle or Nawy enquiry: paste the portal's message, then send the phone and the broker"] },
@@ -130,12 +130,13 @@ function grouped() {
   return Object.entries(GROUPS).map(([id, title]) => ({ id, title, commands: COMMANDS.filter((c) => c.group === id) }));
 }
 
-/** The bot's help reply. */
-function helpText(lang = "ar") {
+/** The bot's help reply. `ws` (lib/workspace.js) hides the commands whose feature the workspace does not get; none → every command. */
+function helpText(lang = "ar", ws = null) {
+  const shown = (c) => !(c.feature && ws && !require("./segments").allows(ws, c.feature));
   const i = lang === "en" ? 1 : 0;
   const head = lang === "en" ? "*📖 Commands* (Arabic in any spelling; English in any case)" : "*📖 الأوامر* (العربي بأي طريقة كتابة؛ أ/ا، ة/ه، ى/ي زي بعض)";
   const mgr = lang === "en" ? " (managers)" : " (للمديرين)";
-  return [head, ...grouped().map((g) => [`\n*${g.title[i]}*`, ...g.commands.map((c) => `• ${usage(c, lang)} ${lang === "en" ? "→" : "←"} ${c.help[i]}${c.manager ? mgr : ""}`)].join("\n"))].join("\n");
+  return [head, ...grouped().map((g) => [`\n*${g.title[i]}*`, ...g.commands.filter(shown).map((c) => `• ${usage(c, lang)} ${lang === "en" ? "→" : "←"} ${c.help[i]}${c.manager ? mgr : ""}`)].join("\n"))].join("\n");
 }
 
 /** docs/commands.md (tests keep the file in step with COMMANDS). */

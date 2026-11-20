@@ -74,3 +74,32 @@ test("a role change and a deactivation take effect at once, on the website and t
   expect((await app("/units")).status).toBe(401);
   await h.query("UPDATE brokers SET is_active = true WHERE id = $1", [id]);
 });
+
+test("below the agency tier a locked page is refused on the website and the app (403 plan_feature); a pilot keeps every page", async () => {
+  const request = require("supertest");
+  const WebAuth = require("../../lib/webAuth");
+  const aid = h.BROKERS.colleague.agency_id;
+  const forget = () => { require("../../lib/planGuard").forget(aid); require("../../lib/workspace").forgetAll(); };
+  const { agent } = await as("owner");
+  const owner = h.BROKERS.owner || h.BROKERS.colleague;
+  const code = await WebAuth.issueLoginCode(h.pool, { id: owner.id, agency_id: owner.agency_id });
+  const token = (await request(h.app.app).post("/api/v1/auth/code/verify").send({ phone: owner.phone, code })).body.token;
+  const api = (p) => request(h.app.app).get(`/api/v1${p}`).set("Authorization", `Bearer ${token}`);
+  try {
+    expect((await agent.get("/app/sources").redirects(0)).status).toBe(200); // pilot: unchanged
+    await h.query("UPDATE agencies SET pilot = false, plan = 'team', paid_until = now() + interval '30 days' WHERE id = $1", [aid]);
+    forget();
+    const res = await agent.get("/app/sources").redirects(0);
+    expect(res.status).toBe(403);
+    expect(res.text).toContain("data-plan-feature");
+    expect((await agent.get("/app/leads").redirects(0)).status).toBe(200);
+    const r = await api("/sources");
+    expect(r.status).toBe(403);
+    expect(r.body).toMatchObject({ error: "plan_feature" });
+    expect(r.body.message).toBeTruthy();
+  } finally {
+    await h.query("UPDATE agencies SET pilot = true WHERE id = $1", [aid]);
+    forget();
+  }
+  expect((await agent.get("/app/sources").redirects(0)).status).toBe(200);
+});

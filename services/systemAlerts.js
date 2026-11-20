@@ -24,11 +24,14 @@ function limits() {
     aiDailyUsd: num("SYSTEM_ALERT_AI_DAILY_USD", 5),
     failedSignIns: num("SYSTEM_ALERT_FAILED_SIGNINS", 10),
     exportsPerDay: num("SYSTEM_ALERT_EXPORTS_PER_DAY", 3),
+    deliveryFailures: num("SYSTEM_ALERT_DELIVERY_FAILURES", 5), // at least this many failed sends in 3 hours …
+    deliveryFailPct: num("SYSTEM_ALERT_DELIVERY_FAIL_PCT", 20), // … and this share of the sends tried
+    digestJobIdleMin: num("SYSTEM_ALERT_DIGEST_JOB_IDLE_MIN", 20), // the 5-minute brief and digest job silent for this long (08:00 to 22:00)
     cooldownHours: num("SYSTEM_ALERT_COOLDOWN_HOURS", 6)
   };
 }
 
-/** The alerts that are due now: [{ key, title, body }] (key is stable per condition, so a cooldown can dedupe it). */
+/** The alerts that are due now: [{ key, category, title, body, once? }] (key is stable per condition, so a cooldown can dedupe it; once = never repeat the same key). */
 async function due(pool, { now = new Date() } = {}) {
   const lim = limits();
   const out = [];
@@ -45,6 +48,7 @@ async function due(pool, { now = new Date() } = {}) {
   if (e.last_hour >= lim.errorsPerHour && e.last_hour >= lim.errorMultiple * avg) {
     out.push({
       key: "errors",
+      category: "errors",
       title: `🚨 ${e.last_hour} errors in the last hour (usually ${Math.round(avg * 10) / 10} an hour)`,
       body: "Open the board's Operations tab."
     });
@@ -57,7 +61,7 @@ async function due(pool, { now = new Date() } = {}) {
     [since(HOUR)]
   )).rows;
   if (a.calls >= lim.aiMinCalls && (100 * a.failed) / a.calls >= lim.aiFailPct) {
-    out.push({ key: "ai_failures", title: `🤖 ${a.failed} of ${a.calls} AI calls failed in the last hour`, body: "Open the board's AI tab." });
+    out.push({ key: "ai_failures", category: "ai", title: `🤖 ${a.failed} of ${a.calls} AI calls failed in the last hour`, body: "Open the board's AI tab." });
   }
 
   // 3. An agency near the end of its monthly credits.
@@ -67,7 +71,7 @@ async function due(pool, { now = new Date() } = {}) {
     if (!(total > 0)) continue;
     const used = await Credits.usedThisMonth(pool, ag.id, { now });
     const pct = Math.round((100 * used) / total);
-    if (pct >= lim.quotaPct) out.push({ key: `quota:${ag.id}`, title: `📈 ${ag.name} has used ${pct}% of this month's credits`, body: `${used} of ${total}.` });
+    if (pct >= lim.quotaPct) out.push({ key: `quota:${ag.id}`, category: "credits", title: `📈 ${ag.name} has used ${pct}% of this month's credits`, body: `${used} of ${total}.` });
   }
 
   // 4. A payment waiting for too long.
@@ -76,41 +80,92 @@ async function due(pool, { now = new Date() } = {}) {
       WHERE p.status = 'pending' AND p.created_at < $1 ORDER BY p.created_at LIMIT 10`,
     [since(lim.paymentHours * HOUR)]
   );
-  for (const p of pay) out.push({ key: `payment:${p.id}`, title: `💳 A payment from ${p.name} has waited over ${lim.paymentHours} hours`, body: "Confirm or cancel it on the board." });
+  for (const p of pay) out.push({ key: `payment:${p.id}`, category: "payments", title: `💳 A payment from ${p.name} has waited over ${lim.paymentHours} hours`, body: "Confirm or cancel it on the board." });
 
   // 5. The AI bill for the last 24 hours (estimated from the logged tokens) is over the daily limit.
   const [spend] = (await pool.query("SELECT COALESCE(sum(estimated_cost_usd), 0)::float AS usd FROM operation_logs WHERE created_at >= $1 AND model_used IS NOT NULL", [since(24 * HOUR)])).rows;
   if (spend.usd >= lim.aiDailyUsd) {
-    out.push({ key: `ai_spend:${now.toISOString().slice(0, 10)}`, title: `💸 AI spend is about $${spend.usd.toFixed(2)} in the last 24 hours (limit $${lim.aiDailyUsd})`, body: "Open the board's AI tab." });
+    out.push({ key: `ai_spend:${now.toISOString().slice(0, 10)}`, category: "ai", title: `💸 AI spend is about $${spend.usd.toFixed(2)} in the last 24 hours (limit $${lim.aiDailyUsd})`, body: "Open the board's AI tab." });
   }
 
   // 5b. The weekly storage check found files nothing points to (a dry run unless deleting is switched on).
-  const [store] = (await pool.query("SELECT watermark FROM crm_jobs WHERE name = 'storage_check'")).rows;
+  // Once per weekly run: the key carries that run's finish time, and "once" skips the cooldown window in run().
+  const [store] = (await pool.query("SELECT watermark, last_finished_at FROM crm_jobs WHERE name = 'storage_check'")).rows;
+  const storeRun = store?.last_finished_at ? new Date(store.last_finished_at).toISOString() : "0";
   if (store?.watermark?.orphans > 0 && store.watermark.dry_run) {
-    out.push({ key: "storage_orphans", title: `🗑️ ${store.watermark.orphans} unused photo files (${Math.round(store.watermark.bytes / 1048576)} MB) found in storage`, body: "Deletion is OFF (dry run only). Set STORAGE_CLEANUP_DELETE to true on Render to remove them." });
+    out.push({ key: `storage_orphans:${storeRun}`, category: "storage", once: true, title: `🗑️ ${store.watermark.orphans} unused photo files (${Math.round(store.watermark.bytes / 1048576)} MB) found in storage`, body: "Deletion is OFF (dry run only). Set STORAGE_CLEANUP_DELETE to true on Render to remove them." });
   } else if (store?.watermark?.orphans > 0) {
     const left = store.watermark.orphans - (store.watermark.deleted || 0);
-    out.push({ key: "storage_deleted", title: `🗑️ Deleted ${store.watermark.deleted || 0} unused photo files from storage this week`, body: left > 0 ? `${left} more are still unused and will be removed in the next run.` : "No unused photo files are left." });
+    out.push({ key: `storage_deleted:${storeRun}`, category: "storage", once: true, title: `🗑️ Deleted ${store.watermark.deleted || 0} unused photo files from storage this week`, body: left > 0 ? `${left} more are still unused and will be removed in the next run.` : "No unused photo files are left." });
   }
 
   // 6. Unusual activity from the audit log: many failed sign-ins in an hour, or one person exporting the inventory again and again.
   const [fails] = (await pool.query("SELECT count(*)::int AS n FROM audit_logs WHERE action LIKE '% failed' AND created_at >= $1", [since(HOUR)])).rows;
-  if (fails.n >= lim.failedSignIns) out.push({ key: "failed_signins", title: `🔐 ${fails.n} failed sign-in attempts in the last hour`, body: "Check the agencies' activity logs." });
+  if (fails.n >= lim.failedSignIns) out.push({ key: "failed_signins", category: "security", title: `🔐 ${fails.n} failed sign-in attempts in the last hour`, body: "Check the agencies' activity logs." });
   const { rows: exp } = await pool.query(
     `SELECT a.broker_id, b.name, count(*)::int AS n FROM audit_logs a LEFT JOIN brokers b ON b.id = a.broker_id
       WHERE a.action = 'command_inventory_export' AND a.created_at >= $1 GROUP BY a.broker_id, b.name HAVING count(*) >= $2 LIMIT 10`,
     [since(24 * HOUR), lim.exportsPerDay]
   );
-  for (const x of exp) out.push({ key: `exports:${x.broker_id}:${now.toISOString().slice(0, 10)}`, title: `📤 ${x.name || "Someone"} exported the inventory ${x.n} times in a day`, body: "Check the agency's activity log." });
+  for (const x of exp) out.push({ key: `exports:${x.broker_id}:${now.toISOString().slice(0, 10)}`, category: "security", title: `📤 ${x.name || "Someone"} exported the inventory ${x.n} times in a day`, body: "Check the agency's activity log." });
+  out.push(...(await deliveryAlerts(pool, { now, lim, since })));
   // New places (compound names, areas, sub-zones) waiting for the owner: one alert an hour with the new ones counted together.
   const places = await require("./placeReview").counts(pool, since(HOUR));
   if (places.fresh > 0) {
     out.push({
       key: `places:${now.toISOString().slice(0, 13)}`,
+      category: "places",
       title: `🆕 ${places.fresh} new ${places.fresh === 1 ? "place" : "places"} waiting for your approval (${places.total} in all)`,
       body: "Open the owner page, Places waiting.",
       url: "/app/owner#places"
     });
+  }
+  return out;
+}
+
+/**
+ * Notification delivery health (Telegram, website push, app push): sends that fail, rows stuck before they went out, and
+ * the morning brief or evening digest not finished when its window is nearly over (or the job not running at all).
+ */
+async function deliveryAlerts(pool, { now, lim, since }) {
+  const out = [];
+  const Digest = require("./dailyDigest");
+
+  // Sends that failed after their retries, in the last 3 hours, and their share of everything that was tried.
+  const [f] = (await pool.query(
+    `SELECT count(*) FILTER (WHERE status = 'failed')::int AS failed, count(*) FILTER (WHERE status IN ('sent', 'failed'))::int AS tried,
+            (array_agg(last_error ORDER BY created_at DESC) FILTER (WHERE status = 'failed'))[1] AS last_error
+       FROM notifications WHERE created_at >= $1`,
+    [since(3 * HOUR)]
+  )).rows;
+  if (f.failed >= lim.deliveryFailures && (100 * f.failed) / Math.max(f.tried, 1) >= lim.deliveryFailPct) {
+    out.push({ key: "delivery_failures", category: "delivery", title: `📭 ${f.failed} of ${f.tried} notifications failed to send in the last 3 hours`, body: `Last error: ${f.last_error || "unknown"}. Telegram, website push or app push may be down.` });
+  }
+
+  // Saved but not sent (the sweep picks these up after 5 minutes), or waiting for a retry that never came.
+  const [s] = (await pool.query(
+    `SELECT count(*)::int AS n FROM notifications
+      WHERE (status = 'pending' AND created_at < $1) OR (status IN ('held', 'queued') AND deliver_after < $2)`,
+    [since(15 * 60 * 1000), since(30 * 60 * 1000)]
+  )).rows;
+  if (s.n > 0) out.push({ key: "delivery_stuck", category: "delivery", title: `⏳ ${s.n} notifications are stuck and not going out`, body: "The notifications job may not be running. Check Background jobs on the owner dashboard." });
+
+  // The daily brief and digest: not finished near the end of their window, or their job has stopped.
+  const { date, hour } = Digest.cairoDay(now);
+  const [job] = (await pool.query("SELECT watermark, last_started_at, last_finished_at FROM crm_jobs WHERE name = 'daily_digest'")).rows;
+  if (!job) return out; // the job has never been claimed on this server (scheduler off, or a fresh database)
+  const mark = job.watermark || {};
+  const [lateBrief, lateDigest] = [Digest.BRIEF_HOURS[1] - 1, Digest.DIGEST_HOURS[1] - 1].map((h) => hour >= h);
+  if (lateBrief && hour < Digest.DIGEST_HOURS[0] && mark.brief !== date) {
+    out.push({ key: `brief_late:${date}`, category: "delivery", once: true, title: "☀️ Today's morning brief did not finish going out", body: "Some brokers may not have received it. The window closes at noon (Cairo)." });
+  }
+  if (lateDigest && mark.digest !== date) {
+    out.push({ key: `digest_late:${date}`, category: "delivery", once: true, title: "🌙 Today's evening digest did not finish going out", body: "Some managers may not have received it. The window closes at 10 pm (Cairo)." });
+  }
+  const awake = hour >= Digest.BRIEF_HOURS[0] && hour < Digest.DIGEST_HOURS[1];
+  const idle = now.getTime() - new Date(job.last_finished_at || job.last_started_at || now).getTime();
+  if (awake && idle > lim.digestJobIdleMin * 60 * 1000) {
+    out.push({ key: `daily_job_idle:${date}:${hour}`, category: "delivery", once: true, title: "⏰ The daily brief and digest job has not run in a while", body: `Last finished: ${job.last_finished_at ? new Date(job.last_finished_at).toISOString() : "never"}. The server may be down or asleep.` });
   }
   return out;
 }
@@ -130,7 +185,9 @@ async function recipients(pool) {
 async function run(pool, { now = new Date() } = {}) {
   const list = await recipients(pool);
   if (!list.length) return { alerts: 0, sent: 0 };
-  const alerts = await due(pool, { now });
+  const OwnerAlerts = require("../lib/ownerAlerts");
+  const alerts = [];
+  for (const a of await due(pool, { now })) if (await OwnerAlerts.allowed(pool, a.category)) alerts.push(a);
   const lim = limits();
   const window = Math.floor(now.getTime() / (lim.cooldownHours * HOUR));
   let sent = 0;
@@ -138,7 +195,7 @@ async function run(pool, { now = new Date() } = {}) {
     for (const owner of list) {
       const r = await Notifications.notifyBroker(pool, owner, {
         kind: "system_alert",
-        dedupeKey: `system:${alert.key}:${window}`,
+        dedupeKey: alert.once ? `system:${alert.key}` : `system:${alert.key}:${window}`,
         title: alert.title,
         body: alert.body,
         url: alert.url || "/app/owner/board",

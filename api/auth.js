@@ -94,7 +94,9 @@ function register(api, { pool }) {
     const b = req.session.broker;
     const testSwitch = TestRole.canSwitch(b) ? { roles: TestRole.ROLES, role: b.home_role || b.role, canView: TestRole.canView(b), viewing: TestRole.isViewing(req.token) } : null;
     const rights = await require("../services/unitRights").rights(pool, b);
-    return res.json({ broker: brokerView(b), agency: agencyView(req.session.agency), rights, nav: require("../lib/navSpec").forBroker(b, { rights }), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
+    const workspace = b.workspace || (b.agency_id ? await require("../lib/workspace").stateOf(pool, b.agency_id, { role: b.role }).catch(() => null) : null);
+    const inviteRoles = workspace ? require("../domain/segments").inviteRolesFor(workspace, require("../services/team").ADD_ROLES) : [];
+    return res.json({ broker: brokerView(b), workspace, inviteRoles, agency: agencyView(req.session.agency), rights, nav: require("../lib/navSpec").forBroker(b, { rights, workspace }), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
   });
 
   // The test switch from the app: the same actions as the website's test switch (web/routes/testRole.js).

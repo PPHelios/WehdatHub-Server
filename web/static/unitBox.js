@@ -16,6 +16,7 @@
     var list = box.querySelector("[data-ubox-list]");
     var ctx = box.querySelector("[data-ubox-context]");
     var warn = box.querySelector("[data-ubox-warn]");
+    var phasesEl = box.querySelector("[data-ubox-phases]"); // a compound's phases (Madinaty B6, Rehab phase 7) as chips: the chosen one is the unit's sub-zone
     var compound = box.querySelector("[data-ubox-compound]");
     var other = box.querySelector("[data-ubox-other]");
     var panel = box.querySelector("[data-ubox-new]");
@@ -83,6 +84,36 @@
       } else areaInput.removeAttribute("required");
     }
 
+    // ---- phases: chips under the place; one chosen at most, tapping it again goes back to the place's own sub-zone ----
+    function showPhases(list, base) {
+      if (!phasesEl) return;
+      phasesEl.innerHTML = "";
+      phasesEl.setAttribute("data-base", base || "");
+      var phases = box.hasAttribute("data-areas-only") ? [] : list || [];
+      phasesEl.hidden = !phases.length;
+      if (!phases.length) return;
+      var lab = document.createElement("span");
+      lab.className = "ubox-phases-label"; lab.textContent = msg("phase");
+      phasesEl.appendChild(lab);
+      phases.forEach(function (p) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "chip chip-phase"; b.setAttribute("data-phase", p.id);
+        b.setAttribute("aria-pressed", p.selected ? "true" : "false");
+        b.textContent = p.label;
+        phasesEl.appendChild(b);
+      });
+    }
+    function choosePhase(id) {
+      if (!phasesEl) return;
+      var now = phasesEl.querySelector('[data-phase][aria-pressed="true"]');
+      var same = now && now.getAttribute("data-phase") === id;
+      Array.prototype.forEach.call(phasesEl.querySelectorAll("[data-phase]"), function (b) {
+        b.setAttribute("aria-pressed", !same && b.getAttribute("data-phase") === id ? "true" : "false");
+      });
+      setSelect(subSel, same ? phasesEl.getAttribute("data-base") || "" : id);
+      changed();
+    }
+
     // One place at a time: a second pick replaces the first (and says so).
     function pickPlace(it) {
       var old = placeChip();
@@ -94,6 +125,7 @@
       compound.value = it.kind === "compound" ? (it.label || it.name_ar || it.name_en) : "";
       setSelect(areaSel, it.area_id || "");
       setSelect(subSel, it.subzone_id || "");
+      showPhases(it.phases, it.phasesBase);
       setContext([it.path].concat(it.zones || []).concat(it.governorate ? [it.governorate] : []));
       warn.hidden = true;
       if (old) announce(msg("swap", it.label));
@@ -138,6 +170,7 @@
       if (kind === "place") {
         compound.value = "";
         setSelect(areaSel, ""); setSelect(subSel, "");
+        showPhases([]);
         setContext([]);
         warn.hidden = true;
         openNew(false);
@@ -211,7 +244,10 @@
         .catch(function () { return null; })
         .then(function (d) {
           if (!d) return;
-          if (d.place && !placeChip()) pickPlace(d.place);
+          if (d.place && !placeChip()) {
+            pickPlace(d.place);
+            if (d.phase) choosePhase(d.phase.id);
+          }
           (d.features || []).forEach(function (f) { addFeature(f.key, f.label); });
           // The two drop-downs fill from the message only while they are empty.
           ["furnishing", "finishing"].forEach(function (n) {
@@ -314,6 +350,12 @@
       var x = e.target.closest && e.target.closest("[data-ubox-remove]");
       if (x) remove(x.closest("[data-ubox-chip]"));
     });
+    if (phasesEl) {
+      phasesEl.addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-phase]");
+        if (b) choosePhase(b.getAttribute("data-phase"));
+      });
+    }
     field.addEventListener("click", function (e) { if (e.target === field) input.focus(); });
     // The new compound's name is the chip's name.
     newName.addEventListener("input", function () {

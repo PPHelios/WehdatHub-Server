@@ -373,6 +373,15 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE, ask = f
       parsed.filters.place_terms = byArea.rest;
     }
   }
+  // A phase in the words ("madinaty b6", "الرحاب مرحلة 7") narrows to that phase; the compound alone still finds every phase.
+  if (parsed.transcript && !parsed.filters.code) {
+    const byPhase = await require("./areaSearch").phaseScope(pool, parsed.transcript).catch(() => null);
+    if (byPhase) {
+      parsed.filters.area_scope = byPhase.scope;
+      const used = new Set(byPhase.words);
+      parsed.filters.place_terms = (parsed.filters.place_terms || []).map((t) => String(t).split(" ").filter((w) => !used.has(w)).join(" ")).filter(Boolean);
+    }
+  }
   const fx = await Fx.loadRates(pool, agencyId);
   let { sql, params } = buildSearchQuery(agencyId, parsed, { fx, status });
   let { rows } = await pool.query(sql, params);

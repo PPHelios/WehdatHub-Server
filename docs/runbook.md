@@ -315,6 +315,7 @@ If Meta blocks or restricts the bot's number:
 | A shared link shows "الصفحة غير موجودة" | Wrong or revoked link, or the unit's code changed; share a new one. Sold units show "مبقتش متاحة". |
 | Web forms answer "Cross-site request refused" (403) | The browser's address differs from `PUBLIC_BASE_URL` (e.g. the custom domain is live but the variable still names onrender.com). Set `PUBLIC_BASE_URL` to the address brokers open. |
 | No Telegram alert for an error | `ALERT_TELEGRAM_CHAT_ID` or `TELEGRAM_BOT_TOKEN` is unset, the owner never sent /start to the bot, or the same error alerted in the last `ALERT_EVERY_MIN` minutes; the row is in `error_events` either way. Logs show `Owner alert failed: …` when Telegram refused. |
+| An owner Telegram alert or app alert does not arrive | The CRM owner may have switched its category off, or set "Send me" to a higher level, in Settings, "Alerts to me" (stored in `app_settings` key `owner_alerts`; no migration). The storage-cleanup alert is sent once per weekly `storage_check` run. |
 | Flyer requests time out | Worker queue full (`FLYER_MAX_QUEUE`) or a slow render (`FLYER_TIMEOUT_MS`); check memory. |
 
 ## 9. Before Release 4

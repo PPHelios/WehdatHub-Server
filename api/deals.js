@@ -7,6 +7,10 @@ const Deals = require("../services/deals");
 const Commissions = require("../services/commissions");
 const Sources = require("../services/leadSources");
 const Enquiries = require("../services/portalEnquiries");
+const PortalParse = require("../domain/portalEnquiry");
+const Card = require("../domain/leadCard");
+const Phone = require("../domain/phone");
+const RateLimit = require("../lib/rateLimit");
 const OpenedLinks = require("../services/openedLinks");
 const C = require("../domain/commissionTracker");
 const P = require("../domain/commissionPeriod");
@@ -103,6 +107,36 @@ function register(api, { pool }) {
   });
 
   api.get("/portal-enquiries", managers, async (req, res) => res.json({ items: await Enquiries.list(pool, req.session.broker) }));
+
+  // Reads a pasted portal message; nothing is saved. 422 when the text is not a portal enquiry.
+  api.post("/portal-enquiries/read", managers, async (req, res) => {
+    if (!(await RateLimit.apiGate(pool, res, `lead_extract:broker:${req.session.broker.id}`, RateLimit.LIMITS.extractBroker))) return undefined;
+    const p = PortalParse.parse(String(req.body?.message || "").slice(0, 4000));
+    if (!p) return res.status(422).json({ ok: false, error: "not_enquiry" });
+    return res.json({ ok: true, portal: p.portal, name: p.name, link: p.link, listingNo: p.listingNo });
+  });
+
+  // Keeps a pasted portal enquiry (a repeat within a day is not kept twice); with phone + brokerId it also becomes a lead.
+  api.post("/portal-enquiries", managers, async (req, res) => {
+    const broker = req.session.broker;
+    if (!(await RateLimit.apiGate(pool, res, `lead_extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker))) return undefined;
+    const b = req.body || {};
+    const message = String(b.message || "").slice(0, 4000);
+    const phone = String(b.phone || "").trim();
+    const brokerId = String(b.brokerId || "").trim();
+    if (phone && !Phone.toE164(phone)) return res.status(422).json({ error: "phone_invalid" });
+    if (!PortalParse.parse(message)) return res.status(422).json({ error: "not_enquiry" });
+    const cap = await Enquiries.capture(pool, broker, message);
+    if (cap.outcome === "forbidden") return res.status(403).json({ error: "forbidden" });
+    const id = cap.outcome === "repeat" ? cap.id : cap.enquiry.id;
+    const out = { id, deduped: cap.outcome === "repeat", assigned: false, leadRef: null };
+    if (phone && brokerId) {
+      const r = await Enquiries.assign(pool, broker, id, { phone, brokerId });
+      if (r.error) return res.status(CODE[r.error] || 422).json({ ...out, error: r.error });
+      Object.assign(out, { assigned: true, leadRef: Card.refLabel(r.leadRef), outcome: r.outcome });
+    }
+    return res.status(out.deduped ? 200 : 201).json(out);
+  });
 
   api.post("/portal-enquiries/:id/assign", managers, async (req, res) => {
     const r = await Enquiries.assign(pool, req.session.broker, req.params.id, { phone: req.body?.phone, brokerId: req.body?.brokerId });

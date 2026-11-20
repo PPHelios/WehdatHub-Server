@@ -149,3 +149,53 @@ test("the Failures page is the CRM owner's; refused actions show up there with t
   expect(page.text).toMatch(/Failed and refused actions/);
   expect(page.text).toMatch(/http_404/);
 });
+
+describe("owner alert gate", () => {
+  const OwnerAlerts = require("../../lib/ownerAlerts");
+  const alertRows = () => h.query("SELECT title FROM notifications WHERE kind = 'system_alert' ORDER BY id");
+  beforeEach(() => OwnerAlerts.invalidate());
+  const spike = async () => { for (let i = 0; i < 30; i++) await h.query("INSERT INTO error_events (kind, source, fingerprint, message) VALUES ('error', 'web', $1, 'boom')", [`fp${i}`]); };
+
+  test("a switched-off category is not sent by systemAlerts", async () => {
+    await OwnerAlerts.save(h.pool, { off: ["errors"] });
+    await spike();
+    expect((await Alerts.run(h.pool)).sent).toBe(0);
+    expect(await alertRows()).toHaveLength(0);
+  });
+
+  test("minSeverity high still sends high alerts", async () => {
+    await OwnerAlerts.save(h.pool, { off: [], minSeverity: "high" });
+    await spike();
+    expect((await Alerts.run(h.pool)).sent).toBe(1);
+  });
+
+  test("the weekly storage alert is sent once per run, not once per 6 hours", async () => {
+    const put = (stamp) => h.query("INSERT INTO crm_jobs (name, watermark, last_finished_at) VALUES ('storage_check', '{\"orphans\": 3, \"bytes\": 3145728, \"dry_run\": true}', $1) ON CONFLICT (name) DO UPDATE SET watermark = EXCLUDED.watermark, last_finished_at = EXCLUDED.last_finished_at", [stamp]);
+    const t0 = new Date("2026-03-01T10:00:00Z");
+    await put("2026-03-01T09:00:00Z");
+    expect((await Alerts.run(h.pool, { now: t0 })).sent).toBe(1);
+    expect((await Alerts.run(h.pool, { now: new Date(t0.getTime() + 7 * 3600 * 1000) })).sent).toBe(0);
+    expect((await Alerts.run(h.pool, { now: new Date(t0.getTime() + 3 * 24 * 3600 * 1000) })).sent).toBe(0);
+    await put("2026-03-08T09:00:00Z");
+    expect((await Alerts.run(h.pool, { now: new Date(t0.getTime() + 7 * 24 * 3600 * 1000) })).sent).toBe(1);
+    expect((await alertRows()).filter((r) => /unused photo files/.test(r.title))).toHaveLength(2);
+  });
+
+  test("the CRM owner saves the switches in Settings; a broker gets 404; unknown ids are ignored", async () => {
+    const crm = await signIn(h, "admin");
+    const page = (await crm.agent.get("/app/settings?lang=en")).text;
+    expect(page).toContain('id="owner-alerts"');
+    expect(page).toMatch(/sev sev-high/);
+    const res = await crm.agent.post("/app/settings/owner-alerts").type("form").send({ _csrf: crm.csrf, minSeverity: "medium", on_storage: ["0"], on_errors: ["0", "1"], on_bogus: "0" });
+    expect(res.status).toBe(303);
+    OwnerAlerts.invalidate();
+    expect(await OwnerAlerts.get(h.pool)).toEqual({ off: ["storage"], minSeverity: "medium" });
+    const all = {};
+    for (const c of OwnerAlerts.CATEGORIES) all[`on_${c.id}`] = "0";
+    await crm.agent.post("/app/settings/owner-alerts").type("form").send({ _csrf: crm.csrf, ...all });
+    expect((await crm.agent.get("/app/settings?lang=en")).text).toContain("data-owner-alerts-warning");
+    const mgr = await signIn(h, "broker");
+    expect((await mgr.agent.post("/app/settings/owner-alerts").type("form").send({ _csrf: mgr.csrf, on_errors: "0" })).status).toBe(404);
+    expect((await mgr.agent.get("/app/settings?lang=en")).text).not.toContain('id="owner-alerts"');
+  });
+});

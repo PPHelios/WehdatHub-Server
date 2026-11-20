@@ -4,20 +4,26 @@
 "use strict";
 
 const A = require("../domain/areas");
+const Phases = require("../domain/phases");
 const Areas = require("./areas");
+const GROUPS = require("../data/areas/compound-phases.json").groups || [];
 
 const CACHE_MS = 60 * 1000;
-let cache = { at: 0, areas: [] };
+let cache = { at: 0, areas: [], places: [] };
 
 async function approved(pool) {
   if (Date.now() - cache.at < CACHE_MS) return cache.areas;
-  cache = { at: Date.now(), areas: await Areas.approvedAreas(pool).catch(() => []) };
+  cache = {
+    at: Date.now(),
+    areas: await Areas.approvedAreas(pool).catch(() => []),
+    places: await pool.query("SELECT id, name_en, name_ar, aliases, area_id, subzone_id FROM map_places WHERE approved").then((r) => r.rows).catch(() => [])
+  };
   return cache.areas;
 }
 
 /** Forget the cached list (after areas change). */
 function resetCache() {
-  cache = { at: 0, areas: [] };
+  cache = { at: 0, areas: [], places: [] };
 }
 
 const below = (areas, id) => {
@@ -45,4 +51,17 @@ async function scope(pool, terms) {
   return { scope: out.areas.length || out.subzones.length ? out : null, rest };
 }
 
-module.exports = { scope, resetCache };
+/**
+ * A phase named in the search text ("madinaty b6", "الرحاب مرحلة 7") narrows the search to that phase: { scope: {areas: [], subzones: [phaseId]}, words }.
+ * The compound word still filters as before (Madinaty alone finds every phase). Null when no phase is named.
+ */
+async function phaseScope(pool, text) {
+  await approved(pool);
+  const hit = Phases.findPhase(text, { places: cache.places, areas: cache.areas });
+  if (hit) return { scope: { areas: [], subzones: [hit.phase.id] }, words: hit.words };
+  // "Rehab 1" / "Rehab 2": an alias for several phases (the groups in the data file).
+  const group = Phases.findGroup(text, { places: cache.places, areas: cache.areas }, GROUPS);
+  return group ? { scope: { areas: [], subzones: group.ids }, words: group.words } : null;
+}
+
+module.exports = { scope, phaseScope, resetCache };

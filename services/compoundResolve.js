@@ -6,6 +6,7 @@
 const P = require("../domain/mapPlaces");
 const A = require("../domain/areas");
 const Areas = require("./areas");
+const Phases = require("../domain/phases");
 
 /** Approved places, indexed. `db` is a client or the pool. */
 async function approvedIndex(db) {
@@ -21,6 +22,12 @@ function locate(areas, fields, place) {
   const index = A.buildIndex(areas);
   let area_id = place?.area_id || null;
   let subzone_id = place?.area_id ? place.subzone_id || null : null;
+  // A phase picked on the unit (Madinaty B6) sits below the compound's own area or sub-zone and is kept; the compound stays.
+  if (place?.area_id && fields.subzone_id && fields.subzone_id !== subzone_id) {
+    const path = A.chain(areas, fields.subzone_id).map((a) => a.id);
+    const own = place.subzone_id || place.area_id;
+    if (path.includes(own) && path.indexOf(own) < path.length - 1 && Phases.isPhase(areas.find((a) => a.id === fields.subzone_id))) subzone_id = fields.subzone_id;
+  }
   if (!area_id && fields.area_id && areas.some((a) => a.id === fields.area_id)) {
     area_id = fields.area_id;
     subzone_id = fields.subzone_id || null;
@@ -45,6 +52,15 @@ async function resolve(db, fields) {
   const { rows, index } = await approvedIndex(db);
   const hit = P.resolveName(index, typed) || P.resolveName(index, fields.compound_en);
   if (!hit || !hit.exact) {
+    // A phase in the text ("مدينتي B6", "b6 madinaty"): the unit keeps the compound the text names and gets the phase as its sub-zone.
+    const ph = Phases.findPhase(typed, { places: rows, areas });
+    if (ph) {
+      const comp = Phases.compoundOf(ph.phase, rows, typed);
+      const at = A.placement(areas, ph.phase.id);
+      const loc = locate(areas, { ...fields, ...at }, comp);
+      if (comp) return { place_id: comp.id, compound_state: null, compound: comp.name_ar || comp.name_en, compound_en: comp.name_en || null, ...loc };
+      return { place_id: null, compound_state: null, compound: null, compound_en: null, ...loc };
+    }
     const { name, extra } = P.splitCompound(typed);
     const asArea = A.resolveArea(A.buildIndex(areas), name || typed);
     if (asArea?.id) return { place_id: null, compound_state: null, compound: null, compound_en: null, ...locate(areas, { ...fields, ...A.placement(areas, asArea.id) }, null), ...(extra ? { extra } : {}) };

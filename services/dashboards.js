@@ -262,11 +262,49 @@ async function ownerDashboard(pool, broker, { weeks = 8, now = new Date(), confi
     [new Date(now.getTime() - 7 * DAY).toISOString()]
   );
   const { rows: jobs } = await pool.query("SELECT name, last_status, last_finished_at, last_error FROM crm_jobs ORDER BY name");
+  const delivery = await deliveryHealth(pool, now);
   const { rows: trials } = await pool.query("SELECT id, name, agency_name, phone_e164, team_size, created_at FROM demo_requests WHERE kind = 'trial' ORDER BY created_at DESC LIMIT 20");
   const { rows: demos } = await pool.query(
     "SELECT id, name, agency_name, phone_e164, team_size, created_at, pilot_agency_id FROM demo_requests WHERE kind = 'demo' ORDER BY created_at DESC LIMIT 30"
   );
-  return { weeks: rows, agencies, topErrors, recentErrors, jobs, trials, demos, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
+  return { weeks: rows, agencies, topErrors, recentErrors, jobs, delivery, trials, demos, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
+}
+
+/**
+ * How notifications are going out (owner board): the last 7 Cairo days by status, the last 24 hours by channel, today's
+ * morning brief and evening digest, what is waiting or stuck now, and the latest failures. Counts and error codes only:
+ * no titles, names or client data.
+ */
+async function deliveryHealth(pool, now = new Date()) {
+  const day = "to_char(created_at AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD')";
+  const since7 = new Date(now.getTime() - 7 * DAY).toISOString();
+  const since1 = new Date(now.getTime() - DAY).toISOString();
+  const [days, channels, daily, now_, failures] = await Promise.all([
+    pool.query(
+      `SELECT ${day} AS day, count(*) FILTER (WHERE status = 'sent')::int AS sent, count(*) FILTER (WHERE status = 'failed')::int AS failed,
+              count(*) FILTER (WHERE status = 'skipped')::int AS skipped, count(*) FILTER (WHERE attempts > 1 AND status = 'sent')::int AS retried_ok
+         FROM notifications WHERE created_at >= $1 GROUP BY 1 ORDER BY 1 DESC`,
+      [since7]
+    ),
+    pool.query(`SELECT coalesce(channel, '—') AS channel, count(*)::int AS n FROM notifications WHERE created_at >= $1 AND status = 'sent' GROUP BY 1 ORDER BY n DESC`, [since1]),
+    pool.query(
+      `SELECT kind, count(*) FILTER (WHERE status = 'sent')::int AS sent, count(*) FILTER (WHERE status = 'failed')::int AS failed,
+              count(*) FILTER (WHERE status = 'skipped')::int AS skipped, count(*) FILTER (WHERE status IN ('pending', 'queued', 'held'))::int AS waiting
+         FROM notifications WHERE kind IN ('daily_brief', 'daily_digest') AND ${day} = to_char($1::timestamptz AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD') GROUP BY kind ORDER BY kind`,
+      [now.toISOString()]
+    ),
+    pool.query(
+      `SELECT count(*) FILTER (WHERE status = 'queued' AND reason = 'retry')::int AS retrying,
+              count(*) FILTER (WHERE (status = 'pending' AND created_at < $1) OR (status IN ('held', 'queued') AND deliver_after < $2))::int AS stuck
+         FROM notifications WHERE created_at >= $3`,
+      [new Date(now.getTime() - 15 * 60000).toISOString(), new Date(now.getTime() - 30 * 60000).toISOString(), since7]
+    ),
+    pool.query(
+      `SELECT kind, coalesce(last_error, '—') AS error, attempts, created_at FROM notifications WHERE status = 'failed' AND created_at >= $1 ORDER BY created_at DESC, id DESC LIMIT 10`,
+      [since7]
+    )
+  ]);
+  return { days: days.rows, channels: channels.rows, daily: daily.rows, retrying: now_.rows[0].retrying, stuck: now_.rows[0].stuck, failures: failures.rows };
 }
 
 /** The app in one period (owner only): active agencies and brokers, new units, leads, deals, errors and reports; and the period before. */
@@ -288,4 +326,4 @@ async function ownerPeriod(pool, broker, p, config = getConfig()) {
   return { now, before };
 }
 
-module.exports = { ownerPeriod, PERIODS, isOwner, isManager, brokerActivity, agencyDashboard, ownerDashboard, weekStart };
+module.exports = { deliveryHealth, ownerPeriod, PERIODS, isOwner, isManager, brokerActivity, agencyDashboard, ownerDashboard, weekStart };

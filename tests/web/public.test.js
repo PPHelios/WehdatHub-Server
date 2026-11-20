@@ -25,7 +25,12 @@ afterAll(closeHarness);
 const BROWSER = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
 const PREVIEW = "WhatsApp/2.24.20.89 A";
 const linkIn = (text) => (String(text).match(/http:\/\/localhost:3000(\/agency-alpha\/[^?\s]+\?s=[A-Za-z0-9_-]+)/) || [])[1];
-const open = (path, ua = BROWSER) => request(h.app.app).get(path).set("User-Agent", ua);
+const hit = (path, ua = BROWSER) => request(h.app.app).get(path).set("User-Agent", ua);
+// Each open is a separate visit: earlier opens are moved back past the same-visitor repeat window first.
+const open = async (path, ua = BROWSER) => {
+  await h.query("UPDATE share_link_opens SET opened_at = opened_at - INTERVAL '1 minute'");
+  return hit(path, ua);
+};
 
 // Every internal field filled with a sentinel that must never reach a public page.
 const SECRET = {
@@ -171,6 +176,9 @@ describe("the public page", () => {
   });
 });
 
+// Opens in the first seconds after a link is made are the broker's own share-sheet preview; tests open later.
+const ageLinks = () => h.query("UPDATE share_links SET created_at = created_at - INTERVAL '1 minute'");
+
 describe("opened alerts", () => {
   beforeAll(() => {
     process.env.TELEGRAM_BOT_TOKEN = "123:test";
@@ -189,11 +197,19 @@ describe("opened alerts", () => {
     await h.tgLink("broker", "colleague");
     h.TG.outbox.length = 0;
 
+    // The broker's own share sheet fetches a preview with a browser agent right after the link is made: not counted.
+    await open(path);
+    expect(alerts()).toHaveLength(0);
+    expect((await h.query("SELECT open_count FROM share_links"))[0].open_count).toBe(0);
+    await ageLinks();
+
     await open(path, PREVIEW); // WhatsApp builds the link preview when the broker sends it
     await open(path, "facebookexternalhit/1.1");
     expect(alerts()).toHaveLength(0);
 
     await open(path);
+    await hit(path); // the same phone loading the page again within a second is one open, not two
+    expect((await h.query("SELECT open_count FROM share_links"))[0].open_count).toBe(1);
     expect(alerts()).toEqual([expect.objectContaining({ chatId: String(h.TG_IDS.broker), text: expect.stringMatching(/العميل فتح رابط الوحدة #PUB-1/) })]);
     await open(path);
     expect(alerts()).toHaveLength(1);
@@ -219,6 +235,7 @@ describe("opened alerts", () => {
     const path = await sharedLink("PUB-1", "admin");
     await h.tgLink("admin");
     h.TG.outbox.length = 0;
+    await ageLinks();
     await open(path);
     expect(alerts()[0].text).toMatch(/Your client opened the link for #PUB-1/);
     for (const ua of ["TelegramBot (like TwitterBot)", "Slackbot-LinkExpanding 1.0", "Mozilla/5.0 (compatible; Googlebot/2.1)", "", "curl/8.0"]) expect([ua, Share.isBot(ua)]).toEqual([ua, true]);
@@ -234,6 +251,7 @@ describe("sharing from the web app", () => {
     const url = r.text.match(/data-share-url>([^<]+)</)[1];
     expect(url).toMatch(/^http:\/\/localhost:3000\/agency-alpha\/PUB-1\?s=/);
     expect(r.text).toMatch(/https:\/\/wa\.me\/\?text=/);
+    await ageLinks();
     await open(url.replace("http://localhost:3000", ""));
     const page = await agent.get("/app/units/PUB-1");
     expect(page.text).toMatch(/data-link-opens="1"/);

@@ -426,6 +426,8 @@ async function undoMany(pool, actor, eventIds, { now = new Date() } = {}) {
 
 /** Managers only: assign to a broker of the agency, or back to the unassigned pool (null). */
 async function assignLead(pool, actor, key, toBrokerId, { version = null, now = new Date() } = {}) {
+  const denied = await require("../lib/entitlements").assertAllowed(pool, actor, "assignLeads");
+  if (denied) return denied;
   let target = null;
   if (toBrokerId) {
     target = await brokerById(pool, actor.agency_id, toBrokerId);

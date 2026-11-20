@@ -486,7 +486,7 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length ? "" : html`<p class=
 ${tl ? V.timelineList(tl.rows, lang, { more: tl.more, lead }) : ""}
   </div>
   <div class="tab-panel" data-tab="lt-more">
-${manager
+${manager && (!broker.workspace || require("../../domain/segments").allows(broker.workspace, "assignLeads"))
   ? html`<section class="card" id="assign"><h2>🧑‍💼 ${L(lang, "تسليم لبروكر", "Assign")}</h2>
   <form method="post" action="${path}/assign" class="row">${hidden}
     <select name="broker"><option value="">${L(lang, "مش متسلم لحد", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === lead.assigned_broker_id ? html` selected` : ""}>${b.name}</option>`)}</select>

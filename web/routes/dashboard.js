@@ -214,8 +214,8 @@ function billingSections(b, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
   return html`${b.csrf !== undefined ? newAgencySection(lang, b.csrf) : ""}<section class="card" id="signups">
   <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
-  <form method="post" action="/app/owner/signup" class="stack" data-signup-form>
-    ${switchField({ name: "open", value: "1", on: b.open, lang, id: "signup-switch", label: L(lang, "التسجيل مفتوح", "Sign-up is open"), sentence: L(lang, "لما يكون شغّال، أي شركة تقدر تطلب تسجيل وكل طلب بيستنى موافقتك. لما يتقفل، مفيش طلبات جديدة.", "When on, any agency can ask to sign up and every request waits for your approval. When off, no new requests come in.") })}
+  <form method="post" action="/app/owner/signup" class="stack" data-signup-form data-autosave>
+    ${switchField({ name: "open", value: "1", on: b.open, lang, id: "signup-switch", label: L(lang, "التجربة المجانية مفتوحة", "Free trial sign-up is open"), sentence: L(lang, "لما يكون شغّال، أي حد يقدر يبدأ تجربة مجانية من صفحة الموقع ومن تليجرام من غير موافقتك. لما يتقفل، زرار «ابدأ التجربة» بيختفي ومفيش تجارب جديدة بتبدأ.", "When on, anyone can start a free trial from the landing page and Telegram, no approval needed. When off, the Start trial buttons disappear and no new trials start.") })}
     <button type="submit" class="secondary" data-signup-toggle="save">${L(lang, "حفظ", "Save")}</button>
   </form>
   ${b.signups.length
@@ -636,11 +636,37 @@ function healthSections(d, lang, usd) {
       )}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش لسه.", "None yet.")}</p>`}
 </section>
+${deliverySection(d.delivery, lang)}
 <section class="card">
   <h2>${L(lang, "المهام الخلفية", "Background jobs")}</h2>
   <table><tbody>${d.jobs.map(
     (j) => html`<tr data-job="${j.name}"><td dir="ltr">${j.name}</td><td>${j.last_status === "failed" ? "❌" : j.last_status === "running" ? "⏳" : "✅"} ${j.last_status || "—"}</td><td dir="ltr">${j.last_finished_at ? new Date(j.last_finished_at).toISOString().slice(0, 16).replace("T", " ") : "—"}</td></tr>`
   )}</tbody></table>
+</section>`;
+}
+
+/** Owner board: how notifications are going out (Telegram, website push, app push). Counts and error codes only. */
+function deliverySection(dv, lang) {
+  if (!dv) return "";
+  const channelName = { telegram: "Telegram", webpush: L(lang, "push الموقع", "Website push"), apppush: L(lang, "push التطبيق", "App push"), inbox: L(lang, "الصندوق فقط", "Inbox only") };
+  const kindName = { daily_brief: L(lang, "☀️ ملخص الصبح", "☀️ Morning brief"), daily_digest: L(lang, "🌙 ملخص المسا", "🌙 Evening digest") };
+  const bad = dv.stuck > 0 || dv.days.some((x, i) => i === 0 && x.failed > 0);
+  return html`<section class="card" id="delivery">
+  <h2>${bad ? "⚠️" : "✅"} ${L(lang, "وصول الإشعارات", "Notification delivery")}</h2>
+  <p class="muted">${L(lang, "بتحاول تاني لوحدها", "Retrying now")}: <b data-delivery-retrying>${dv.retrying}</b> · ${L(lang, "عالقة", "Stuck")}: <b data-delivery-stuck>${dv.stuck}</b></p>
+  ${dv.daily.length
+    ? html`<table><thead><tr><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "اتبعتت", "Sent")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "اتخطت", "Skipped")}</th><th>${L(lang, "مستنية", "Waiting")}</th></tr></thead>
+  <tbody>${dv.daily.map((r) => html`<tr data-delivery-kind="${r.kind}"><td>${kindName[r.kind] || r.kind}</td><td>${r.sent}</td><td>${r.failed}</td><td>${r.skipped}</td><td>${r.waiting}</td></tr>`)}</tbody></table>`
+    : html`<p class="muted">${L(lang, "لسه ملخص النهارده ما اتبعتش.", "Today's brief and digest have not gone out yet.")}</p>`}
+  ${dv.days.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "اليوم", "Day")}</th><th>${L(lang, "اتبعتت", "Sent")}</th><th>${L(lang, "نجحت بعد إعادة", "Sent after retry")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "اتخطت", "Skipped")}</th></tr></thead>
+  <tbody>${dv.days.map((r) => html`<tr data-delivery-day="${r.day}"><td dir="ltr">${r.day}</td><td>${r.sent}</td><td>${r.retried_ok}</td><td>${r.failed ? html`<b>${r.failed}</b>` : 0}</td><td>${r.skipped}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش إشعارات في آخر 7 أيام.", "No notifications in the last 7 days.")}</p>`}
+  ${dv.channels.length ? html`<p class="muted">${L(lang, "آخر 24 ساعة حسب القناة", "Last 24 hours by channel")}: ${dv.channels.map((c) => `${channelName[c.channel] || c.channel} ${c.n}`).join(" · ")}</p>` : ""}
+  ${dv.failures.length
+    ? html`<details><summary>${L(lang, "آخر الإشعارات اللي فشلت", "Latest failed sends")}</summary>
+  <table><tbody>${dv.failures.map((f) => html`<tr><td dir="ltr">${new Date(f.created_at).toISOString().slice(0, 16).replace("T", " ")}</td><td dir="ltr">${f.kind}</td><td dir="ltr">${f.error}</td><td>×${f.attempts}</td></tr>`)}</tbody></table></details>`
+    : ""}
 </section>`;
 }
 
@@ -821,7 +847,7 @@ function register(web, { pool, page }) {
 
   web.post("/owner/signup", ownerOnly(async (req, res, lang) => {
     await Signup.setOpen(pool, req.body.open === "1");
-    return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التسجيل اتفتح.", "Sign-up is open.") : L(lang, "التسجيل اتقفل.", "Sign-up is closed.")));
+    return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التجربة المجانية اتفتحت.", "Free trial sign-up is open.") : L(lang, "التسجيل اتقفل.", "Free trial sign-up is closed.")));
   }));
 
   // CRM owner only: create an agency and its owner; the owner's Telegram start link is shown once.

@@ -445,7 +445,9 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   lock_until timestamp with time zone,
   founding_partner boolean DEFAULT false NOT NULL,
   extra_seats smallint DEFAULT 0 NOT NULL,
-  analytics_enabled boolean DEFAULT false NOT NULL
+  analytics_enabled boolean DEFAULT false NOT NULL,
+  team_style text DEFAULT 'shared'::text NOT NULL,
+  segment_hint text
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -799,7 +801,9 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   deliver_after timestamp with time zone,
   delivered_at timestamp with time zone,
   merged_into bigint,
-  dismissed_at timestamp with time zone
+  dismissed_at timestamp with time zone,
+  attempts integer DEFAULT 0 NOT NULL,
+  last_error text
 );
 
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
@@ -2119,7 +2123,9 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = A
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_extra_seats_check CHECK (((extra_seats >= 0) AND (extra_seats <= 4)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
+ALTER TABLE agencies ADD CONSTRAINT agencies_segment_hint_check CHECK (((segment_hint IS NULL) OR (segment_hint = ANY (ARRAY['solo'::text, 'team'::text, 'agency'::text]))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
+ALTER TABLE agencies ADD CONSTRAINT agencies_team_style_check CHECK ((team_style = ANY (ARRAY['shared'::text, 'structured'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((wa_credits_monthly IS NULL) OR (wa_credits_monthly >= 0)));
@@ -2128,7 +2134,7 @@ ALTER TABLE analytics_search_daily ADD CONSTRAINT analytics_search_daily_zero_re
 ALTER TABLE areas ADD CONSTRAINT areas_check CHECK (((name_en IS NOT NULL) OR (name_ar IS NOT NULL)));
 ALTER TABLE areas ADD CONSTRAINT areas_lat_check CHECK (((lat IS NULL) OR ((lat >= (21)::double precision) AND (lat <= (32)::double precision))));
 ALTER TABLE areas ADD CONSTRAINT areas_lng_check CHECK (((lng IS NULL) OR ((lng >= (24)::double precision) AND (lng <= (37)::double precision))));
-ALTER TABLE areas ADD CONSTRAINT areas_place_type_check CHECK (((place_type IS NULL) OR (place_type = ANY (ARRAY['city_or_district'::text, 'sub_area_or_sector'::text, 'neighborhood_or_zone'::text, 'road_or_corridor'::text]))));
+ALTER TABLE areas ADD CONSTRAINT areas_place_type_check CHECK (((place_type IS NULL) OR (place_type = ANY (ARRAY['city_or_district'::text, 'sub_area_or_sector'::text, 'neighborhood_or_zone'::text, 'road_or_corridor'::text, 'phase'::text]))));
 ALTER TABLE areas ADD CONSTRAINT areas_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text, 'broker'::text])));
 ALTER TABLE areas ADD CONSTRAINT areas_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_answer_source_check CHECK (((answer_source IS NULL) OR (answer_source = ANY (ARRAY['ai'::text, 'local'::text]))));
@@ -2263,8 +2269,8 @@ ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (
 ALTER TABLE map_places ADD CONSTRAINT map_places_lat_check CHECK (((lat >= (21)::double precision) AND (lat <= (32)::double precision)));
 ALTER TABLE map_places ADD CONSTRAINT map_places_lng_check CHECK (((lng >= (24)::double precision) AND (lng <= (37)::double precision)));
 ALTER TABLE map_places ADD CONSTRAINT map_places_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text])));
-ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text])));
-ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text, 'batched'::text, 'policy_off'::text])));
+ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text, 'apppush'::text])));
+ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text, 'batched'::text, 'policy_off'::text, 'retry'::text, 'send_failed'::text, 'recovered'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS NULL) OR (url ~~ '/app/%'::text)));
 ALTER TABLE owner_change_requests ADD CONSTRAINT owner_change_requests_kind_check CHECK ((kind = 'rename'::text));
@@ -2652,6 +2658,8 @@ CREATE INDEX map_places_verified ON public.map_places USING btree (verified);
 CREATE INDEX idx_notifications_agency ON public.notifications USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_notifications_due ON public.notifications USING btree (deliver_after) WHERE (status = ANY (ARRAY['held'::text, 'queued'::text]));
 CREATE INDEX idx_notifications_inbox ON public.notifications USING btree (broker_id, created_at DESC);
+CREATE INDEX idx_notifications_pending ON public.notifications USING btree (created_at) WHERE (status = 'pending'::text);
+CREATE INDEX idx_notifications_status_created ON public.notifications USING btree (created_at, status);
 CREATE INDEX idx_notifications_unread ON public.notifications USING btree (broker_id) WHERE (read_at IS NULL);
 CREATE INDEX idx_op_logs_agency_date ON public.operation_logs USING btree (agency_id, created_at);
 CREATE INDEX idx_operation_logs_agency_type_created ON public.operation_logs USING btree (agency_id, operation_type, created_at DESC);

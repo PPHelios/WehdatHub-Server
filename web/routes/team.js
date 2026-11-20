@@ -21,6 +21,21 @@ const { html, raw } = require("../html");
 const { tabs } = require("../views/tabs");
 
 const { L } = require("../../lib/copy");
+const Segments = require("../../domain/segments");
+const Plans = require("../../domain/plans");
+/** Does the viewer's workspace get this feature? Unknown workspace (or agency tier) → yes, so nothing changes there. */
+const can = (viewer, feature) => !viewer?.workspace || Segments.allows(viewer.workspace, feature);
+
+/** The upgrade card (owner only: brokers never see prices): the next plan up with more seats than now, its monthly price, and the pay link. */
+function upgradeCard(lang, seats) {
+  const next = Plans.PLANS.filter((p) => p.seats > seats && p.priceEgp).sort((a, b) => a.seats - b.seats)[0];
+  if (!next) return html`<p class="card notice bad" role="alert">❌ ${errorText("seats", lang)}</p>`;
+  return html`<section class="card notice" data-upgrade-card>
+  <h2>👥 ${L(lang, "ضيف زميل", "Add a teammate")}</h2>
+  <p>${L(lang, `عشان تضيف زميل محتاج باقة «${Plans.planName(next, "ar")}»: ${next.priceEgp} جنيه في الشهر لحد ${next.seats} أعضاء.`, `To add a teammate you need the ${Plans.planName(next, "en")} plan: ${next.priceEgp} EGP a month for up to ${next.seats} people.`)}</p>
+  <p><a class="btn" href="/app/usage#plan">${L(lang, "رقّي الباقة", "Upgrade your plan")}</a></p>
+</section>`;
+}
 const ROLE_LABEL = { broker: ["بروكر", "Broker"], manager: ["مدير", "Manager"], owner: ["مالك الشركة", "Agency owner"], admin: ["مدير", "Manager"], data_entry: ["مدخل بيانات", "Data entry"], team_lead: ["قائد فريق", "Team lead"] };
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };
@@ -37,6 +52,8 @@ const ERRORS = {
   self: ["مينفعش توقف نفسك.", "You can't deactivate yourself."],
   no_bot: ["بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME)."],
   rate: ["دعوات كتير النهارده؛ جرب بكرة.", "Too many invites today; try tomorrow."],
+  plan_feature: ["الميزة دي مش في باقتك الحالية. رقّي الباقة من صفحة الباقة.", "This is not in your current plan. Upgrade your plan on the Plan page."],
+  style: ["الاختيار مش مظبوط.", "That choice isn't valid."],
   seats: ["مقاعد الباقة كلها مستخدمة؛ رقّي الباقة من صفحة الباقة.", "Every seat on your plan is taken; upgrade from the Plan page."],
   active: ["البروكر لسه شغال؛ أوقفه الأول.", "The broker is still active; deactivate them first."],
   has_records: ["عنده صفقات أو وحدات؛ مينفعش يتمسح، سيبه موقوف.", "They have deals or listings, so they can't be deleted; leave them deactivated."],
@@ -153,8 +170,8 @@ function teamLeadForm(b, lang, teamLeads) {
 }
 
 /** The agency owner moves a member between broker, manager and data entry (Team.changeRole; team lead has its own form). */
-function roleForm(b, lang) {
-  const choices = ["broker", "manager", "data_entry"].filter((r) => r !== b.role);
+function roleForm(b, lang, viewer = null) {
+  const choices = ["broker", "manager", "data_entry"].filter((r) => r !== b.role && (r !== "data_entry" || can(viewer, "dataEntry")));
   const options = choices.map((r) => html`<option value="${r}">${L(lang, ROLE_LABEL[r][0], ROLE_LABEL[r][1])}</option>`);
   return html`<form method="post" action="/app/team/${b.id}/role" class="row" data-confirm="${L(lang, "متأكد؟ الدور هيتغير فورًا.", "Sure? The role changes right away.")}"><label>${L(lang, "غيّر الدور", "Change role")} <select name="role">${options}</select></label><button type="submit" class="secondary">${L(lang, "احفظ الدور", "Save role")}</button></form>`;
 }
@@ -169,8 +186,8 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
   </dl>
   <div class="row m-actions">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
   ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/${b.id}/reactivate"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Reactivate")}</button></form><form method="post" action="/app/team/${b.id}/delete" data-confirm="${L(lang, "مسح نهائي ومينفعش يتراجع. متأكد؟", "Delete for good? This cannot be undone.")}"><button type="submit" class="secondary danger">🗑️ ${L(lang, "مسح نهائي", "Delete for good")}</button></form>`}</div>
-  ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager", "data_entry"].includes(b.role) ? roleForm(b, lang) : ""}
-  ${b.is_active && b.id !== viewer?.id && MANAGER_ROLES.includes(String(viewer?.role || "").toLowerCase()) ? teamLeadForm(b, lang, teamLeads) : ""}
+  ${isAgencyOwner(viewer) && b.is_active && b.id !== viewer.id && ["broker", "manager", "data_entry"].includes(b.role) ? roleForm(b, lang, viewer) : ""}
+  ${b.is_active && b.id !== viewer?.id && MANAGER_ROLES.includes(String(viewer?.role || "").toLowerCase()) && can(viewer, "teamLead") ? teamLeadForm(b, lang, teamLeads) : ""}
   ${memberTools(b, lang, today)}
 </li>`;
 }
@@ -202,6 +219,19 @@ function policyCard({ policy, viewer, lang, notice = null }) {
 </form>`;
 }
 
+/** The owner's choice below the agency tier: everyone acts as a broker (shared) or owner and brokers with the owner's switches (structured). */
+function styleCard(viewer, lang) {
+  const ws = viewer?.workspace;
+  if (!ws || ws.mode === "agency" || !isAgencyOwner(viewer)) return "";
+  const on = (v) => (ws.teamStyle === v ? html` checked` : "");
+  return html`<form method="post" action="/app/team/style" class="card stack" data-team-style>
+  <h2>⚙️ ${L(lang, "طريقة شغل الفريق", "How the team works")}</h2>
+  <label class="row"><input type="radio" name="style" value="shared"${on("shared")}> ${L(lang, "الكل بروكرز: كله بيشوف كل الوحدات والعملاء", "Everyone is a broker: all units and leads are shared")}</label>
+  <label class="row"><input type="radio" name="style" value="structured"${on("structured")}> ${L(lang, "أنا (المالك) والبروكرز: وأنا اللي بحدد مين يشوف إيه", "Me (the owner) and brokers: I choose what each one sees")}</label>
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
+</form>`;
+}
+
 /** tab: 0 the team (default), 1 the lead rules (opened after saving one). */
 function teamPage({ team, lang, rules, speed, routing, viewer = null, notice = null, link = null, tab = 0, now = new Date(), policy = {}, invite = null }) {
   const today = cairoDay(now);
@@ -209,13 +239,14 @@ function teamPage({ team, lang, rules, speed, routing, viewer = null, notice = n
   return html`<h1>${L(lang, "الفريق", "Team")}</h1>
 ${notice}
 ${link || ""}
+${styleCard(viewer, lang)}
 ${tabs("team_tab", [
   [L(lang, `الفريق (${active})`, `Team (${active})`), html`<details class="card invite"${team.length <= 1 || invite ? html` open` : ""}>
   <summary>➕ ${L(lang, "إضافة عضو", "Add member")}</summary>
   <form method="post" action="/app/team/invite" class="stack">
   <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80" value="${invite?.name || ""}"></label>
   <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" value="${invite?.phone || ""}"></label>
-  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker"${invite?.role === "broker" ? raw(" selected") : ""}>${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}<option value="team_lead">${L(lang, "قائد فريق", "Team lead")}</option><option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option></select></label>
+  <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker"${invite?.role === "broker" ? raw(" selected") : ""}>${L(lang, "بروكر", "Broker")}</option>${isAgencyOwner(viewer) ? html`<option value="manager">${L(lang, "مدير", "Manager")}</option>` : ""}${can(viewer, "teamLead") ? html`<option value="team_lead">${L(lang, "قائد فريق", "Team lead")}</option>` : ""}${can(viewer, "dataEntry") ? html`<option value="data_entry">${L(lang, "مدخل بيانات", "Data entry")}</option>` : ""}</select></label>
   <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en"${invite?.lang === "en" ? raw(" selected") : ""}>English</option></select></label>
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
   </form>
@@ -223,7 +254,7 @@ ${tabs("team_tab", [
 <ul class="members">${team.filter((b) => b.is_active).map((b) => memberCard(b, lang, speed, today, now, viewer, team.filter((t) => t.role === "team_lead" && t.is_active)))}</ul>
 <p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الموقوفين في تاب «الموقوفين»: تقدر ترجّعهم أو تمسحهم نهائي.", "Deactivating signs them out at once and returns their leads to the managers. Deactivated members are in the Deactivated tab, where you can bring them back or delete them for good.")}</p>
 <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>`],
-  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}${policyCard({ policy, viewer, lang })}`],
+  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${can(viewer, "leadRules") ? html`${routingCard(routing, lang)}${rulesCard(rules, lang)}` : ""}${policyCard({ policy, viewer, lang })}`],
   [L(lang, `الموقوفين (${team.length - active})`, `Deactivated (${team.length - active})`), html`<ul class="members">${team.filter((b) => !b.is_active).map((b) => memberCard(b, lang, speed, today, now, viewer, []))}</ul>${team.length === active ? html`<p class="muted">${L(lang, "مفيش حد موقوف.", "Nobody is deactivated.")}</p>` : ""}`]
 ], { open: tab })}`;
 }
@@ -265,9 +296,30 @@ function register(web, { pool, page }) {
     const rl = await RateLimit.hit(pool, `team_invite:agency:${manager.agency_id}`, INVITES);
     if (!rl.allowed) return render(req, res, { notice: bad("rate", lang) }, 429);
     const r = await Team.invite(pool, manager, { name: req.body.name, phone: req.body.phone, role: req.body.role, lang: req.body.lang });
+    if (r.error === "seats" && isAgencyOwner(manager)) {
+      const seats = (await require("../../services/billing").allowance(pool, manager.agency_id)).seats.limit;
+      return render(req, res, { notice: upgradeCard(lang, seats), invite: { name: String(req.body.name || "").slice(0, 80), phone: String(req.body.phone || "").slice(0, 20), role: req.body.role, lang: req.body.lang } }, 402);
+    }
     if (r.error) return render(req, res, { notice: bad(r.error, lang), invite: { name: String(req.body.name || "").slice(0, 80), phone: String(req.body.phone || "").slice(0, 20), role: req.body.role, lang: req.body.lang } }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     const notice = html`<p class="card notice ok" role="status">✅ ${r.created ? L(lang, `اتضاف ${r.broker.name}.`, `${r.broker.name} added.`) : L(lang, `${r.broker.name} رجع للفريق.`, `${r.broker.name} is back on the team.`)}${r.noBot ? html` ${errorText("no_bot", lang)}` : ""}</p>`;
     return render(req, res, { notice, link: r.url ? linkCard(r.broker, r.url, req.session.agency.name, lang) : null });
+  });
+
+  // A lone owner's "Add a teammate" row: the upgrade card (no prices for anyone else).
+  web.get("/add-teammate", async (req, res, next) => {
+    if (!isAgencyOwner(req.session.broker)) return next();
+    const lang = langOf(req);
+    const seats = (await require("../../services/billing").allowance(pool, req.session.broker.agency_id)).seats.limit;
+    return page(req, res, { title: L(lang, "ضيف زميل", "Add a teammate"), nav: "settings", body: upgradeCard(lang, seats) });
+  });
+
+  // Owner only: how a team below the agency tier works (services/team.js setTeamStyle).
+  web.post("/team/style", async (req, res) => {
+    const lang = langOf(req);
+    const r = await Team.setTeamStyle(pool, req.session.broker, String(req.body.style || ""));
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    req.session.broker.workspace = await require("../../lib/workspace").stateOf(pool, req.session.broker.agency_id, { role: req.session.broker.role }).catch(() => req.session.broker.workspace);
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظ.", "Saved.")}</p>` });
   });
 
   // Owner only: move a broker to manager, or a manager back to broker. Logged for the agency.

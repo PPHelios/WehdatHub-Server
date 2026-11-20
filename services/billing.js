@@ -23,7 +23,10 @@ const Referrals = require("./referrals");
 const Vis = require("../lib/visibility");
 
 // lib/planGuard.js remembers an agency's plan state for 15 s: every write of plan or payment state drops it (lazy: planGuard needs this module).
-const forgetPlanState = (agencyId) => require("../lib/planGuard").forget(agencyId);
+const forgetPlanState = (agencyId) => {
+  require("../lib/planGuard").forget(agencyId);
+  require("../lib/workspace").forget(agencyId);
+};
 
 const DAY = 24 * 3600 * 1000;
 // The periods a plan can be sold for; which of them a given plan offers is its price table (domain/plans.js prices).

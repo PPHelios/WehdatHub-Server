@@ -11,6 +11,7 @@ const ReadCaps = require("../lib/readCaps");
 const AI = require("../lib/ai");
 const Phone = require("../domain/phone");
 const Intake = require("../domain/leadIntake");
+const PortalParse = require("../domain/portalEnquiry");
 const LeadIntake = require("../lib/leadIntake");
 const { logOperation } = require("../lib/db");
 const Authz = require("../lib/authz");
@@ -100,6 +101,9 @@ function register(api, { pool }) {
     const lang = broker.preferred_lang === "en" ? "en" : "ar";
     const text = String(req.body?.message || "").trim().slice(0, 4000);
     if (!text) return res.status(400).json({ error: "nothing_to_read" });
+    // A portal enquiry (Dubizzle, Nawy, Bayut): managers get the portal screen's fields back, without the AI.
+    const portal = Authz.isManager(broker) ? PortalParse.parse(text) : null;
+    if (portal) return res.json({ portal: true, enquiry: { portal: portal.portal, name: portal.name, link: portal.link, listingNo: portal.listingNo } });
     if (!(await RateLimit.apiGate(pool, res, `lead_extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker))) return;
     let ex = { phones: [], name: null, kind: null, source: null, note: null };
     try {

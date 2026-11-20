@@ -120,6 +120,8 @@ function footer(broker, lang) {
 const NavSpec = require("../lib/navSpec");
 // Pages that need a laptop-sized screen (the import tools): marked so the phone's More list can hide them.
 const DESKTOP_ONLY = new Set(["import", "leadimport"]);
+// The session's rights (data entry only) and workspace (lib/workspace.js) travel on the broker, so the website's menu matches the app's /me nav.
+const forBroker = (broker) => NavSpec.forBroker(broker, { rights: broker?.rights || null, workspace: broker?.workspace || null });
 const webTab = (t) => ({ key: t.key, href: t.web, ar: t.label.ar, en: t.label.en, icon: t.icon, fab: Boolean(t.fab) });
 
 /**
@@ -127,7 +129,7 @@ const webTab = (t) => ({ key: t.key, href: t.web, ar: t.label.ar, en: t.label.en
  * [{ key, label: {ar,en}, items: [{ key, href, ar, en, icon, desktop }] }], groups in the spec order, empty groups left out.
  */
 function moreGroups(broker) {
-  return NavSpec.forBroker(broker)
+  return forBroker(broker)
     .groups.map((g) => ({
       key: g.key,
       label: g.label,
@@ -172,7 +174,7 @@ function tabBar(broker, tab, lang) {
 
 
 /** The bottom-bar places this role sees (lib/navSpec.js): the same places as the app's tabs. */
-const tabsFor = (broker) => NavSpec.forBroker(broker).tabs.filter((t) => t.web).map(webTab);
+const tabsFor = (broker) => forBroker(broker).tabs.filter((t) => t.web).map(webTab);
 
 // Groups that start open before the person's own choice (kept in the browser, web/static/app.js) is applied.
 const GROUP_OPEN = new Set(["clients", "listings"]);
@@ -185,7 +187,7 @@ const GROUP_OPEN = new Set(["clients", "listings"]);
 function sideMenu(broker, tab, lang, { crm = false } = {}) {
   const en = lang === "en";
   const { icon } = require("./icons");
-  const nav = NavSpec.forBroker(broker);
+  const nav = forBroker(broker);
   const link = (n, current) => html`<a href="${n.href}"${current ? raw(' aria-current="page"') : ""}>${icon(n.icon, 20)}<span>${en ? n.en : n.ar}</span></a>`;
   const home = nav.tabs.find((t) => t.key === "home" && t.web);
   const groups = nav.groups

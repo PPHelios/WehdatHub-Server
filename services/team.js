@@ -12,6 +12,8 @@ const Brokers = require("./brokers");
 const Billing = require("./billing");
 const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const { getConfig } = require("../config");
+const Entitlements = () => require("../lib/entitlements");
+const forgetWorkspace = (agencyId) => require("../lib/workspace").forget(agencyId);
 
 const INVITE_ROLES = ["broker", "manager", "data_entry"];
 /** Roles a manager can add a member as (a team lead too; changeRole keeps INVITE_ROLES: a team lead is made through setTeamLeadRole). */
@@ -101,6 +103,8 @@ async function invite(pool, manager, input = {}, opts = {}) {
   if (!name) return { error: "name" };
   if (!digits || !Phone.isEgyptMobile(digits)) return { error: "phone" };
   if (!role) return { error: "role" };
+  // Below the agency tier only some roles exist (domain/segments.js inviteRolesFor): a role the plan has no use for is an upgrade line.
+  if (!(await Entitlements().inviteRoles(pool, manager, ADD_ROLES)).includes(role)) return { error: "plan_feature" };
   // Only the agency owner adds managers; managers add brokers.
   if (role === "manager" && !isAgencyOwner(manager)) return { error: "forbidden" };
   const lang = input.lang === "en" ? "en" : "ar";
@@ -126,6 +130,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
     brokerId = rows[0].id;
     created = true;
   }
+  forgetWorkspace(manager.agency_id);
   const link = await startLinkFor(pool, manager, brokerId, opts);
   const { rows: b } = await pool.query("SELECT id, name, role, phone_number, preferred_lang FROM brokers WHERE id = $1", [brokerId]);
   return { ok: true, broker: b[0], url: link.url || null, created, noBot: link.error === "no_bot" };
@@ -139,7 +144,9 @@ async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
   const { rows } = await pool.query("SELECT role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   if (!rows[0]) return { error: "not_found" };
   if (!mayActOn(manager, rows[0].role)) return { error: "rank" };
-  return Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
+  const out = await Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
+  forgetWorkspace(manager.agency_id);
+  return out;
 }
 
 /** Brings a deactivated broker back with the same role (a seat must be free). Their old leads stay with the managers. */
@@ -153,6 +160,7 @@ async function reactivate(pool, manager, brokerId) {
   if (b.is_active) return { ok: true, broker: b };
   if (!(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
   await pool.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
+  forgetWorkspace(manager.agency_id);
   return { ok: true, broker: b };
 }
 
@@ -169,6 +177,7 @@ async function remove(pool, manager, brokerId) {
   if (!b) return { error: "not_found" };
   if (!mayActOn(manager, b.role)) return { error: "rank" };
   if (b.is_active) return { error: "active" };
+  forgetWorkspace(manager.agency_id);
   try {
     await pool.query("DELETE FROM brokers WHERE id = $1 AND agency_id = $2 AND NOT is_active", [brokerId, manager.agency_id]);
   } catch (e) {
@@ -194,6 +203,7 @@ function inviteText(broker, url, agencyName) {
 async function changeRole(pool, owner, brokerId, newRole) {
   if (!isAgencyOwner(owner)) return { error: "forbidden" };
   if (!INVITE_ROLES.includes(String(newRole || ""))) return { error: "role" };
+  if (!(await Entitlements().inviteRoles(pool, owner, INVITE_ROLES)).includes(String(newRole))) return { error: "plan_feature" };
   if (brokerId === owner.id) return { error: "self" };
   const { rows } = await pool.query("SELECT id, name, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, owner.agency_id]);
   if (!rows[0]) return { error: "not_found" };
@@ -210,6 +220,8 @@ async function changeRole(pool, owner, brokerId, newRole) {
  */
 async function setTeamLeadRole(pool, manager, brokerId, on) {
   if (!MANAGER_ROLES.includes(String(manager.role || "").toLowerCase())) return { error: "forbidden" };
+  const denied = await Entitlements().assertAllowed(pool, manager, "teamLead");
+  if (denied) return denied;
   if (brokerId === manager.id) return { error: "self" };
   const { rows } = await pool.query("SELECT id, name, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   if (!rows[0]) return { error: "not_found" };
@@ -223,12 +235,15 @@ async function setTeamLeadRole(pool, manager, brokerId, on) {
     await pool.query("UPDATE broker_team_history SET to_at = now() WHERE team_lead_id = $1 AND agency_id = $2 AND to_at IS NULL", [brokerId, manager.agency_id]);
     await pool.query("UPDATE brokers SET team_lead_id = NULL WHERE team_lead_id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   }
+  forgetWorkspace(manager.agency_id);
   return { ok: true, broker: rows[0], from, to };
 }
 
 /** A manager puts a broker in a team (under a team lead), or takes them out (teamLeadId null). Returns { ok } | { error }. */
 async function setTeam(pool, manager, brokerId, teamLeadId) {
   if (!MANAGER_ROLES.includes(String(manager.role || "").toLowerCase())) return { error: "forbidden" };
+  const denied = await Entitlements().assertAllowed(pool, manager, "teamLead");
+  if (denied) return denied;
   const { rows } = await pool.query("SELECT id, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   if (!rows[0]) return { error: "not_found" };
   if (String(rows[0].role || "").toLowerCase() === "team_lead" && teamLeadId) return { error: "team_lead_nested" };
@@ -246,4 +261,16 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
   return { ok: true };
 }
 
-module.exports = { INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };
+/**
+ * The agency owner picks how a team below the agency tier works: "shared" (everyone acts as a broker) or "structured" (owner and brokers with the
+ * owner's switches). Owner only. Drops the remembered workspace so every screen follows at once. → { ok, style } | { error }.
+ */
+async function setTeamStyle(pool, owner, style) {
+  if (!isAgencyOwner(owner)) return { error: "forbidden" };
+  if (!require("../domain/segments").TEAM_STYLES.includes(String(style))) return { error: "style" };
+  await pool.query("UPDATE agencies SET team_style = $2 WHERE id = $1", [owner.agency_id, String(style)]);
+  forgetWorkspace(owner.agency_id);
+  return { ok: true, style: String(style) };
+}
+
+module.exports = { setTeamStyle, INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };

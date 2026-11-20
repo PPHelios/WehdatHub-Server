@@ -8,7 +8,8 @@ const COLUMNS = "id, parent_id, name_key, name_en, name_ar, aliases, lat, lng, s
 
 /** Approved areas and sub-zones (all levels). `db` is a client or the pool. */
 async function approvedAreas(db) {
-  const { rows } = await db.query(`SELECT ${COLUMNS} FROM areas WHERE status = 'approved' ORDER BY name_en NULLS LAST, name_ar`);
+  // place_type (the phase marker) came with migration 110 and the first migrations read areas before it exists: read it from the row as JSON.
+  const { rows } = await db.query(`SELECT ${COLUMNS}, to_jsonb(areas) ->> 'place_type' AS place_type FROM areas WHERE status = 'approved' ORDER BY name_en NULLS LAST, name_ar`);
   return rows;
 }
 

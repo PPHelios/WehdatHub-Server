@@ -75,7 +75,7 @@ function unitBox(v, areas, lang, place, opts = {}) {
   const context = place && place.known ? [place.path, ...(place.zones || [])].filter(Boolean) : [];
   return html`<div class="ubox" data-ubox data-field-wrap${opts.noNew ? raw(" data-no-new") : ""}${opts.areasOnly ? raw(" data-areas-only") : ""}
     data-msg-new="${L(lang, "جديد", "new")}" data-msg-check="${L(lang, "مش في القائمة: اختار من الاقتراحات أو اطلبه كجديد.", "Not on the list: pick a suggestion or request it as new.")}"
-    data-msg-places="${L(lang, "الأماكن", "Places")}" data-msg-features="${L(lang, "المميزات", "Features")}"
+    data-msg-phase="${L(lang, "المرحلة", "Phase")}" data-msg-places="${L(lang, "الأماكن", "Places")}" data-msg-features="${L(lang, "المميزات", "Features")}"
     data-msg-request="${opts.areasOnly ? L(lang, "اطلب منطقة فرعية جديدة: «%s»", "Request a new sub-area: “%s”") : L(lang, "اطلب مكان جديد: «%s»", "Request a new place: “%s”")}" data-msg-other="${L(lang, "ضيف «%s» كميزة تانية", "Add “%s” as another feature")}"
     data-msg-swap="${L(lang, "اتغير المكان: %s", "Place changed to %s")}" data-msg-remove="${L(lang, "شيل %s", "Remove %s")}" data-msg-other-tag="${L(lang, "مش في القائمة", "not in the list")}">
     <span class="ubox-label" id="ubox-label">${opts.label || L(lang, "المكان والمميزات *", "Place and features *")}</span>
@@ -89,6 +89,7 @@ function unitBox(v, areas, lang, place, opts = {}) {
       ${(v.feature || []).filter((k) => Features.featureLabel(k)).map((k) => html`<span class="chip chip-feature" data-ubox-chip="feature" data-key="${k}"><span data-chip-text>${Features.featureLabel(k, lang)}</span>${chipX(Features.featureLabel(k, lang))}<input type="hidden" name="feature" value="${k}"></span>`)}
       ${others.map((o) => html`<span class="chip chip-other" data-ubox-chip="other"><span data-chip-text>${o}</span> <em class="chip-tag">${L(lang, "مش في القائمة", "not in the list")}</em>${chipX(o)}</span>`)}
     </div>
+    <div class="ubox-phases" data-ubox-phases data-base="${place?.phasesBase || ""}"${hid(opts.areasOnly || !(place && place.phases && place.phases.length))}>${opts.areasOnly || !place || !place.phases ? "" : html`<span class="ubox-phases-label">${L(lang, "المرحلة", "Phase")}</span>${place.phases.map((p) => html`<button type="button" class="chip chip-phase" data-phase="${p.id}" aria-pressed="${p.selected ? "true" : "false"}">${p.label}</button>`)}`}</div>
     <p class="ubox-context" data-ubox-context${hid(!context.length)}>${ICON.pin}<span data-ubox-context-text>${context.join(" · ")}</span></p>
     <p class="ubox-warn" data-ubox-warn role="status"${hid(placeState !== "check")}>${L(lang, "مش في القائمة: اختار من الاقتراحات أو اطلبه كجديد.", "Not on the list: pick a suggestion or request it as new.")}</p>
     <input type="hidden" name="compound" value="${v.compound}" data-ubox-compound>

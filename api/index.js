@@ -100,8 +100,15 @@ function mountApi(app, { pool }) {
 
   const priv = express.Router();
   priv.use(requireAuth);
+  // The workspace (tier, mode, team style) travels with the request, like on the website; one memoised read (lib/workspace.js).
+  priv.use(async (req, _res, next) => {
+    const b = req.session.broker;
+    if (b?.agency_id) b.workspace = await require("../lib/workspace").stateOf(pool, b.agency_id, { role: b.role }).catch(() => null);
+    next();
+  });
   // After the plan period ended (read-only, blocked): writes are refused with 402 plan_readonly / plan_blocked (lib/planGuard.js).
   priv.use(require("../lib/planGuard").api(pool));
+  priv.use(require("../lib/entitlements").api(pool));
   priv.use(require("../lib/readCaps").apiReadLimiter(pool));
   // Every refused or failed app request (4xx/5xx) is one row in the Failures list, tagged "app" (lib/failureLog.js).
   priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));

@@ -14,6 +14,8 @@ const TABLES = { unit: "listings", lead: "leads", owner: "unit_owners" };
  */
 async function setPrivate(pool, owner, kind, id, value) {
   if (!isAgencyOwner(owner)) return { error: "forbidden" };
+  const denied = await require("../lib/entitlements").assertAllowed(pool, owner, "privateUnits");
+  if (denied) return denied;
   const table = TABLES[kind];
   if (!table) return { error: "kind" };
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ""))) return { error: "not_found" };

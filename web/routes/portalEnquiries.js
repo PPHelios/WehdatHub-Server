@@ -6,6 +6,7 @@
 
 const Authz = require("../../lib/authz");
 const Enquiries = require("../../services/portalEnquiries");
+const Phone = require("../../domain/phone");
 const { html } = require("../html");
 
 const { L } = require("../../lib/copy");
@@ -16,9 +17,11 @@ const NOTICES = {
   assigned: ["✅ اتحول لعميل.", "✅ Now a lead."],
   colleague: ["✅ الرقم ده لعميل عند زميل: اتسجل الاستفسار عنده ومفيش تفاصيل ظاهرة.", "✅ The phone belongs to a colleague's lead: the enquiry was noted there, no details shown."],
   merged: ["✅ الرقم كان لعميل موجود: اتضاف للعميل، والبروكر بتاعه لسه معاه.", "✅ The phone was already a lead: merged into it, and its broker stays."],
+  repeat: ["ℹ️ الاستفسار ده اتسجل قبل كده (آخر يوم). مش هيتسجل تاني.", "ℹ️ This enquiry was already kept in the last day. It was not kept twice."],
   error: ["❌ حصلت مشكلة. اتأكد من البيانات وحاول تاني.", "❌ Something went wrong. Check the details and try again."]
 };
 const ERRORS = {
+  not_enquiry: ["الرسالة دي مش رسالة استفسار من بوابة (Bayut أو Dubizzle أو Nawy).", "That is not a portal enquiry message (Bayut, Dubizzle or Nawy)."],
   phone_invalid: ["الرقم مش مظبوط.", "The phone number isn't valid."],
   already_assigned: ["الاستفسار ده اتحول قبل كده.", "This enquiry was already assigned."],
   erased_before: ["الرقم ده اتمسح قبل كده بطلب العميل.", "This number was erased at the client's request."],
@@ -31,6 +34,20 @@ const ERRORS = {
 };
 
 const when = (d, lang) => (d ? new Date(d).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" }) : "");
+
+/** The paste box: the portal's message from WhatsApp; the phone and broker are optional here (they can be added in the list). */
+function pasteBox(brokers, lang) {
+  return html`<form method="post" action="/app/portal-enquiries/paste" class="card stack" data-portal-paste>
+  <label for="portal-msg">${L(lang, "الزق رسالة البوابة هنا", "Paste the portal message here")}</label>
+  <textarea id="portal-msg" name="message" rows="5" maxlength="4000" required placeholder="${L(lang, "الصق رسالة الاستفسار اللي جتلك على واتساب", "Paste the enquiry message you got on WhatsApp")}"></textarea>
+  <input name="phone" dir="ltr" inputmode="tel" placeholder="${L(lang, "رقم العميل (اختياري)", "Client phone (optional)")}" aria-label="${L(lang, "الرقم", "Phone")}">
+  <select name="broker_id" aria-label="${L(lang, "البروكر", "Broker")}">
+    <option value="">${L(lang, "البروكر (اختياري)", "Broker (optional)")}</option>
+    ${brokers.map((b) => html`<option value="${b.id}">${b.name}</option>`)}
+  </select>
+  <button type="submit">${L(lang, "اقرأ الرسالة", "Read message")}</button>
+</form>`;
+}
 
 function enquiryRow(e, brokers, lang) {
   const linked = e.unit_code
@@ -58,6 +75,7 @@ function enquiryRow(e, brokers, lang) {
 function enquiriesPanel({ rows, brokers, lang, owner, alertsOn, notice }) {
   return html`${notice || ""}
 <p class="muted">${L(lang, "استفسارات Bayut وDubizzle وNawy. الاسم والرابط بس. لما تضيف الرقم وتحوّل للبروكر، الاستفسار بيبقى عميل.", "Enquiries from Bayut, Dubizzle and Nawy: name and link only. Add the phone and assign a broker, and it becomes a lead.")}</p>
+${pasteBox(brokers, lang)}
 ${owner ? html`<form method="post" action="/app/portal-enquiries/alerts" class="card stack"><label><input type="checkbox" name="on" value="1" ${alertsOn ? "checked" : ""}> ${L(lang, "تنبيهات الاستفسارات ليا (إنت المالك بس)", "Enquiry alerts for me (the owner only)")}</label><button type="submit">${L(lang, "حفظ", "Save")}</button></form>` : ""}
 ${rows.length
   ? html`<div class="scroll card"><table><thead><tr><th>${L(lang, "التاريخ", "Date")}</th><th>${L(lang, "البوابة", "Portal")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "الرابط", "Link")}</th><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "الرقم والبروكر", "Phone and broker")}</th></tr></thead>
@@ -100,6 +118,25 @@ function register(web, { pool }) {
     if (!managersOnly(req, res)) return undefined;
     const key = req.query.done;
     return res.redirect(303, key && NOTICES[key] ? back(`done=${encodeURIComponent(key)}`) : TAB);
+  });
+
+  // The paste box: keeps the message as an enquiry; with a phone and a broker it becomes a lead in the same step.
+  web.post("/portal-enquiries/paste", async (req, res) => {
+    if (!managersOnly(req, res)) return undefined;
+    const actor = req.session.broker;
+    const message = String(req.body.message || "").slice(0, 4000);
+    const phone = String(req.body.phone || "").trim();
+    const brokerId = String(req.body.broker_id || "").trim();
+    if (phone && !Phone.toE164(phone)) return res.redirect(303, back("error=phone_invalid"));
+    const cap = await Enquiries.capture(pool, actor, message);
+    if (cap.outcome === "not_enquiry") return res.redirect(303, back("error=not_enquiry"));
+    if (cap.outcome !== "created" && cap.outcome !== "repeat") return res.redirect(303, back("error=error"));
+    if (phone && brokerId) {
+      const r = await Enquiries.assign(pool, actor, cap.outcome === "repeat" ? cap.id : cap.enquiry.id, { phone, brokerId });
+      if (r.error) return res.redirect(303, back(`error=${encodeURIComponent(r.error)}`));
+      return res.redirect(303, back(`done=${r.outcome === "created" ? "assigned" : r.outcome === "colleague" ? "colleague" : "merged"}`));
+    }
+    return res.redirect(303, back(cap.outcome === "repeat" ? "done=repeat" : "done=saved"));
   });
 
   web.post("/portal-enquiries/:id/assign", async (req, res) => {

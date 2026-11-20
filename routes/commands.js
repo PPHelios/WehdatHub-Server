@@ -47,7 +47,8 @@ async function handleCommand(broker, text, ctx) {
   // 1. HELP / MENU (SYS-01)
   if (/^(مساعدة|help|اوامر|الأوامر|menu|قائمة)$/i.test(lower)) {
     const guide = lang === "en" ? `📘 Quick guide and FAQ: ${Links.guideUrl(lang)}` : `📘 الدليل السريع والأسئلة الشائعة: ${Links.guideUrl(lang)}`;
-    const helpMsg = `${T.getHelpMessage(lang)}\n\n${guide}`;
+    const ws = await require("../lib/workspace").stateOf(pool, broker.agency_id, { role: broker.role }).catch(() => null);
+    const helpMsg = `${T.getHelpMessage(lang, ws)}\n\n${guide}`;
     await reply(broker, helpMsg);
     logCommandOp(pool, {
       agency_id: broker.agency_id,

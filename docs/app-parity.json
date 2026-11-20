@@ -97,7 +97,7 @@
     "app": "Plan"
   },
   "portalEnquiries.js": {
-    "app": "Portal enquiries (PR 4)"
+    "app": "Portal enquiries (PR 4), plus the portal enquiry screen opened from share and paste"
   },
   "priceSheets.js": {
     "web": "web only: price sheet uploads and reading"

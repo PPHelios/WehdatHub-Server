@@ -96,6 +96,7 @@
  "/share": "app-only: the app is a share target",
  "/signup": "web-only: new agency sign-up",
  "/sources": "api:/sources",
+ "/add-teammate": "web-only: upgrade card of a lone owner (app screen in Phase 4)",
  "/team": "api:/team",
  "/tg": "web-only: Telegram mini app entry",
  "/units": "api:/units",

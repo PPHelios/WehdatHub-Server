@@ -261,7 +261,8 @@ ${landingBody(lang, { telegramUrl, form: tryForm(lang, form), signupOpen, action
       [values.name, values.agency, e164, team, lang]
     );
     ErrorReports.alertOwner(
-      [`📅 Demo request #D${rows[0].id}`, `${values.name} · ${values.agency}`, `📞 ${e164}`, `👥 ${team} brokers`].filter(Boolean).join("\n")
+      [`📅 Demo request #D${rows[0].id}`, `${values.name} · ${values.agency}`, `📞 ${e164}`, `👥 ${team} brokers`].filter(Boolean).join("\n"),
+      { category: "new_trial", pool }
     ).catch(() => {});
     return done();
   });
