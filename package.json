@@ -1,7 +1,7 @@
 {
-  "name": "AqarChat",
+  "name": "wehdathub-server",
   "version": "2.2.0",
-  "description": "Enterprise Real Estate WhatsApp Ingestion, Valuation & Inventory Engine",
+  "description": "Real estate inventory, leads and CRM for brokers",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
