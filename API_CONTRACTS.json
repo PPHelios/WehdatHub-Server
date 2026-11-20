@@ -660,6 +660,8 @@
       "styleFor": ["tier", "style"]
     },
     "domain/sheetImport.js": {
+      "LONG_TEXT": "Array",
+      "isEmpty": ["v"],
       "typeIn": ["t"],
       "statusHint": ["cells"],
       "deliveryCell": ["v"],
