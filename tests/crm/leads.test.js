@@ -239,10 +239,12 @@ describe("changes, versions and undo", () => {
     expect(c.lead.stage).toBe("contacted");
     expect(c.lead.last_contact_at).toBeTruthy();
     const unit = await h.insertListing({ code: "VIL-08" });
-    await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-20T08:00:00Z" });
-    const v = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-21T15:00:00Z", kind: "viewing", listingId: unit.id, note: "bring keys" });
+    const inDays = (n) => new Date(Date.now() + n * 24 * 3600e3).toISOString(); // follow-ups in the past are refused, so never hardcode a date
+    const viewAt = inDays(2);
+    await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: inDays(1) });
+    const v = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: viewAt, kind: "viewing", listingId: unit.id, note: "bring keys" });
     expect(v.lead).toMatchObject({ follow_up_kind: "viewing", follow_up_listing_id: unit.id, follow_up_status: "open" });
-    expect(new Date(v.lead.next_follow_up_at).toISOString()).toBe("2026-11-21T15:00:00.000Z");
+    expect(new Date(v.lead.next_follow_up_at).toISOString()).toBe(viewAt);
     expect((await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "soon" })).error).toBe("follow_up_time");
     expect((await Leads.completeFollowUp(h.pool, B.broker, lead.id)).lead.follow_up_status).toBe("done");
     expect((await Leads.completeFollowUp(h.pool, B.broker, lead.id)).error).toBe("no_open_follow_up");
@@ -257,7 +259,7 @@ describe("changes, versions and undo", () => {
     expect(u.lead).toMatchObject({ stage: "new", lost_reason: null });
     expect((await Leads.undo(h.pool, B.broker, s.eventId)).error).toBe("already_undone");
 
-    const f = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: "2026-11-20T08:00:00Z", now: t0 });
+    const f = await Leads.setFollowUp(h.pool, B.broker, lead.id, { at: new Date(t0.getTime() + 3600e3), now: t0 });
     expect((await Leads.undo(h.pool, B.broker, f.eventId, { now: new Date(t0.getTime() + 11 * 60e3) })).error).toBe("undo_expired");
     const fu = await Leads.undo(h.pool, B.broker, f.eventId, { now: t0 });
     expect(fu.lead).toMatchObject({ follow_up_status: null, next_follow_up_at: null });
