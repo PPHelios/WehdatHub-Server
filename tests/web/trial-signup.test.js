@@ -202,6 +202,7 @@ test("Day 11 and Day 13 reminders reach the new owner on Telegram", async () => 
   await h.tg(8811, contact("+201055556666", 8811));
   const [a] = await h.query("SELECT id FROM agencies WHERE name = 'Delta Homes'");
   const [b] = await h.query("SELECT id FROM brokers WHERE agency_id = $1", [a.id]);
+  // Fixed at 10:00 UTC (midday in Cairo) so the quiet-hours rule never holds the reminder back, whatever time CI runs.
   const start = new Date();
   start.setUTCHours(10, 0, 0, 0); // midday Cairo: the default quiet hours (22:00 to 08:00) would hold the message if the test ran at night
   let i = 0;
