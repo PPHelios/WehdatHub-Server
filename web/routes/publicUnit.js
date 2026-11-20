@@ -298,7 +298,8 @@ function mountPublic(app, { pool, assets }) {
             robots: "noindex, nofollow",
             scripts: false,
             manifest: false,
-            head: unit.status === "active" ? ogTags(unit, pageUrl) : null,
+            // Only the carousel script: swipe loops round at the ends (the rest of the page needs no script).
+            head: unit.status === "active" ? html`${ogTags(unit, pageUrl)}<script src="${assets.url("carousel.js")}" defer></script>` : null,
             body: unitBody(unit, { otherLangUrl, interest: { action: `${base}&lang=${lang}#interest`, ...interest }, plans: plansView(unit, listing, `${base}&lang=${lang}`, req.query.plan, lang) })
           })
         )

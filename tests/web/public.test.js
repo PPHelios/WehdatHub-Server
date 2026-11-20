@@ -85,7 +85,7 @@ describe("the client copy carries a share link", () => {
 });
 
 describe("the public page", () => {
-  test("OG tags for the link preview, noindex everywhere, no scripts, no referrer", async () => {
+  test("OG tags for the link preview, noindex everywhere, only the carousel script, no referrer", async () => {
     await seedUnit();
     const r = await open(await sharedLink(), PREVIEW);
     expect(r.status).toBe(200);
@@ -98,7 +98,7 @@ describe("the public page", () => {
     expect(r.text).toMatch(/<meta property="og:image" content="https:\/\/storage.test\/listing-images\/a.jpg">/);
     expect(r.text).toMatch(/<meta property="og:url" content="http:\/\/localhost:3000\/agency-alpha\/PUB-1\?s=/);
     expect(r.text).toMatch(/<meta property="og:description" content="[^"]*150م/);
-    expect(r.text).not.toMatch(/<script/);
+    expect(r.text.match(/<script[^>]*>/g)).toEqual([expect.stringMatching(/carousel[^"]*\.js/)]); // the only script: swipe loops round at the ends
     expect(r.text).not.toMatch(/rel="manifest"/);
   });
 

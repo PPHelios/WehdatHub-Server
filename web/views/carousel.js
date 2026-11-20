@@ -1,7 +1,6 @@
 // web/views/carousel.js — The photo carousel of a unit: swipe, or use the arrows. Used by the unit page and the client link, so
-// both show the photos the same way. It needs no script (the client link has none): each photo carries its own arrows, which
-// are links to the neighbouring photo (and loop round at the ends), a row of thumbnails jumps to any photo, and the track snaps
-// to one photo at a time.
+// both show the photos the same way. The arrows work without a script: each photo carries links to the neighbouring photo (they loop round at the ends), a row of thumbnails jumps to any photo, and the track snaps
+// to one photo at a time. Swiping past the first or last photo loops too, through web/static/carousel.js.
 "use strict";
 
 const { html } = require("../html");
