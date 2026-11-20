@@ -10,7 +10,8 @@ const Portfolio = require("../../services/privatePortfolio");
 const Vis = require("../../lib/visibility");
 const { html, escapeHtml } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
+const { phoneHelp } = require("../views/phoneHelp");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const stamp = (d, lang) => new Date(d).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const PAGE = 50;
@@ -46,7 +47,7 @@ async function unitOwnerBlock(pool, viewer, listing, lang, csrf, notice = null) 
     <label>${L(lang, "كود العميل اللي اشتراها (L-0042)", "Lead who bought it (L-0042)")}<input name="lead" dir="ltr" placeholder="L-0042"></label>
     <p class="muted small">${L(lang, "أو مالك جديد:", "or a new owner:")}</p>
     <label>${L(lang, "الاسم", "Name")}<input name="name" maxlength="120"></label>
-    <label>${L(lang, "الموبايل", "Mobile")}<input name="phone" inputmode="tel" dir="ltr"></label>
+    <label>${L(lang, "الموبايل", "Mobile")}<input name="phone" inputmode="tel" dir="ltr">${phoneHelp(lang)}</label>
     <button type="submit" class="secondary">${L(lang, "انقل", "Move")}</button>
   </form></details>`
     : "";
@@ -104,7 +105,7 @@ ${list.rows.length
       title: L(lang, "طلبات تعديل الأسماء", "Name requests"),
       nav: "units",
       body: html`<h1>📝 ${L(lang, "طلبات تعديل الأسماء", "Name requests")}</h1>
-${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => html`<li class="card" data-request="${r.id}"><b>${r.code}</b> · ${r.old_value || "—"} → <b>${r.new_value}</b> <span class="muted small">${r.requested_by_name || ""} · ${stamp(r.created_at, lang)}</span>
+${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => html`<li class="card" data-request="${r.id}"><b>${r.code}</b> · ${r.old_value || "—"} ${L(lang, "←", "→")} <b>${r.new_value}</b> <span class="muted small">${r.requested_by_name || ""} · ${stamp(r.created_at, lang)}</span>
 <form method="post" action="/app/owners/requests/${r.id}" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><button name="decision" value="approve" type="submit">${L(lang, "موافقة", "Approve")}</button><button name="decision" value="reject" type="submit" class="secondary">${L(lang, "رفض", "Reject")}</button></form></li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش طلبات.", "No requests.")}</p>`}`
     });
   });

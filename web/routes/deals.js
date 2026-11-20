@@ -16,7 +16,7 @@ const { html } = require("../html");
 const { dealsSwitch } = require("../views/tabs");
 const Vis = require("../../lib/visibility");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const money = (n, lang) => Commission.money(n, lang);
 const when = (d) => new Date(d).toISOString().slice(0, 10);
@@ -123,7 +123,7 @@ ${notice ? html`<div class="card notice bad" role="alert">⚠️ ${notice}</div>
   <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${v.unit}" list="deal-units" autocomplete="off"></label>
   <datalist id="deal-units">${picks.units.map((u) => html`<option value="${u.code}">${[u.title || u.compound || u.location, u.price_display].filter(Boolean).join(" · ")}</option>`)}</datalist>
   <label>${L(lang, "النوع", "Type")}<select name="deal_type"><option value="">${L(lang, "زي الوحدة", "As the unit")}</option><option value="sale"${v.deal_type === "sale" ? html` selected` : ""}>${L(lang, "بيع", "Sale")}</option><option value="rent"${v.deal_type === "rent" ? html` selected` : ""}>${L(lang, "إيجار", "Rent")}</option></select></label>
-  <label>${L(lang, "السعر (فاضي = سعر الوحدة)", "Price (empty = the unit's price)")}<input name="price" inputmode="decimal" value="${v.price || ""}" placeholder="${L(lang, "8.5 مليون", "8.5M")}"></label>
+  <label>${L(lang, "السعر (فاضي = سعر الوحدة)", "Price (empty = the unit's price)")}<input name="price" inputmode="decimal" data-money value="${v.price || ""}" placeholder="${L(lang, "8.5 مليون", "8.5M")}"></label>
   <label>${L(lang, "العمولة: نسبة أو مبلغ", "Commission: a % or an amount")}<input name="commission" required value="${v.commission || ""}" placeholder="2% / 170000"></label>
   <fieldset><legend>${L(lang, "بروكر خارجي (اختياري)", "External co-broker (optional)")}</legend>
     <label>${L(lang, "نصيبه: نسبة من العمولة أو مبلغ", "Their share: a % of the commission or an amount")}<input name="external" value="${v.external || ""}" placeholder="10% / 20000"></label>

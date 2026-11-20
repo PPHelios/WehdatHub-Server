@@ -11,14 +11,14 @@ const { withTransaction, logOperation } = require("../lib/db");
 const Vis = require("../lib/visibility");
 
 const DAY = 86400000;
-const ACTIONS = ["owner_plan", "owner_suspend", "owner_resume", "owner_announcement", "owner_founding", "owner_extra_seats"];
+const ACTIONS = ["owner_plan", "owner_suspend", "owner_resume", "owner_announcement", "owner_founding", "owner_extra_seats", "owner_analytics"];
 // The first agencies on the Founding Partner list (flag set here; the extras are operational: no setup fee, migration help).
 const FOUNDING_MAX = 20;
 
 /** Every approved or pending agency with its plan in force and its size. */
 async function list(db, { now = new Date() } = {}) {
   const { rows } = await db.query(
-    `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.created_at, a.signed_up_at, a.grace_extra_until, a.extra_seats, a.founding_partner, a.lock_until, a.locked_prices IS NOT NULL AS price_locked,
+    `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.created_at, a.signed_up_at, a.grace_extra_until, a.extra_seats, a.founding_partner, a.analytics_enabled, a.lock_until, a.locked_prices IS NOT NULL AS price_locked,
             (SELECT p.months FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'confirmed' ORDER BY p.confirmed_at DESC NULLS LAST LIMIT 1) AS last_months,
             (SELECT min(p.created_at) FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'pending') AS pending_plan_at,
             a.crm_settings->>'suspended_at' AS suspended_at,
@@ -37,8 +37,10 @@ async function get(db, agencyId, { now = new Date() } = {}) {
   const all = await list(db, { now });
   const a = all.find((x) => x.id === agencyId);
   if (!a) return null;
-  const { rows: brokers } = await db.query("SELECT id, name, role, is_active, preferred_lang, created_at FROM brokers WHERE agency_id = $1 ORDER BY role, name", [agencyId]);
-  const payments = await Billing.paymentsOf(db, agencyId, { limit: 10 });
+  const [{ rows: brokers }, payments] = await Promise.all([
+    db.query("SELECT id, name, role, is_active, preferred_lang, created_at FROM brokers WHERE agency_id = $1 ORDER BY role, name", [agencyId]),
+    Billing.paymentsOf(db, agencyId, { limit: 10 })
+  ]);
   return { ...a, team: brokers, payments };
 }
 
@@ -62,6 +64,7 @@ async function setPlan(db, owner, agencyId, { plan, months = null, until = null,
     [agencyId, p.id, paidUntil ? paidUntil.toISOString() : null, pilot === null ? null : Boolean(pilot)]
   );
   if (!rows[0]) return { error: "not_found" };
+  require("../lib/planGuard").forget(agencyId);
   logOperation(db, { agency_id: agencyId, broker_id: owner.id, operation_type: "owner_plan", status: "success", metadata: { plan: p.id, paid_until: rows[0].paid_until, pilot: rows[0].pilot } });
   return { ok: true, agency: rows[0] };
 }
@@ -90,6 +93,7 @@ async function setFounding(pool, owner, agencyId, on) {
     await client.query("UPDATE agencies SET founding_partner = $2, updated_at = now() WHERE id = $1", [agencyId, want]);
     return { ok: true, founding: want, ...(await foundingCount(client)) };
   });
+  if (out.ok) require("../lib/planGuard").forget(agencyId);
   if (out.ok) logOperation(pool, { agency_id: agencyId, broker_id: owner.id, operation_type: "owner_founding", status: "success", metadata: { founding: out.founding } });
   return out;
 }

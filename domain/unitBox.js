@@ -5,6 +5,7 @@
 
 const Features = require("./features");
 const A = require("./areas");
+const Phases = require("./phases");
 const { placeKey, keysOf } = require("./mapPlaces");
 const { mapFurnishing, mapFinishing } = require("./furnishingStatus");
 const { normalizeSearch } = require("./searchText");
@@ -78,7 +79,19 @@ function finishingOf(text) {
 /** Text → { place, features, furnishing, finishing }: what a pasted message fills in the box and the two drop-downs. Nothing is invented. */
 function resolve(text, lists, lang = "ar") {
   const s = String(text || "").slice(0, 4000);
-  return { place: findPlace(s, lists, lang), features: Features.matchFeatureKeys(s).filter((k) => !NOT_FOR_BOX.has(k)), furnishing: furnishingOf(s), finishing: finishingOf(s) };
+  let place = findPlace(s, lists, lang);
+  // A phase ("مدينتي B6", "b6 madinaty", "الرحاب مرحلة 7"): the place stays the compound the text names (else the phase itself), the phase is
+  // the sub-zone. A bare "B6" next to another place is that place's own word (a building), not a phase.
+  let phase = null;
+  const ph = Phases.findPhase(s, lists);
+  if (ph && (ph.named || !place || place.id === ph.phase.id)) {
+    const nm = (r) => (lang === "ar" ? r.name_ar || r.name_en : r.name_en || r.name_ar);
+    const itemOf = (row) => A.suggest(nm(row), lists, 20, lang).find((x) => x.id === row.id) || null;
+    phase = itemOf(ph.phase);
+    const comp = Phases.compoundOf(ph.phase, lists.places || [], s);
+    place = (comp && itemOf(comp)) || phase;
+  }
+  return { place, phase, features: Features.matchFeatureKeys(s).filter((k) => !NOT_FOR_BOX.has(k)), furnishing: furnishingOf(s), finishing: finishingOf(s) };
 }
 
 module.exports = { suggestFeatures, findPlace, resolve, NOT_FOR_BOX };

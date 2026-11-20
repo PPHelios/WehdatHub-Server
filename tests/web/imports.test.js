@@ -13,6 +13,13 @@ const Imports = require("../../services/imports");
 const Excel = require("../../lib/excel");
 const Describe = require("../../domain/describe");
 
+// The Excel apply runs in the background: wait for it, then look.
+async function applyRows(agent, csrf, id, body) {
+  const res = await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send(body);
+  await Imports.waitForApply(id);
+  return res;
+}
+
 jest.setTimeout(90000);
 
 let h;
@@ -79,7 +86,7 @@ describe("Excel diff import", () => {
     const before = await unit("HP-1");
     const { agent, csrf } = await signIn(h, "manager");
     const id = importId(await upload(agent, csrf, await workbook(rows)));
-    const apply = await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2&rows=4");
+    const apply = await applyRows(agent, csrf, id, "rows=2&rows=4");
     expect(apply.status).toBe(303);
     const hp1 = await unit("HP-1");
     expect(hp1).toMatchObject({ price_value: 8.5e6, feature_keys: ["north_facing", "corner"], version: before.version + 1 });
@@ -89,8 +96,15 @@ describe("Excel diff import", () => {
     const view = await agent.get(`/app/import/${id}`);
     expect(view.text).toMatch(/data-result/);
     expect(view.text).toMatch(/اتضافت: 1/);
-    expect(view.text).not.toMatch(/name="rows"/);
-    const again = await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=3");
+    // A changed row (COL-1, a colleague's unit) is still to be applied: the plan stays open. Pressing Apply on a row that was already written writes nothing twice.
+    expect(view.text).toMatch(/name="rows"/);
+    const twice = await applyRows(agent, csrf, id, "rows=2&rows=4");
+    expect(twice.status).toBe(303);
+    expect((await unit("HP-1")).version).toBe(before.version + 1);
+    expect(await h.query("SELECT 1 FROM listings WHERE code_norm = 'NEW-9'")).toHaveLength(1);
+    expect((await applyRows(agent, csrf, id, "rows=6")).status).toBe(303);
+    expect((await agent.get(`/app/import/${id}`)).text).not.toMatch(/name="rows"/);
+    const again = await applyRows(agent, csrf, id, "rows=3");
     expect(again.status).toBe(409);
     // New units are found by WhatsApp search.
     h.AI.respond(() => new Error("503"));
@@ -102,7 +116,7 @@ describe("Excel diff import", () => {
     const { agent, csrf } = await signIn(h, "manager");
     const id = importId(await upload(agent, csrf, await workbook(rows)));
     await h.text("broker", "سعر HP-1 11 مليون");
-    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2");
+    await applyRows(agent, csrf, id, "rows=2");
     expect((await unit("HP-1")).price_value).toBe(11e6);
     const [{ result }] = await h.query("SELECT result FROM web_imports WHERE id = $1", [id]);
     expect(result.conflicts).toEqual(["HP-1"]);
@@ -128,7 +142,7 @@ describe("Excel diff import", () => {
     const res = await upload(agent, csrf, await workbook(rows.slice(0, 3)));
     const page = await agent.get(res.headers.location);
     expect(page.text).not.toMatch(/data-kind="missing"|GONE-1|name="archive"/);
-    await agent.post(`/app/import/${importId(res)}/apply`).set("X-CSRF-Token", csrf).type("form").send("archive=GONE-1&rows=2");
+    await applyRows(agent, csrf, importId(res), "archive=GONE-1&rows=2");
     expect((await unit("GONE-1")).status).toBe("active"); // nothing is archived by an import
   });
 
@@ -138,10 +152,14 @@ describe("Excel diff import", () => {
     const res = await upload(agent, csrf, await workbook(rows));
     const id = importId(res);
     const page = await agent.get(res.headers.location);
-    expect(page.text).toMatch(/id="edit-5"/); // the invalid row (BAD-1) is editable
-    expect(page.text).toMatch(/id="edit-2"/); // so is a changed row (its Edit window is the structured editor: place search, chips)
-    expect(page.text).toMatch(/data-importeditor/);
-    expect(page.text).not.toMatch(/id="edit-3"/); // an unchanged one is not
+    // The Edit windows are fetched when their button is pressed: the page holds an empty shell for each editable row.
+    expect(page.text).toMatch(/data-edit-dialog="5" data-lazy="\/app\/import\/[^"]+\/dialog\/5"/); // the invalid row (BAD-1) is editable
+    expect(page.text).toMatch(/data-edit-dialog="2" data-lazy=/); // so is a changed row
+    expect(page.text).not.toMatch(/data-edit-dialog="3"/); // an unchanged one is not
+    const win = await agent.get(`/app/import/${id}/dialog/2`); // the structured editor: place search, chips
+    expect(win.status).toBe(200);
+    expect(win.text).toMatch(/id="edit-2"/);
+    expect(win.text).toMatch(/data-importeditor/);
 
     // still invalid: the price is missing
     await agent.post(`/app/import/${id}/edit/5`).set("X-CSRF-Token", csrf).type("form").send({ c_compound: "Hyde Park" }).expect(303);
@@ -156,7 +174,7 @@ describe("Excel diff import", () => {
     expect(payload.items.find((i) => i.row === 2).patch.price_value).toBe(9e6);
     expect((await unit("BAD-1"))).toBeUndefined(); // nothing is written until Apply
 
-    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2&rows=5");
+    await applyRows(agent, csrf, id, "rows=2&rows=5");
     expect((await unit("BAD-1")).price_value).toBe(3e6);
     expect((await unit("HP-1")).price_value).toBe(9e6);
   });
@@ -166,7 +184,7 @@ describe("Excel diff import", () => {
     const { agent, csrf } = await signIn(h, "manager");
     const id = importId(await upload(agent, csrf, await workbook(rows)));
     await agent.post(`/app/import/${id}/edit/99`).set("X-CSRF-Token", csrf).type("form").send({ c_price_value: "1" }).expect(404);
-    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2");
+    await applyRows(agent, csrf, id, "rows=2&rows=4&rows=6");
     await agent.post(`/app/import/${id}/edit/5`).set("X-CSRF-Token", csrf).type("form").send({ c_price_value: "1" }).expect(404);
   });
 
@@ -175,12 +193,31 @@ describe("Excel diff import", () => {
     const s = wb.addWorksheet("x");
     s.addRow(["My agency"]);
     s.addRow([]);
-    s.addRow(["Code", "Compound", "Property Type", "Purpose", "Price", "Area (sqm)", "Bedrooms"]);
-    s.addRow(["F-1", "Hyde Park", "Apartment", "Sale", { formula: "4000000*2", result: 8000000 }, 150, 3]);
+    s.addRow(["Code", "Compound", "Property Type", "Purpose", "Price", "Area (sqm)", "Bedrooms", "Owner phone"]);
+    s.addRow(["F-1", "Hyde Park", "Apartment", "Sale", { formula: "4000000*2", result: 8000000 }, 150, 3, "01012345678"]);
     const { agent, csrf } = await signIn(h, "manager");
     const res = await upload(agent, csrf, Buffer.from(await wb.xlsx.writeBuffer()));
     const [{ payload }] = await h.query("SELECT payload FROM web_imports WHERE id = $1", [importId(res)]);
     expect(payload.items).toEqual([expect.objectContaining({ row: 4, kind: "new", code: "F-1", fields: expect.objectContaining({ price_value: 8000000 }) })]);
+  });
+
+  test("a sheet with no code column is planned as new rows (codes are made when applied)", async () => {
+    const wb = new ExcelJS.Workbook();
+    const s = wb.addWorksheet("Hyde Park");
+    s.addRow(["Compound", "Property Type", "Purpose", "Price", "Area (sqm)", "Bedrooms", "Owner phone"]);
+    s.addRow(["Hyde Park", "Apartment", "Sale", 8000000, 150, 3, "01012345678"]);
+    s.addRow(["Hyde Park", "Apartment", "Sale", 9000000, 170, 3, "01012345679"]);
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await upload(agent, csrf, Buffer.from(await wb.xlsx.writeBuffer()));
+    expect(res.status).toBe(303);
+    const [{ payload }] = await h.query("SELECT payload FROM web_imports WHERE id = $1", [importId(res)]);
+    expect(payload.items.map((i) => i.kind)).toEqual(["new", "new"]);
+    expect(payload.items.every((i) => !i.code)).toBe(true); // no code yet: the codes are made when applied
+    expect((await applyRows(agent, csrf, importId(res), "rows=2&rows=3")).status).toBe(303);
+    const made = await h.query("SELECT code FROM listings WHERE agency_id = (SELECT agency_id FROM web_imports WHERE id = $1) ORDER BY code", [importId(res)]);
+    expect(made).toHaveLength(2);
+    expect(made.every((x) => /\d/.test(x.code))).toBe(true);
+    expect(new Set(made.map((x) => x.code)).size).toBe(2);
   });
 
   test("files that are not inventory workbooks are refused with a reason", async () => {
@@ -200,7 +237,7 @@ describe("Excel diff import", () => {
     const id = importId(await upload(me.agent, me.csrf, await workbook(rows)));
     const other = await signIn(h, "colleague");
     expect((await other.agent.get(`/app/import/${id}`)).status).toBe(404);
-    expect((await other.agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", other.csrf).type("form").send("rows=4")).status).toBe(403);
+    expect((await applyRows(other.agent, other.csrf, id, "rows=4")).status).toBe(403);
     expect(await unit("NEW-9")).toBeUndefined();
   });
 });
@@ -250,7 +287,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect(page.text).toMatch(/name="rows" value="0" checked/);
     expect(page.text).toMatch(/name="rows" value="1">/);
 
-    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=0&rows=2");
+    await applyRows(agent, csrf, id, "rows=0&rows=2");
     const created = await h.query("SELECT * FROM listings WHERE details->>'source' = 'group_import'");
     expect(created).toHaveLength(1);
     expect(created[0]).toMatchObject({ compound: "ميفيدا", price_value: 12e6, feature_keys: ["north_facing"], broker_id: h.BROKERS.manager.id });
@@ -263,7 +300,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     const id = importId(r);
     await Imports.waitForGroupImport(id);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/Ahmed Broker/);
-    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=0");
+    await applyRows(agent, csrf, id, "rows=0");
     const [l] = await h.query("SELECT * FROM listings");
     expect(l.details).toMatchObject({ co_broker: "Ahmed Broker", source: "group_import" });
     expect(Describe.clientCopy(l, h.BROKERS.broker)).not.toMatch(/Ahmed/);

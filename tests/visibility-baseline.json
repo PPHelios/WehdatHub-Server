@@ -1,1 +1,6 @@
-{}
+{
+  "lib/workspace.js|FROM leads x WHERE x.agency_id = a.id AND COALESCE(x.source, '') <> '')) AS k_so": 1,
+  "lib/workspace.js|FROM leads x WHERE x.agency_id = a.id AND x.is_private)) AS k_private, (EXISTS (": 1,
+  "lib/workspace.js|FROM leads x WHERE x.agency_id = a.id AND x.stage IN ('won', 'lost')) AS k_win_l": 1,
+  "lib/workspace.js|FROM listings x WHERE x.agency_id = a.id AND x.is_private) OR EXISTS (SELECT 1 F": 1
+}

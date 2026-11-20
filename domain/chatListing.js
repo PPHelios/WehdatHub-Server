@@ -113,7 +113,7 @@ function parsePost(text, places = null, from = {}) {
   };
 
   // The poster's own contact (a group post carries one); every unit needs an owner contact.
-  const phone = take(/(?:\+?20)?0?1[0125]\d{8}/);
+  const phone = take(/(?<!\d)(?:\+?20)?0?1[0125]\d{8}(?!\d)/);
   if (phone) set("owner_phone", phone[0]);
 
   // A code the poster wrote: "كود HP-12", "code: N4-105", "#VIL-08".

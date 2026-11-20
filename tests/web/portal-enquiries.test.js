@@ -96,3 +96,24 @@ test("the owner's mute is for himself only: managers still hear; only the owner 
   expect((await brokerAgent.get("/app/leads?tab=portal")).text).not.toMatch(/Silent/);
   expect((await agent.post("/app/portal-enquiries/alerts").set("X-CSRF-Token", csrf).type("form").send("on=1")).status).toBe(403);
 });
+
+test("the paste box keeps a portal message (and makes the lead when phone and broker are given); other text shows an error", async () => {
+  const { agent, csrf } = await signIn(h, "admin");
+  const page = await agent.get("/app/leads?tab=portal");
+  expect(page.text).toMatch(/data-portal-paste/);
+  expect(page.text).toMatch(/اقرأ الرسالة|Read message/);
+  const post = (body) => agent.post("/app/portal-enquiries/paste").set("X-CSRF-Token", csrf).type("form").send(body);
+  const bad = await post({ message: "hello there" });
+  expect(bad.status).toBe(303);
+  expect(bad.headers.location).toBe("/app/leads?tab=portal&error=not_enquiry");
+  expect(await h.query("SELECT count(*)::int AS n FROM portal_enquiries")).toEqual([{ n: 0 }]);
+  const ok = await post({ message: sample("Pasted One", "611111111") });
+  expect(ok.headers.location).toBe("/app/leads?tab=portal&done=saved");
+  expect((await agent.get("/app/leads?tab=portal")).text).toMatch(/Pasted One/);
+  expect((await post({ message: sample("Pasted One", "611111111") })).headers.location).toBe("/app/leads?tab=portal&done=repeat");
+  const both = await post({ message: sample("Two Step", "622222222"), phone: "01012345680", broker_id: h.BROKERS.broker.id });
+  expect(both.headers.location).toBe("/app/leads?tab=portal&done=assigned");
+  expect((await h.query("SELECT name FROM leads WHERE phone_e164 = '+201012345680'"))[0].name).toBe("Two Step");
+  const { agent: b } = await signIn(h, "broker");
+  expect((await b.post("/app/portal-enquiries/paste").type("form").send({ message: sample() })).status).toBeGreaterThanOrEqual(400);
+});

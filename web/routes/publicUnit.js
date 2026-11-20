@@ -30,7 +30,7 @@ const { html, layout } = require("../html");
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 const CODE = /^[A-Za-z0-9][A-Za-z0-9_\-.]{1,29}$/;
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const INTEREST_IP = { limit: 5, windowSec: 3600 };
 const INTEREST_LINK = { limit: 20, windowSec: 24 * 3600 };
 const PDF_IP = { limit: 20, windowSec: 3600 };
@@ -42,6 +42,45 @@ const INTEREST_ERRORS = {
   phone: ["اكتب رقم موبايل صحيح.", "Enter a valid mobile number."],
   rate: ["طلبات كتير؛ جرب بعد شوية.", "Too many requests; try again later."]
 };
+
+const FACT_ICONS = [
+  { test: /مساحة|area/i, icon: "📐", ar: "المساحة", en: "Area" },
+  { test: /غرف|نوم|حمام|bed|bath/i, icon: "🛏️", ar: "الغرف والحمامات", en: "Rooms & Baths" },
+  { test: /دور|floor/i, icon: "🏢", ar: "الدور", en: "Floor" },
+  { test: /تشطيب|finishing/i, icon: "✨", ar: "التشطيب", en: "Finishing" },
+  { test: /تسليم|delivery/i, icon: "🔑", ar: "التسليم", en: "Delivery" },
+  { test: /فرش|furnishing/i, icon: "🛋️", ar: "الفرش", en: "Furnishing" },
+  { test: /جاردن|حوش|garden/i, icon: "🌳", ar: "الجنينة", en: "Garden" },
+  { test: /روف|سطح|roof/i, icon: "🌇", ar: "الروف", en: "Roof" },
+  { test: /جراج|parking|garage/i, icon: "🚗", ar: "الجراج", en: "Parking" }
+];
+
+function formatFactItem(f, lang) {
+  const en = lang === "en";
+  let icon = "";
+  let label = "";
+  let value = f;
+  const emojiMatch = f.match(/^([\p{Extended_Pictographic}\u200d\ufe0f]+)\s*(.*)$/u);
+  if (emojiMatch) {
+    icon = emojiMatch[1];
+    value = emojiMatch[2];
+  }
+  const colon = value.indexOf(":");
+  if (colon !== -1) {
+    label = value.slice(0, colon).trim();
+    value = value.slice(colon + 1).trim();
+  }
+  const textForLookup = (label || f).toLowerCase();
+  for (const item of FACT_ICONS) {
+    if (item.test.test(textForLookup)) {
+      if (!icon) icon = item.icon;
+      if (!label) label = en ? item.en : item.ar;
+      break;
+    }
+  }
+  if (!label) label = en ? "Specification" : "المواصفات";
+  return html`<li><div class="fact-head">${icon ? html`<span class="fact-ico">${icon}</span>` : ""}<span class="fact-lbl">${label}</span></div><strong class="fact-val">${value}</strong></li>`;
+}
 
 function interestForm(u, { action, error, values = {}, sent }) {
   const lang = u.lang;
@@ -57,7 +96,7 @@ function interestForm(u, { action, error, values = {}, sent }) {
   <label>${L(lang, "رسالة (اختياري)", "Message (optional)")} <textarea name="message" maxlength="500" rows="2">${values.message || ""}</textarea></label>
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
   <button type="submit">${L(lang, "ابعت", "Send")}</button>
-  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الشركة تتواصل معاك بخصوص الوحدة دي وتحتفظ بالاسم والرقم لده.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
+  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الشركة تتواصل معاك بخصوص الوحدة دي وتحفظ اسمك ورقمك عشان المتابعة.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
 </form>`;
 }
 
@@ -126,7 +165,7 @@ function unitBody(u, { otherLangUrl, interest = null, plans = {} }) {
   <h1>${u.headline}</h1>
   ${u.price ? html`<p class="line"><strong>💰 ${u.price}</strong></p>` : ""}
   ${carousel(u.images, lang)}
-  <ul class="facts">${u.facts.map((f) => html`<li>${f}</li>`)}</ul>
+  <ul class="facts">${u.facts.map((f) => formatFactItem(f, lang))}</ul>
   ${u.features.length ? html`<ul class="tags">${u.features.map((f) => html`<li>${f}</li>`)}</ul>` : ""}
   ${u.summary ? html`<p>${u.summary}</p>` : ""}
   <p class="muted">${L(lang, "كود الوحدة", "Unit code")}: <span dir="ltr">${u.code}</span></p>
@@ -161,7 +200,7 @@ function compareBody(units, { agency, contact, lang, otherLangUrl }) {
     <tbody>
       ${row(L(lang, "السعر", "Price"), (u) => html`<strong>${u.price || "—"}</strong>`)}
       ${row(L(lang, "سعر المتر", "Per m²"), (u) => (u.per_m2 ? money(u.per_m2, lang) : "—"))}
-      ${row(L(lang, "المواصفات", "Details"), (u) => html`<ul class="facts">${u.facts.map((f) => html`<li>${f}</li>`)}</ul>`)}
+      ${row(L(lang, "المواصفات", "Details"), (u) => html`<ul class="facts">${u.facts.map((f) => formatFactItem(f, lang))}</ul>`)}
       ${row(L(lang, "المشروع والتسليم", "Project and delivery"), (u) => (u.project ? `${u.project.name || ""}${u.project.delivery ? ` · ${u.project.delivery}` : ""}` : "—"))}
       ${row(L(lang, "أول خطة دفع", "First payment plan"), (u) => (plan(u) ? html`${plan(u).name}<br>${L(lang, "مقدم", "Down")} ${money(plan(u).summary.down_payment, lang)}${plan(u).summary.installments ? html`<br>${plan(u).summary.installments} × ${money(plan(u).summary.installment, lang)}` : ""}` : "—"))}
       ${row(L(lang, "مميزات", "Features"), (u) => (u.features.length ? u.features.join("، ") : "—"))}

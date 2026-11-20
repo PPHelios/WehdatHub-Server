@@ -7,7 +7,7 @@ const Lib = require("../../services/globalProjects");
 const { isManager } = require("../../lib/authz");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 
 const facts = (g) => [g.developer, g.region, g.status, g.unit_types].filter(Boolean).join(" · ");

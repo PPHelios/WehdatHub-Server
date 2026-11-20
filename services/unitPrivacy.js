@@ -133,6 +133,8 @@ async function deciders(pool, agencyId) {
 
 /** A broker asks to see a unit's secret details; the deciders hear (once a day per ask) and every step is logged. */
 async function requestAccess(pool, broker, listing) {
+  const denied = await require("../lib/entitlements").assertAllowed(pool, broker, "accessRequests");
+  if (denied) return { ok: false, ...denied };
   if (await canSee(pool, broker, listing)) return { ok: true, already: true };
   await Audit.recordStrict(pool, { agencyId: broker.agency_id, brokerId: broker.id, action: "secret_details_request", targetType: "listing", targetId: listing.id, payload: { code: listing.code } });
   const open = await pool.query("SELECT id FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status = 'pending' LIMIT 1", [broker.agency_id, listing.id, broker.id]);
@@ -178,6 +180,7 @@ async function hasPending(pool, broker, listing) {
 
 /** A manager (or the owner, when there is no manager) says yes or no; the asker hears and the step is logged. */
 async function decide(pool, actor, listing, requestId, approve) {
+  if (await require("../lib/entitlements").assertAllowed(pool, actor, "accessRequests")) return { ok: false, reason: "plan_feature" };
   if (listing.agency_id !== actor.agency_id || !(await mayDecide(pool, actor))) return { ok: false, reason: "not_allowed" };
   await Audit.recordStrict(pool, { agencyId: actor.agency_id, brokerId: actor.id, action: "secret_details_decision", targetType: "listing", targetId: listing.id, payload: { code: listing.code, request_id: requestId, approved: Boolean(approve) } });
   const { rows } = await pool.query(

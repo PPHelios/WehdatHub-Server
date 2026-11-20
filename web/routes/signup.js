@@ -13,8 +13,9 @@ const Plans = require("../../domain/plans");
 const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
+const { MARK } = require("../icons");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const ERRORS = {
   agency: ["اكتب اسم الشركة.", "Enter the agency name."],
   name: ["اكتب اسمك.", "Enter your name."],
@@ -35,9 +36,12 @@ function closedPage(lang) {
 
 function signupForm(lang, { error, values = {} } = {}) {
   return html`<form method="post" action="/app/signup" class="card stack auth" id="signup">
-  <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
-  <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية من غير كارت ومن غير موافقة: مستخدم واحد، ${Plans.TRIAL.units} وحدة، و${Plans.TRIAL.credits} رصيد ذكاء اصطناعي. بتتأكد من رقمك على تيليجرام في ثواني. بعدها تختار باقة، وبياناتك مش بتتمسح أبداً.`, `A ${Plans.TRIAL.days}-day free trial with no card and no approval: 1 user, ${Plans.TRIAL.units} units and ${Plans.TRIAL.credits} AI credits. You confirm your number on Telegram in seconds. Then pick a plan; your data is never deleted.`)}</p>
-  <p class="muted">${L(lang, "مكتب من ١٥ بروكر أو أكتر؟ احجز عرض مباشر بدل التجربة الذاتية.", "An office of 15+ brokers? Book a live demo instead of the self-serve trial.")} <a href="/?lang=${lang}#try">${L(lang, "احجز عرض مباشر", "Book a live demo")}</a></p>
+  <div class="auth-head">
+    <span class="auth-mark" aria-hidden="true">${MARK}</span>
+    <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
+    <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية من غير كارت ومن غير موافقة: مستخدم واحد، ${Plans.TRIAL.units} وحدة، و${Plans.TRIAL.credits} رصيد ذكاء اصطناعي. بتتأكد من رقمك على تيليجرام في ثواني. بعدها تختار باقة، وبياناتك مش بتتمسح أبداً.`, `A ${Plans.TRIAL.days}-day free trial with no card and no approval: 1 user, ${Plans.TRIAL.units} units and ${Plans.TRIAL.credits} AI credits. You confirm your number on Telegram in seconds. Then pick a plan; your data is never deleted.`)}</p>
+    <p class="muted">${L(lang, "مكتب من ١٥ بروكر أو أكتر؟ احجز عرض مباشر بدل التجربة الذاتية.", "An office of 15+ brokers? Book a live demo instead of the self-serve trial.")} <a href="/?lang=${lang}#try">${L(lang, "احجز عرض مباشر", "Book a live demo")}</a></p>
+  </div>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}${error === "trial_used" ? html` <a href="/?lang=${lang}#plans">${L(lang, "الباقات", "Plans")}</a> · <a href="/?lang=${lang}#try">${L(lang, "تواصل معنا", "Contact us")}</a>` : ""}</p>` : ""}
   <label>${L(lang, "اسم الشركة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
   <label>${L(lang, "اسمك", "Your name")} <input name="name" required maxlength="80" autocomplete="name" value="${values.name || ""}"></label>

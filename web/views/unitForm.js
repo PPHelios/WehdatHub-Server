@@ -9,7 +9,7 @@ const Credits = require("../../services/credits");
 const { html, raw } = require("../html");
 const { factList } = require("./units");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const pick = (pair, lang) => (pair ? (lang === "en" ? pair[1] : pair[0]) : "");
 const sel = (on) => (on ? raw(" selected") : "");
 const chk = (on) => (on ? raw(" checked") : "");
@@ -28,8 +28,8 @@ function ruleAttrs(rule) {
 function input(name, label, value, { type = "text", dir = null, extra = "", rule = null } = {}) {
   return html`<label${req(label)}${ruleAttrs(rule)}>${label}<input name="${name}" type="${type}" value="${value}"${dir ? html` dir="${dir}"` : ""}${raw(extra)}></label>`;
 }
-function select(name, label, value, options, { rule = null } = {}) {
-  return html`<label${req(label)}${ruleAttrs(rule)}>${label}<select name="${name}">${options.map(([v, t]) => html`<option value="${v}"${sel(String(value) === String(v))}>${t}</option>`)}</select></label>`;
+function select(name, label, value, options, { rule = null, extra = "" } = {}) {
+  return html`<label${req(label)}${ruleAttrs(rule)}>${label}<select name="${name}"${raw(extra)}>${options.map(([v, t]) => html`<option value="${v}"${sel(String(value) === String(v))}>${t}</option>`)}</select></label>`;
 }
 
 const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Describe.frequencyLabel(f, lang)])];
@@ -75,7 +75,7 @@ function unitBox(v, areas, lang, place, opts = {}) {
   const context = place && place.known ? [place.path, ...(place.zones || [])].filter(Boolean) : [];
   return html`<div class="ubox" data-ubox data-field-wrap${opts.noNew ? raw(" data-no-new") : ""}${opts.areasOnly ? raw(" data-areas-only") : ""}
     data-msg-new="${L(lang, "جديد", "new")}" data-msg-check="${L(lang, "مش في القائمة: اختار من الاقتراحات أو اطلبه كجديد.", "Not on the list: pick a suggestion or request it as new.")}"
-    data-msg-places="${L(lang, "الأماكن", "Places")}" data-msg-features="${L(lang, "المميزات", "Features")}"
+    data-msg-phase="${L(lang, "المرحلة", "Phase")}" data-msg-places="${L(lang, "الأماكن", "Places")}" data-msg-features="${L(lang, "المميزات", "Features")}"
     data-msg-request="${opts.areasOnly ? L(lang, "اطلب منطقة فرعية جديدة: «%s»", "Request a new sub-area: “%s”") : L(lang, "اطلب مكان جديد: «%s»", "Request a new place: “%s”")}" data-msg-other="${L(lang, "ضيف «%s» كميزة تانية", "Add “%s” as another feature")}"
     data-msg-swap="${L(lang, "اتغير المكان: %s", "Place changed to %s")}" data-msg-remove="${L(lang, "شيل %s", "Remove %s")}" data-msg-other-tag="${L(lang, "مش في القائمة", "not in the list")}">
     <span class="ubox-label" id="ubox-label">${opts.label || L(lang, "المكان والمميزات *", "Place and features *")}</span>
@@ -89,6 +89,7 @@ function unitBox(v, areas, lang, place, opts = {}) {
       ${(v.feature || []).filter((k) => Features.featureLabel(k)).map((k) => html`<span class="chip chip-feature" data-ubox-chip="feature" data-key="${k}"><span data-chip-text>${Features.featureLabel(k, lang)}</span>${chipX(Features.featureLabel(k, lang))}<input type="hidden" name="feature" value="${k}"></span>`)}
       ${others.map((o) => html`<span class="chip chip-other" data-ubox-chip="other"><span data-chip-text>${o}</span> <em class="chip-tag">${L(lang, "مش في القائمة", "not in the list")}</em>${chipX(o)}</span>`)}
     </div>
+    <div class="ubox-phases" data-ubox-phases data-base="${place?.phasesBase || ""}"${hid(opts.areasOnly || !(place && place.phases && place.phases.length))}>${opts.areasOnly || !place || !place.phases ? "" : html`<span class="ubox-phases-label">${L(lang, "المرحلة", "Phase")}</span>${place.phases.map((p) => html`<button type="button" class="chip chip-phase" data-phase="${p.id}" aria-pressed="${p.selected ? "true" : "false"}">${p.label}</button>`)}`}</div>
     <p class="ubox-context" data-ubox-context${hid(!context.length)}>${ICON.pin}<span data-ubox-context-text>${context.join(" · ")}</span></p>
     <p class="ubox-warn" data-ubox-warn role="status"${hid(placeState !== "check")}>${L(lang, "مش في القائمة: اختار من الاقتراحات أو اطلبه كجديد.", "Not on the list: pick a suggestion or request it as new.")}</p>
     <input type="hidden" name="compound" value="${v.compound}" data-ubox-compound>
@@ -157,7 +158,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   </section>
 
   <section class="card uf-card" data-step="2" id="uf-2">${head(2, steps[1])}<div class="grid">
-    ${input("price_value", L(lang, v.listing_type === "rent" ? "الإيجار الشهري *" : "السعر *", v.listing_type === "rent" ? "Monthly rent *" : "Price *"), v.price_value, { extra: html` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}" data-label-sale="${L(lang, "السعر *", "Price *")}" data-label-rent="${L(lang, "الإيجار الشهري *", "Monthly rent *")}"` })}
+    ${input("price_value", L(lang, v.listing_type === "rent" ? "الإيجار الشهري *" : "السعر *", v.listing_type === "rent" ? "Monthly rent *" : "Price *"), v.price_value, { extra: html` inputmode="decimal" data-money placeholder="${L(lang, "8.5 مليون", "8.5M")}" data-label-sale="${L(lang, "السعر *", "Price *")}" data-label-rent="${L(lang, "الإيجار الشهري *", "Monthly rent *")}"` })}
     ${select("currency", L(lang, "العملة", "Currency"), v.currency, [["", "EGP"], ["USD", "USD"], ["EUR", "EUR"]])}
     ${select("rent_period", L(lang, "الإيجار", "Rent period"), v.rent_period, [["", "—"], ["monthly", L(lang, "شهري", "Monthly")], ["yearly", L(lang, "سنوي", "Yearly")]], { rule: { showIf: "listing_type=rent" } })}
     ${input("area_value", L(lang, "المساحة م² * (المباني للفيلات)", "Area m² * (BUA for villas)"), v.area_value, { type: "number", extra: ' min="0" step="any"' })}
@@ -165,7 +166,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("bathrooms", L(lang, "الحمامات", "Bathrooms"), v.bathrooms, { type: "number", extra: ' min="0"' })}
     ${input("floor_level", L(lang, "الدور (0 = أرضي)", "Floor (0 = ground)"), v.floor_level, { type: "number", rule: { types: Rules.FIELD_TYPES.floor_level } })}
     ${select("finishing", L(lang, "التشطيب", "Finishing"), v.finishing, [["", "—"], ...Object.entries(Describe.FINISHING_LABELS).map(([k, p]) => [k, pick(p, lang)])])}
-    ${select("furnishing", L(lang, "الفرش", "Furnishing"), v.furnishing, [["", "—"], ["furnished", L(lang, "مفروشة", "Furnished")], ["semi_furnished", L(lang, "نصف فرش", "Semi-furnished")], ["unfurnished", L(lang, "بدون فرش", "Unfurnished")], ["kitchen_and_ac", L(lang, "مطبخ وتكييف", "Kitchen and AC")], ["ac_only", L(lang, "تكييف بس", "AC only")], ["kitchen_only", L(lang, "مطبخ بس", "Kitchen only")]])}
+    ${select("furnishing", L(lang, "الفرش", "Furnishing"), v.furnishing, [["", "—"], ["furnished", L(lang, "مفروشة", "Furnished")], ["semi_furnished", L(lang, "نصف فرش", "Semi-furnished")], ["unfurnished", L(lang, "بدون فرش", "Unfurnished")], ["kitchen_and_ac", L(lang, "مطبخ وتكييف", "Kitchen and AC")], ["ac_only", L(lang, "تكييف بس", "AC only")], ["kitchen_only", L(lang, "مطبخ بس", "Kitchen only")]], { extra: html` data-feature-sync data-kitchen-label="${Features.featureLabel("kitchen_installed", lang)}" data-ac-label="${Features.featureLabel("ac_installed", lang)}"` })}
     ${input("land_area", L(lang, "مساحة الأرض م²", "Land area m²"), v.land_area, { type: "number", extra: ' min="0" step="any"', rule: { types: Rules.FIELD_TYPES.land_area } })}
     ${input("garden_area", L(lang, "الجنينة م²", "Garden m²"), v.garden_area, { type: "number", extra: html` min="0" step="any" data-feature-label="${Features.featureLabel("private_garden", lang)}"`, rule: { types: Rules.FIELD_TYPES.garden_area } })}
     ${input("roof_area", L(lang, "الروف م²", "Roof m²"), v.roof_area, { type: "number", extra: html` min="0" step="any" data-feature-label="${Features.featureLabel("roof", lang)}"`, rule: { types: Rules.FIELD_TYPES.roof_area } })}
@@ -183,16 +184,16 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <div class="tab-bar" role="tablist"><label for="pay-tab-resale" role="tab">${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</label><label for="pay-tab-primary" role="tab">${L(lang, "برايمري", "Primary")}</label></div>` : ""}
     <div class="${isPrimary ? "tab-panel panel-resale" : ""}" role="tabpanel">
       <div class="grid">
-      ${input("down_payment_value", L(lang, "المدفوع (الكاش المطلوب)", "Paid (cash required)"), v.down_payment_value, { extra: ' inputmode="decimal"' })}
-      ${input("remaining_amount", L(lang, "المتبقي أقساط", "Remaining installments"), v.remaining_amount, { extra: ' inputmode="decimal"' })}
-      ${input("installment_value", L(lang, "قيمة القسط", "Installment amount"), v.installment_value, { extra: ' inputmode="decimal"' })}
+      ${input("down_payment_value", L(lang, "المدفوع (الكاش المطلوب)", "Paid (cash required)"), v.down_payment_value, { extra: ' inputmode="decimal" data-money' })}
+      ${input("remaining_amount", L(lang, "المتبقي أقساط", "Remaining installments"), v.remaining_amount, { extra: ' inputmode="decimal" data-money' })}
+      ${input("installment_value", L(lang, "قيمة القسط", "Installment amount"), v.installment_value, { extra: ' inputmode="decimal" data-money' })}
       ${select("payment_frequency", L(lang, "دورية القسط", "Frequency"), v.payment_frequency, freqOptions(lang))}
       ${input("installments_end", L(lang, "آخر قسط", "Last installment"), v.installments_end, { type: "month" })}
       </div>
     </div>
     ${isPrimary ? html`<div class="tab-panel panel-primary" role="tabpanel">
       <div class="grid">
-      ${input("cash_price", L(lang, "سعر الكاش", "Cash price"), v.cash_price, { extra: ' inputmode="decimal"' })}
+      ${input("cash_price", L(lang, "سعر الكاش", "Cash price"), v.cash_price, { extra: ' inputmode="decimal" data-money' })}
       ${input("maintenance_pct", L(lang, "الصيانة %", "Maintenance %"), v.maintenance_pct, { type: "number", extra: ' min="0" step="any"' })}
       ${input("maintenance_terms", L(lang, "شروط الصيانة", "Maintenance terms"), v.maintenance_terms)}
       ${input("project", L(lang, "المشروع", "Project"), v.project)}
@@ -237,7 +238,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
         )}</ol>`
       : ""}
     <input type="file" name="photos" accept="image/*" multiple data-photo-tray>
-    <label class="muted">${L(lang, "أو زيب من \"تحميل الكل\" في واتساب (صور الوحدة دي بس؛ الفيديوهات بتتشال):", "Or a zip from WhatsApp \"Download all\" (this unit's photos; videos are dropped):")} <input type="file" accept=".zip,application/zip" data-photo-zip></label>
+    <label class="muted">${L(lang, "أو الملف المضغوط من \"تحميل الكل\" في واتساب (صور الوحدة دي بس؛ الفيديوهات بتتشال):", "Or a zip from WhatsApp \"Download all\" (this unit's photos; videos are dropped):")} <input type="file" accept=".zip,application/zip" data-photo-zip></label>
     <p class="notice warn" data-photo-note hidden></p>
     <ol data-sortable data-photo-preview class="photo-order" hidden></ol>
     <p class="muted" data-photo-preview-hint hidden>${L(lang, "اسحب الصور (أو الأسهم) لترتيبها قبل الحفظ؛ الأولى هي الغلاف.", "Drag the photos (or arrows) to order them before saving; the first is the cover.")}</p>

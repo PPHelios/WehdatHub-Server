@@ -16,6 +16,7 @@
     var list = box.querySelector("[data-ubox-list]");
     var ctx = box.querySelector("[data-ubox-context]");
     var warn = box.querySelector("[data-ubox-warn]");
+    var phasesEl = box.querySelector("[data-ubox-phases]"); // a compound's phases (Madinaty B6, Rehab phase 7) as chips: the chosen one is the unit's sub-zone
     var compound = box.querySelector("[data-ubox-compound]");
     var other = box.querySelector("[data-ubox-other]");
     var panel = box.querySelector("[data-ubox-new]");
@@ -83,6 +84,36 @@
       } else areaInput.removeAttribute("required");
     }
 
+    // ---- phases: chips under the place; one chosen at most, tapping it again goes back to the place's own sub-zone ----
+    function showPhases(list, base) {
+      if (!phasesEl) return;
+      phasesEl.innerHTML = "";
+      phasesEl.setAttribute("data-base", base || "");
+      var phases = box.hasAttribute("data-areas-only") ? [] : list || [];
+      phasesEl.hidden = !phases.length;
+      if (!phases.length) return;
+      var lab = document.createElement("span");
+      lab.className = "ubox-phases-label"; lab.textContent = msg("phase");
+      phasesEl.appendChild(lab);
+      phases.forEach(function (p) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "chip chip-phase"; b.setAttribute("data-phase", p.id);
+        b.setAttribute("aria-pressed", p.selected ? "true" : "false");
+        b.textContent = p.label;
+        phasesEl.appendChild(b);
+      });
+    }
+    function choosePhase(id) {
+      if (!phasesEl) return;
+      var now = phasesEl.querySelector('[data-phase][aria-pressed="true"]');
+      var same = now && now.getAttribute("data-phase") === id;
+      Array.prototype.forEach.call(phasesEl.querySelectorAll("[data-phase]"), function (b) {
+        b.setAttribute("aria-pressed", !same && b.getAttribute("data-phase") === id ? "true" : "false");
+      });
+      setSelect(subSel, same ? phasesEl.getAttribute("data-base") || "" : id);
+      changed();
+    }
+
     // One place at a time: a second pick replaces the first (and says so).
     function pickPlace(it) {
       var old = placeChip();
@@ -94,6 +125,7 @@
       compound.value = it.kind === "compound" ? (it.label || it.name_ar || it.name_en) : "";
       setSelect(areaSel, it.area_id || "");
       setSelect(subSel, it.subzone_id || "");
+      showPhases(it.phases, it.phasesBase);
       setContext([it.path].concat(it.zones || []).concat(it.governorate ? [it.governorate] : []));
       warn.hidden = true;
       if (old) announce(msg("swap", it.label));
@@ -138,6 +170,7 @@
       if (kind === "place") {
         compound.value = "";
         setSelect(areaSel, ""); setSelect(subSel, "");
+        showPhases([]);
         setContext([]);
         warn.hidden = true;
         openNew(false);
@@ -211,7 +244,10 @@
         .catch(function () { return null; })
         .then(function (d) {
           if (!d) return;
-          if (d.place && !placeChip()) pickPlace(d.place);
+          if (d.place && !placeChip()) {
+            pickPlace(d.place);
+            if (d.phase) choosePhase(d.phase.id);
+          }
           (d.features || []).forEach(function (f) { addFeature(f.key, f.label); });
           // The two drop-downs fill from the message only while they are empty.
           ["furnishing", "finishing"].forEach(function (n) {
@@ -232,8 +268,49 @@
       });
     });
 
+    function removeFeature(key) {
+      var c = chips.querySelector('[data-ubox-chip="feature"][data-key="' + key + '"]');
+      if (!c) return;
+      c.remove();
+      changed();
+    }
+
+    // The fitted kitchen and ACs features and the Furnishing field are one fact: a change in either shows in the other.
+    // kitchen + AC = "kitchen and AC", AC only, kitchen only; "furnished" and "semi-furnished" already mean more, so they stay.
+    var furn = form.querySelector("select[data-feature-sync]");
+    if (furn) {
+      var KITCHEN = "kitchen_installed", AC = "ac_installed";
+      var HALF = { kitchen_and_ac: [1, 1], ac_only: [0, 1], kitchen_only: [1, 0] };
+      var busy = false;
+      var prev = furn.value;
+      var sync = function (fn) { if (busy) return; busy = true; try { fn(); } finally { busy = false; prev = furn.value; } };
+      var setFurn = function (v) { if (furn.value !== v) { furn.value = v; furn.dispatchEvent(new Event("change", { bubbles: true })); } };
+      // Features changed: the field follows (only while it is empty, unfurnished or one of the three kitchen/AC statuses).
+      new MutationObserver(function () {
+        sync(function () {
+          var k = hasFeature(KITCHEN), a = hasFeature(AC), cur = furn.value;
+          if (cur === "furnished" || cur === "semi_furnished") return;
+          var next = k && a ? "kitchen_and_ac" : a ? "ac_only" : k ? "kitchen_only" : HALF[cur] ? "" : cur;
+          setFurn(next);
+        });
+      }).observe(chips, { childList: true });
+      // The field changed: the two features follow.
+      furn.addEventListener("change", function () {
+        sync(function () {
+          var v = furn.value, want = HALF[v];
+          if (want) {
+            if (want[0]) addFeature(KITCHEN, furn.getAttribute("data-kitchen-label")); else removeFeature(KITCHEN);
+            if (want[1]) addFeature(AC, furn.getAttribute("data-ac-label")); else removeFeature(AC);
+          } else if (v === "unfurnished" || (v === "" && HALF[prev])) {
+            removeFeature(KITCHEN);
+            removeFeature(AC);
+          }
+        });
+      });
+    }
+
     // Other scripts on the page (the project form's reader) set the box's chips through these.
-    box.uboxApi = { pickPlace: pickPlace, addFeature: addFeature, hasPlace: function () { return Boolean(placeChip()); } };
+    box.uboxApi = { pickPlace: pickPlace, addFeature: addFeature, removeFeature: removeFeature, hasPlace: function () { return Boolean(placeChip()); } };
 
     input.addEventListener("input", function () {
       var q = input.value.trim();
@@ -273,6 +350,12 @@
       var x = e.target.closest && e.target.closest("[data-ubox-remove]");
       if (x) remove(x.closest("[data-ubox-chip]"));
     });
+    if (phasesEl) {
+      phasesEl.addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-phase]");
+        if (b) choosePhase(b.getAttribute("data-phase"));
+      });
+    }
     field.addEventListener("click", function (e) { if (e.target === field) input.focus(); });
     // The new compound's name is the chip's name.
     newName.addEventListener("input", function () {

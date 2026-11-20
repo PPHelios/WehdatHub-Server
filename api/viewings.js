@@ -20,8 +20,7 @@ function register(api, { pool }) {
   // and link; the app shows the message under an info button and only sends it when the broker chooses to.
   api.post("/leads/:ref/viewing", async (req, res) => {
     const { broker } = req.session;
-    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
     const lead = await Leads.getLead(pool, broker, req.params.ref);
     if (!lead) return res.status(404).json({ error: "not_found" });
     const b = req.body || {};

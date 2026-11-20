@@ -7,7 +7,7 @@ const Tokens = require("./designTokens");
 
 const BRAND = Object.freeze({
   name: "Wehdat Hub",
-  // Brand v2 (2026-10-27): azure for actions and links, copper for "very interested" and featured, charcoal text.
+  // Brand v2 (2026-10-27): gold (#c29741) for actions, links, "very interested" and featured, charcoal text.
   colors: Object.freeze({ brand: Tokens.COLORS.light.brand, accent: Tokens.COLORS.light.accent, ink: Tokens.COLORS.light.ink, bg: Tokens.COLORS.light.bg }),
   // Under web/static/ (served at /app/static/).
   logo: "icons/icon.svg"

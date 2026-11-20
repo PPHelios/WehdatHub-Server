@@ -11,15 +11,15 @@ const { notifyPreferred } = require("../../lib/dispatcher");
 const { logOperation: logOp } = require("../../lib/db");
 const Audit = require("../../services/audit");
 const logOperation = (pool, p) => { Audit.fromOperation(pool, p); return logOp(pool, p); };
-const { t } = require("../../lib/copy");
+const { t, L } = require("../../lib/copy");
 const TgInit = require("../../domain/tgInitData");
 const TgLink = require("../../lib/tgLink");
 const Passkeys = require("../../services/passkeys");
 const { getConfig } = require("../../config");
 const S = require("../session");
 const { html } = require("../html");
+const { icon, MARK } = require("../icons");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
 
 /** True only for the demo broker: the demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true". */
 function isDemoBroker(env, broker) {
@@ -45,8 +45,11 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
   const bot = getConfig().telegram.botUsername;
   const botUrl = /^[A-Za-z0-9_]{5,32}$/.test(bot || "") ? `https://t.me/${bot}` : null;
   return html`<div class="card auth">
-  <h1>${L(lang, "الدخول", "Sign in")}</h1>
-  <p class="muted">${L(lang, "اكتب رقم الموبايل المسجل وهيوصلك رابط الدخول على البوت.", "Enter your registered mobile and a sign-in link reaches you through the bot.")}</p>
+  <div class="auth-head">
+    <span class="auth-mark" aria-hidden="true">${MARK}</span>
+    <h1>${L(lang, "الدخول", "Sign in")}</h1>
+    <p class="muted">${L(lang, "اكتب رقم الموبايل المسجل وهيوصلك رابط الدخول على البوت.", "Enter your registered mobile and a sign-in link reaches you through the bot.")}</p>
+  </div>
   ${message ? html`<p class="notice card">${message}</p>` : ""}
   <form method="post" action="/app/login" class="stack">
     <input type="hidden" name="_csrf" value="${pre}">
@@ -57,12 +60,12 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
   </form>
   <div id="passkey-login" class="stack" data-csrf="${pre}" data-next="${next}" hidden>
     <p class="or"><span>${L(lang, "أو", "or")}</span></p>
-    <button type="button" class="secondary" data-passkey-login>🔑 ${L(lang, "ادخل ببصمة الإصبع أو الوجه", "Sign in with a passkey")}</button>
+    <button type="button" class="secondary" data-passkey-login>${icon("key", 18)} ${L(lang, "ادخل ببصمة الإصبع أو الوجه", "Sign in with a passkey")}</button>
     <p class="muted" data-passkey-status></p>
   </div>
   <div class="auth-tip">
     <p>${lang === "en" ? html`Or send <strong>"login"</strong> to the WehdatHub bot. Inside Telegram, the WehdatHub button opens the website already signed in.` : html`أو ابعت <strong>«دخول»</strong> لبوت WehdatHub. ومن جوه تليجرام، زرار WehdatHub بيفتح الموقع وانت داخل على طول.`}</p>
-    ${botUrl ? html`<a class="btn secondary small" href="${botUrl}" rel="noopener">✈️ ${L(lang, "افتح البوت", "Open the bot")}</a>` : ""}
+    ${botUrl ? html`<a class="btn secondary small" href="${botUrl}" rel="noopener">${icon("send", 16)} ${L(lang, "افتح البوت", "Open the bot")}</a>` : ""}
   </div>
 </div>`;
 }
@@ -70,8 +73,11 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
 // Second step for a typed code: the same number and token, then the six digits the bot sent.
 function codeForm({ pre, next, phone, message = null, lang = "ar" }) {
   return html`<div class="card auth">
-  <h1>${L(lang, "اكتب الكود", "Enter the code")}</h1>
-  <p class="muted">${L(lang, "الكود اتبعت على تليجرام (أو واتساب). صالح 5 دقايق.", "The code was sent on Telegram (or WhatsApp). Valid for 5 minutes.")}</p>
+  <div class="auth-head">
+    <span class="auth-mark" aria-hidden="true">${MARK}</span>
+    <h1>${L(lang, "اكتب الكود", "Enter the code")}</h1>
+    <p class="muted">${L(lang, "الكود اتبعت على تليجرام (أو واتساب). صالح 5 دقايق.", "The code was sent on Telegram (or WhatsApp). Valid for 5 minutes.")}</p>
+  </div>
   ${message ? html`<p class="notice card">${message}</p>` : ""}
   <form method="post" action="/app/login/code" class="stack">
     <input type="hidden" name="_csrf" value="${pre}">

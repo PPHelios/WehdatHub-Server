@@ -11,7 +11,7 @@
   var MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif" };
   var T = document.documentElement.lang === "en"
     ? { over: "{n} photo(s) not added: the limit is {max} per unit.", prep: "Preparing photos {i} of {n}…", saving: "Saving {p}%", sending: "Uploading photos…", sendingNone: "Saving…", server: "The server is saving… {s}s", checking: "Checking whether it was saved…", saved: "✅ Saved. Opening the unit…", notSaved: "⚠️ Not saved yet. Your form and photos are kept.", retry: "Try again", up: "Uploading {p}%", wait: "Waiting…", done: "✓", fail: "⚠ Failed", again: "↻ Retry", restored: "Photos you uploaded earlier were restored.", kept: "{n} photos, the limit is {max}. Delete {x} to save.", dropped: "{n} video or non-photo file(s) left out.", del: "🗑 Delete", zip: "Opening the zip…", zipFail: "This zip could not be opened. Pick the photos instead.", noPhotos: "No photos in this zip." }
-    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "بحمل الصور…", sendingNone: "بنحفظ…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", up: "بحمل {p}%", wait: "مستني…", done: "✓", fail: "⚠ فشلت", again: "↻ جرب تاني", restored: "رجّعنا الصور اللي حملتها قبل كده.", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الزيب…", zipFail: "الزيب ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الزيب ده." };
+    : { over: "{n} صورة متضافتش: الحد {max} صورة للوحدة.", prep: "بجهّز الصور {i} من {n}…", saving: "بحفظ {p}%", sending: "بحمل الصور…", sendingNone: "بنحفظ…", server: "السيرفر بيحفظ… {s} ث", checking: "بتأكد إنها اتحفظت…", saved: "✅ اتحفظت. بفتح الوحدة…", notSaved: "⚠️ لسه ما اتحفظتش. الفورم والصور زي ما هما.", retry: "جرب تاني", up: "بحمل {p}%", wait: "مستني…", done: "✓", fail: "⚠ فشلت", again: "↻ جرب تاني", restored: "رجّعنا الصور اللي حملتها قبل كده.", kept: "عدد الصور {n} والحد {max}. امسح {x} عشان تحفظ.", dropped: "اتشال {n} فيديو أو ملف مش صورة.", del: "🗑 احذف", zip: "بفتح الملف المضغوط …", zipFail: "الملف المضغوط ده مش بيتفتح. اختار الصور عادي.", noPhotos: "مفيش صور في الملف المضغوط ده." };
   var fill = function (s, o) { return s.replace(/\{(\w+)\}/g, function (_, k) { return o[k]; }); };
   var EN = document.documentElement.lang === "en";
   T.keepOn = EN ? "✓ Kept" : "✓ هتتحفظ"; T.keepOff = EN ? "Not saved (after photo 15)" : "مش هتتحفظ (بعد صورة 15)";
@@ -173,7 +173,8 @@
     if (hint) hint.hidden = tray.items.length < 2;
     sync();
     // The review (and Save) must look at the photos as they are now.
-    tray.form.dispatchEvent(new CustomEvent("photos:changed"));
+    var only = Boolean(tray.reorder); tray.reorder = false;
+    tray.form.dispatchEvent(new CustomEvent("photos:changed", { detail: { reorder: only } }));
   }
 
   // Every photo that is going to be saved is reduced in the browser first, to what the server used to do: longest side
@@ -258,9 +259,21 @@
     });
   }
 
+  // The next photo is reduced (two at a time at most) while the current one uploads; the uploads themselves stay one at a time.
+  // shortcut: uploads serial because Render + Supabase are on free plans, parallelize when upgraded to paid
+  var MAX_SHRINK = 2, shrinking = 0;
+  function precompress(it) {
+    if (!it || it.pre || !it.file || shrinking >= MAX_SHRINK) return;
+    shrinking++;
+    it.pre = reduce(it.file);
+    it.pre.then(function () { shrinking--; });
+  }
+
   function processItem(it) {
     it.state = "working"; it.pct = 1; showState(it);
-    return reduce(it.file).then(function (r) {
+    var shrunk = it.pre || reduce(it.file);
+    it.pre = null;
+    return shrunk.then(function (r) {
       if (!r) { it.state = "local"; return null; } // a type the browser cannot reduce: goes with the form
       it.small = r.small;
       return signOne().then(function (u) {
@@ -273,14 +286,17 @@
     }).catch(function () { it.state = "failed"; }).then(function () { showState(it); });
   }
 
-  // One photo at a time (phones run out of memory with many); the next starts as soon as one is done.
+  // One photo uploads at a time (phones run out of memory with many); the next starts as soon as one is done.
   function pump() {
     if (pumping) return;
     pumping = true;
     (function next() {
-      var it = tray && tray.items.filter(function (x) { return x.state === "queued" && x.keep; })[0];
+      var queued = tray ? tray.items.filter(function (x) { return x.state === "queued" && x.keep; }) : [];
+      var it = queued[0];
       if (!it) { pumping = false; if (tray) sync(); return; }
       if (!direct) { it.state = "local"; showState(it); return next(); }
+      precompress(it);
+      precompress(queued[1]);
       processItem(it).then(function () { sync(); next(); });
     })();
   }
@@ -330,17 +346,18 @@
       .catch(function () { tray.restoring = false; });
   }
 
-  // The photos in the tray, one at a time (phones run out of memory with many at once); onStep(done, total) for the percent.
+  // The photos in the tray; onStep(done, total) feeds the percent. They are shrunk two at a time at most (the upload of the form itself is one request).
+  // shortcut: uploads serial because Render + Supabase are on free plans, parallelize when upgraded to paid
   function prepare(form, onStep) {
-    var items = chosen(), i = 0;
+    var items = chosen(), at = 0, done = 0;
     var step = function () {
-      if (i >= items.length) return Promise.resolve();
-      var it = items[i];
-      if (it.key || !it.file) { i++; return step(); } // already in storage
-      onStep(i, items.length);
-      return (it.small ? Promise.resolve(it.small) : compress(it.file)).then(function (s) { it.small = s; i++; return step(); });
+      if (at >= items.length) return Promise.resolve();
+      var it = items[at++];
+      if (it.key || !it.file) { done++; return step(); } // already in storage
+      onStep(done, items.length);
+      return (it.small ? Promise.resolve(it.small) : compress(it.file)).then(function (s) { it.small = s; done++; return step(); });
     };
-    return step().then(function () { onStep(items.length, items.length); sync(); });
+    return Promise.all([step(), step()]).then(function () { onStep(items.length, items.length); sync(); });
   }
 
   // Only as many photos as the unit has room for are added; the rest are counted and said out loud.
@@ -403,6 +420,7 @@
         tray.items = order.map(function (i) { return tray.items[i]; });
         var manual = tray.form.querySelector("[data-photo-manual]");
         if (manual) manual.checked = true;
+        tray.reorder = true; // the order alone never changes what blocks Save: the review is not run again
         render();
       });
       list.addEventListener("click", function (e) {

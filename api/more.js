@@ -72,12 +72,7 @@ function register(api, { pool }) {
 
   // Photos of a new or existing project (the website's upload twin): images only, up to 10, no AI: every photo is shared with all units.
   // The AI sort is the separate, explicit gallery call below.
-  const uploadGate = async (req, res) => {
-    const gate = await RateLimit.hit(pool, `upload:broker:${req.session.broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (gate.allowed) return true;
-    res.status(429).set("Retry-After", String(gate.retryAfterSec || 30)).json({ error: "rate_limited" });
-    return false;
-  };
+  const uploadGate = (req, res) => RateLimit.apiGate(pool, res, `upload:broker:${req.session.broker.id}`, RateLimit.LIMITS.uploadBroker);
   const galleryAnswer = (res, r) => {
     if (r.error === "forbidden") return res.status(403).json({ error: "forbidden" });
     if (r.error === "not_found") return res.status(404).json({ error: "not_found" });
@@ -135,7 +130,7 @@ function register(api, { pool }) {
   // Compare units for a client (a link to share)
   api.post("/compare", async (req, res) => {
     const codes = Compare.parseCodes(req.body?.codes || []);
-    const out = await Compare.createCompareLink(pool, req.session.broker, codes, { lang: req.body?.lang === "en" ? "en" : "ar" });
+    const out = await Compare.createCompareLink(pool, req.session.broker, codes, { lang: req.body?.lang === "en" ? "en" : "ar", planState: req.planState });
     return out.error ? res.status(out.error === "count" ? 400 : 422).json({ error: out.error, missing: out.missing || [] }) : res.json(out);
   });
 
@@ -161,8 +156,7 @@ function register(api, { pool }) {
 
   api.get("/usage", async (req, res) => {
     const b = req.session.broker;
-    const allowance = await Billing.allowance(pool, b.agency_id);
-    const ai = await require("../services/aiUserLimits").overview(pool, b);
+    const [allowance, ai] = await Promise.all([Billing.allowance(pool, b.agency_id), require("../services/aiUserLimits").overview(pool, b)]);
     res.json({ allowance: Billing.publicAllowance(allowance), ai });
   });
 

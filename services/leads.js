@@ -426,6 +426,8 @@ async function undoMany(pool, actor, eventIds, { now = new Date() } = {}) {
 
 /** Managers only: assign to a broker of the agency, or back to the unassigned pool (null). */
 async function assignLead(pool, actor, key, toBrokerId, { version = null, now = new Date() } = {}) {
+  const denied = await require("../lib/entitlements").assertAllowed(pool, actor, "assignLeads");
+  if (denied) return denied;
   let target = null;
   if (toBrokerId) {
     target = await brokerById(pool, actor.agency_id, toBrokerId);
@@ -745,18 +747,14 @@ async function findByPhone(pool, actor, raw) {
   return Authz.canViewLead(actor, lead, await LeadScope.open(pool, actor)) ? { lead, elsewhere: false } : { lead: null, elsewhere: true };
 }
 
-/**
- * Pages of 20, newest activity first. Brokers see only their own leads; managers all, with a broker filter.
- * @param {Object} f - { q (name, phone digits or L- ref), stage, kind, source, brokerId ("none" = unassigned), noNextStep, overdue, dueToday, offset, limit }
- */
-async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
+/** The agency and who-sees-which-leads part of a lead filter: { where, args, add(sql, value, into = where) }. */
+function scopeWhere(actor, seeAll, f) {
   const where = ["l.agency_id = $1"];
   const args = [actor.agency_id];
-  const add = (sql, v) => {
+  const add = (sql, v, into = where) => {
     args.push(v);
-    where.push(sql.replace("?", `$${args.length}`));
+    into.push(sql.replace("?", `$${args.length}`));
   };
-  const seeAll = await LeadScope.open(pool, actor);
   if (seeAll) {
     // The agency owner let brokers see every lead: all of them, or only their own with the "mine" filter.
     if (f.mine) add("l.assigned_broker_id = ?", actor.id);
@@ -770,24 +768,61 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   } else if (!Authz.isManager(actor)) add("l.assigned_broker_id = ?", actor.id);
   else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
   else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
-  if (f.stage && Stages.STAGES.includes(f.stage)) add("l.stage = ?", f.stage);
+  return { where, args, add };
+}
+
+/** The tab part of a lead filter (stage, no next step, overdue, due today), added to `where`. */
+function tabWhere(f, now, where, add) {
+  if (f.stage && Stages.STAGES.includes(f.stage)) add("l.stage = ?", f.stage, where);
+  if (f.noNextStep) where.push("l.follow_up_status IS DISTINCT FROM 'open' AND l.stage NOT IN ('won', 'lost')");
+  if (f.overdue) add("l.follow_up_status = 'open' AND l.next_follow_up_at < ?", now.toISOString(), where);
+  if (f.dueToday) {
+    add("l.follow_up_status = 'open' AND l.next_follow_up_at >= ?", Stages.cairoDayAt(now, 0, 0).toISOString(), where);
+    add("l.next_follow_up_at < ?", Stages.cairoDayAt(now, 1, 0).toISOString(), where);
+  }
+}
+
+/** The search-text part of a lead filter (L- ref, phone digits or name), added to `where`. */
+function searchWhere(f, where, add) {
+  const q = String(f.q || "").trim();
+  if (!q) return;
+  const ref = Card.parseRef(q);
+  const digits = Phone.toAsciiDigits(q).replace(/\D/g, "").replace(/^0+/, "");
+  if (ref) add("l.ref = ?", ref, where);
+  else if (digits.length >= 4 && /^[\d\s+\-().٠-٩]+$/.test(q)) add("EXISTS (SELECT 1 FROM unnest(l.phones) p WHERE p LIKE '%' || ? || '%')", digits, where);
+  else add("l.name ILIKE '%' || ? || '%'", q.replace(/[%_\\]/g, (c) => `\\${c}`), where);
+}
+
+/**
+ * The number on every tab in one statement: the same filters as listLeads({ countOnly }) per tab.
+ * @param {Object} f - { q, brokerId }
+ * @param {Object} tabs - { [tab]: tab filter ({ stage, dueToday, overdue, noNextStep }) }
+ * @returns {Promise<Object>} { [tab]: count }
+ */
+async function countTabs(pool, actor, f, tabs, { now = new Date() } = {}) {
+  const { where, args, add } = scopeWhere(actor, await LeadScope.open(pool, actor), f);
+  searchWhere(f, where, add);
+  const names = Object.keys(tabs);
+  const cols = names.map((t, i) => {
+    const tw = [];
+    tabWhere(tabs[t], now, tw, add);
+    return `count(*) FILTER (WHERE ${tw.length ? tw.join(" AND ") : "TRUE"})::int AS t${i}`;
+  });
+  const { rows } = await pool.query(`SELECT ${cols.join(", ")} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args);
+  return Object.fromEntries(names.map((t, i) => [t, rows[0][`t${i}`]]));
+}
+
+/**
+ * Pages of 20, newest activity first. Brokers see only their own leads; managers all, with a broker filter.
+ * @param {Object} f - { q (name, phone digits or L- ref), stage, kind, source, brokerId ("none" = unassigned), noNextStep, overdue, dueToday, offset, limit }
+ */
+async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
+  const { where, args, add } = scopeWhere(actor, await LeadScope.open(pool, actor), f);
   if (f.kind && Stages.KINDS.includes(f.kind)) add("l.kind = ?", f.kind);
   if (f.source) add("l.source = ?", String(f.source));
   if (f.private && Authz.isAgencyOwner(actor)) where.push("l.is_private");
-  if (f.noNextStep) where.push("l.follow_up_status IS DISTINCT FROM 'open' AND l.stage NOT IN ('won', 'lost')");
-  if (f.overdue) add("l.follow_up_status = 'open' AND l.next_follow_up_at < ?", now.toISOString());
-  if (f.dueToday) {
-    add("l.follow_up_status = 'open' AND l.next_follow_up_at >= ?", Stages.cairoDayAt(now, 0, 0).toISOString());
-    add("l.next_follow_up_at < ?", Stages.cairoDayAt(now, 1, 0).toISOString());
-  }
-  const q = String(f.q || "").trim();
-  if (q) {
-    const ref = Card.parseRef(q);
-    const digits = Phone.toAsciiDigits(q).replace(/\D/g, "").replace(/^0+/, "");
-    if (ref) add("l.ref = ?", ref);
-    else if (digits.length >= 4 && /^[\d\s+\-().٠-٩]+$/.test(q)) add("EXISTS (SELECT 1 FROM unnest(l.phones) p WHERE p LIKE '%' || ? || '%')", digits);
-    else add("l.name ILIKE '%' || ? || '%'", q.replace(/[%_\\]/g, (c) => `\\${c}`));
-  }
+  tabWhere(f, now, where, add);
+  searchWhere(f, where, add);
   // Counts only (the app's tab numbers): the same filters, no rows.
   if (f.countOnly) {
     const { rows } = await pool.query(`SELECT count(*)::int AS n ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args);
@@ -1029,6 +1064,7 @@ module.exports = {
   pipeline,
   findByPhone,
   listLeads,
+  countTabs,
   timeline,
   releaseBrokerLeads
 };

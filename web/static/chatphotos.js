@@ -10,6 +10,7 @@
   var lang = root.getAttribute("data-lang") === "en" ? "en" : "ar";
   var TEXT = {
     ar: {
+      lastImport: "آخر تحميل للشات ده:", sinceLast: "من آخر تحميل",
       pick: "اختار ملف الـ zip الأول.", reading: "جاري قراءة الملف…", noChat: "مفيش ملف الشات (.txt) جوه الـ zip.", badZip: "الملف مش zip سليم.", encrypted: "الملف عليه باسورد.",
       noUnits: "مفيش وحدات في الشركة لسه. حمّل الشيت الأول أو اختار «اقرأ الوحدات من البوستات».", big: "الملف كبير والتليفون ممكن يقف. الأفضل تستخدم كمبيوتر.",
       photos: "صورة", units: "وحدة", noPhotos: "وحدات من غير صور", tray: "صور مش متوزعة", unknown: "أكواد في الشات مش موجودة", pattern: "ترتيب الشات", p_photos_first: "الصور الأول وبعدها الوصف", p_text_first: "الوصف الأول وبعدها الصور", p_mixed: "مختلط (مفيش قاعدة واحدة)", p_unknown: "مش واضح",
@@ -21,9 +22,12 @@
       aiUpTo: "ذكاء اصطناعي: حتى", aiCredits: "رصيد", aiOffLabel: "من غير ذكاء اصطناعي: قراءة بالقواعد بس", 
       codeChecking: "بنراجع الأكواد…", codeNew: "وحدة جديدة", codeUpdate: "تحديث للوحدة", codeHas: "فيها صور", codeTaken: "الكود ده لوحدة مش من حقك تعدلها", codeDup: "نفس الكود في بوست", codeFail: "مقدرناش نراجع الأكواد دلوقتي: هتتراجع في المراجعة.",
       videos: "فيديو اتتخطى (مش بيتحمل)", videosTotal: "فيديو أو ملف اتتخطى ومش هيتحمل", pickNote: "اختار 15 صورة بس: أول 15 معلّمين، والباقي علّمه بإيدك. استخدم ◀ ▶ لترتيب الصور.", stageRead: "قراءة الملف", stageMatch: "توزيع الصور على البوستات", stagePosts: "قراءة بيانات الوحدات", stageUpload: "تحميل الصور", leaveWarn: "لو قفلت الصفحة التحميل هيقف.",
-      verify: "راجع الصور", swap: "بدّل الصور مع الوحدة اللي بعدها", full15: "الوحدة وصلت 15 صورة. شيل علامة صورة تانية أو شيل صورة قديمة.", oldPhotos: "صور الوحدة الحالية: علّم اللي تتشال", removeFail: "مقدرناش نشيل الصور القديمة", heicFail: "صور HEIC متحولتش", converted: "صور اتحولت من HEIC", aiOff: "الذكاء الاصطناعي مش متاح: القراءة بالقواعد بس.", errors: "أخطاء", planFail: "مقدرناش نقرا البوستات. جرب تاني.", edit: "تعديل", editDone: "تم", description: "الوصف", original: "الرسالة الأصلية", summaryLoading: "جاري قراءة بيانات الوحدة…", missingField: "ناقص", missingNote: "بيانات ناقصة: اضغط تعديل وكملها، وإلا الوحدة مش هتتضاف."
+      verify: "راجع الصور", swap: "بدّل الصور مع الوحدة اللي بعدها", full15: "الوحدة وصلت 15 صورة. شيل علامة صورة تانية أو شيل صورة قديمة.", oldPhotos: "صور الوحدة الحالية: علّم اللي تتشال", removeFail: "مقدرناش نشيل الصور القديمة", heicFail: "صور HEIC متحولتش", converted: "صور اتحولت من HEIC", aiOff: "الذكاء الاصطناعي مش متاح: القراءة بالقواعد بس.", errors: "أخطاء", planFail: "مقدرناش نقرا البوستات. جرب تاني.", edit: "تعديل", editDone: "تم", description: "الوصف", original: "الرسالة الأصلية", summaryLoading: "جاري قراءة بيانات الوحدة…", missingField: "ناقص", missingNote: "بيانات ناقصة: اضغط تعديل وكملها، وإلا الوحدة مش هتتضاف.",
+      discard: "تجاهل", restore: "رجّع", restoreAll: "رجّع الكل", discardedWord: "متجاهلة", discardErrors: "تجاهل الوحدات اللي فيها أخطاء", selectValid: "اختار كل الصالح", unchangedSkipped: "صورة لوحدات مفيش فيها تغيير (اتساب)",
+      sumLine: function (n, a, b, m, x, z) { return "هيتحفظ " + n + " وحدة (" + a + " جديدة، " + b + " تحديث) · هيتساب " + m + " (أخطاء " + x + "، متجاهلة " + z + "). الوحدات اللي مفيش فيها تغيير بتتساب لوحدها بعد القراءة."; }
     },
     en: {
+      lastImport: "Last import of this chat:", sinceLast: "Since last import",
       pick: "Choose the zip file first.", reading: "Reading the file…", noChat: "No chat text (.txt) inside the zip.", badZip: "That is not a readable zip.", encrypted: "The zip is password-protected.",
       noUnits: "There are no units in the agency yet. Import the sheet first or choose “Read units from the posts”.", big: "This file is big and a phone may stop. A computer is better.",
       photos: "photos", units: "units", noPhotos: "Units with no photos", tray: "Photos not placed", unknown: "Codes in the chat that are not in the app", pattern: "Chat order", p_photos_first: "photos first, then the description", p_text_first: "description first, then photos", p_mixed: "mixed (no single rule)", p_unknown: "not clear",
@@ -35,7 +39,9 @@
       aiUpTo: "AI: up to", aiCredits: "credits", aiOffLabel: "no AI: rules only", 
       codeChecking: "Checking the codes…", codeNew: "New unit", codeUpdate: "Updates unit", codeHas: "already has photos", codeTaken: "Code belongs to a unit you can't change", codeDup: "Same code as post", codeFail: "Could not check the codes now: they are checked again in the review.",
       videos: "videos skipped (not uploaded)", videosTotal: "videos or files skipped and not uploaded", pickNote: "Choose 15 photos only: the first 15 are ticked, tick the others by hand. Use ◀ ▶ to put the photos in order.", stageRead: "Reading the file", stageMatch: "Placing photos on posts", stagePosts: "Reading the units", stageUpload: "Uploading photos", leaveWarn: "Closing this page stops the upload.",
-      verify: "Verify photos", swap: "Swap photos with the next unit", full15: "The unit is at 15 photos. Untick another photo or remove an old one.", oldPhotos: "The unit's current photos: tick the ones to remove", removeFail: "Could not remove the old photos", heicFail: "HEIC photos that could not be converted", converted: "photos converted from HEIC", aiOff: "AI is not available: read with the rules only.", errors: "Errors", planFail: "Could not read the posts. Try again.", edit: "Edit", editDone: "Done", description: "Description", original: "Original message", summaryLoading: "Reading the unit details…", missingField: "Missing", missingNote: "Details missing: press Edit and complete them, or the unit will not be added."
+      verify: "Verify photos", swap: "Swap photos with the next unit", full15: "The unit is at 15 photos. Untick another photo or remove an old one.", oldPhotos: "The unit's current photos: tick the ones to remove", removeFail: "Could not remove the old photos", heicFail: "HEIC photos that could not be converted", converted: "photos converted from HEIC", aiOff: "AI is not available: read with the rules only.", errors: "Errors", planFail: "Could not read the posts. Try again.", edit: "Edit", editDone: "Done", description: "Description", original: "Original message", summaryLoading: "Reading the unit details…", missingField: "Missing", missingNote: "Details missing: press Edit and complete them, or the unit will not be added.",
+      discard: "Discard", restore: "Restore", restoreAll: "Restore all", discardedWord: "discarded", discardErrors: "Discard units with errors", selectValid: "Select all valid", unchangedSkipped: "photos of unchanged units (skipped)",
+      sumLine: function (n, a, b, m, x, z) { return "Will save " + n + " units (" + a + " new, " + b + " updated) · skipping " + m + " (errors " + x + ", discarded " + z + "). Units with no changes are skipped automatically after reading."; }
     }
   }[lang];
 
@@ -92,9 +98,11 @@
     await stage(TEXT.stageRead, 5);
     var zip = null;
     var text;
+    var chatName = file.name;
     try {
       if (/\.txt$/i.test(file.name)) {
         text = await file.text();
+        chatName = file.name;
       } else {
         zip = await timed("read_zip", function () { return ZipRead.open(file); }, { mb: Math.round(file.size / 1048576) });
         await stage(TEXT.stageRead, 15);
@@ -102,6 +110,7 @@
           .sort(function (a, b) { return Number(/chat/i.test(base(b.name))) - Number(/chat/i.test(base(a.name))); });
         if (!txts.length) return say(TEXT.noChat, true);
         text = await timed("read_chat", function () { return zip.text(txts[0]); });
+        chatName = txts[0].name;
       }
     } catch (err) {
       flush();
@@ -118,18 +127,48 @@
       units = r.ok ? (await r.json()).units : [];
       if (!units.length) return say(TEXT.noUnits, true);
     }
-    state = { file: file, zip: zip, text: text, byName: byName, byLower: byLower, mode: mode, units: units, aliases: {}, assigned: {}, pick: {}, files: {}, drops: {}, olds: {}, skipped: {}, sumCache: {}, fields: {}, modal: null, codeInfo: null, codeState: null };
+    state = { file: file, zip: zip, text: text, byName: byName, byLower: byLower, mode: mode, units: units, aliases: {}, assigned: {}, pick: {}, files: {}, drops: {}, olds: {}, skipped: {}, discarded: {}, sumFailed: false, sumCache: {}, fields: {}, modal: null, codeInfo: null, codeState: null };
     if (file.size > 1024 * 1024 * 1024 && /Mobi|Android|iPhone/i.test(navigator.userAgent)) state.bigWarn = true;
+    await rememberChat(chatName, text);
     compute();
   }
 
   var entryOf = function (name) { return state.byName[name] || state.byLower[String(name).toLowerCase()] || null; };
 
+  // The date range: the same options and the same code (ChatParse.rangeBounds) as the group form and the app.
+  function bounds() {
+    var kind = $("range") ? $("range").value : "custom";
+    var custom = root.querySelector("[data-range-custom]");
+    if (custom) custom.hidden = kind !== "custom";
+    return window.ChatParse && ChatParse.rangeBounds ? ChatParse.rangeBounds(kind, { lastImportAt: state && state.lastImportAt, since: $("since") ? $("since").value : null, until: $("until") ? $("until").value : null }) : { since: $("since") && $("since").value || null, until: null };
+  }
+
+  // The chat's own id (file name + first message header, domain/chatFingerprint.js) and what the agency decided about it before.
+  async function rememberChat(name, text) {
+    if (!window.ChatFingerprint) return;
+    state.chatFp = ChatFingerprint.chatFingerprint(name, ChatFingerprint.firstHeaderOf(text));
+    var url = root.getAttribute("data-decisions-url");
+    if (!url || state.mode !== "posts") return;
+    try {
+      var r = await fetch(url + "?chat_fp=" + state.chatFp, { credentials: "same-origin" });
+      var j = r.ok ? await r.json() : {};
+      state.lastImportAt = j.last_import_at || null;
+    } catch (e) { state.lastImportAt = null; }
+    var sel = $("range");
+    var opt = sel && sel.querySelector('option[value="last"]');
+    if (opt && state.lastImportAt) {
+      opt.hidden = false; opt.disabled = false;
+      sel.value = "last";
+      var note = $("last-note");
+      if (note) note.textContent = TEXT.lastImport + " " + String(state.lastImportAt).slice(0, 10);
+    } else if (opt) { opt.hidden = true; opt.disabled = true; if (sel.value === "last") sel.value = "30"; }
+  }
+
   function compute() {
     var codes = state.units ? state.units.map(function (u) { return u.code; }) : null;
     var t0 = Date.now();
     state.res = ChatMatch.match(state.text, {
-      since: $("since").value || null, windowMin: Number($("window").value) || 10, sameSender: $("same").checked, pattern: $("pattern").value, codes: codes, aliases: state.aliases
+      since: bounds().since, until: bounds().until, windowMin: Number($("window").value) || 10, sameSender: $("same").checked, pattern: $("pattern").value, codes: codes, aliases: state.aliases
     });
     state.files = {};
     steps.push({ step: "match", ms: Date.now() - t0, ok: true, meta: { messages: state.res.stats.messages, photos: state.res.stats.photos, dividers: state.res.stats.dividers || 0, tray: state.res.tray.length } });
@@ -236,8 +275,33 @@
     return fetch(url, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ posts: asked }) })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) { if (!j) return; keys.forEach(function (k, n) { state.sumCache[k] = j.posts[n] || { cells: {}, missing: [] }; }); render(); })
-      .catch(function () {});
+      .catch(function () { state.sumFailed = true; render(); });
   }
+  // Whether a post is saved. Default: ON only when its details are complete and its code is usable; OFF for missing mandatory
+  // details, a code that belongs to a unit the person may not change, or a code repeated in this zip. A blocked post cannot be
+  // ticked (the reason is on its card) until it is fixed. The person's own tick only counts when nothing blocks it. The server
+  // checks everything again, so this is the first guard, never the only one.
+  function blockOf(x) {
+    if (!state || state.res.mode !== "posts") return null;
+    var posts = state.res.posts;
+    if (x.code) {
+      var first = null;
+      posts.forEach(function (o, k) { if (first === null && o.code === x.code) first = k; });
+      if (first !== null && first !== posts.indexOf(x)) return TEXT.codeDup + " " + (first + 1) + ": " + x.code;
+      var info = state.codeInfo && state.codeInfo[x.code];
+      if (info && info.state === "taken") return TEXT.codeTaken;
+    }
+    var sum = summaryOf(x);
+    if (sum && (sum.missing || []).length) return TEXT.missingNote;
+    return null;
+  }
+  function isIncluded(x) {
+    var id = String(x.i);
+    if (state.discarded[id] || blockOf(x)) return false;
+    if (state.skipped[id] !== undefined) return !state.skipped[id];
+    return Boolean(summaryOf(x)) || state.sumFailed;
+  }
+  var includedPosts = function () { return state.res.posts.filter(isIncluded); };
   // The unit as a short summary (what the reader found) with the required things it could not find marked in red.
   function summaryBox(x) {
     var sum = summaryOf(x);
@@ -380,18 +444,28 @@
     list.forEach(function (x) { totalPhotos += x.files.length; });
     out.appendChild(el("p", { class: "card", "data-cp-summary": true, text: list.length + " " + TEXT.units + " · " + totalPhotos + " " + TEXT.photos + " · " + TEXT.pattern + ": " + TEXT["p_" + r.pattern] + (r.stats.omittedMedia ? " · " + r.stats.omittedMedia + " " + TEXT.omitted : "") + (r.stats.skippedMedia ? " · " + r.stats.skippedMedia + " " + TEXT.skippedMedia : "") + (r.stats.duplicates ? " · " + r.stats.duplicates + " " + TEXT.duplicates : "") }));
     if (r.stats.truncated) out.appendChild(el("p", { class: "muted", text: TEXT.cap }));
+    if (r.mode === "posts") out.appendChild(bulkBar());
 
     var existing = {};
     (state.units || []).forEach(function (u) { existing[u.code] = u.photos; });
     var ol = el("ol", { class: "results", "data-cp-list": true });
     var modalCtx = null;
     list.forEach(function (x, k) {
+      if (r.mode === "posts" && state.discarded[String(x.i)]) return;
       var id = r.mode === "codes" ? x.code : String(x.i);
       var seenRef = {};
       var refs = filesOf(x).concat(assignedTo(id)).filter(function (f) { if (seenRef[f.name]) return false; seenRef[f.name] = true; return true; });
       var gallery = r.mode === "posts";
       var slots = Math.max(0, MAXP - (existing[id] || 0) + dropCount(id));
-      var title = r.mode === "codes" ? x.code : TEXT.post + " " + (k + 1) + (x.sender ? " · " + x.sender : "");
+      // The sender is often a phone number: keep it left-to-right inside Arabic text ("+20 111 161 6455", not "20 111 161 6455 +"). A name stays auto.
+      var titleNode = function () {
+        var strong = el("strong", { text: r.mode === "codes" ? x.code : TEXT.post + " " + (k + 1) });
+        if (r.mode !== "codes" && x.sender) {
+          strong.appendChild(document.createTextNode(" · "));
+          strong.appendChild(el("bdi", { dir: /^[+\d\s().-]+$/.test(x.sender) ? "ltr" : "auto", text: x.sender }));
+        }
+        return strong;
+      };
       var badge = gallery ? codeBadge(x, list) : null;
       var picked = refs.filter(function (f, i) { return entryOf(f.name) && pickOf(f, i, slots); }).length;
       var info = refs.length + " " + TEXT.photos + (existing[id] ? " · " + TEXT.existing + " (" + existing[id] + ")" : "") + (x.over ? " · " + x.over + " " + TEXT.overCap : "") + (refs.length > slots ? " · " + slots + " / " + MAXP : "") + (x.videos ? " · 🎞 " + x.videos + " " + TEXT.videos : "");
@@ -402,13 +476,17 @@
       ]);
       if (gallery) {
         if (state.modal === id) modalCtx = { id: id, x: x, refs: refs, slots: slots, k: k };
-        ol.appendChild(el("li", { class: "card unit-card", "data-cp-unit": id }, [
+        var reason = blockOf(x);
+        var discardBtn = el("button", { type: "button", class: "secondary small", "data-cp-discard": id, text: "🗑 " + TEXT.discard, on: { click: function () { state.discarded[id] = true; render(); } } });
+        ol.appendChild(el("li", { class: "card unit-card" + (reason ? " is-bad" : ""), "data-cp-unit": id }, [
           el("div", { class: "uc-head" }, [
-            el("input", { type: "checkbox", "data-cp-pick": id, checked: !state.skipped[id], on: { change: function (ev) { state.skipped[id] = !ev.target.checked; refreshApply(); } } }),
-            el("div", { class: "uc-title" }, [badge, el("strong", { text: title }), el("span", { class: "muted", text: info })]),
+            el("input", { type: "checkbox", "data-cp-pick": id, checked: isIncluded(x), disabled: Boolean(reason), title: reason || null, on: { change: function (ev) { state.skipped[id] = !ev.target.checked; refreshApply(); } } }),
+            el("div", { class: "uc-title" }, [badge, titleNode(), el("span", { class: "muted", text: info })]),
             x.code ? el("span", { class: "uc-code", text: x.code }) : null,
-            editBtn
+            editBtn,
+            discardBtn
           ]),
+          reason ? el("div", { class: "uc-alert", role: "alert", "data-cp-block": id, text: "⛔ " + reason }) : null,
           x.text ? summaryBox(x) : null,
           x.text ? el("details", { class: "ie-original", "data-cp-original": id }, [el("summary", { text: "💬 " + TEXT.original }), el("p", { dir: "auto", text: origOf(x) })]) : null,
           warnings,
@@ -419,7 +497,7 @@
       ol.appendChild(el("li", { class: "card", "data-cp-unit": id }, [
         el("div", { class: "row" }, [
           el("input", { type: "checkbox", "data-cp-pick": id, checked: !state.skipped[id], on: { change: function (ev) { state.skipped[id] = !ev.target.checked; refreshApply(); } } }),
-          el("strong", { text: title }),
+          titleNode(),
           el("span", { class: "muted", text: info })
         ]),
         warnings,
@@ -461,7 +539,42 @@
       var sel = el("select", { "data-cp-have": true }, [el("option", { value: "add", text: TEXT.addNew }), el("option", { value: "skip", text: TEXT.skipHave })]);
       out.appendChild(el("label", {}, [sel]));
     }
-    out.appendChild(el("div", { class: "cp-actions" }, [el("button", { type: "button", "data-cp-apply": true, text: applyLabel(), on: { click: apply } })]));
+    if (r.mode === "posts") out.appendChild(el("p", { class: "card notice", role: "status", "data-cp-save-line": true, text: saveLine() }));
+    out.appendChild(el("div", { class: "cp-actions" }, [el("button", { type: "button", "data-cp-apply": true, disabled: r.mode === "posts" && !includedPosts().length, text: applyLabel(), on: { click: apply } })]));
+  }
+
+  // Posts mode, above the list: discard / select in bulk, and the posts thrown out (with Restore).
+  function bulkBar() {
+    var posts = state.res.posts;
+    var live = posts.filter(function (x) { return !state.discarded[String(x.i)]; });
+    var bad = live.filter(function (x) { return blockOf(x); });
+    var gone = posts.filter(function (x) { return state.discarded[String(x.i)]; });
+    var bar = el("div", { class: "card stack", "data-cp-bulk": true });
+    var row = el("div", { class: "row" }, [
+      el("button", { type: "button", class: "secondary small", "data-cp-select-valid": true, text: "✔ " + TEXT.selectValid, on: { click: function () { live.forEach(function (x) { if (!blockOf(x)) state.skipped[String(x.i)] = false; }); render(); } } }),
+      bad.length ? el("button", { type: "button", class: "secondary small", "data-cp-discard-errors": true, text: "🗑 " + TEXT.discardErrors + " (" + bad.length + ")", on: { click: function () { bad.forEach(function (x) { state.discarded[String(x.i)] = true; }); render(); } } }) : null
+    ]);
+    bar.appendChild(row);
+    if (gone.length) {
+      var d = el("details", { "data-cp-discarded": String(gone.length) }, [el("summary", { text: "🗑 " + gone.length + " " + TEXT.discardedWord + " · " + TEXT.restore })]);
+      var ul = el("ul", {});
+      gone.forEach(function (x) {
+        ul.appendChild(el("li", {}, [el("span", { class: "muted", text: TEXT.post + " " + (posts.indexOf(x) + 1) + " " }), el("button", { type: "button", class: "secondary small", "data-cp-restore": String(x.i), text: "↩ " + TEXT.restore, on: { click: function () { delete state.discarded[String(x.i)]; render(); } } })]));
+      });
+      d.appendChild(ul);
+      d.appendChild(el("button", { type: "button", class: "secondary small", "data-cp-restore-all": true, text: "↩ " + TEXT.restoreAll, on: { click: function () { state.discarded = {}; render(); } } }));
+      bar.appendChild(d);
+    }
+    return bar;
+  }
+  // "Will save N units (A new, B updated) · skipping M (errors X, discarded Z)": counted from what is ticked now.
+  function saveLine() {
+    var posts = state.res.posts;
+    var on = includedPosts();
+    var upd = on.filter(function (x) { var i = state.codeInfo && x.code && state.codeInfo[x.code]; return i && i.state === "update"; }).length;
+    var errs = posts.filter(function (x) { return !state.discarded[String(x.i)] && blockOf(x); }).length;
+    var gone = posts.filter(function (x) { return state.discarded[String(x.i)]; }).length;
+    return TEXT.sumLine(on.length, on.length - upd, upd, posts.length - on.length, errs, gone);
   }
 
   // The upload button says what AI may cost: up to the per-post credits × the posts ticked (only a post the normal reader cannot
@@ -469,13 +582,24 @@
   var aiBox = function () { return $("ai"); };
   var aiOn = function () { return Boolean(aiBox() && aiBox().checked); };
   function applyLabel() {
-    if (!state || state.res.mode !== "posts" || !aiBox()) return TEXT.apply;
-    if (!aiOn()) return TEXT.apply + " · " + TEXT.aiOffLabel;
+    if (!state || state.res.mode !== "posts") return TEXT.apply;
+    var n = includedPosts().length;
+    var base = TEXT.apply + " (" + n + ")";
+    if (!aiBox()) return base;
+    if (!aiOn()) return base + " · " + TEXT.aiOffLabel;
     var cost = Number(root.getAttribute("data-ai-cost")) || 0;
-    var n = state.res.posts.filter(function (x) { return !state.skipped[String(x.i)]; }).length;
-    return cost ? TEXT.apply + " · " + TEXT.aiUpTo + " " + cost * n + " " + TEXT.aiCredits : TEXT.apply;
+    return cost ? base + " · " + TEXT.aiUpTo + " " + cost * n + " " + TEXT.aiCredits : base;
   }
-  function refreshApply() { var b = root.querySelector("[data-cp-apply]"); if (b) b.textContent = applyLabel(); }
+  // The button says how many units it will save and is off at 0; the line above it says what is skipped and why.
+  function refreshApply() {
+    var b = root.querySelector("[data-cp-apply]");
+    if (b) {
+      b.textContent = applyLabel();
+      if (state && state.res.mode === "posts") b.disabled = !includedPosts().length;
+    }
+    var line = root.querySelector("[data-cp-save-line]");
+    if (line && state && state.res.mode === "posts") line.textContent = saveLine();
+  }
 
   // The units (or posts) shown and sent: the matched ones, plus units that only got photos placed by hand.
   function entries() {
@@ -605,7 +729,7 @@
     if (r.mode === "codes") entries().forEach(function (u) { picks[u.code] = filesOf(u); });
     else r.posts.forEach(function (p) { picks[String(p.i)] = filesOf(p); });
     Object.keys(picks).forEach(function (id) {
-      if (state.skipped[id]) return;
+      if (r.mode === "posts" ? !includedPosts().some(function (x) { return String(x.i) === id; }) : state.skipped[id]) return;
       var existing = r.mode === "codes" ? (state.units.filter(function (u) { return u.code === id; })[0] || {}).photos || 0 : 0;
       if (existing && have === "skip") return;
       var seen = {};
@@ -624,16 +748,17 @@
   async function apply() {
     var p = plan();
     var postsMode = state.res.mode === "posts";
-    if (!p.tasks.length && !(postsMode && state.res.posts.some(function (x) { return !state.skipped[String(x.i)]; }))) return say(TEXT.nothing, true);
+    if (postsMode ? !includedPosts().length : !p.tasks.length) return say(TEXT.nothing, true);
     var importId = null;
     var aiNote = null;
+    var untouched = 0;
     if (postsMode) {
-      var chosen = state.res.posts.filter(function (x) { return !state.skipped[String(x.i)]; });
+      var chosen = includedPosts();
       var j0 = null;
       await stage(TEXT.stagePosts + " (" + chosen.length + ")", 35);
       try {
         j0 = await timed("plan", async function () {
-          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: textOf(x), orig: origOf(x), fields: fieldsOf(x) }; }) }) });
+          var r0 = await fetch(root.getAttribute("data-plan-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ filename: state.file.name, chat_fp: state.chatFp || null, ai: aiOn(), posts: chosen.map(function (x) { return { sender: x.sender, at: x.at, text: textOf(x), orig: origOf(x), fields: fieldsOf(x) }; }) }) });
           var j = await r0.json().catch(function () { return {}; });
           if (!r0.ok || !j.id) { var e = new Error(j.message || (r0.status === 422 ? TEXT.noPosts : TEXT.planFail)); e.code = j.error || "http_" + r0.status; throw e; }
           return j;
@@ -646,6 +771,13 @@
       aiNote = j0.message || null;
       var index = {};
       chosen.forEach(function (x, k) { index[String(x.i)] = k; });
+      // A post the plan found to be an existing unit with no changes (or not the person's) is not saved: its photos are not uploaded.
+      var kinds = j0.kinds || {};
+      var memory = j0.remembered || {};
+      var before = p.tasks.length;
+      // A post saved or discarded in an earlier import of this chat is not saved again: its photos are not uploaded either.
+      p.tasks = p.tasks.filter(function (t) { var row = String(index[t.id] + 1); var kd = kinds[row]; return kd !== "unchanged" && kd !== "forbidden" && memory[row] !== "saved" && memory[row] !== "discarded"; });
+      untouched = before - p.tasks.filter(function (t) { return index[t.id] !== undefined; }).length;
       p.tasks = p.tasks.filter(function (t) { return index[t.id] !== undefined; }).map(function (t) { t.url = root.getAttribute("data-plan-photo-url").replace("{id}", importId).replace("{row}", index[t.id] + 1); return t; });
     } else {
       p.tasks.forEach(function (t) { t.url = root.getAttribute("data-unit-url").replace("{code}", encodeURIComponent(t.id)); });
@@ -662,7 +794,7 @@
         }, { units: codesToClean.length });
       }
     }
-    run = { cancelled: false, done: 0, total: p.tasks.length, started: Date.now(), counts: { ok: 0, dup: 0, full: 0, unreadable: 0, failed: 0, heic: 0, missing: p.gone }, converted: 0, errors: {}, aiNote: aiNote, dropFail: typeof dropFail === "number" ? dropFail : 0, note: "" };
+    run = { cancelled: false, done: 0, total: p.tasks.length, started: Date.now(), counts: { ok: 0, dup: 0, full: 0, unreadable: 0, failed: 0, heic: 0, missing: p.gone, skipped: untouched }, converted: 0, errors: {}, aiNote: aiNote, dropFail: typeof dropFail === "number" ? dropFail : 0, note: "" };
     var wake = null;
     try { if (navigator.wakeLock) wake = await navigator.wakeLock.request("screen"); } catch (err) { wake = null; }
     out.textContent = "";
@@ -705,6 +837,7 @@
           if (res.heic) run.counts.heic++;
           else if (res.unreadable || res.status === 422) run.counts.unreadable++;
           else if (res.failed || (res.status && res.status >= 400 && !b.full && !b.dup)) run.counts.failed++;
+          else if (b.skipped) run.counts.skipped++;
           else if (b.dup) run.counts.dup++;
           else if (b.full) run.counts.full++;
           else run.counts.ok++;
@@ -723,7 +856,7 @@
   function finish(importId) {
     var c = run.counts;
     out.textContent = "";
-    var parts = [[c.ok, TEXT.uploaded], [c.dup, TEXT.dup], [c.full, TEXT.full], [c.unreadable, TEXT.unreadable], [c.missing, TEXT.missing], [c.failed, TEXT.failed]].filter(function (x) { return x[0]; }).map(function (x) { return x[0] + " " + x[1]; });
+    var parts = [[c.ok, TEXT.uploaded], [c.dup, TEXT.dup], [c.full, TEXT.full], [c.unreadable, TEXT.unreadable], [c.missing, TEXT.missing], [c.skipped, TEXT.unchangedSkipped], [c.failed, TEXT.failed]].filter(function (x) { return x[0]; }).map(function (x) { return x[0] + " " + x[1]; });
     if (c.heic) parts.push(c.heic + " " + TEXT.heicFail);
     if (run.converted) parts.push(run.converted + " " + TEXT.converted);
     out.appendChild(el("p", { class: "card notice", role: "status", "data-cp-done": true, text: (run.cancelled ? TEXT.cancelled : TEXT.done) + ": " + parts.join(" · ") }));
@@ -747,6 +880,6 @@
     Promise.resolve(load()).finally(function () { b.classList.remove("busy"); b.disabled = false; });
   });
   if ($("ai")) $("ai").addEventListener("change", refreshApply);
-  ["window", "pattern", "same", "since"].forEach(function (n) { $(n).addEventListener("change", function () { if (state) compute(); }); });
+  ["window", "pattern", "same", "since", "until", "range"].forEach(function (n) { $(n).addEventListener("change", function () { if (state) compute(); else bounds(); }); });
   });
 })();

@@ -123,6 +123,8 @@ function loadConfig(env = process.env) {
       priceEgp: num(env.WA_PRICE_EGP, 0.21)
     },
     // Keyed hash of an erased client's phone (lead_erasures); outside production a fixed development key.
+    // AES-256-GCM key (32 bytes, base64) for Facebook Page tokens at rest (lib/secretBox.js); outside production a test key is used.
+    security: { tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY || "" },
     leads: {
       hashKey: env.LEAD_HASH_KEY || (isProd ? "" : "dev-only-lead-hash-key")
     },

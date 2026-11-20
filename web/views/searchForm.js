@@ -8,7 +8,7 @@ const { PROPERTY_TYPES } = require("../../domain/fieldRules");
 const { formFromFilters } = require("../../domain/searchLink");
 const { html, raw } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const sel = (on) => (on ? raw(" selected") : "");
 const chk = (on) => (on ? raw(" checked") : "");
 const pick = (pair, lang) => (lang === "en" ? pair[1] : pair[0]);

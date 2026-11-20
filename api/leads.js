@@ -11,6 +11,7 @@ const ReadCaps = require("../lib/readCaps");
 const AI = require("../lib/ai");
 const Phone = require("../domain/phone");
 const Intake = require("../domain/leadIntake");
+const PortalParse = require("../domain/portalEnquiry");
 const LeadIntake = require("../lib/leadIntake");
 const { logOperation } = require("../lib/db");
 const Authz = require("../lib/authz");
@@ -51,12 +52,7 @@ const ERRORS = {
 };
 
 function register(api, { pool }) {
-  const writeGate = async (req, res) => {
-    const gate = await RateLimit.hit(pool, `crm_write:broker:${req.session.broker.id}`, RateLimit.LIMITS.crmWriteBroker);
-    if (gate.allowed) return true;
-    res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
-    return false;
-  };
+  const writeGate = (req, res) => RateLimit.apiGate(pool, res, `crm_write:broker:${req.session.broker.id}`, RateLimit.LIMITS.crmWriteBroker);
   const load = async (req, res) => {
     const lead = await Leads.getLead(pool, req.session.broker, req.params.ref);
     if (!lead) res.status(404).json({ error: "not_found" });
@@ -86,8 +82,8 @@ function register(api, { pool }) {
   api.get("/leads/counts", async (req, res) => {
     const { broker } = req.session;
     const q = String(req.query.q || "").slice(0, 80);
-    const entries = await Promise.all(TABS.map(async (t) => [t, (await Leads.listLeads(pool, broker, { ...tabFilter(t), q, brokerId: String(req.query.broker || ""), countOnly: true })).total]));
-    res.json({ counts: Object.fromEntries(entries) });
+    const counts = await Leads.countTabs(pool, broker, { q, brokerId: String(req.query.broker || "") }, Object.fromEntries(TABS.map((t) => [t, tabFilter(t)])));
+    res.json({ counts });
   });
 
   api.get("/leads/:ref", async (req, res) => {
@@ -105,8 +101,10 @@ function register(api, { pool }) {
     const lang = broker.preferred_lang === "en" ? "en" : "ar";
     const text = String(req.body?.message || "").trim().slice(0, 4000);
     if (!text) return res.status(400).json({ error: "nothing_to_read" });
-    const gate = await RateLimit.hit(pool, `lead_extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    // A portal enquiry (Dubizzle, Nawy, Bayut): managers get the portal screen's fields back, without the AI.
+    const portal = Authz.isManager(broker) ? PortalParse.parse(text) : null;
+    if (portal) return res.json({ portal: true, enquiry: { portal: portal.portal, name: portal.name, link: portal.link, listingNo: portal.listingNo } });
+    if (!(await RateLimit.apiGate(pool, res, `lead_extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker))) return;
     let ex = { phones: [], name: null, kind: null, source: null, note: null };
     try {
       ex = await LeadIntake.extractLead(AI, { text, voice: null, lang, ctx: { pool, broker } });

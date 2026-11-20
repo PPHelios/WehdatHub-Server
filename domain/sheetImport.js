@@ -11,12 +11,13 @@ const Mixed = require("./sheetMixed");
 const Delivery = require("./delivery");
 const { TYPE_TERMS } = require("./vocabulary");
 const { normalizeSearch } = require("./searchText");
+const { toAsciiDigits } = require("./read/numbers");
 
 // Checked in order: the first match wins (e.g. "owner phone" before "owner").
 const COLUMNS = [
   ["code", /^(code|unit code|unit id|ref|كود|الكود|كود الوحده|الكود الداخلي)$/],
   ["owner_phone", /(owner phone|owner mobile|تليفون المالك|رقم المالك|موبايل المالك)/],
-  ["owner_phone", /^(number|phone|phone number|mobile|tel|telephone|رقم التليفون|رقم الموبايل|تليفون|موبايل)$/],
+  ["owner_phone", /^(number|phone|phone number|mobile|mobile number|whatsapp|whatsapp number|tel|telephone|رقم التليفون|رقم الموبايل|رقم الهاتف|رقم الواتساب|تليفون|موبايل|الهاتف|هاتف|الموبايل|التليفون|واتساب|واتس اب)$/],
   ["owner_name", /^(owner|owner name|name|المالك|اسم المالك|الاسم|اسم)$/],
   ["unit_no", /^(unit no|unit number|unit num|apartment no|رقم الوحده|رقم الوحدة|رقم الشقه|رقم الشقة)$/],
   ["address", /^(address|full address|location|unit location|العنوان بالكامل|العنوان التفصيلي|العنوان بالتفصيل|الموقع)$/],
@@ -28,15 +29,17 @@ const COLUMNS = [
   ["compound", /(compound|project|الكمبوند|كمبوند|المشروع)/],
   ["market", /(market|inventory|السوق|نوع المخزون)/],
   ["property_type", /^(property type|type|unit type|نوع|النوع|نوع العقار|نوع الوحده)$/],
-  ["listing_type", /^(purpose|sale rent|sale or rent|بيع او ايجار|بيع ايجار|الغرض)$/],
+  ["listing_type", /^(purpose|sale rent|rent sale|sale or rent|rent or sale|بيع او ايجار|بيع ايجار|الغرض)$/],
   ["remaining_amount", /(remaining|المتبقي)/],
   ["down_payment_value", /(upfront cash|cash paid|paid|down payment|المدفوع|المقدم|مقدم)/],
+  // Years before the amount: "Installment years" / "سنوات القسط" are the length, not the installment.
+  ["installment_years", /(tenure|years|سنوات|سنين)/],
   ["installment_value", /(quarterly check|installment amount|installment|قيمه القسط|القسط)/],
   ["payment_frequency", /(frequency|دوريه القسط)/],
-  ["installment_years", /(tenure|years|سنوات|سنين)/],
-  ["price_value", /^(price|total price|asking price|السعر|سعر|اجمالي السعر|السعر الاجمالي)( egp)?$/],
-  ["area_value", /^(area|area sqm|bua|المساحه|مساحه|المساحه م2|المساحه بالمتر)/],
-  ["bedrooms", /(bedrooms|beds|غرف|الغرف)/],
+  ["price_value", /^(price|total price|asking price|selling price|sale price|rent|monthly rent|rent price|rental price|السعر|سعر|اجمالي السعر|السعر الاجمالي|سعر البيع|سعر الايجار|الايجار|ايجار|الايجار الشهري)( egp)?$/],
+  // Anchored: "Area name" is a place (the district line below), not the size.
+  ["area_value", /^(area|bua|built up area|built up|size|المساحه|مساحه|م2)( (sqm|sq m|m2|m|م2|م|متر|بالمتر|متر مربع|مربع))*$/],
+  ["bedrooms", /(bedrooms|beds|غرف|الغرف)|^(rooms|no of rooms|number of rooms)$/],
   ["bathrooms", /(bathrooms|baths|حمامات|الحمامات)/],
   ["floor", /^(floor|الدور|دور)$/],
   ["delivery", /(delivery|التسليم|الاستلام|استلام)/],
@@ -50,7 +53,9 @@ const COLUMNS = [
 ];
 
 // A header with a typo ("descibation", "deatils") is still the column it was meant to be.
-const FUZZY = [["description", "description"], ["details", "details_text"], ["bedrooms", "bedrooms"], ["bathrooms", "bathrooms"], ["location", "address"], ["compound", "compound"], ["price", "price_value"], ["phone", "owner_phone"], ["feedback", "notes"]];
+const FUZZY = [["description", "description"], ["details", "details_text"], ["bedrooms", "bedrooms"], ["bathrooms", "bathrooms"], ["location", "address"], ["compound", "compound"], ["price", "price_value"], ["phone", "owner_phone"], ["feedback", "notes"],
+  // Arabic words (a header is already folded by normalizeSearch).
+  ["الكمبوند", "compound"], ["المساحه", "area_value"], ["التليفون", "owner_phone"], ["الموبايل", "owner_phone"], ["ملاحظات", "notes"], ["التشطيب", "finishing"], ["الحمامات", "bathrooms"], ["التسليم", "delivery"]];
 function editDistance(a, b) {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
   for (let j = 1; j <= b.length; j++) d[0][j] = j;
@@ -58,7 +63,7 @@ function editDistance(a, b) {
   return d[a.length][b.length];
 }
 function fuzzyColumn(h) {
-  if (!/^[a-z]{5,14}$/.test(h)) return null;
+  if (!/^([a-z]{5,14}|[ء-ي]{5,14})$/.test(h)) return null;
   for (const [word, key] of FUZZY) if (Math.abs(word.length - h.length) <= 2 && editDistance(word, h) <= (word.length >= 10 ? 3 : word.length >= 7 ? 2 : 1)) return key;
   return null;
 }
@@ -88,14 +93,15 @@ const EMPTY = new Set(["", "-", "—", "n/a", "na", "null", "none", "لا يوج
 const isEmpty = (v) => v === null || v === undefined || EMPTY.has(String(v).trim().replace(/^'+/, "").toLowerCase());
 const text = (v, max = 200) => (isEmpty(v) ? null : String(v).trim().replace(/^'+/, "").slice(0, max));
 const unquote = (v) => (typeof v === "string" ? v.trim().replace(/^'+/, "") : v);
-const AR = "٠١٢٣٤٥٦٧٨٩";
-const digits = (s) => String(s).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d)));
+// Arabic and Persian digits, ٫ as the decimal point, ٬ as the thousands mark: the shared reader's own clean-up.
+const digits = (s) => toAsciiDigits(s);
 
 /** "8.5 مليون", "8,500,000", "8.5M", 8500000 → 8500000; 0 and unknown → null. */
 function money(v) {
   if (isEmpty(v)) return null;
   if (typeof v === "number") return v > 0 ? v : null;
-  const s = digits(v).toLowerCase().replace(/egp|le|ج\.?م|جنيه/g, "").trim();
+  // A single comma and 1-2 digits before a unit word is a decimal mark: "8,5 مليون" is 8.5 million, not 85.
+  const s = digits(v).toLowerCase().replace(/egp|le|ج\.?م|جنيه/g, "").trim().replace(/^(\d+),(\d{1,2})(?=\s*(?:m|mn|million|مليون|k|الف|ألف|thousand)$)/, "$1.$2");
   const m = s.match(/^([\d.,]+)\s*(m|mn|million|مليون|k|الف|ألف|thousand)?$/);
   // Wider phrasing ("٣ ونص مليون", "5 مليون الا ربع"): the shared reader, only when it is sure (empty beats wrong).
   if (!m) return Amount.readWhole(String(v));
@@ -104,20 +110,30 @@ function money(v) {
   const unit = m[2] || "";
   return /^(m|mn|million|مليون)$/.test(unit) ? Math.round(n * 1e6) : /^(k|الف|ألف|thousand)$/.test(unit) ? Math.round(n * 1e3) : n;
 }
-const number = (v) => {
-  if (isEmpty(v)) return null;
-  const n = typeof v === "number" ? v : Number(digits(v).replace(/[^\d.]/g, ""));
-  return Number.isFinite(n) ? n : null;
-};
-const positive = (v) => {
-  const n = number(v);
-  return n !== null && n > 0 ? n : null;
-};
+/**
+ * A number from a cell: { n, note }. "120 م" and "1,200" give the number. "3+1", "3-4" or "120-130" (more than one number)
+ * give the first one (the low value of a range) with the cell's own text as the note; the digits are never run together.
+ */
+function numberNote(v) {
+  if (isEmpty(v)) return { n: null };
+  if (typeof v === "number") return { n: Number.isFinite(v) ? v : null };
+  const s = digits(v).trim();
+  if (/^\D*(\d[\d.,\s]*\d|\d)\D*$/.test(s)) {
+    const n = Number(s.replace(/[^\d.]/g, ""));
+    return { n: Number.isFinite(n) ? n : null };
+  }
+  const found = s.replace(/(\d),(?=\d{3}\b)/g, "$1").match(/\d+(?:\.\d+)?/g);
+  if (!found) return { n: null };
+  const range = /^\D*\d+(?:\.\d+)?\s*(?:-|–|—|~|to|الى|إلى|الي)\s*\d+(?:\.\d+)?\D*$/i.test(s);
+  return { n: range ? Math.min(Number(found[0]), Number(found[1])) : Number(found[0]), note: String(v).trim().slice(0, 40) };
+}
+const number = (v) => numberNote(v).n;
 
 const CURRENCY = /(\$|usd|€|eur\b|dollar|دولار|يورو)/i;
 
 /** Columns a sheet must fill for any row to be usable; a tab with one of these empty across every row is refused. */
-const REQUIRED = ["code", "price_value", "area_value"];
+// The code is not one of them: an empty code is made by the app.
+const REQUIRED = ["price_value", "area_value"];
 
 /** Required columns with no value on any row (rows: [{ cells }]). A tab with no rows reports nothing. */
 function emptyRequired(rows = []) {
@@ -128,7 +144,7 @@ function emptyRequired(rows = []) {
 const TYPE_LOOKUP = new Map(
   Object.entries({ ...TYPE_TERMS, villa: [...TYPE_TERMS.villa, "standalone villa"] }).flatMap(([key, words]) => words.map((w) => [normalizeSearch(w), key]))
 );
-const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twin_villa"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"], ["triplex", "triplex"], ["basement", "basement"], ["mazonette", "mazonette"], ["maisonette", "maisonette"], ["skyloft", "sky_loft"]];
+const TYPE_WORDS = [["apartment", "apartment"], ["penthouse", "penthouse"], ["townhouse", "townhouse"], ["twinhouse", "twin_villa"], ["standalone", "villa"], ["duplex", "duplex"], ["studio", "studio"], ["chalet", "chalet"], ["triplex", "triplex"], ["basement", "basement"], ["mazonette", "maisonette"], ["mizonette", "maisonette"], ["maisonette", "maisonette"], ["skyloft", "sky_loft"]];
 /** Garden anywhere in the type cell ("apartment with garden", "ground with garden"): the unit gets the private-garden feature. */
 const gardenIn = (v) => /garden/.test(normalizeSearch(v));
 /** Words after a type that say where the unit is or what it has ("apartment 4th floor", "town house corner", "studio with roof"). */
@@ -339,13 +355,22 @@ function rowToDraft(input = {}) {
       if (draft[k] === null && k === "price_value") errors.push(k);
     }
   }
+  // "3+1" rooms or a "120-130" range: the first number is used and the cell's own text is kept in the notes.
+  const numNotes = [];
+  const NOTE_LABEL = { bedrooms: "غرف (rooms)", bathrooms: "حمامات (baths)", area_value: "مساحة (area)", land_area: "أرض (land)" };
+  const read = (k) => {
+    const r = numberNote(cells[k]);
+    if (r.note) numNotes.push(`${NOTE_LABEL[k] || k}: ${r.note}`);
+    return r.n;
+  };
   if (has("area_value")) {
-    draft.area_value = positive(cells.area_value);
+    const a = read("area_value");
+    draft.area_value = a !== null && a > 0 ? a : null;
     if (!draft.area_value) errors.push("area_value");
   }
   for (const k of ["bedrooms", "bathrooms", "installment_years"]) {
     if (has(k)) {
-      const n = number(cells[k]);
+      const n = k === "installment_years" ? number(cells[k]) : read(k);
       draft[k] = n === null ? null : Math.round(n);
       if (k === "installment_years" && !draft[k]) delete draft[k];
     }
@@ -394,9 +419,10 @@ function rowToDraft(input = {}) {
     if (ph.more.length) draft.details.notes = [draft.details.notes, `${ph.more.join(" / ")}`].filter(Boolean).join(" · ");
   }
   if (has("land_area")) {
-    const land = positive(cells.land_area);
-    if (land) draft.details.land_area = land;
+    const land = read("land_area");
+    if (land > 0) draft.details.land_area = land;
   }
+  if (numNotes.length) draft.details.notes = [draft.details.notes, ...numNotes].filter(Boolean).join(" · ");
   if (has("notes")) draft.details.notes = [text(cells.notes, 1000), draft.details.notes].filter(Boolean).join(" · ") || null;
   for (const k of Object.keys(draft)) if (draft[k] === null || draft[k] === undefined) delete draft[k];
   for (const k of Object.keys(draft.details)) if (draft.details[k] === null) delete draft.details[k];

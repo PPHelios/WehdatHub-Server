@@ -15,9 +15,9 @@ const { isManager } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads } = require("../uploads");
-const { html, raw } = require("../html");
+const { html, raw, phoneLtr } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const SHOWN = 200; // rows listed per section; the counts cover all of them
 // Browsers send a CSV as text/csv, application/vnd.ms-excel (Windows) or nothing useful.
@@ -54,7 +54,7 @@ const KIND_LABEL = {
 const FILL_LABEL = { name: ["الاسم", "name"], source: ["المصدر", "source"], notes: ["الملاحظات", "notes"], phones: ["رقم جديد", "new number"], request: ["الطلب", "request"] };
 const ORDER = ["new", "merge", "colleague", "erased_before", "repeated", "invalid"];
 
-const who = (i, lang) => `${i.name || L(lang, "بدون اسم", "No name")} · ${i.phones.map((p) => Phone.displayPhone(p)).join("، ")}`;
+const who = (i, lang) => html`${i.name || L(lang, "بدون اسم", "No name")} · ${i.phones.map((p, n) => html`${n ? "، " : ""}${phoneLtr(Phone.displayPhone(p))}`)}`;
 
 function formBody(req, { error = null } = {}) {
   const lang = langOf(req);

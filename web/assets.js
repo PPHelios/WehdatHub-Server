@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { cssTokens } = require("../domain/brand");
+const { SPRITE } = require("./icons");
 
 const STATIC_DIR = path.join(__dirname, "static");
 const TYPES = {
@@ -20,14 +21,18 @@ const TYPES = {
 // Files served under /app/static/ (sw.js is served at /app/sw.js, filled in per version).
 const FILES = {
   "app.css": path.join(STATIC_DIR, "app.css"),
+  "theme.js": path.join(STATIC_DIR, "theme.js"),
   "app.js": path.join(STATIC_DIR, "app.js"),
   // The busy rule: one server call at a time locks the page's other controls and spins the one that started it.
   "busy.js": path.join(STATIC_DIR, "busy.js"),
+  // Unsaved-changes bar for forms marked data-savebar (Settings).
+  "saveBar.js": path.join(STATIC_DIR, "saveBar.js"),
   "voice.js": path.join(STATIC_DIR, "voice.js"),
   // Match photos (managers): the chat parser and matcher are the server's own pure files, run in the browser too.
   "zipread.js": path.join(STATIC_DIR, "zipread.js"),
   "chatparse.js": path.join(__dirname, "..", "domain", "chatParse.js"),
   "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
+  "chatfingerprint.js": path.join(__dirname, "..", "domain", "chatFingerprint.js"),
   "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
   "chatreview.js": path.join(STATIC_DIR, "chatreview.js"),
   "wordfields.js": path.join(STATIC_DIR, "wordfields.js"),
@@ -48,6 +53,8 @@ const FILES = {
   // Excel import: the workbook is read in the browser, tab by tab.
   "xlsxread.js": path.join(STATIC_DIR, "xlsxread.js"),
   "ximport.js": path.join(STATIC_DIR, "ximport.js"),
+  // The review page of an Excel import while it is being saved: progress bar, reload at the end.
+  "applypoll.js": path.join(STATIC_DIR, "applypoll.js"),
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
   // The map page: Leaflet and the vector-tile layer (read from the owner's .pmtiles file), loaded on that page only.
   "leaflet.js": require.resolve("leaflet/dist/leaflet.js"),
@@ -86,8 +93,16 @@ function loadAssets() {
   const face = (w) => files[`fonts/cairo-${w}.woff2`]
     ? `@font-face { font-family: "Cairo"; font-style: normal; font-weight: ${w === 400 ? "300 500" : "600 900"}; font-display: swap; src: url("/app/static/fonts/cairo-${w}.woff2?v=${files[`fonts/cairo-${w}.woff2`].hash}") format("woff2"); }\n`
     : "";
+  // The icon sprite (web/icons.js) has no file on disk; its hash is the same sha256 slice web/icons.js puts in the icon URLs.
+  const sprite = Buffer.from(SPRITE);
+  files["icons.svg"] = { body: sprite, type: TYPES[".svg"], hash: hash(sprite) };
+  // brand.css is folded into app.css: one stylesheet request, tokens and faces first.
   const brand = Buffer.from(cssTokens() + face(400) + face(700));
-  files["brand.css"] = { body: brand, type: TYPES[".css"], hash: hash(brand) };
+  const app = files["app.css"];
+  if (app) {
+    const merged = Buffer.concat([brand, app.body]);
+    files["app.css"] = { body: merged, type: TYPES[".css"], hash: hash(merged) };
+  }
   const version = hash(Buffer.from(Object.values(files).map((f) => f.hash).join(".")));
   const url = (name) => {
     const f = files[name];

@@ -34,7 +34,7 @@ const Uploads = require("../../lib/unitUploads");
 const { placeList } = require("../views/searchForm");
 const { imagesOf } = require("./units");
 
-const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L: L10n } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const upload = uploads([PHOTO, VOICE_MANY]);
 
@@ -311,6 +311,14 @@ function register(web, { pool, page, assets }) {
     const code = key ? await SaveKeys.lookup(pool, req.session.broker.agency_id, key) : null;
     res.set("Cache-Control", "no-store");
     return res.json(code ? { saved: true, code } : { saved: false });
+  });
+
+  // The owner's phone is a client of this broker: the form fills the owner's name and the lead code (nothing is saved here).
+  web.get("/units/owner-lookup", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const found = await Leads.findByPhone(pool, req.session.broker, String(req.query.phone || "").slice(0, 30));
+    const lead = found && found.lead;
+    return res.json(lead ? { found: true, ref: Card.refLabel(lead.ref), name: lead.name || "" } : { found: false });
   });
 
   // Photos straight to storage: one-time upload links (the photo never passes through this server), and the check that

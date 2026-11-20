@@ -15,7 +15,7 @@ const Store = require("../../lib/listingStore");
 const DealRules = require("../../domain/dealType");
 const { html, raw } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 // The first list: places read from the map file (scripts/build-map-seed.js), and a few the owner supplied by hand that the map file lacks.
 const SEED_FILES = ["extra.json", "places.json"].map((f) => path.join(__dirname, "..", "..", "data", "map-seed", f));
@@ -156,7 +156,7 @@ ${notice}
   ${unmatched.length
     ? html`<ul class="stack">${unmatched.map((r) => html`<li data-unmatched><strong>${r.name}</strong> <span class="muted">${r.other} · ${r.n} ${L(lang, "وحدة", "units")} · ${r.agencies} ${L(lang, "مكتب", "agencies")}</span>
       ${r.hint ? html`<form method="post" action="/app/owner/map/${r.hint.id}/approve" class="row"><button type="submit" class="small">${L(lang, `اعتمد "${r.hint.name}"`, `Approve "${r.hint.name}"`)}</button></form>` : ""}
-      <form method="post" action="/app/owner/map/alias" class="row"><input type="hidden" name="alias" value="${r.name}"><input name="place" placeholder="${L(lang, "اسم المكان", "Place name")}" required maxlength="80"><button type="submit" class="secondary small">${L(lang, "اربط", "Link")}</button></form>
+      <form method="post" action="/app/owner/map/alias" class="row"><input type="hidden" name="alias" value="${r.name}"><input name="place" aria-label="${L(lang, "اسم المكان", "Place name")}" placeholder="${L(lang, "اسم المكان", "Place name")}" required maxlength="80"><button type="submit" class="secondary small">${L(lang, "اربط", "Link")}</button></form>
       <form method="post" action="/app/owner/map/dismiss" class="row" data-confirm="${L(lang, "الاسم ده مش كمبوند؟", "Not a compound?")}"><input type="hidden" name="name" value="${r.name}"><button type="submit" class="secondary small">${L(lang, "مش كمبوند", "Not a compound")}</button></form></li>`)}</ul>`
     : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
 </section>
@@ -184,7 +184,7 @@ ${notice}
 ${placeForm(lang, editing, areaList)}
 <div class="map-view map-pick" data-map data-pick data-places="${JSON.stringify(allPins.places.filter((x) => x.approved && x.lat != null && x.id !== editing?.id).map((x) => ({ id: x.id, n: x.name_en || x.name_ar, lat: x.lat, lng: x.lng })))}" role="application" aria-label="${L(lang, "اختار مكان الدبوس", "Pick the pin")}" data-tiles="${tilesUrl}" data-i18n="${JSON.stringify(words(lang))}" data-lang="${lang}"></div>
 <section class="card stack" id="places"><h2>${L(lang, "الأماكن", "Places")}</h2>
-  <form method="get" action="/app/owner/map" class="row"><input type="search" name="q" value="${q}" placeholder="${L(lang, "ابحث", "Search")}"><select name="v"><option value="">${L(lang, "الكل", "All")}</option><option value="1"${filter === true ? raw(" selected") : ""}>${L(lang, "مراجَع", "Checked")}</option><option value="0"${filter === false ? raw(" selected") : ""}>${L(lang, "لسه", "Not yet")}</option></select><button type="submit" class="secondary">${L(lang, "ابحث", "Search")}</button></form>
+  <form method="get" action="/app/owner/map" class="row"><input type="search" name="q" value="${q}" aria-label="${L(lang, "ابحث", "Search")}" placeholder="${L(lang, "ابحث", "Search")}"><select name="v"><option value="">${L(lang, "الكل", "All")}</option><option value="1"${filter === true ? raw(" selected") : ""}>${L(lang, "مراجَع", "Checked")}</option><option value="0"${filter === false ? raw(" selected") : ""}>${L(lang, "لسه", "Not yet")}</option></select><button type="submit" class="secondary">${L(lang, "ابحث", "Search")}</button></form>
   <div class="scroll"><table><thead><tr><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المنطقة", "District")}</th><th>${L(lang, "الموقع", "Location")}</th><th></th></tr></thead>
   <tbody>${list.rows.map((p) => html`<tr data-place="${p.id}"><td>${p.name_en || ""}<br><span class="muted">${p.name_ar || ""}</span>${p.verified ? html` ✅` : ""}</td><td>${p.district || "—"}</td><td dir="ltr">${p.lat == null ? L(lang, "من غير مكان", "no pin yet") : `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`}</td>
     <td class="row"><a class="btn secondary small" href="/app/owner/map?edit=${p.id}#place-form">${L(lang, "تعديل", "Edit")}</a>
@@ -415,7 +415,7 @@ ${reviewMap(lang, rows)}
   web.post("/owner/map/master", ownerOnly(async (req, res) => {
     let rows = [];
     try {
-      rows = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "data", "map-seed", "master.json"), "utf8"));
+      rows = JSON.parse(await fs.promises.readFile(path.join(__dirname, "..", "..", "data", "map-seed", "master.json"), "utf8"));
     } catch {
       return goOwner(res, "err=missing");
     }
@@ -427,7 +427,7 @@ ${reviewMap(lang, rows)}
   web.post("/owner/map/import", ownerOnly(async (req, res) => {
     let rows = [];
     try {
-      rows = SEED_FILES.flatMap((f) => JSON.parse(fs.readFileSync(f, "utf8")));
+      rows = (await Promise.all(SEED_FILES.map(async (f) => JSON.parse(await fs.promises.readFile(f, "utf8"))))).flat();
     } catch {
       return goOwner(res, "err=missing");
     }

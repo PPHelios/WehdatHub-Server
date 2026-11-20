@@ -35,8 +35,6 @@ jobs:
       browser: ${{ steps.filter.outputs.browser }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - id: filter
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
@@ -45,6 +43,7 @@ jobs:
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
             echo "browser=true" >> "$GITHUB_OUTPUT"; echo "no base commit: browser on"; exit 0
           fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
           if ! changed=$(git diff --name-only "$BASE_SHA" HEAD 2>/dev/null); then
             echo "browser=true" >> "$GITHUB_OUTPUT"; echo "diff unreadable: browser on"; exit 0
           fi
@@ -58,6 +57,8 @@ jobs:
           fi
 
   fast:
+    # Quick feedback on draft pull requests only; every other run goes straight to the full job.
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -67,6 +68,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run audit:schema
       - name: Run fast tests (errors only)
         env:
           NODE_OPTIONS: --max-old-space-size=3072
@@ -78,6 +80,10 @@ jobs:
             exit 1
           }
           tail -n 5 fast.log
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - name: Run main paths in the browser (errors only)
         run: |
@@ -125,6 +131,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - name: Run browser tests (errors only)
         run: |

@@ -7,7 +7,7 @@ const Queue = require("../../services/accessQueue");
 const Period = require("../../lib/period");
 const { html, raw } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const PATH = "/app/access-requests";
 const STATUS_LABEL = { pending: ["مستني", "Pending"], approved: ["اتوافق", "Approved"], declined: ["اترفض", "Declined"] };
@@ -52,7 +52,7 @@ ${card("مستني دلوقتي", "Waiting now", sum.pending, sum.oldestHours !=
 </div>
 <nav class="seg" data-queue>${tab("pending", "مستني", "Pending")}${tab("approved", "اتوافق", "Approved")}${tab("declined", "اترفض", "Declined")}${tab("all", "الكل", "All")}</nav>
 <form method="get" action="${PATH}" class="row" data-filters><input type="hidden" name="period" value="${p.key}"><input type="hidden" name="status" value="${status === "pending" ? "" : status}">
-<input type="search" name="q" value="${text}" placeholder="${L(lang, "كود الوحدة أو اسم السمسار", "Unit code or broker")}">
+<input type="search" name="q" value="${text}" aria-label="${L(lang, "كود الوحدة أو اسم السمسار", "Unit code or broker")}" placeholder="${L(lang, "كود الوحدة أو اسم السمسار", "Unit code or broker")}">
 <label class="row"><input type="checkbox" name="changed" value="1"${changed ? raw(" checked") : ""}> ${L(lang, "اتغير آخر يوم", "Changed in the last day")}</label>
 <button class="secondary">${L(lang, "فلتر", "Filter")}</button></form>
 <section class="card stack" data-requests>${out.rows.length

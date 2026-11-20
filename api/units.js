@@ -137,7 +137,14 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const t0 = Date.now();
     const wanted = [...new Set((Array.isArray(req.body?.codes) ? req.body.codes : []).map((c) => String(c || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 200);
-    const byNorm = new Map(wanted.map((c) => [normalizeCode(c), c]));
+    // Several spellings can fold to one code_norm (HP-12, hp-12, #HP-12): each of them gets the answer.
+    const byNorm = new Map();
+    for (const c of wanted) {
+      const n = normalizeCode(c);
+      if (!byNorm.has(n)) byNorm.set(n, []);
+      byNorm.get(n).push(c);
+    }
+    const put = (n, v) => { for (const c of byNorm.get(n) || []) out[c] = v; };
     const out = {};
     if (byNorm.size) {
       const { rows } = await pool.query(
@@ -146,11 +153,11 @@ function register(api, { pool }) {
            FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.code_norm = ANY($2::text[])`,
         [broker.agency_id, [...byNorm.keys()]]
       );
-      for (const l of rows) out[byNorm.get(l.code_norm)] = Authz.canEdit(broker, l) ? { state: "update", code: l.code, photos: l.photos, status: l.status } : { state: "taken" };
-      const rest = [...byNorm.keys()].filter((n) => !out[byNorm.get(n)]);
+      for (const l of rows) put(l.code_norm, Authz.canEdit(broker, l) ? { state: "update", code: l.code, photos: l.photos, status: l.status } : { state: "taken" });
+      const rest = [...byNorm.keys()].filter((n) => !out[byNorm.get(n)[0]]);
       if (rest.length) {
         const { rows: hidden } = await pool.query("SELECT code_norm FROM listings WHERE agency_id = $1 AND code_norm = ANY($2::text[]) /* vis:exempt */", [broker.agency_id, rest]);
-        for (const l of hidden) out[byNorm.get(l.code_norm)] = { state: "taken" };
+        for (const l of hidden) put(l.code_norm, { state: "taken" });
       }
     }
     for (const c of wanted) if (!out[c]) out[c] = { state: "new" };
@@ -166,11 +173,14 @@ function register(api, { pool }) {
     if (!found) return res.status(404).json({ error: "not_found" });
     // Photos marked as documents or unrelated (contracts, receipts, screenshots) are only for managers and the unit's own broker.
     const docsToo = Authz.isManager(broker) || found.broker_id === broker.id;
-    const images = (await pool.query(`SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2${docsToo ? "" : " AND (role IS NULL OR role NOT IN ('document', 'unrelated'))"} ORDER BY position`, [found.id, broker.agency_id])).rows;
+    const [{ rows: images }, mayWrite] = await Promise.all([
+      pool.query(`SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2${docsToo ? "" : " AND (role IS NULL OR role NOT IN ('document', 'unrelated'))"} ORDER BY position`, [found.id, broker.agency_id]),
+      Authz.canEdit(broker, found) && Rights.mayWrite(pool, broker)
+    ]);
     return res.json({
       ...unitView(found),
       mine: found.broker_id === broker.id,
-      canEdit: Authz.canEdit(broker, found) && (await Rights.mayWrite(pool, broker)),
+      canEdit: Boolean(mayWrite),
       features: found.feature_keys || [],
       images: images.map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), position: i.position }))
     });
@@ -210,9 +220,8 @@ function register(api, { pool }) {
     const { broker } = req.session;
     const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!found || !Authz.canView(broker, found)) return res.status(404).json({ error: "not_found" });
-    const gate = await RateLimit.hit(pool, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
-    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: req.body?.lang === "en" || req.body?.lang === "ar" ? req.body.lang : broker.preferred_lang === "en" ? "en" : "ar", unbranded: req.body?.unbranded === true });
+    if (!(await RateLimit.apiGate(pool, res, `flyer:broker:${broker.id}`, RateLimit.LIMITS.searchBroker))) return;
+    const out = await Flyer.flyerUrlFor(pool, broker, found, { theme: req.body?.theme === "light" ? "light" : "dark", lang: req.body?.lang === "en" || req.body?.lang === "ar" ? req.body.lang : broker.preferred_lang === "en" ? "en" : "ar", unbranded: req.body?.unbranded === true, planState: req.planState });
     if (out.error) return res.status(out.error === "busy" ? 503 : 502).json({ error: out.error });
     return res.json({ url: out.url });
   });
@@ -234,7 +243,7 @@ function register(api, { pool }) {
     // Who it goes to: a lead (L-0042) or a mobile number, same as the website and Telegram; empty means no recipient.
     const recipient = await Recipients.resolveRecipient(pool, broker, req.body && req.body.to);
     if (recipient.error) return res.status(422).json({ error: recipient.error });
-    const { url } = await Share.createShareLink(pool, broker, found, { channel: "web", lang, recipient, source: "web" });
+    const { url } = await Share.createShareLink(pool, broker, found, { channel: "web", lang, recipient, source: "web", planState: req.planState });
     return res.json({ url, recipientPhone: recipient.phone || null, leadLinked: Boolean(recipient.leadId) });
   });
 }

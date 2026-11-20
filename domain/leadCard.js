@@ -8,7 +8,7 @@ const Stages = require("./leadStages");
 const Describe = require("./describe");
 const Places = require("./places");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../lib/copy");
 
 /** 42 → "L-0042". */
 const refLabel = (ref) => `L-${String(ref).padStart(4, "0")}`;

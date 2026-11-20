@@ -4,6 +4,7 @@
 const { html, raw, moreGroups } = require("../html");
 const Swallow = require("../../lib/swallow");
 const { icon } = require("../icons");
+const { searchBar } = require("../views/searchBar");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
 const Today = require("../../services/today");
@@ -140,29 +141,26 @@ function todayPage({ broker, agency, welcome, day, now, en }) {
   const total = tasks.length + d.moreTasks;
   const shown = tasks.slice(0, 8);
   const greet = en ? `Hello ${broker.name}` : `أهلاً ${broker.name}`;
-  const count = (n, label, href, cls = "") => html`<a class="count ${cls}" href="${href}"><strong>${n}</strong><span>${label}</span></a>`;
+  const count = (n, label, href, ic, cls = "") => html`<a class="count ${cls}" href="${href}"><span class="count-top"><strong>${n}</strong><span class="count-ico" aria-hidden="true">${icon(ic, 18)}</span></span><span>${label}</span></a>`;
   return html`<section class="today-head">
-  <span class="muted">${fmtDay(now, en)} · ${agency.name}</span>
+  <span class="today-meta">${fmtDay(now, en)} · ${agency.name}</span>
   <h1>${greet}</h1>
-  <form method="get" action="/app/search" class="searchbox" role="search">
-    ${icon("search", 20)}<input name="q" aria-label="${en ? "Search" : "بحث"}" placeholder="${en ? "Search: 3-bed flat in New Cairo under 5M" : "دوّر: شقة 3 غرف في التجمع تحت 5 مليون"}" enterkeyhint="search">
-    <a class="mic" href="/app/search?voice=1" aria-label="${en ? "Search by voice" : "بحث بالصوت"}">${icon("mic", 20)}</a>
-  </form>
+  ${searchBar({ lang: en ? "en" : "ar", label: en ? "Search" : "بحث", placeholder: en ? "Search: 3-bed flat in New Cairo under 5M" : "دوّر: شقة 3 غرف في التجمع تحت 5 مليون" })}
 </section>
 <div class="counts">
-  ${count(d.counts.followUpsToday, en ? "Follow-ups today" : "متابعات النهارده", "/app/leads?tab=due_today")}
-  ${count(d.counts.viewings, en ? "Viewings" : "معاينات", "/app/leads?tab=viewing")}
-  ${count(d.counts.newLeads, en ? "New leads" : "عملاء جداد", "/app/leads?tab=new", d.counts.newLeads ? "hot" : "")}
+  ${count(d.counts.followUpsToday, en ? "Follow-ups today" : "متابعات النهارده", "/app/leads?tab=due_today", "calendar")}
+  ${count(d.counts.viewings, en ? "Viewings" : "معاينات", "/app/leads?tab=viewing", "pin")}
+  ${count(d.counts.newLeads, en ? "New leads" : "عملاء جداد", "/app/leads?tab=new", "leads", d.counts.newLeads ? "hot" : "")}
 </div>
 ${welcome ? welcomeCard(welcome, en) : ""}
 <section class="stack" data-today>
-  <div class="row between"><h2>${en ? "Needs you now" : "مطلوب منك دلوقتي"}</h2><a href="/app/leads?tab=overdue">${en ? "All" : "الكل"}</a></div>
+  <div class="row between"><h2>${en ? "Needs you now" : "مطلوب منك دلوقتي"}</h2><a class="section-link" href="/app/leads?tab=overdue">${en ? "All" : "الكل"}</a></div>
   ${shown.length
     ? shown.map(
         (t) => html`<article class="card task" data-task="${t.ref}">
     <div class="row between"><a class="grow" href="/app/leads/${t.ref}"><b>${t.name || t.ref}</b><span class="muted">${t.note}</span></a><span class="chip ${t.cls}">${t.chip}</span></div>
     <div class="row actions">
-      ${t.phone ? html`<a class="btn call" href="tel:+${t.phone}">${en ? "Call" : "اتصال"}</a><a class="btn secondary" href="https://wa.me/${t.phone}" target="_blank" rel="noopener">${en ? "WhatsApp" : "واتساب"}</a>` : ""}
+      ${t.phone ? html`<a class="btn call" href="tel:+${t.phone}">${icon("phone", 16)} ${en ? "Call" : "اتصال"}</a><a class="btn secondary" href="https://wa.me/${t.phone}" target="_blank" rel="noopener">${icon("chat", 16)} ${en ? "WhatsApp" : "واتساب"}</a>` : ""}
       <a class="btn secondary" href="/app/leads/${t.ref}" aria-label="${en ? "Open" : "افتح"}">${icon("back", 20)}</a>
     </div>
   </article>`

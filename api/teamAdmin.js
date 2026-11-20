@@ -6,7 +6,7 @@ const Team = require("../services/team");
 const Audit = require("../services/audit");
 const { logOperation } = require("../lib/db");
 
-const STATUS = { forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, already_member: 409, seats: 402, self: 409, active: 409, has_records: 409, same: 409, team_lead_nested: 409, team_lead_not_found: 404 };
+const STATUS = { plan_feature: 403, forbidden: 403, not_found: 404, rank: 403, phone_taken: 409, already_member: 409, seats: 402, self: 409, active: 409, has_records: 409, same: 409, team_lead_nested: 409, team_lead_not_found: 404 };
 const UUID = /^[0-9a-f-]{36}$/i;
 const fail = (res, error) => res.status(STATUS[error] || 422).json({ error });
 
@@ -22,6 +22,12 @@ function register(api, { pool }) {
     const r = await Team.invite(pool, req.session.broker, { name: req.body?.name, phone: req.body?.phone, role: req.body?.role, lang: req.body?.lang });
     if (r.error) return fail(res, r.error);
     return res.json({ ok: true, created: r.created, broker: { id: r.broker.id, name: r.broker.name, role: r.broker.role }, url: r.url, noBot: Boolean(r.noBot) });
+  });
+
+  // The agency owner picks how a team below the agency tier works: "shared" or "structured" (services/team.js setTeamStyle).
+  api.post("/team/style", async (req, res) => {
+    const r = await Team.setTeamStyle(pool, req.session.broker, String(req.body?.style || ""));
+    return r.error ? fail(res, r.error) : res.json({ ok: true, style: r.style });
   });
 
   api.post("/team/:id/role", async (req, res) => {

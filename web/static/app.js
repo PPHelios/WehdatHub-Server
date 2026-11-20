@@ -9,6 +9,8 @@
     (root || document).querySelectorAll("[data-ai]").forEach(function (el) {
       if (off.indexOf(el.getAttribute("data-ai")) < 0 || el.hasAttribute("data-ai-off")) return;
       el.setAttribute("data-ai-off", "");
+      // The search bar's round button also sends typed text: it stays usable, only its voice side is off (see listen()).
+      if (el.hasAttribute("data-mic")) return;
       el.setAttribute("aria-disabled", "true");
       if (el.tagName === "BUTTON") el.disabled = true;
       if (el.tagName === "A") el.removeAttribute("href");
@@ -461,6 +463,8 @@
     if (!cols) return;
     var col = cols.querySelector(".bcol");
     var delta = Number(step.getAttribute("data-board-step")) * ((col ? col.offsetWidth : 260) + 12);
+    // RTL: the first column is on the right and scrollLeft runs negative, so "previous" (-1) must scroll right (+).
+    if (getComputedStyle(cols).direction === "rtl") delta = -delta;
     var before = cols.scrollLeft, max = cols.scrollWidth - cols.clientWidth;
     cols.scrollBy({ left: delta, behavior: "smooth" });
     // Loop: when the edge stops the step, jump to the other end (any sign of scrollLeft, RTL or LTR).
@@ -545,14 +549,16 @@
     var n = parseInt(bg.slice(1), 16);
     var lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
     document.documentElement.setAttribute("data-theme", lum < 0.5 ? "dark" : "light");
+    document.documentElement.setAttribute("data-tg-theme", lum < 0.5 ? "dark" : "light");
   })();
   // Appearance: System (the phone's, or Telegram's) unless the user picked Light or Dark on the More page; kept on this device.
   (function () {
-    var root = document.documentElement, auto = root.getAttribute("data-theme");
+    var root = document.documentElement;
     function stored() { try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; } }
     function apply(v) {
       if (v === "light" || v === "dark") root.setAttribute("data-theme", v);
-      else if (auto) root.setAttribute("data-theme", auto);
+      else if (root.getAttribute("data-tg-theme")) root.setAttribute("data-theme", root.getAttribute("data-tg-theme"));
+      else if (window.whTheme) window.whTheme.apply("system");
       else root.removeAttribute("data-theme");
       document.querySelectorAll("[data-theme-set]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-theme-set") === v)); });
     }
@@ -656,9 +662,11 @@
   function toast(text, bad) {
     var box = document.querySelector("[data-toast-box]");
     if (!box || !text) return;
-    box.textContent = text;
+    // Unhide first, then set the text: a live region announces text changed after it is shown.
     box.className = "toast" + (bad ? " bad" : "");
+    box.setAttribute("role", bad ? "alert" : "status");
     box.hidden = false;
+    box.textContent = text;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { box.hidden = true; }, bad ? 6000 : 4000);
   }
@@ -680,9 +688,14 @@
   // (:invalid) gets the focus instead when there is one.
   function showError(root) {
     var scope = root && root.querySelector ? root : document.getElementById("main") || document;
-    var n = scope.querySelector(".notice.bad:not([hidden])");
+    // The review panel's "still needed to save" list is a status the person asked for by reaching the last step, not a refusal:
+    // it never toasts or scrolls (it used to jump down before anything was done).
+    var n = Array.prototype.find.call(scope.querySelectorAll(".notice.bad:not([hidden])"), function (x) { return !x.closest("[data-review]"); });
     if (!n) return;
-    var text = n.textContent.replace(/\s+/g, " ").trim();
+    // A list reads as "heading item · item" (a toast is one line: the items must not run together).
+    var lis = n.querySelectorAll("li");
+    var head = n.querySelector("strong");
+    var text = lis.length ? ((head ? head.textContent.trim() + " " : "") + Array.prototype.map.call(lis, function (li) { return li.textContent.replace(/\s+/g, " ").trim(); }).join(" · ")) : n.textContent.replace(/\s+/g, " ").trim();
     if (text) toast(text.length > 160 ? text.slice(0, 157) + "…" : text, true);
     var r = n.getBoundingClientRect();
     if (r.bottom < 0 || r.top > (window.innerHeight || document.documentElement.clientHeight)) {
@@ -816,6 +829,8 @@
   document.addEventListener("change", function (e) {
     var t = e.target;
     if (t && t.hasAttribute && t.hasAttribute("data-autosubmit") && t.form) t.form.submit();
+    // <form data-autosave>: a switch inside it saves at once; the Save button stays for browsers without script.
+    else if (t && t.type === "checkbox" && t.form && t.form.hasAttribute("data-autosave")) t.form.submit();
   });
   // Tabs made of radios: a link to something inside a hidden tab (#merge, #timeline) opens that tab first.
   function openTabFor(hash) {
@@ -875,47 +890,146 @@
   try { if (/[?&]saved=1/.test(location.search)) { localStorage.removeItem(DRAFT_KEY); Object.keys(localStorage).forEach(function (k) { if (k.indexOf("wh-unit-photos:") === 0) localStorage.removeItem(k); }); } } catch (e) {}
   (function () {
     var form = document.getElementById("unit-form");
-    if (!form || /\/edit$/.test(form.getAttribute("action") || "")) return;
+    if (!form) return;
+    // An edit keeps its own draft per unit (and only while the unit has not changed on the server: its version must match).
+    var isEdit = /\/edit$/.test(form.getAttribute("action") || "");
+    var KEY = isEdit ? DRAFT_KEY + ":" + form.getAttribute("action") : DRAFT_KEY;
+    var verEl = form.querySelector('[name="version"]');
+    var ver = verEl ? verEl.value : "";
     var dirty = false, timer = null;
     function fieldsOf() { return Array.prototype.filter.call(form.elements, function (el) { return el.name && !DRAFT_SKIP.test(el.name) && el.type !== "file" && el.type !== "submit" && el.type !== "button" && el.type !== "hidden"; }); }
     function save() {
       try {
         var out = {};
         fieldsOf().forEach(function (el) {
-          if (el.type === "checkbox") { if (el.checked) (out[el.name] = out[el.name] || []).push(el.value); }
-          else if (el.value) out[el.name] = el.value;
+          if (el.type === "checkbox") { if (isEdit) out[el.name] = out[el.name] || []; if (el.checked) (out[el.name] = out[el.name] || []).push(el.value); }
+          else if (el.value || isEdit) out[el.name] = el.value;
         });
-        if (Object.keys(out).length) localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), v: out })); else localStorage.removeItem(DRAFT_KEY);
+        if (Object.keys(out).length) localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), v: out, ver: ver })); else localStorage.removeItem(KEY);
       } catch (e) {}
     }
     // Restore only into an empty form (a form re-shown after a refusal already has its values).
     try {
-      var raw = localStorage.getItem(DRAFT_KEY);
+      var raw = localStorage.getItem(KEY);
       var d = raw ? JSON.parse(raw) : null;
-      var empty = fieldsOf().every(function (el) { return el.type === "checkbox" ? !el.checked : !el.value || el.tagName === "SELECT"; });
+      var empty = isEdit || fieldsOf().every(function (el) { return el.type === "checkbox" ? !el.checked : !el.value || el.tagName === "SELECT"; });
+      if (isEdit && d && d.ver !== ver) { localStorage.removeItem(KEY); d = null; } // the unit changed since: the draft is old
       if (d && d.v && Date.now() - d.at < 7 * 24 * 3600 * 1000 && empty) {
+        var restored = 0;
         fieldsOf().forEach(function (el) {
           var val = d.v[el.name];
           if (val === undefined) return;
-          if (el.type === "checkbox") el.checked = [].concat(val).indexOf(el.value) >= 0; else el.value = String(val);
+          if (el.type === "checkbox") { var on = [].concat(val).indexOf(el.value) >= 0; if (el.checked !== on) { el.checked = on; restored++; } }
+          else if (el.value !== String(val)) { el.value = String(val); restored++; }
         });
+        // An edit with nothing different from the saved unit has nothing to restore.
+        if (isEdit && !restored) throw new Error("nothing");
         var note = document.createElement("p");
         note.className = "card notice";
         note.setAttribute("data-draft-note", "");
-        note.textContent = (EN ? "Your unfinished unit was restored. " : "رجّعنا الوحدة اللي ما كملتهاش. ") + (EN ? "Photos and owner details are not kept. " : "الصور وبيانات المالك مش بتتحفظ. ");
+        note.textContent = (isEdit ? (EN ? "Your unsaved changes to this unit were restored. " : "رجّعنا تعديلاتك اللي ما اتحفظتش. ") : (EN ? "Your unfinished unit was restored. " : "رجّعنا الوحدة اللي ما كملتهاش. ")) + (EN ? "Photos and owner details are not kept. " : "الصور وبيانات المالك مش بتتحفظ. ");
         var discard = document.createElement("button");
-        discard.type = "button"; discard.className = "secondary small"; discard.textContent = EN ? "Start over" : "ابدأ من الأول";
-        discard.addEventListener("click", function () { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} dirty = false; location.reload(); });
+        discard.type = "button"; discard.className = "secondary small"; discard.textContent = isEdit ? (EN ? "Undo my changes" : "الغي تعديلاتي") : (EN ? "Start over" : "ابدأ من الأول");
+        discard.addEventListener("click", function () { try { localStorage.removeItem(KEY); } catch (e) {} dirty = false; location.reload(); });
         note.appendChild(discard);
         form.insertBefore(note, form.firstChild.nextSibling);
       }
     } catch (e) {}
     form.addEventListener("input", function () { dirty = true; clearTimeout(timer); timer = setTimeout(save, 500); });
-    form.addEventListener("submit", function () { dirty = false; });
-    window.addEventListener("beforeunload", function (e) { if (dirty && !window.__whSaved) { e.preventDefault(); e.returnValue = ""; } });
-    // Price and phone: say how the typed text is read, as you type.
+    form.addEventListener("submit", function () { dirty = false; if (isEdit) { clearTimeout(timer); try { localStorage.removeItem(KEY); } catch (e) {} } });
+    // An edit keeps its draft instead of asking before leaving.
+    if (!isEdit) window.addEventListener("beforeunload", function (e) { if (dirty && !window.__whSaved) { e.preventDefault(); e.returnValue = ""; } });
+    // Phone: say how the typed text is read, as you type.
     var DIG = { "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
     function latin(t) { return String(t).replace(/[٠-٩]/g, function (c) { return DIG[c]; }); }
+    function hint(name, fn, empty) {
+      var inp = form.querySelector('[name="' + name + '"]');
+      if (!inp) return;
+      var s = document.createElement("small");
+      s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", name);
+      inp.parentNode.appendChild(s);
+      var run = function () { s.textContent = inp.value ? fn(inp.value) : (empty || ""); };
+      inp.addEventListener("input", run);
+      run();
+    }
+    // A usable phone: an Egyptian mobile (01…, 20…; landlines are not used) or foreign written with + or 00 and the country code (8 to 15 digits).
+    function okPhone(v) {
+      var t = latin(v).trim(), d = t.replace(/\D/g, "");
+      if (/[^\d\s+\-().]/.test(t)) return false;
+      if (/^(20)?0?1[0125]\d{8}$/.test(d)) return true;
+      var intl = /^\+/.test(t) || /^00/.test(d);
+      if (/^00/.test(d)) d = d.slice(2);
+      return intl && d.length >= 8 && d.length <= 15 && d.charAt(0) !== "0";
+    }
+    // A phone that is already one of this broker's clients fills the owner's name and the lead code (only fields still empty).
+    (function () {
+      var phone = form.querySelector('[name="owner_phone"]');
+      if (!phone) return;
+      var nameEl = form.querySelector('[name="owner_name"]'), leadEl = form.querySelector('[name="owner_lead"]');
+      var timer = null, lastAsked = "";
+      phone.addEventListener("input", function () {
+        clearTimeout(timer);
+        var d = latin(phone.value).replace(/\D/g, "");
+        if (!okPhone(phone.value) || d === lastAsked) return;
+        timer = setTimeout(function () {
+          lastAsked = d;
+          fetch("/app/units/owner-lookup?phone=" + encodeURIComponent(d), { credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+              if (!j || !j.found) return;
+              if (nameEl && !nameEl.value.trim() && j.name) { nameEl.value = j.name; nameEl.dispatchEvent(new Event("input", { bubbles: true })); }
+              if (leadEl && !leadEl.value.trim()) { leadEl.value = j.ref; leadEl.dispatchEvent(new Event("input", { bubbles: true })); }
+              var small = form.querySelector('[data-readback="owner_phone"]');
+              if (small) { small.textContent = "✅ 🔗 " + (j.name ? j.name + " · " : "") + j.ref; small.classList.add("owner-found"); }
+            })
+            .catch(function () {});
+        }, 500);
+      });
+    })();
+    hint("owner_phone", function (v) { return okPhone(v) ? "✅" : (EN ? "⚠️ Egyptian numbers are 11 digits (01…); a foreign number starts with + and the country code. No landlines" : "⚠️ الرقم المصري 11 رقم (01…)، والأجنبي يبدأ بـ + وكود الدولة. مفيش أرضي"); }, EN ? "Mobile only (no landlines): 01012345678, or a foreign number with + and the country code (+971…)." : "موبايل بس (مش أرضي): 01012345678، أو رقم أجنبي بـ + وكود الدولة (+971…).");
+    // Area: a typo guard ("1500" for a 150 m² flat) and the price per m² once the price is filled too.
+    (function () {
+      var area = form.querySelector('[name="area_value"]'), price = form.querySelector('[name="price_value"]'), type = form.querySelector('[name="property_type"]');
+      if (!area) return;
+      var s = document.createElement("small");
+      s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", "area_value");
+      area.parentNode.appendChild(s);
+      var num = function (v) { var x = latin(v || "").replace(/,/g, "").trim(); var m = x.match(/^(\d+(?:\.\d+)?)\s*(m|million|مليون|k|thousand|ألف|الف)?$/i); if (!m) return null; var n = parseFloat(m[1]), u = (m[2] || "").toLowerCase(); return u === "m" || u === "million" || u === "مليون" ? n * 1e6 : u ? n * 1e3 : n; };
+      var run = function () {
+        var a = num(area.value), p = price ? num(price.value) : null;
+        if (!a) { s.textContent = ""; return; }
+        var land = type && /land|farm/.test(type.value);
+        if (!land && a < 15) { s.textContent = EN ? "⚠️ Very small: check the area" : "⚠️ صغيرة أوي: راجع المساحة"; return; }
+        if (!land && a > 3000) { s.textContent = EN ? "⚠️ Very large: check the area" : "⚠️ كبيرة أوي: راجع المساحة"; return; }
+        s.textContent = p && p >= 1000 ? "≈ " + Math.round(p / a).toLocaleString("en") + (EN ? " EGP per m²" : " ج.م للمتر") : "";
+      };
+      area.addEventListener("input", run);
+      if (price) price.addEventListener("input", run);
+      run();
+    })();
+    // Paid + remaining installments, added up (a plain sum, no judgement: the two are not always the price).
+    (function () {
+      var paid = form.querySelector('[name="down_payment_value"]'), rest = form.querySelector('[name="remaining_amount"]');
+      if (!paid || !rest) return;
+      var s = document.createElement("small");
+      s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", "paid_plus_remaining");
+      rest.parentNode.appendChild(s);
+      var num = function (v) { var x = latin(v || "").replace(/,/g, "").trim(); var m = x.match(/^(\d+(?:\.\d+)?)\s*(m|million|مليون|k|thousand|ألف|الف)?$/i); if (!m) return null; var n = parseFloat(m[1]), u = (m[2] || "").toLowerCase(); return u === "m" || u === "million" || u === "مليون" ? n * 1e6 : u ? n * 1e3 : n; };
+      var run = function () {
+        var a = num(paid.value), b = num(rest.value);
+        s.textContent = a && b ? (EN ? "Paid + remaining = " : "المدفوع + المتبقي = ") + (a + b).toLocaleString("en") : "";
+      };
+      paid.addEventListener("input", run);
+      rest.addEventListener("input", run);
+      run();
+    })();
+  })();
+
+  // Every money field (data-money: price, paid, remaining, installment, cash price; add and edit forms, the import editor, deals):
+  // thousands separators as it is typed, and under it how the text is read: 13000000 reads "13M", "250 ألف" reads "250K".
+  (function () {
+    var DIG = { "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
+    var latin = function (t) { return String(t).replace(/[٠-٩]/g, function (c) { return DIG[c]; }); };
     function readPrice(t) {
       var x = latin(t).replace(/,/g, "").trim();
       var m = x.match(/^(\d+(?:\.\d+)?)\s*(m|million|مليون|k|thousand|ألف|الف)?$/i);
@@ -924,21 +1038,25 @@
       if (u === "m" || u === "million" || u === "مليون") n *= 1e6; else if (u) n *= 1e3;
       return n >= 1000 ? n : null;
     }
-    function hint(name, fn) {
-      var inp = form.querySelector('[name="' + name + '"]');
-      if (!inp) return;
-      var s = document.createElement("small");
-      s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", name);
-      inp.parentNode.appendChild(s);
-      var run = function () { s.textContent = inp.value ? fn(inp.value) : ""; };
-      inp.addEventListener("input", run);
-      run();
+    // 13000000 reads "13M" / "13 مليون", 250000 reads "250K" / "250 ألف"; a number that is not round to 2 decimals shows in full.
+    function shortPrice(n) {
+      var big = n >= 1e6, k = big ? n / 1e6 : n / 1e3;
+      if (n < 1e3 || Math.abs(k * 100 - Math.round(k * 100)) > 1e-6) return n.toLocaleString("en");
+      var t = String(Math.round(k * 100) / 100);
+      return EN ? t + (big ? "M" : "K") : t + (big ? " مليون" : " ألف");
     }
-    // The price field shows thousands separators as it is typed (caret at the end); they are stripped again on submit.
-    (function () {
-      var inp = form.querySelector('[name="price_value"]');
-      if (!inp) return;
+    function wire(inp) {
+      if (inp._money) return;
+      inp._money = true;
+      var s = document.createElement("small");
+      s.className = "muted"; s.setAttribute("aria-live", "polite"); s.setAttribute("data-readback", inp.name);
+      inp.parentNode.appendChild(s);
+      var run = function () {
+        var n = inp.value ? readPrice(inp.value) : null;
+        s.textContent = !inp.value ? "" : n ? "= " + shortPrice(n) : (EN ? "Not read as a price yet" : "لسه مش مقروء كسعر");
+      };
       inp.addEventListener("input", function () {
+        run();
         if (inp.selectionStart !== inp.value.length) return;
         // "9 مليون", "9m", "250 ألف": a number with a word is left as typed (the readback shows its value); only plain digits get commas.
         if (/[^\d.,\s٠-٩]/.test(inp.value)) return;
@@ -947,10 +1065,12 @@
         var parts = d.split(".");
         inp.value = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (parts.length > 1 ? "." + parts[1] : "");
       });
-      form.addEventListener("submit", function () { inp.value = latin(inp.value).replace(/,/g, ""); }, true);
-    })();
-    hint("price_value", function (v) { var n = readPrice(v); return n ? "= " + n.toLocaleString("en") : (EN ? "Not read as a price yet" : "لسه مش مقروء كسعر"); });
-    hint("owner_phone", function (v) { var d = latin(v).replace(/\D/g, ""); return /^(20)?0?1[0125]\d{8}$/.test(d) ? "✅" : (EN ? "⚠️ Egyptian mobile numbers have 11 digits (01…)" : "⚠️ الموبايل المصري 11 رقم (01…)"); });
+      if (inp.form) inp.form.addEventListener("submit", function () { inp.value = latin(inp.value).replace(/,/g, ""); }, true);
+      run();
+    }
+    var wireAll = function (root) { [].forEach.call((root && root.querySelectorAll ? root : document).querySelectorAll("input[data-money]"), wire); };
+    wireAll(document);
+    document.addEventListener("htmx:load", function (e) { wireAll(e.target); });
   })();
 
   // A form that is waiting for the server can't be edited or tapped (inert), so nothing changes under the request.
@@ -1010,7 +1130,7 @@
       clearTimeout(rvTimer);
       rvTimer = setTimeout(function () { runReview(unitFormEl); }, 700);
     };
-    unitFormEl.addEventListener("photos:changed", stale);
+    unitFormEl.addEventListener("photos:changed", function (e) { if (!(e.detail && e.detail.reorder)) stale(); });
     unitFormEl.addEventListener("change", function (e) {
       if (e.target && e.target.hasAttribute && (e.target.hasAttribute("data-warn-ack") || e.target.type === "file")) return;
       if (unitFormEl.querySelector("[data-review]")) stale();
@@ -1318,6 +1438,48 @@
     btn.classList.toggle("recording", state === "recording");
     btn.classList.toggle("busy", state === "busy");
     btn.setAttribute("aria-pressed", state === "recording" ? "true" : "false");
+    if (state !== "recording") railOff(btn);
+    labelAct(btn);
+  }
+  // The round button's name follows what it does now: voice (empty box), search (typed text) or send (recording).
+  function labelAct(btn) {
+    var form = btn.form || btn.closest("form");
+    var input = form && form.querySelector("input[name=q]");
+    var typed = !!(input && input.value.trim());
+    if (form) form.classList.toggle("has-text", typed);
+    btn.setAttribute("aria-label", btn.classList.contains("recording") ? btn.getAttribute("data-l-send") : typed ? btn.getAttribute("data-l-go") : btn.getAttribute("data-l-mic"));
+  }
+  // The recording rail (voice.js) replaces the input while a note is recorded; Esc or the bin throws it away.
+  function railOn(btn, form, input) {
+    var prev = input.value;
+    form.classList.add("is-rec");
+    btn._railCtl = window.WHRail.open({ parent: form, before: btn, send: false, onDiscard: function () { discardNote(btn, form, input, prev); } });
+    btn.focus();
+  }
+  function railOff(btn) {
+    var ctl = btn._railCtl;
+    if (!ctl) return;
+    btn._railCtl = null;
+    ctl.close();
+    (btn.form || btn.closest("form")).classList.remove("is-rec");
+  }
+  function discardNote(btn, form, input, prev) {
+    var rec = btn._rec;
+    var ctl = btn._railCtl;
+    if (!rec || !ctl) return;
+    btn._railCtl = null;
+    btn._discard = !rec.abort; // a MediaRecorder cannot abort: its stop handler must then skip the upload
+    btn._rec = null;
+    if (rec.abort) { try { rec.abort(); } catch (_) {} } else { try { rec.stop(); } catch (_) {} }
+    btn.classList.remove("recording");
+    btn.setAttribute("aria-pressed", "false");
+    ctl.discard(function () {
+      form.classList.remove("is-rec");
+      input.value = prev;
+      labelAct(btn);
+      input.focus();
+      window.WHRail.announce(window.WHRail.text.gone);
+    });
   }
   function pickType() {
     var types = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
@@ -1366,11 +1528,13 @@
       rec.onstop = function () {
         btn._rec = null;
         stream.getTracks().forEach(function (t) { t.stop(); });
+        if (btn._discard) { btn._discard = false; return; }
         transcribe(btn, form, new Blob(chunks, { type: rec.mimeType || type || "audio/webm" }));
       };
       btn._rec = rec;
       rec.start();
       setMic(btn, "recording");
+      railOn(btn, form, form.querySelector("input[name=q]"));
     }).catch(function () {
       toast(EN ? VOICE_ERRORS["not-allowed"][0] : VOICE_ERRORS["not-allowed"][1], true);
     });
@@ -1422,6 +1586,7 @@
     try {
       rec.start();
       setMic(btn, "recording");
+      railOn(btn, form, input);
       rec.guard(12000);
     } catch (_) {
       btn._rec = null;
@@ -1456,15 +1621,25 @@
     if (!input) return;
     e.preventDefault();
     input.blur();
-    // The form's own submit path (its Search button is the submitter), so the button shows its spinner and the search is sent.
-    if (input.value.trim()) { var go = input.form.querySelector("[data-search-go]"); if (input.form.requestSubmit) input.form.requestSubmit(go || undefined); else send(input.form); }
+    if (input.value.trim()) { busyBox(input.form, true); if (input.form.requestSubmit) input.form.requestSubmit(); else send(input.form); }
   });
-  if (Speech) {
-    var mics = document.querySelectorAll("[data-mic]");
-    for (var m = 0; m < mics.length; m++) {
-      mics[m].hidden = false;
-      mics[m].addEventListener("click", function () { listen(this); });
-    }
+  // The round button: typed text searches (a normal submit); an empty box records. Its label follows the text.
+  var mics = document.querySelectorAll("[data-mic]");
+  for (var m = 0; m < mics.length; m++) {
+    (function (btn) {
+      var form = btn.form || btn.closest("form");
+      var input = form && form.querySelector("input[name=q]");
+      if (input) input.addEventListener("input", function () { labelAct(btn); });
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (!btn._rec && input && input.value.trim()) { busyBox(form, true); if (form.requestSubmit) form.requestSubmit(); else form.submit(); return; }
+        if (btn.classList.contains("busy")) return;
+        if (!btn._rec && btn.hasAttribute("data-ai-off")) return toast(document.body.getAttribute("data-ai-off-hint") || "", true);
+        if (!btn._rec && !Speech && !canRecord()) return toast(EN ? "Voice is not supported here. Type your search." : "الصوت مش مدعوم هنا. اكتب بحثك.", true);
+        if (btn._rec) window.WHRail.announce(window.WHRail.text.sent);
+        listen(btn);
+      });
+    })(mics[m]);
   }
   // A voice file picked on the unit form runs the same "fill from a voice note" request as the record button.
   document.addEventListener("change", function (e) {
@@ -1781,4 +1956,32 @@
     var base = a.getAttribute("data-wa-base") || "https://wa.me/";
     if (ta) a.href = base.split("?")[0] + "?text=" + encodeURIComponent(ta.value);
   });
+})();
+
+// Import review: a tab or page link reloads the whole review (it can take a while on a big file). The click shows a bar at the
+// top, dims the page and turns every button off until the next page arrives, so nothing is pressed twice.
+(function () {
+  "use strict";
+  var links = "nav[data-kind-nav] a, nav[data-pager] a";
+  function busy() {
+    document.documentElement.classList.add("nav-busy");
+    [].forEach.call(document.querySelectorAll("form button, form input[type=submit], nav[data-kind-nav] a, nav[data-pager] a"), function (b) {
+      b.setAttribute("data-was-disabled", b.disabled ? "1" : "0");
+      if (b.tagName === "A") b.setAttribute("aria-disabled", "true"); else b.disabled = true;
+    });
+  }
+  function idle() {
+    document.documentElement.classList.remove("nav-busy");
+    [].forEach.call(document.querySelectorAll("[data-was-disabled]"), function (b) {
+      if (b.tagName === "A") b.removeAttribute("aria-disabled"); else b.disabled = b.getAttribute("data-was-disabled") === "1";
+      b.removeAttribute("data-was-disabled");
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest(links) : null;
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || a.getAttribute("aria-disabled") === "true") return;
+    if (document.documentElement.classList.contains("nav-busy")) { e.preventDefault(); return; }
+    setTimeout(busy, 0); // after the click is handled, so the link still opens
+  });
+  window.addEventListener("pageshow", idle); // back button: the page comes from the cache with the bar still on
 })();

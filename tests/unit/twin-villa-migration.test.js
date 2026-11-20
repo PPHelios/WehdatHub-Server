@@ -22,6 +22,6 @@ test("a twinhouse unit becomes a twin villa; the vocabulary has the new types an
   expect(unit.property_type).toBe("twin_villa");
   const { rows: types } = await db.pool.query("SELECT key FROM search_vocabulary WHERE kind = 'type'");
   const keys = types.map((r) => r.key);
-  expect(keys).toEqual(expect.arrayContaining(["triplex", "triplex_roof", "sky_loft", "basement", "mazonette", "i_villa", "twin_villa", "maisonette"]));
+  expect(keys).toEqual(expect.arrayContaining(["triplex", "triplex_roof", "sky_loft", "basement", "i_villa", "twin_villa", "maisonette"]));
   expect(keys).not.toContain("twinhouse");
 });

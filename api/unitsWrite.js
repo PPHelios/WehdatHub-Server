@@ -29,7 +29,7 @@ const Privacy = require("../services/unitPrivacy");
 const Catalogue = require("../services/catalogue");
 
 const MAX_DESCRIBE = 4000;
-const L10n = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L: L10n } = require("../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
 
@@ -164,8 +164,7 @@ function register(api, { pool }) {
     const text = String(req.body?.describe || "").trim().slice(0, MAX_DESCRIBE);
     const voice = filesOf(req, "voice").map((f) => ({ buffer: f.buffer, mimeType: f.mimetype.split(";")[0] }));
     if (!text && !voice.length) return res.status(400).json({ error: "nothing_to_read" });
-    const gate = await RateLimit.hit(pool, `extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `extract:broker:${broker.id}`, RateLimit.LIMITS.extractBroker))) return;
     try {
       const base = Form.composeFromForm({ existing: null, form: Form.unitFromForm(fieldsOf(req.body)), lang });
       const extracted = await L.extractPropertyDetails(AI, { texts: text ? [text] : [], voice, lang, ctx: { pool, broker, agency: req.session.agency, lang } });
@@ -206,6 +205,27 @@ function register(api, { pool }) {
     return res.json({ posts });
   });
 
+  // What each chat post would do against the broker's own inventory (nothing is written): new, update (the safe form-field patch and the
+  // changes in both languages), unchanged, other_unit, older, invalid, forbidden. The website's chat planner decides; the app only shows.
+  api.post("/units/chat-plan", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
+    if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
+    const ChatPlan = require("../services/chatPlan");
+    const sent = Array.isArray(req.body?.posts) ? req.body.posts.slice(0, ChatPlan.MAX_APP_POSTS) : [];
+    const plan = await ChatPlan.planPosts(pool, broker, sent, { lang: langOf(req) });
+    res.set("Cache-Control", "no-store");
+    return res.json(plan);
+  });
+
+  // The owner's phone is already one of this broker's clients: the app fills the owner's name and the lead code (nothing is saved).
+  api.get("/units/owner-lookup", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const found = await require("../services/leads").findByPhone(pool, req.session.broker, String(req.query.phone || "").slice(0, 30));
+    const lead = found && found.lead;
+    return res.json(lead ? { found: true, ref: require("../domain/leadCard").refLabel(lead.ref), name: lead.name || "" } : { found: false });
+  });
+
   // What is still missing, warnings, and a duplicate, without saving.
   api.post("/units/review", async (req, res) => {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
@@ -235,7 +255,7 @@ function register(api, { pool }) {
     }
     const ok = blockers.length === 0;
     const duplicate = ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
-    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing), place: placed ? { area_id: placed.area_id || null, subzone_id: placed.subzone_id || null, compound: placed.compound || null, compound_state: placed.compound_state || null } : null });
+    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing, lang), place: placed ? { area_id: placed.area_id || null, subzone_id: placed.subzone_id || null, compound: placed.compound || null, compound_state: placed.compound_state || null } : null });
   });
 
   // The unit's fields as the form names them, for the edit screen. Whoever may edit the unit may open this.
@@ -245,7 +265,7 @@ function register(api, { pool }) {
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing) return res.status(404).json({ error: "not_found" });
     if (!Authz.canEdit(broker, listing)) return res.status(403).json({ error: "forbidden" });
-    return res.json({ code: listing.code, version: listing.version, fields: Form.formFromUnit(listing) });
+    return res.json({ code: listing.code, version: listing.version, updated_at: listing.updated_at || null, compound: listing.compound || null, compound_en: listing.compound_en || null, area_id: listing.area_id || null, subzone_id: listing.subzone_id || null, fields: Form.formFromUnit(listing) });
   });
 
   // Save changes to one unit: the version the screen was opened at must still be current (409 otherwise). Photos are not
@@ -254,8 +274,7 @@ function register(api, { pool }) {
     const lang = langOf(req);
     const { broker } = req.session;
     if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
-    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
     const expectedVersion = Number(req.body && req.body.version);
     if (!Number.isInteger(expectedVersion)) return res.status(400).json({ error: "version_required" });
     const form = Form.unitFromForm(fieldsOf(req.body));
@@ -293,8 +312,7 @@ function register(api, { pool }) {
   api.post("/units/:code/photos", upload, async (req, res) => {
     const { broker } = req.session;
     if (!(await Rights.mayWrite(pool, broker))) return res.status(403).json({ error: "writes_off" });
-    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
     const ids = (raw) => {
       try {
         const v = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -351,8 +369,7 @@ function register(api, { pool }) {
     if (!(await Rights.mayWrite(pool, req.session.broker))) return res.status(403).json({ error: "writes_off" });
     const lang = langOf(req);
     const { broker } = req.session;
-    const gate = await RateLimit.hit(pool, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker);
-    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).json({ error: "rate_limited" });
+    if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
     const fields = fieldsOf(req.body);
     const t0 = Date.now();
     const saveKey = SaveKeys.keyOf(req.body);

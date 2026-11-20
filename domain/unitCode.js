@@ -8,7 +8,6 @@ const TYPE_LETTER = {
   triplex_roof: "E",
   sky_loft: "K",
   basement: "B",
-  mazonette: "M",
   i_villa: "I",
   twin_villa: "W",
   maisonette: "N",

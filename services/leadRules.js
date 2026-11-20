@@ -31,6 +31,8 @@ async function getRules(db, agencyId) {
 /** Saves the managers' form: { ok, rules } | { error, field }. */
 async function saveRules(pool, manager, input) {
   if (!isManager(manager)) return { error: "forbidden" };
+  const denied = await require("../lib/entitlements").assertAllowed(pool, manager, "leadRules");
+  if (denied) return denied;
   const r = Rules.rulesFields(input);
   if (r.error) return r;
   await pool.query("UPDATE agencies SET lead_rules = $2::jsonb WHERE id = $1", [manager.agency_id, JSON.stringify(r.fields)]);
@@ -55,6 +57,8 @@ function cairoMidnight(day) {
 /** A manager marks one of their brokers away until a day (back that day), or clears it with an empty day. */
 async function setAway(pool, manager, brokerId, day, { now = new Date() } = {}) {
   if (!isManager(manager)) return { error: "forbidden" };
+  const denied = await require("../lib/entitlements").assertAllowed(pool, manager, "leadRules");
+  if (denied) return denied;
   let until = null;
   if (day) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day)) || Number.isNaN(Date.parse(`${day}T00:00:00Z`))) return { error: "away_date" };
@@ -92,6 +96,8 @@ async function routingOf(db, agencyId) {
 /** The managers' switch and order (broker ids, first gets the next lead). */
 async function saveRouting(pool, manager, { roundRobin, order }) {
   if (!isManager(manager)) return { error: "forbidden" };
+  const denied = await require("../lib/entitlements").assertAllowed(pool, manager, "leadRules");
+  if (denied) return denied;
   const { rows } = await pool.query("SELECT id, role FROM brokers WHERE agency_id = $1 AND is_active", [manager.agency_id]);
   // Only brokers and team leads can be in the rotation; managers and the owner never are.
   const known = new Set(rows.filter((r) => !MANAGER_ROLES.includes(String(r.role || "").toLowerCase())).map((r) => r.id));

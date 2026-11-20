@@ -133,7 +133,7 @@ async function requestMore(db, manager, { credits, note = "" } = {}) {
     [manager.agency_id, manager.id, n, String(note || "").slice(0, 300) || null]
   );
   const { rows: ag } = await db.query("SELECT name FROM agencies WHERE id = $1", [manager.agency_id]);
-  ErrorReports.alertOwner([`🔔 Credit request: ${ag[0]?.name || ""}`, `${manager.name || ""} asks for ${n} credits`, note ? String(note).slice(0, 300) : "", "Answer on /app/owner"].filter(Boolean).join("\n")).catch(() => {});
+  ErrorReports.alertOwner([`🔔 Credit request: ${ag[0]?.name || ""}`, `${manager.name || ""} asks for ${n} credits`, note ? String(note).slice(0, 300) : "", "Answer on /app/owner"].filter(Boolean).join("\n"), { category: "credits", pool: db }).catch(() => {});
   return { ok: true, request: rows[0] };
 }
 

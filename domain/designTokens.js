@@ -1,5 +1,5 @@
 // domain/designTokens.js — The one set of colours and shapes for the website and the app (plan part 2, section 8).
-// Light: azure is the main colour. Dark: copper is the main colour, and azure becomes the second colour.
+// Light: Brushed Satin Gold is the main colour and Royal Dark Blue the companion. Dark: a lighter gold is the main colour and Cobalt Blue the companion.
 // The website gets these as CSS variables (web/assets.js, brand.css); the app carries the same values in
 // packages/shared/src/tokens.ts (a test there compares the two when the repos sit side by side).
 // Every "on" colour is the text or icon colour that is readable on its fill: tests/unit/design-tokens.test.js checks the
@@ -8,27 +8,28 @@
 
 const COLORS = Object.freeze({
   light: Object.freeze({
-    // Main colour (azure): buttons, links, the selected item.
-    brand: "#1d70b8", "brand-hi": "#2a82cc", "brand-strong": "#14558c", "brand-weak": "#6fa8d6", "on-brand": "#ffffff", "brand-ink": "#155a96", "brand-soft": "#e6f0fa",
-    // Second colour (copper): "very interested", featured, launching.
-    accent: "#b8501f", "on-accent": "#ffffff", "accent-ink": "#8a3416", "accent-soft": "#fbeae2",
-    ink: "#0e1521", bg: "#f4f6f9", card: "#ffffff", soft: "#eef2f6", field: "#ffffff", muted: "#4a5568", line: "#e2e8f0", "line-strong": "#cbd5e1",
-    ok: "#1e7b4e", "on-ok": "#ffffff", "ok-ink": "#145a38", "ok-soft": "#e3f3ea", "ok-line": "#bfe3cb",
-    warn: "#9a5b00", "on-warn": "#ffffff", "warn-soft": "#fdf3e1",
-    bad: "#b42318", "on-bad": "#ffffff", "bad-ink": "#8f1b12", "bad-soft": "#fdecea",
+    // Main colour (Brushed Satin Gold): primary CTAs, active accents, outer 4 logo towers. Deep royal ink on gold (6.9:1 AA+/AAA).
+    brand: "#c29741", "brand-hi": "#d5af55", "brand-strong": "#a67e32", "brand-weak": "#e8d49c", "on-brand": "#0a1324", "brand-ink": "#122b4f", "brand-soft": "#f8f2e2",
+    // Companion colour (Royal Dark Blue): secondary strong actions, links, status highlights.
+    accent: "#122b4f", "on-accent": "#ffffff", "accent-ink": "#122b4f", "accent-soft": "#e6eef9",
+    ink: "#0d182b", bg: "#f4f6fa", card: "#ffffff", soft: "#ecf0f6", field: "#ffffff", muted: "#4c596f", line: "#dce2ee", "line-strong": "#c2cce0",
+    // Status tones (strictly 2-colour system — no green): Royal Dark Blue for positive/ready/Call, antique bronze for warn, muted crimson for errors.
+    ok: "#122b4f", "on-ok": "#ffffff", "ok-ink": "#122b4f", "ok-soft": "#e6eef9", "ok-line": "#c3d3ec",
+    warn: "#7a5614", "on-warn": "#ffffff", "warn-soft": "#faf3df",
+    bad: "#a62319", "on-bad": "#ffffff", "bad-ink": "#8a1c14", "bad-soft": "#fbece9",
     // A dark surface that stays dark in both modes (toasts) and a neutral fill (idle, sold out).
-    inverse: "#0e1521", "on-inverse": "#f8fafc", neutral: "#5b6878", "on-neutral": "#ffffff"
+    inverse: "#0d182b", "on-inverse": "#f8fafc", neutral: "#566073", "on-neutral": "#ffffff"
   }),
   dark: Object.freeze({
-    // Main colour (copper). Text on a copper fill is dark: white on copper is too faint to read.
-    brand: "#e8845a", "brand-hi": "#ee9872", "brand-strong": "#dc6a3d", "brand-weak": "#7a4a36", "on-brand": "#0e1521", "brand-ink": "#f3b190", "brand-soft": "#3b2219",
-    // Second colour (azure).
-    accent: "#4e9fea", "on-accent": "#0e1521", "accent-ink": "#9fcaf3", "accent-soft": "#1b3350",
-    ink: "#f8fafc", bg: "#0e1521", card: "#172133", soft: "#1f2b40", field: "#1f2b40", muted: "#a9b4c4", line: "#2a3850", "line-strong": "#3a4a66",
-    ok: "#3fae78", "on-ok": "#0e1521", "ok-ink": "#9de0bd", "ok-soft": "#173328", "ok-line": "#2c5a44",
-    warn: "#e0a33a", "on-warn": "#0e1521", "warn-soft": "#33270f",
-    bad: "#f0715f", "on-bad": "#0e1521", "bad-ink": "#f7b4aa", "bad-soft": "#3a1c19",
-    inverse: "#f8fafc", "on-inverse": "#0e1521", neutral: "#5b6878", "on-neutral": "#ffffff"
+    // Main colour (Brushed Satin Gold) on deep Royal Navy surfaces.
+    brand: "#d5af55", "brand-hi": "#ddb95e", "brand-strong": "#c29741", "brand-weak": "#6b5424", "on-brand": "#08101e", "brand-ink": "#e8cc7e", "brand-soft": "#261f10",
+    // Companion colour (Lifted Cobalt Blue — matches invariant logo center spire).
+    accent: "#4b83d4", "on-accent": "#08101e", "accent-ink": "#c6dcfa", "accent-soft": "#162a4a",
+    ink: "#f8fafc", bg: "#09111f", card: "#111c30", soft: "#182742", field: "#15233b", muted: "#9db0ca", line: "#243656", "line-strong": "#344b73",
+    ok: "#d5af55", "on-ok": "#08101e", "ok-ink": "#c6dcfa", "ok-soft": "#162a4a", "ok-line": "#27416b",
+    warn: "#d5af55", "on-warn": "#08101e", "warn-soft": "#261f10",
+    bad: "#e87166", "on-bad": "#170a08", "bad-ink": "#f7b7ae", "bad-soft": "#361918",
+    inverse: "#f8fafc", "on-inverse": "#09111f", neutral: "#566073", "on-neutral": "#ffffff"
   })
 });
 
@@ -42,9 +43,8 @@ const SHAPE = Object.freeze({ radius: 20, "radius-btn": 14, "radius-field": 12, 
 const PAIRS = Object.freeze([
   ["ink", "bg", 4.5], ["ink", "card", 4.5], ["ink", "soft", 4.5], ["ink", "field", 4.5],
   ["muted", "bg", 4.5], ["muted", "card", 4.5], ["muted", "soft", 4.5],
-  ["brand", "bg", 4.5], ["brand", "card", 4.5], ["brand", "soft", 4.5],
-  ["on-brand", "brand", 4.5], ["on-brand", "brand-hi", 3], ["on-brand", "brand-strong", 4.5],
-  ["brand-ink", "brand-soft", 4.5], ["brand-ink", "card", 4.5],
+  ["brand-ink", "bg", 4.5], ["brand-ink", "card", 4.5], ["brand-ink", "soft", 4.5], ["brand-ink", "brand-soft", 4.5],
+  ["on-brand", "brand", 4.5], ["on-brand", "brand-hi", 4.5], ["on-brand", "brand-strong", 4.5],
   ["on-accent", "accent", 4.5], ["accent-ink", "accent-soft", 4.5], ["accent", "card", 3],
   ["on-ok", "ok", 4.5], ["ok-ink", "ok-soft", 4.5], ["ok", "card", 3],
   ["on-warn", "warn", 4.5], ["ink", "warn-soft", 4.5], ["warn", "card", 3],

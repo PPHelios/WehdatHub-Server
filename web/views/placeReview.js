@@ -4,7 +4,7 @@
 
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 
 function approveCompoundForm(g, q, lang, csrf) {
   const lead = g.lead;

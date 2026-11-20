@@ -6,7 +6,7 @@
 const { html, raw } = require("../html");
 const { projectCard } = require("./projectCard");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const money = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 const SORTS = [
   ["best", "الأنسب", "Best match"],

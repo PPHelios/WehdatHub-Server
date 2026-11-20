@@ -12,7 +12,7 @@ const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
 const { html } = require("../html");
 const Credits = require("../../services/credits");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const isManager = (b) => MANAGER_ROLES.includes(String(b.role || "").toLowerCase());
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
@@ -223,7 +223,7 @@ function register(web, { pool, page }) {
       const msg = (r.error === "lapsed" && upgrade ? UPGRADE_LAPSED : ERRORS[r.error] || ERRORS.plan)[lang === "en" ? 1 : 0];
       return render(req, res, { notice: html`<p class="card notice bad" role="alert" data-plan-error="${r.error}">❌ ${msg}</p>` }, r.error === "forbidden" ? 403 : 400);
     }
-    BillingNotices.paymentRequested(r.payment, r.agency, broker);
+    BillingNotices.paymentRequested(r.payment, r.agency, broker, pool);
     return render(req, res, { created: r.payment });
   });
 }

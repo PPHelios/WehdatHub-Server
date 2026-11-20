@@ -22,7 +22,7 @@ const TAB_LABELS = {
 // The five views across the top; each opens on its first tab and lists the others as a second row.
 const VIEW_LABELS = { today: ["النهاردة", "Today"], agencies: ["الشركات", "Agencies"], money: ["الفلوس", "Money"], health: ["الصحة", "Health"], content: ["المحتوى", "Content"] };
 const viewOf = (tab) => Object.keys(AdminBoard.VIEWS).find((v) => AdminBoard.VIEWS[v].includes(tab)) || "today";
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const num = (n) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const when = (iso) => (iso ? `${new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", hour12: false })} (Cairo)` : "—");

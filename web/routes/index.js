@@ -37,6 +37,7 @@ const PRIVATE = [
   require("./portalEnquiries"),
   require("./winLoss"),
   require("./insights"),
+  require("./market"),
   require("./catalogueUpdates"),
   require("./brochure"),
   require("./gallery"),

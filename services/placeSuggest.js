@@ -8,6 +8,7 @@ const { placeKey, keysOf } = require("../domain/mapPlaces");
 const UnitBox = require("../domain/unitBox");
 const Features = require("../domain/features");
 const Areas = require("./areas");
+const Phases = require("../domain/phases");
 
 const CACHE_MS = 60 * 1000;
 let cache = { at: 0, places: [], areas: [], zones: [], version: "" };
@@ -20,7 +21,7 @@ async function lists(pool) {
   const [places, areas, zones] = await Promise.all([
     pool.query("SELECT id, name_en, name_ar, aliases, area_id, subzone_id, lat, lng FROM map_places WHERE approved"),
     // The governorate comes with the areas (an attribute of the top area, shown with a place).
-    pool.query("SELECT id, parent_id, name_key, name_en, name_ar, aliases, lat, lng, status, governorate FROM areas WHERE status = 'approved' ORDER BY name_en NULLS LAST, name_ar").then((r) => r.rows),
+    pool.query("SELECT id, parent_id, name_key, name_en, name_ar, aliases, lat, lng, status, place_type, governorate FROM areas WHERE status = 'approved' ORDER BY name_en NULLS LAST, name_ar").then((r) => r.rows),
     pool.query("SELECT place_id, area_id FROM place_zones").then((r) => r.rows).catch(() => [])
   ]);
   // The version changes only when an approved place, an area, a zone or the feature dictionary changes, so the phone can keep its copy until then.
@@ -36,12 +37,29 @@ function withZones(item, { zones, areas }, lang) {
   return { ...item, zones: names.map((a) => (lang === "ar" ? a.name_ar || a.name_en : a.name_en || a.name_ar)) };
 }
 
+/**
+ * A place on a compound's (or area's) phases gets them as `phases: [{id, label, selected}]` (domain/phases.js), so the box shows them
+ * as chips under the place; `subzone_id` stays the place's own, the chosen phase replaces it on the unit.
+ */
+function withPhases(item, { areas }, lang, chosen = null) {
+  if (!item || item.kind === "feature") return item;
+  const nm = (r) => (lang === "en" ? r.name_en || r.name_ar : r.name_ar || r.name_en);
+  const node = item.kind === "compound" ? item.subzone_id || item.area_id : item.id;
+  const { phases, selected } = Phases.phasesFor(areas, node);
+  if (!phases.length) return item;
+  const pick = chosen || selected;
+  // phasesBase: the sub-zone the unit goes back to when the chosen phase is tapped off ("" = the area itself).
+  const parentId = selected ? areas.find((a) => a.id === node)?.parent_id : node;
+  const phasesBase = A.chain(areas, parentId).length > 1 ? parentId : "";
+  return { ...item, phasesBase, phases: phases.map((p) => ({ id: p.id, label: nm(p), selected: p.id === pick })) };
+}
+
 /** The unit box's list for what is typed: places first, then features (domain/unitBox.js). */
 async function box(pool, text, lang = "ar", { areasOnly = false } = {}) {
   const l = await lists(pool);
   const q = String(text || "").slice(0, 80);
   // A project is filed under an area or sub-area, never under a compound: with areasOnly the compounds are left out.
-  const places = A.suggest(q, areasOnly ? { ...l, places: [] } : l, 6, lang).map((it) => withZones(it, l, lang));
+  const places = A.suggest(q, areasOnly ? { ...l, places: [] } : l, 6, lang).map((it) => withPhases(withZones(it, l, lang), l, lang));
   return [...places, ...UnitBox.suggestFeatures(q, lang, 6)];
 }
 
@@ -58,18 +76,20 @@ async function placeChip(pool, { compound, area_id, subzone_id } = {}, lang = "a
     const k = placeKey(typed);
     const row = l.places.find((p) => keysOf(p).includes(k));
     const it = row && asItem(row);
-    return it ? { ...withZones(it, l, lang), known: true } : { label: typed, path: "", zones: [], known: false };
+    return it ? { ...withPhases(withZones(it, l, lang), l, lang, subzone_id), known: true } : { label: typed, path: "", zones: [], known: false };
   }
   const area = l.areas.find((a) => a.id === (subzone_id || area_id));
   const it = area && asItem(area);
-  return it ? { ...it, zones: [], known: true } : null;
+  return it ? { ...withPhases(it, l, lang), zones: [], known: true } : null;
 }
 
 /** A pasted message → the place and the features it names, for the box's chips. */
 async function boxResolve(pool, text, lang = "ar") {
   const l = await lists(pool);
   const r = UnitBox.resolve(text, l, lang);
-  return { place: withZones(r.place, l, lang), features: r.features.map((key) => ({ key, label: Features.featureLabel(key, lang) })), furnishing: r.furnishing, finishing: r.finishing };
+  const phase = r.phase ? withPhases(r.phase, l, lang) : null;
+  const place = withPhases(withZones(r.place, l, lang), l, lang, phase ? phase.id : null);
+  return { place, phase: phase ? { id: phase.id, label: phase.label } : null, features: r.features.map((key) => ({ key, label: Features.featureLabel(key, lang) })), furnishing: r.furnishing, finishing: r.finishing };
 }
 
 /** Up to `limit` suggestions for the text: [{kind, id, name_en, name_ar, path, via}]. */

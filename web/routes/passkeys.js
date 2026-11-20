@@ -10,7 +10,7 @@ const logOperation = (pool, p) => { Audit.fromOperation(pool, p); return logOp(p
 const Passkeys = require("../../services/passkeys");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
 
 /** The Settings card. */

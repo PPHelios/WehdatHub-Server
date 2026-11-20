@@ -1,0 +1,638 @@
+{
+  "_note": "Owner-confirmed phase list. Edit this file (names, aliases, pins) and add a migration that loads it; nothing is hard-coded elsewhere. Phases are the children of a node marked children_are_phases (areas rows with place_type 'phase'). Matching is by name_key under the parent, so rows loaded by migrations 111/115 are reused and renamed. A bare B6 / VG3 (letters+digits in the phase's own name) or a named zone may resolve alone; every other alias (generic: مرحلة 7, phase 1, سادسة, م1) resolves only when the parent compound is named in the same text. 'groups' are aliases that search several phases at once (Rehab 1 = phases 1-5, Rehab 2 = phases 6-10): search layer only, no extra tree level (areas go 3 levels deep: New Cairo > El Rehab > phase).",
+  "tree": [
+    {
+      "en": "Madinaty",
+      "ar": "مدينتي",
+      "aliases": [
+        "madinaty",
+        "medinaty",
+        "madinty",
+        "مدينتى"
+      ],
+      "lat": 30.095602,
+      "lng": 31.634931,
+      "children_are_phases": true,
+      "children": [
+        {
+          "en": "Madinaty B1",
+          "ar": "مدينتي B1",
+          "aliases": [
+            "b1",
+            "b 1",
+            "zone b1",
+            "بي 1",
+            "ب1",
+            "منطقة B1",
+            "المرحلة الأولى",
+            "أولى"
+          ],
+          "lat": 30.105378,
+          "lng": 31.640638,
+          "children": []
+        },
+        {
+          "en": "Madinaty B2",
+          "ar": "مدينتي B2",
+          "aliases": [
+            "b2",
+            "b 2",
+            "zone b2",
+            "بي 2",
+            "ب2",
+            "منطقة B2",
+            "المرحلة الثانية",
+            "ثانية"
+          ],
+          "lat": 30.10466,
+          "lng": 31.644709,
+          "children": []
+        },
+        {
+          "en": "Madinaty B3",
+          "ar": "مدينتي B3",
+          "aliases": [
+            "b3",
+            "b 3",
+            "zone b3",
+            "بي 3",
+            "ب3",
+            "منطقة B3",
+            "المرحلة الثالثة",
+            "ثالثة"
+          ],
+          "lat": 30.09087,
+          "lng": 31.642183,
+          "children": []
+        },
+        {
+          "en": "Madinaty B6",
+          "ar": "مدينتي B6",
+          "aliases": [
+            "b6",
+            "b 6",
+            "zone b6",
+            "بي 6",
+            "ب6",
+            "منطقة B6",
+            "المرحلة السادسة",
+            "سادسة"
+          ],
+          "lat": 30.078579,
+          "lng": 31.644012,
+          "children": []
+        },
+        {
+          "en": "Madinaty B7",
+          "ar": "مدينتي B7",
+          "aliases": [
+            "b7",
+            "b 7",
+            "zone b7",
+            "بي 7",
+            "ب7",
+            "منطقة B7",
+            "المرحلة السابعة",
+            "سابعة"
+          ],
+          "lat": 30.087776,
+          "lng": 31.648537,
+          "children": []
+        },
+        {
+          "en": "Madinaty B8",
+          "ar": "مدينتي B8",
+          "aliases": [
+            "b8",
+            "b 8",
+            "zone b8",
+            "بي 8",
+            "ب8",
+            "منطقة B8",
+            "المرحلة الثامنة",
+            "ثامنة"
+          ],
+          "lat": 30.100619,
+          "lng": 31.652552,
+          "children": []
+        },
+        {
+          "en": "Madinaty B10",
+          "ar": "مدينتي B10",
+          "aliases": [
+            "b10",
+            "b 10",
+            "zone b10",
+            "بي 10",
+            "ب10",
+            "منطقة B10",
+            "المرحلة العاشرة",
+            "عاشرة"
+          ],
+          "lat": 30.085636,
+          "lng": 31.656533,
+          "children": []
+        },
+        {
+          "en": "Madinaty B11",
+          "ar": "مدينتي B11",
+          "aliases": [
+            "b11",
+            "b 11",
+            "zone b11",
+            "بي 11",
+            "ب11",
+            "منطقة B11",
+            "المرحلة الحادية عشرة",
+            "حادية عشرة"
+          ],
+          "lat": 30.075772,
+          "lng": 31.658255,
+          "children": []
+        },
+        {
+          "en": "Madinaty B12",
+          "ar": "مدينتي B12",
+          "aliases": [
+            "b12",
+            "b 12",
+            "zone b12",
+            "بي 12",
+            "ب12",
+            "منطقة B12",
+            "المرحلة الثانية عشرة",
+            "ثانية عشرة"
+          ],
+          "lat": 30.07944,
+          "lng": 31.672974,
+          "children": []
+        },
+        {
+          "en": "Madinaty B14",
+          "ar": "مدينتي B14",
+          "aliases": [
+            "b14",
+            "b 14",
+            "zone b14",
+            "بي 14",
+            "ب14",
+            "منطقة B14",
+            "المرحلة الرابعة عشرة",
+            "رابعة عشرة"
+          ],
+          "lat": 30.096092,
+          "lng": 31.673827,
+          "children": []
+        },
+        {
+          "en": "Madinaty B15",
+          "ar": "مدينتي B15",
+          "aliases": [
+            "b15",
+            "b 15",
+            "zone b15",
+            "بي 15",
+            "ب15",
+            "منطقة B15",
+            "المرحلة الخامسة عشرة",
+            "خامسة عشرة"
+          ],
+          "lat": 30.090271,
+          "lng": 31.676692,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG1",
+          "ar": "مدينتي VG1",
+          "aliases": [
+            "vg1",
+            "vg 1",
+            "في جي 1",
+            "فيلات 1",
+            "فيلات VG1",
+            "المرحلة الأولى فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG2",
+          "ar": "مدينتي VG2",
+          "aliases": [
+            "vg2",
+            "vg 2",
+            "في جي 2",
+            "فيلات 2",
+            "فيلات VG2",
+            "المرحلة الثانية فيلات"
+          ],
+          "lat": 30.085659,
+          "lng": 31.622923,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG3",
+          "ar": "مدينتي VG3",
+          "aliases": [
+            "vg3",
+            "vg 3",
+            "في جي 3",
+            "فيلات 3",
+            "فيلات VG3",
+            "المرحلة الثالثة فيلات"
+          ],
+          "lat": 30.080917,
+          "lng": 31.624849,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG4",
+          "ar": "مدينتي VG4",
+          "aliases": [
+            "vg4",
+            "vg 4",
+            "في جي 4",
+            "فيلات 4",
+            "فيلات VG4",
+            "المرحلة الرابعة فيلات"
+          ],
+          "lat": 30.079745,
+          "lng": 31.63257,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG5",
+          "ar": "مدينتي VG5",
+          "aliases": [
+            "vg5",
+            "vg 5",
+            "في جي 5",
+            "فيلات 5",
+            "فيلات VG5",
+            "المرحلة الخامسة فيلات"
+          ],
+          "lat": 30.079745,
+          "lng": 31.63257,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG6",
+          "ar": "مدينتي VG6",
+          "aliases": [
+            "vg6",
+            "vg 6",
+            "في جي 6",
+            "فيلات 6",
+            "فيلات VG6",
+            "المرحلة السادسة فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG7",
+          "ar": "مدينتي VG7",
+          "aliases": [
+            "vg7",
+            "vg 7",
+            "في جي 7",
+            "فيلات 7",
+            "فيلات VG7",
+            "المرحلة السابعة فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG8",
+          "ar": "مدينتي VG8",
+          "aliases": [
+            "vg8",
+            "vg 8",
+            "في جي 8",
+            "فيلات 8",
+            "فيلات VG8",
+            "المرحلة الثامنة فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG9",
+          "ar": "مدينتي VG9",
+          "aliases": [
+            "vg9",
+            "vg 9",
+            "في جي 9",
+            "فيلات 9",
+            "فيلات VG9",
+            "المرحلة التاسعة فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG10",
+          "ar": "مدينتي VG10",
+          "aliases": [
+            "vg10",
+            "vg 10",
+            "في جي 10",
+            "فيلات 10",
+            "فيلات VG10",
+            "المرحلة العاشرة فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Madinaty VG11",
+          "ar": "مدينتي VG11",
+          "aliases": [
+            "vg11",
+            "vg 11",
+            "في جي 11",
+            "فيلات 11",
+            "فيلات VG11",
+            "المرحلة الحادية عشرة فيلات"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Golf Villas",
+          "ar": "فيلات الجولف",
+          "aliases": [
+            "four seasons villas",
+            "الفورسيزونز"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "Privado",
+          "ar": "بريفادو",
+          "aliases": [
+            "privado madinaty",
+            "بريفادو مدينتي"
+          ],
+          "lat": 30.091613,
+          "lng": 31.665172,
+          "children": []
+        },
+        {
+          "en": "Craft Zone",
+          "ar": "كرافت زون",
+          "aliases": [
+            "crafts",
+            "الحرفيين"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        },
+        {
+          "en": "The Spine",
+          "ar": "ذا سباين",
+          "aliases": [
+            "spine",
+            "وسط المدينة"
+          ],
+          "lat": null,
+          "lng": null,
+          "children": []
+        }
+      ]
+    },
+    {
+      "en": "New Cairo",
+      "ar": "القاهرة الجديدة",
+      "aliases": [],
+      "lat": null,
+      "lng": null,
+      "children": [
+        {
+          "en": "El Rehab",
+          "ar": "الرحاب",
+          "aliases": [
+            "rehab",
+            "el rehab",
+            "al rehab",
+            "الرحاب"
+          ],
+          "lat": 30.064626,
+          "lng": 31.488175,
+          "children_are_phases": true,
+          "children": [
+            {
+              "en": "Rehab Phase 1",
+              "ar": "الرحاب المرحلة 1",
+              "aliases": [
+                "phase 1",
+                "stage 1",
+                "مرحلة 1",
+                "المرحلة 1",
+                "المرحلة الأولى",
+                "م1",
+                "p1"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 2",
+              "ar": "الرحاب المرحلة 2",
+              "aliases": [
+                "phase 2",
+                "stage 2",
+                "مرحلة 2",
+                "المرحلة 2",
+                "المرحلة الثانية",
+                "م2",
+                "p2"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 3",
+              "ar": "الرحاب المرحلة 3",
+              "aliases": [
+                "phase 3",
+                "stage 3",
+                "مرحلة 3",
+                "المرحلة 3",
+                "المرحلة الثالثة",
+                "م3",
+                "p3"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 4",
+              "ar": "الرحاب المرحلة 4",
+              "aliases": [
+                "phase 4",
+                "stage 4",
+                "مرحلة 4",
+                "المرحلة 4",
+                "المرحلة الرابعة",
+                "م4",
+                "p4"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 5",
+              "ar": "الرحاب المرحلة 5",
+              "aliases": [
+                "phase 5",
+                "stage 5",
+                "مرحلة 5",
+                "المرحلة 5",
+                "المرحلة الخامسة",
+                "م5",
+                "p5"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 6",
+              "ar": "الرحاب المرحلة 6",
+              "aliases": [
+                "phase 6",
+                "stage 6",
+                "مرحلة 6",
+                "المرحلة 6",
+                "المرحلة السادسة",
+                "م6",
+                "p6"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 7",
+              "ar": "الرحاب المرحلة 7",
+              "aliases": [
+                "phase 7",
+                "stage 7",
+                "مرحلة 7",
+                "المرحلة 7",
+                "المرحلة السابعة",
+                "م7",
+                "p7"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 8",
+              "ar": "الرحاب المرحلة 8",
+              "aliases": [
+                "phase 8",
+                "stage 8",
+                "مرحلة 8",
+                "المرحلة 8",
+                "المرحلة الثامنة",
+                "م8",
+                "p8"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 9",
+              "ar": "الرحاب المرحلة 9",
+              "aliases": [
+                "phase 9",
+                "stage 9",
+                "مرحلة 9",
+                "المرحلة 9",
+                "المرحلة التاسعة",
+                "م9",
+                "p9"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            },
+            {
+              "en": "Rehab Phase 10",
+              "ar": "الرحاب المرحلة 10",
+              "aliases": [
+                "phase 10",
+                "stage 10",
+                "مرحلة 10",
+                "المرحلة 10",
+                "المرحلة العاشرة",
+                "م10",
+                "p10"
+              ],
+              "lat": null,
+              "lng": null,
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "parent": "El Rehab",
+      "name_en": "Old Rehab (phases 1-5)",
+      "aliases": [
+        "rehab 1",
+        "el rehab 1",
+        "الرحاب 1",
+        "الرحاب القديمة"
+      ],
+      "phases": [
+        "Rehab Phase 1",
+        "Rehab Phase 2",
+        "Rehab Phase 3",
+        "Rehab Phase 4",
+        "Rehab Phase 5"
+      ]
+    },
+    {
+      "parent": "El Rehab",
+      "name_en": "Rehab Extension (phases 6-10)",
+      "aliases": [
+        "rehab 2",
+        "el rehab 2",
+        "الرحاب 2",
+        "امتداد الرحاب",
+        "الامتداد",
+        "extension"
+      ],
+      "phases": [
+        "Rehab Phase 6",
+        "Rehab Phase 7",
+        "Rehab Phase 8",
+        "Rehab Phase 9",
+        "Rehab Phase 10"
+      ]
+    }
+  ]
+}

@@ -18,7 +18,7 @@ const { html } = require("../html");
 const { dealsSwitch } = require("../views/tabs");
 
 const PAGE = 20;
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const money = (n, lang) => (n === null || n === undefined ? "—" : Commission.money(Number(n), lang));
 const day = (d) => (d ? C.isoDay(d) : "—");
@@ -91,8 +91,8 @@ function termsSection(lang, projectId, terms, notice = "") {
       <label>${L(lang, "النسبة %", "Rate %")} <input name="pct" inputmode="decimal" dir="ltr" size="5" value="${t.pct ?? ""}"></label>
       <label>${L(lang, "المبلغ", "Amount")} <input name="amount" inputmode="numeric" dir="ltr" size="10" value="${t.amount ?? ""}"></label>
     </div>
-    <fieldset class="row"><legend>${L(lang, "شرايح السنة (من عدد وحدات → نسبة)", "Yearly tiers (from units sold → rate)")}</legend>
-      ${tiers.map((x) => html`<span class="row"><input name="tier_min" inputmode="numeric" dir="ltr" size="3" placeholder="${L(lang, "وحدات", "units")}" value="${x.min_units ?? ""}"> → <input name="tier_pct" inputmode="decimal" dir="ltr" size="4" placeholder="%" value="${x.pct ?? ""}"></span>`)}
+    <fieldset class="row"><legend>${L(lang, "شرايح السنة (من عدد وحدات ← نسبة)", "Yearly tiers (from units sold → rate)")}</legend>
+      ${tiers.map((x) => html`<span class="row"><input name="tier_min" inputmode="numeric" dir="ltr" size="3" aria-label="${L(lang, "وحدات", "units")}" placeholder="${L(lang, "وحدات", "units")}" value="${x.min_units ?? ""}"> ${L(lang, "←", "→")} <input name="tier_pct" inputmode="decimal" dir="ltr" size="4" placeholder="%" value="${x.pct ?? ""}"></span>`)}
     </fieldset>
     <div class="row">
       <label>${L(lang, "تتطالب بعد", "Claimable after")} <select name="claim_trigger">${opt("contract", L(lang, "العقد", "the contract"), t.claim_trigger || "contract")}${opt("down_payment", L(lang, "دفع المقدم", "the down payment"), t.claim_trigger)}${opt("paid_pct", L(lang, "دفع نسبة من السعر", "a % of the price paid"), t.claim_trigger)}</select></label>
@@ -250,8 +250,8 @@ ${notice}
 </section>
 <section class="card stack">
   ${c.status === "expected" ? form("claimable", "", `✅ ${L(lang, "بقت جاهزة للمطالبة", "Mark claimable")}`) : ""}
-  ${["expected", "claimable"].includes(c.status) ? form("claim", html`<input name="invoice_no" required maxlength="60" placeholder="${L(lang, "رقم الفاتورة", "Invoice no.")}" dir="ltr" size="10"><input name="invoice_url" placeholder="https://" dir="ltr" size="20"><input type="date" name="claimed_on">`, `🧾 ${L(lang, "اتطالب", "Claim")}`) : ""}
-  ${open ? form("payment", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" placeholder="${L(lang, "المبلغ", "Amount")}"><input type="date" name="paid_on" value="${Stages.cairoDay()}">`, `💰 ${L(lang, "سجّل دفعة", "Record a payment")}`) : ""}
+  ${["expected", "claimable"].includes(c.status) ? form("claim", html`<input name="invoice_no" required maxlength="60" aria-label="${L(lang, "رقم الفاتورة", "Invoice no.")}" placeholder="${L(lang, "رقم الفاتورة", "Invoice no.")}" dir="ltr" size="10"><input name="invoice_url" placeholder="https://" dir="ltr" size="20"><input type="date" name="claimed_on">`, `🧾 ${L(lang, "اتطالب", "Claim")}`) : ""}
+  ${open ? form("payment", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" aria-label="${L(lang, "المبلغ", "Amount")}" placeholder="${L(lang, "المبلغ", "Amount")}"><input type="date" name="paid_on" value="${Stages.cairoDay()}">`, `💰 ${L(lang, "سجّل دفعة", "Record a payment")}`) : ""}
   ${form("registration", html`<input type="date" name="registered_on" required value="${c.client_registered_on ? day(c.client_registered_on) : ""}">`, `📝 ${L(lang, "تاريخ تسجيل العميل", "Client registration date")}`)}
   ${form("expected", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" value="${c.expected_amount}">`, `✏️ ${L(lang, "عدّل المتوقع", "Correct the expected amount")}`)}
   ${c.status === "cancelled" ? form("reopen", "", L(lang, "رجّعها", "Reopen")) : c.status !== "paid" ? form("cancel", "", `❌ ${L(lang, "إلغاء", "Cancel")}`) : ""}

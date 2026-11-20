@@ -100,7 +100,7 @@ function plansReadSection(lang, project, reading, query = {}) {
 }
 
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const sel = (on) => (on ? html` selected` : "");
 const val = (v) => (v === null || v === undefined ? "" : String(Number.isFinite(Number(v)) && typeof v !== "string" ? Number(v) : v));
@@ -435,7 +435,7 @@ function register(web, { pool, page, assets }) {
     const placeRow = lists && (lists.places.find((x) => x.id === state.pl) || lists.areas.find((x) => x.id === state.pl));
     const labels = { place: nameIn(placeRow, lang), developer: dev ? dev.name : "" };
     const manager = isManager(actor);
-    const body = html`${listPage(lang, { projects: projPage.projects, projPage, devPage, state, labels, notice: notice || savedNotice(req), manager, developerForm: manager ? developerForm(lang) : "" })}<script src="${assets.url("catalogueSearch.js")}"></script>`;
+    const body = html`${listPage(lang, { projects: projPage.projects, projPage, devPage, state, labels, notice: notice || savedNotice(req), manager, developerForm: manager ? developerForm(lang) : "" })}<script src="${assets.url("catalogueSearch.js")}" defer></script>`;
     return page(req, res, { title: title(lang), nav: "catalogue", body }, status);
   };
 

@@ -10,6 +10,7 @@
 
   const MAX_COLS = 80;
   const MAX_ROWS_PER_TAB = 6000;
+  const MAX_MERGE_ROWS = 2000;
   const MAX_SHEET_BYTES = 80 * 1024 * 1024; // uncompressed XML of one tab
   const fail = (code, message) => Object.assign(new Error(message), { code });
 
@@ -59,7 +60,7 @@
     let seq = 0;
     while ((rm = rowRe.exec(xml))) {
       seq++;
-      if (onRow && seq % 100 === 0) onRow(seq);
+      if (onRow && seq % 100 === 0) onRow(seq, rowRe.lastIndex / xml.length);
       if (!rm[2]) continue;
       const rAttr = /\br="(\d+)"/.exec(rm[1]);
       const n = rAttr ? Number(rAttr[1]) : seq;
@@ -98,7 +99,43 @@
         if (rows.length >= MAX_ROWS_PER_TAB) break;
       }
     }
+    fillMergedDown(xml, rows);
+    onRow?.(seq, 1);
     return rows;
+  }
+
+  /**
+   * A vertical merge (<mergeCell ref="A2:A9"/>) holds its value only in the top cell: copy it into the cells below, on rows
+   * that have other data (a merged block never invents a row). Horizontal merges and merges starting on or above the header row
+   * (the row among the first 10 with the most text cells) are left alone: a label merged down from the header is not data.
+   */
+  function fillMergedDown(xml, rows) {
+    if (!rows.length || xml.indexOf("<mergeCell") < 0) return;
+    const byN = new Map(rows.map((r) => [r.n, r]));
+    let header = 0;
+    let most = 0;
+    for (const r of rows.slice(0, 10)) {
+      const n = r.v.filter((x) => typeof x === "string").length;
+      if (n > most) {
+        most = n;
+        header = r.n;
+      }
+    }
+    const re = /<mergeCell\b[^>]*?\bref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g;
+    let m;
+    while ((m = re.exec(xml))) {
+      const col = colIndex(m[1]);
+      const top = Number(m[2]);
+      if (col !== colIndex(m[3]) || col >= MAX_COLS || top < 2 || top <= header) continue;
+      const val = byN.get(top)?.v[col];
+      if (val === null || val === undefined) continue;
+      for (let n = top + 1; n <= Math.min(Number(m[4]), top + MAX_MERGE_ROWS); n++) {
+        const row = byN.get(n);
+        if (!row) continue;
+        while (row.v.length < col) row.v.push(null);
+        if (row.v[col] === null || row.v[col] === undefined) row.v[col] = val;
+      }
+    }
   }
 
   const norm = (target, base) => {
@@ -126,9 +163,9 @@
 
     const sheets = [...wbXml.matchAll(/<sheet\b[^>]*>/g)].map((m) => ({ name: attr(m[0], "name") || "", rid: attr(m[0], "r:id"), state: attr(m[0], "state") || "visible" }));
     const skipped = [];
-    // First pass: find every tab to read and count its rows, so progress is per row of the whole workbook.
+    // Find the tabs to read; progress is by the bytes of each tab's XML (known from the zip directory, nothing read yet).
     const plan = [];
-    let rowsTotal = 0;
+    let bytesTotal = 0;
     for (const s of sheets) {
       if (s.state !== "visible") {
         skipped.push({ name: s.name, reason: "hidden" });
@@ -144,26 +181,36 @@
         skipped.push({ name: s.name, reason: "too_big" });
         continue;
       }
-      onProgress?.({ tabsDone: plan.length, tabsTotal: sheets.length, rowsDone: 0, rowsTotal: 0, name: s.name });
-      const xml = await zip.text(entry);
-      const rowsInTab = (xml.match(/<row\b/g) || []).length;
-      rowsTotal += rowsInTab;
-      plan.push({ name: s.name, xml, rowsInTab });
+      plan.push({ name: s.name, entry });
+      bytesTotal += entry.size;
     }
-    // Second pass: parse each tab; progress reports the rows read so far across the whole workbook.
+    // One tab at a time: read its XML, parse it, drop the string. rowsDone counts the rows read; rowsTotal is the estimate the
+    // bytes read so far imply (exact at the end), so rowsDone / rowsTotal is the share of bytes read.
     const tabs = [];
     let rowsBefore = 0;
+    let bytesBefore = 0;
+    const report = (i, name, rowsNow, bytesNow) => {
+      const rowsDone = rowsBefore + rowsNow;
+      const bytesDone = bytesBefore + bytesNow;
+      const rowsTotal = bytesDone > 0 ? Math.max(rowsDone, Math.ceil((rowsDone * bytesTotal) / bytesDone)) : 0;
+      onProgress?.({ tabsDone: i, tabsTotal: plan.length, rowsDone, rowsTotal, bytesDone, bytesTotal, name });
+    };
     for (let i = 0; i < plan.length; i++) {
       const t = plan[i];
-      const rows = parseSheet(t.xml, shared, function (seq) {
-        onProgress?.({ tabsDone: i, tabsTotal: plan.length, rowsDone: rowsBefore + Math.min(seq, t.rowsInTab), rowsTotal, name: t.name });
+      report(i, t.name, 0, 0);
+      let xml = await zip.text(t.entry);
+      let rowsInTab = 0;
+      const rows = parseSheet(xml, shared, function (seq, share) {
+        rowsInTab = seq;
+        report(i, t.name, seq, t.entry.size * share);
       });
-      rowsBefore += t.rowsInTab;
+      xml = null;
+      rowsBefore += rowsInTab;
+      bytesBefore += t.entry.size;
       if (rows.length) tabs.push({ name: t.name, rows });
       else skipped.push({ name: t.name, reason: "empty" });
-      t.xml = null;
     }
-    onProgress?.({ tabsDone: plan.length, tabsTotal: plan.length, rowsDone: rowsTotal, rowsTotal, name: "" });
+    onProgress?.({ tabsDone: plan.length, tabsTotal: plan.length, rowsDone: rowsBefore, rowsTotal: rowsBefore, bytesDone: bytesTotal, bytesTotal, name: "" });
     return { tabs, skipped };
   }
 

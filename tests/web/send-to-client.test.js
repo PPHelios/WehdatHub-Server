@@ -123,7 +123,9 @@ describe("send to client and the hot signal", () => {
     const shareUrl = decodeURIComponent(r.url).match(/https?:\/\/\S+\/HP-1\?s=[\w-]+/)[0];
     const path = new URL(shareUrl).pathname + new URL(shareUrl).search;
     const ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
+    await h.query("UPDATE share_links SET created_at = created_at - INTERVAL '1 minute'"); // past the share-sheet preview window
     for (let i = 0; i < 4; i++) {
+      await h.query("UPDATE share_link_opens SET opened_at = opened_at - INTERVAL '1 minute'"); // a new visit, past the same-visitor repeat window
       const page = await request(h.app.app).get(path).set("User-Agent", ua);
       expect(page.status).toBe(200);
       expect(page.text).not.toContain(SENTINEL);

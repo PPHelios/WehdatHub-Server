@@ -13,7 +13,6 @@ const TYPE_TERMS = {
   triplex: ["تريبلكس", "تربيلكس", "triplex"],
   sky_loft: ["سكاي لوفت", "سكاى لوفت", "sky loft", "skyloft"],
   basement: ["بدروم", "بيسمنت", "basement"],
-  mazonette: ["مازونيت", "مزونيت", "mazonette", "mazonet"],
   duplex: ["دوبلكس", "duplex"],
   penthouse: ["بنتهاوس", "penthouse"],
   chalet: ["شاليه", "شاليهات", "chalet"],
@@ -22,7 +21,7 @@ const TYPE_TERMS = {
   i_villa: ["i villa", "i-villa", "ivilla", "آي فيلا", "اي فيلا"],
   // "twin house" is a twin villa: there is no separate twin house type in search or import.
   twin_villa: ["twin villa", "twinvilla", "توين فيلا", "twin house", "twinhouse", "توين هاوس", "توين"],
-  maisonette: ["maisonette", "maisonnette", "ميزونيت"],
+  maisonette: ["maisonette", "maisonnette", "maisonet", "mazonette", "mazonet", "mizonette", "mizonet", "mezonette", "mezonet", "مازونيت", "مازونيته", "مزونيت", "مايزونيت", "ميزونيت", "ميزونيته", "ميزونت", "ميزونيتا"],
   villa: ["فيلا", "فيلات", "فيلا مستقلة", "villa", "villas", "standalone", "stand alone"],
   townhouse: ["تاون هاوس", "تاون", "townhouse", "town house"],
   office: ["مكتب", "مكاتب", "مكتب اداري", "office", "offices"],

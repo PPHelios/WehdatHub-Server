@@ -36,6 +36,9 @@ function html(strings, ...values) {
 /** Marks trusted markup (never use on user input). */
 const raw = (text) => new SafeHtml(String(text ?? ""));
 
+/** A phone number kept left-to-right inside RTL text (the "+" and digits would otherwise render reversed). */
+const phoneLtr = (value) => html`<bdi dir="ltr">${value}</bdi>`;
+
 /** JSON text for an attribute; html`` escapes it once when interpolated. */
 const jsonAttr = (obj) => JSON.stringify(obj);
 
@@ -45,7 +48,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, theme = false, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
   const en = lang === "en";
   const crm = Boolean(broker) && require("../lib/authz").isCrmOwner(broker);
   const tab = broker ? (crm ? crmTabOf(path) : tabOf(path, nav)) : null;
@@ -58,17 +61,20 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta name="theme-color" content="${BRAND.colors.brand}">
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}
-<title>${title ? `${title} · WehdatHub` : "WehdatHub"}</title>
+<title>${title ? `${title} · ${BRAND.name}` : BRAND.name}</title>
 ${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
 <link rel="icon" href="${assets(BRAND.logo)}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${assets("icons/icon-192.png")}">
-<link rel="stylesheet" href="${assets("brand.css")}">
+${scripts || theme ? html`<script src="${assets("theme.js")}"></script>
+` : ""}<link rel="preload" href="${assets("fonts/cairo-400.woff2")}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="${assets("fonts/cairo-700.woff2")}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${assets("app.css")}">
 ${head || ""}
 ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("carousel.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>
 <script src="${assets("busy.js")}" defer></script>
+<script src="${assets("saveBar.js")}" defer></script>
 <script src="${assets("voice.js")}" defer></script>` : ""}
 </head>
 <body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الشركة"}"`) : ""}>
@@ -114,6 +120,8 @@ function footer(broker, lang) {
 const NavSpec = require("../lib/navSpec");
 // Pages that need a laptop-sized screen (the import tools): marked so the phone's More list can hide them.
 const DESKTOP_ONLY = new Set(["import", "leadimport"]);
+// The session's rights (data entry only) and workspace (lib/workspace.js) travel on the broker, so the website's menu matches the app's /me nav.
+const forBroker = (broker) => NavSpec.forBroker(broker, { rights: broker?.rights || null, workspace: broker?.workspace || null });
 const webTab = (t) => ({ key: t.key, href: t.web, ar: t.label.ar, en: t.label.en, icon: t.icon, fab: Boolean(t.fab) });
 
 /**
@@ -121,7 +129,7 @@ const webTab = (t) => ({ key: t.key, href: t.web, ar: t.label.ar, en: t.label.en
  * [{ key, label: {ar,en}, items: [{ key, href, ar, en, icon, desktop }] }], groups in the spec order, empty groups left out.
  */
 function moreGroups(broker) {
-  return NavSpec.forBroker(broker)
+  return forBroker(broker)
     .groups.map((g) => ({
       key: g.key,
       label: g.label,
@@ -166,7 +174,7 @@ function tabBar(broker, tab, lang) {
 
 
 /** The bottom-bar places this role sees (lib/navSpec.js): the same places as the app's tabs. */
-const tabsFor = (broker) => NavSpec.forBroker(broker).tabs.filter((t) => t.web).map(webTab);
+const tabsFor = (broker) => forBroker(broker).tabs.filter((t) => t.web).map(webTab);
 
 // Groups that start open before the person's own choice (kept in the browser, web/static/app.js) is applied.
 const GROUP_OPEN = new Set(["clients", "listings"]);
@@ -179,7 +187,7 @@ const GROUP_OPEN = new Set(["clients", "listings"]);
 function sideMenu(broker, tab, lang, { crm = false } = {}) {
   const en = lang === "en";
   const { icon } = require("./icons");
-  const nav = NavSpec.forBroker(broker);
+  const nav = forBroker(broker);
   const link = (n, current) => html`<a href="${n.href}"${current ? raw(' aria-current="page"') : ""}>${icon(n.icon, 20)}<span>${en ? n.en : n.ar}</span></a>`;
   const home = nav.tabs.find((t) => t.key === "home" && t.web);
   const groups = nav.groups
@@ -232,16 +240,31 @@ function viewAgencyForm(broker, lang) {
   return html`<form method="post" action="/app/test-view" class="test-role" data-test-role><label><span class="sr-only">${en ? "Agency" : "الشركة"}</span><select name="view" data-autosubmit><option value="home"${on ? "" : raw(" selected")}>${en ? "Test agency" : "شركة التجربة"}</option><option value="other"${on ? raw(" selected") : ""}>${en ? "NCH (read only)" : "NCH (للقراءة فقط)"}</option></select></label><noscript><button type="submit">✓</button></noscript></form>`;
 }
 
+/** The brand name and mark that link home (translate="no": the product name is never machine-translated). */
+function brandLink(href, lang, { label = false } = {}) {
+  const en = lang === "en";
+  const { MARK } = require("./icons");
+  return html`<a class="brand" translate="no" href="${href}"${label ? html` aria-label="${en ? "Wehdat Hub" : "وحدات هب"}"` : ""}>${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>`;
+}
+
+/** The light/dark switch of the top bar (web/static/theme.js drives it). */
+function themeToggle(lang) {
+  const en = lang === "en";
+  const { icon } = require("./icons");
+  return html`<button type="button" class="iconbtn theme-toggle" data-theme-toggle aria-label="${en ? "Switch theme" : "تبديل المظهر"}"><span class="ico-sun">${icon("sun", 20)}</span><span class="ico-moon">${icon("moon", 20)}</span></button>`;
+}
+
 function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   const en = lang === "en";
-  const { icon, MARK } = require("./icons");
+  const { icon } = require("./icons");
   const TestRole = require("../lib/testRole");
   return html`<header class="top">
-  <a class="brand" href="${broker ? "/app/" : "/"}" aria-label="${en ? "Wehdat Hub" : "وحدات هب"}">${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>
+  ${brandLink(broker ? "/app/" : "/", lang, { label: true })}
   ${broker && TestRole.canSwitch(broker) && (TestRole.canView(broker) || broker.view_of) ? viewAgencyForm(broker, lang) : ""}
   ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
+  ${themeToggle(lang)}
   ${broker
-    ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
+    ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}${unread ? ` (${unread > 99 ? "99+" : unread})` : ""}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
   <a class="iconbtn" href="${tab === "more" ? "/app/" : "/app/more"}" aria-label="${tab === "more" ? (en ? "Close menu" : "إغلاق القائمة") : (en ? "More" : "المزيد")}"${tab === "more" ? raw(' aria-current="page" data-menu-close') : ""}>${icon("more")}</a>`
     : html`<a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
 </header>`;
@@ -259,4 +282,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, navFor, tabOf, HTMX_CONFIG };
+module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, phoneLtr, escapeHtml, jsonAttr, layout, themeToggle, brandLink, withCsrf, navFor, tabOf, HTMX_CONFIG };

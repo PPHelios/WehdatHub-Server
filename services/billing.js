@@ -22,6 +22,12 @@ const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const Referrals = require("./referrals");
 const Vis = require("../lib/visibility");
 
+// lib/planGuard.js remembers an agency's plan state for 15 s: every write of plan or payment state drops it (lazy: planGuard needs this module).
+const forgetPlanState = (agencyId) => {
+  require("../lib/planGuard").forget(agencyId);
+  require("../lib/workspace").forget(agencyId);
+};
+
 const DAY = 24 * 3600 * 1000;
 // The periods a plan can be sold for; which of them a given plan offers is its price table (domain/plans.js prices).
 const MONTHS = [1, 6, 12];
@@ -471,7 +477,10 @@ async function requestPayment(db, manager, input = {}, { now = new Date() } = {}
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) ON CONFLICT (reference) DO NOTHING RETURNING *`,
       [manager.agency_id, kind, plan, rowMonths, amount, newReference(), manager.id, bundle, detail ? JSON.stringify(detail) : null]
     );
-    if (rows[0]) return { ok: true, payment: rows[0], agency };
+    if (rows[0]) {
+      forgetPlanState(manager.agency_id);
+      return { ok: true, payment: rows[0], agency };
+    }
   }
   throw new Error("Could not allocate a payment reference");
 }
@@ -537,7 +546,7 @@ async function pendingPayments(db) {
  * @returns {Promise<{ ok, payment, agency, referral } | { error }>}
  */
 async function confirmPayment(pool, id, { now = new Date() } = {}) {
-  return withTransaction(pool, async (client) => {
+  const out = await withTransaction(pool, async (client) => {
     const { rows } = await client.query("SELECT * FROM payments WHERE id = $1 FOR UPDATE", [id]);
     const p = rows[0];
     if (!p) return { error: "not_found" };
@@ -590,10 +599,16 @@ async function confirmPayment(pool, id, { now = new Date() } = {}) {
     }
     return { ok: true, payment: done[0], agency, referral, restored };
   });
+  if (out.ok) {
+    forgetPlanState(out.payment.agency_id);
+    if (out.referral?.referrer) forgetPlanState(out.referral.referrer.id);
+  }
+  return out;
 }
 
 async function cancelPayment(db, id) {
   const { rows } = await db.query("UPDATE payments SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING *", [id]);
+  if (rows[0]) forgetPlanState(rows[0].agency_id);
   return rows[0] ? { ok: true, payment: rows[0] } : { error: "not_pending" };
 }
 
@@ -649,6 +664,7 @@ async function extendTrial(db, agencyId, days, { now = new Date() } = {}) {
       WHERE id = $1 AND NOT pilot AND approval = 'approved' RETURNING id, name, trial_ends_at`,
     [agencyId, now.toISOString(), Number(days)]
   );
+  if (rows[0]) forgetPlanState(agencyId);
   return rows[0] ? { ok: true, agency: rows[0] } : { error: "not_found" };
 }
 
@@ -667,6 +683,7 @@ async function extendGrace(db, agencyId, days, { now = new Date() } = {}) {
   const from = new Date(Math.max(now.getTime(), l.graceEnd.getTime()));
   const until = new Date(from.getTime() + Number(days) * DAY);
   await db.query("UPDATE agencies SET grace_extra_until = $2, updated_at = NOW() WHERE id = $1", [agencyId, until.toISOString()]);
+  forgetPlanState(agencyId);
   return { ok: true, agency: { id: agency.id, name: agency.name, grace_extra_until: until } };
 }
 

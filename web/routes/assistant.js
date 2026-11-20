@@ -16,7 +16,7 @@ const { isManager, isAgencyOwner } = require("../../lib/authz");
 const AiBlock = require("../../lib/aiBlock");
 const { html } = require("../html");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const day = (d) => new Date(d).toISOString().slice(0, 10);
 

@@ -16,17 +16,21 @@ const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
 const SheetImport = require("../../domain/sheetImport");
 const Chat = require("../../domain/chatExport");
+const ChatFp = require("../../domain/chatFingerprint");
+const ChatParse = require("../../domain/chatParse");
+const Decisions = require("../../services/chatDecisions");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
 const { uploads } = require("../uploads");
-const { html, raw } = require("../html");
+const { html, raw, phoneLtr } = require("../html");
 const { tabs } = require("../views/tabs");
 const { importEditor, cellsFromForm } = require("../views/importEditor");
 const { stripMarkdown } = require("../views/units");
 
-const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const { L } = require("../../lib/copy");
+const { phoneHelp } = require("../views/phoneHelp");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
-const SHEET = { name: "sheet", maxCount: 1, accept: /^application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|octet-stream|zip)$/ };
+const SHEET = { name: "sheet", maxCount: 1, accept: /^(text\/(csv|plain)|application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel|csv|octet-stream|zip))$/ };
 const CHAT = { name: "chat", maxCount: 1, accept: /^(text\/plain|application\/(zip|x-zip-compressed|octet-stream))$/ };
 const uploadSheet = uploads([SHEET], { maxMb: 5 });
 const BIG_SERVER_SHEET = 1.5 * 1024 * 1024; // larger workbooks are read in the browser, never loaded whole on the server
@@ -39,6 +43,28 @@ const TEMPLATE_HEADERS = ["Code / الكود", "Compound / الكمبوند", "P
 /** True when a buffer starts like a zip file (a chat export with photos goes to the Match photos tab). */
 const isZip = (b) => Buffer.isBuffer(b) && b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b;
 
+/** An old binary Excel file (.xls) starts with this signature; nothing here reads it. */
+const isOle = (b) => Buffer.isBuffer(b) && b.length >= 8 && b.readUInt32BE(0) === 0xd0cf11e0 && b.readUInt32BE(4) === 0xa1b11ae1;
+
+const GRID_KEEP_BYTES = 2.5 * 1024 * 1024; // the raw tabs are kept with the plan (for "change how a tab is read") when they are no bigger than this
+const SKIP_REASONS = new Set(["hidden", "too_big", "missing", "empty"]);
+
+/** The tabs not read: those the browser left out (hidden, empty, too big) and those with no known columns. */
+function skippedTabsOf(sheet, fromBrowser = []) {
+  const out = [];
+  for (const t of Array.isArray(fromBrowser) ? fromBrowser.slice(0, SheetGrid.MAX_TABS) : []) {
+    if (t && SKIP_REASONS.has(t.reason)) out.push({ name: String(t.name ?? "").slice(0, 80), reason: t.reason });
+  }
+  for (const t of sheet.tabs || []) if (t.reason === "no_columns") out.push({ name: t.name, reason: "no_columns" });
+  return out;
+}
+
+/** What is stored with a plan besides the plan itself: the sheet, the tabs not read, and (when small enough) the raw tabs. */
+function planPayload(plan, sheet, skippedTabs, { rawTabs = null, overrides = null, byFileRow = false } = {}) {
+  const grid = rawTabs && JSON.stringify(rawTabs).length <= GRID_KEEP_BYTES ? { grid: { tabs: rawTabs, by_file_row: byFileRow } } : {};
+  return { ...plan, rows: sheet.rows, columns: sheet.mapped, skipped: sheet.skipped || [], tabs: sheet.tabs, defaults: sheet.defaults, skipped_tabs: skippedTabs, ...grid, ...(overrides ? { overrides } : {}) };
+}
+
 /** A chat export uploaded as .txt → its text. */
 async function chatText(file) {
   if (!file || isZip(file.buffer)) return "";
@@ -49,11 +75,12 @@ const KIND_LABEL = {
   review: ["⚠️ راجع: نفس الكود أو وحدة شبيهة", "⚠️ Check: same code or a similar unit"],
   new: ["🆕 جديدة", "🆕 New"],
   changed: ["✏️ متغيرة", "✏️ Changed"],
-  unchanged: ["✔️ زي ما هي", "✔️ Unchanged"],
+  unchanged: ["✔️ مفيش تغيير", "✔️ No changes"],
   invalid: ["⛔ ناقصة أو غلط", "⛔ Invalid"],
   forbidden: ["🔒 مش من حقك تعدلها", "🔒 Not yours to change"]
 };
 
+const APPLY_GRACE_MS = 2500; // how long Apply waits for a small import before showing the progress page
 const PAGE_SIZE = 50;
 const PAGED_FROM = 200; // plans with more rows than this are shown one kind and one page at a time
 const KIND_ORDER = ["invalid", "review", "new", "changed", "unchanged", "forbidden"];
@@ -75,11 +102,27 @@ const CELL_LABEL = {
   down_payment_value: ["المقدم", "Down payment"]
 };
 
-function excelPlanPage(imp, lang, query = {}, extra = {}) {
-  const { items, counts, rows: sheetRows, columns, tabs: tabInfos, defaults } = imp.payload;
+/** The line above the Save button of a chat review (chatreview.js writes the same words again as the ticks change). */
+function summaryLine(lang, n, a, b, m, x, y, z) {
+  return L(lang, `هيتحفظ ${n} وحدة (${a} جديدة، ${b} متعدلة) · هيتساب ${m} (أخطاء ${x}، مفيش تغيير ${y}، متجاهلة ${z})`, `Will save ${n} units (${a} new, ${b} updated) · skipping ${m} (errors ${x}, unchanged ${y}, discarded ${z})`);
+}
+
+/** What a review page shows: the units left after Discard and "already imported", their kinds, and the rows of the page asked for. */
+function viewOf(imp, query = {}) {
   const applied = imp.status !== "ready";
   const chat = imp.payload.source === "chat";
-  const paged = items.length > PAGED_FROM || chat;
+  // Units the person threw away (Discard) are not shown and never saved; they are listed in one bar with a Restore.
+  const gone = new Set((imp.payload.discarded || []).map(Number));
+  // What the agency decided about these posts in an earlier import of the same chat (services/chatDecisions.js): posts saved before are
+  // hidden unless asked for, posts discarded before start in the discarded bar, posts found unchanged before start unticked.
+  const remembered = chat ? imp.payload.remembered || {} : {};
+  const showSaved = query.show_saved === "1";
+  const savedBefore = chat && !applied ? imp.payload.items.filter((i) => remembered[i.row] === "saved" && !gone.has(i.row)).map((i) => i.row) : [];
+  const hiddenSaved = new Set(showSaved ? [] : savedBefore);
+  const items = imp.payload.items.filter((i) => !gone.has(i.row) && !hiddenSaved.has(i.row));
+  const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
+  // A chat plan is at most 40 posts: every kind on one page, so the "will save" line counts the whole plan.
+  const paged = items.length > PAGED_FROM;
   const kinds = KIND_ORDER.filter((k) => counts[k]);
   const kind = paged ? (kinds.includes(query.kind) ? query.kind : counts.review ? "review" : counts.invalid ? "invalid" : kinds[0]) : null;
   const tab = paged && query.tab ? String(query.tab) : null;
@@ -87,6 +130,51 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const page = Math.min(pages, Math.max(1, Number(query.page) || 1));
   const slice = paged ? shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : items;
+  return { applied, chat, gone, remembered, showSaved, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice };
+}
+
+/** The place chip of each row on the page, worked out once per distinct compound (not for every row of a 5000-row sheet). */
+async function placesOf(pool, imp, lang, query) {
+  const PlaceSuggest = require("../../services/placeSuggest");
+  const onPage = new Set(viewOf(imp, query).slice.map((i) => i.row));
+  const byCompound = new Map();
+  const places = new Map();
+  for (const r of imp.payload.rows || []) {
+    if (!r.cells?.compound || !onPage.has(r.rowNumber)) continue;
+    const name = String(r.cells.compound);
+    if (!byCompound.has(name)) byCompound.set(name, await PlaceSuggest.placeChip(pool, { compound: r.cells.compound }, lang).catch(() => null));
+    places.set(r.rowNumber, byCompound.get(name));
+  }
+  return places;
+}
+
+const SKIP_WHY = {
+  hidden: ["مخفي", "hidden"],
+  too_big: ["كبير أوي", "too big"],
+  missing: ["مش موجود في الملف", "not found in the file"],
+  empty: ["فاضي", "empty"],
+  no_columns: ["مفيش أعمدة معروفة", "no known columns"]
+};
+/** The tabs of the file that were not read, with why: [{ name, reason }] from the browser's read and the mapping. */
+const tabsNotRead = (payload) => (Array.isArray(payload.skipped_tabs) ? payload.skipped_tabs : []);
+
+/** The inside of one unit's Edit window (the form): used in the page for chat units and sent on request for Excel rows. */
+function editDialogForm(imp, i, cells, lang, extra, { chat = false, missing = [], original = "" } = {}) {
+  return html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}" class="stack" data-unit-edit-form>
+  <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
+  <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
+  ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
+  ${chat ? original : ""}
+  ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
+  <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
+</form>`;
+}
+
+function excelPlanPage(imp, lang, query = {}, extra = {}) {
+  const { rows: sheetRows, columns, tabs: tabInfos, defaults } = imp.payload;
+  const { applied, chat, gone, remembered, showSaved, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice } = viewOf(imp, query);
+  const doneRows = Imports.appliedRows(imp);
+  if (imp.status === "applying") return applyingCard(imp, lang);
   const href = (o) => `/app/import/${imp.id}?${new URLSearchParams(Object.entries({ kind, tab, page: 1, ...o }).filter(([, v]) => v !== null && v !== undefined)).toString()}`;
   const where = (i) => (i.tab ? `${i.tab} · ${L(lang, "صف", "row")} ${i.sheet_row}` : `${L(lang, "صف", "Row")} ${i.row}`);
   const section = (k, body) => {
@@ -102,6 +190,12 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const structured = canEdit && (chat || Array.isArray(extra.areas));
   const cellsOf = new Map((sheetRows || []).filter((r) => slice.some((i) => i.row === r.rowNumber)).map((r) => [r.rowNumber, r.cells]));
   const labelOf = (k) => (CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
+  // Which unit a problem row is: type · compound · price · area, from the row's own cells.
+  const unitLine = (i) => {
+    const c = cellsOf.get(i.row) || {};
+    const line = [c.property_type, c.compound, c.price_value, c.area_value ? `${c.area_value} ${L(lang, "م²", "m²")}` : ""].filter((x) => x !== undefined && x !== null && String(x).trim() !== "").join(" · ");
+    return line ? html`<div class="muted" data-row-line="${i.row}">${line}</div>` : "";
+  };
   const field = (i, k) => {
     const v = cellsOf.get(i.row)?.[k] ?? "";
     if (k === "listing_type") {
@@ -110,13 +204,15 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     return html`<label>${labelOf(k)}<input form="edit-${i.row}" name="c_${k}" value="${v}" maxlength="600"></label>`;
   };
   const editor = (i) => {
-    if (!canEdit) return "";
-    if (structured) return html`<button type="button" class="secondary${i.kind === "invalid" ? " bad" : ""}" data-edit-open="${i.row}">✏️ ${L(lang, "تعديل", "Edit")}</button>`;
+    if (!canEdit || doneRows.has(i.row)) return "";
+    // A row with a problem gets a plain (not grey) button that says Fix: it is the one thing to press.
+    const open = i.kind === "invalid" ? html`<button type="button" class="small" data-edit-open="${i.row}" data-fix>🛠 ${L(lang, "صلّح الصف ده", "Fix this row")}</button>` : html`<button type="button" class="secondary" data-edit-open="${i.row}">✏️ ${L(lang, "تعديل", "Edit")}</button>`;
+    if (structured) return open;
     const fields = [...new Set([...(i.needs || []), ...columns])];
     // What the row is missing comes first and the form opens on it; the other columns follow.
     // An edit window per unit: opens over the page, saves the unit's fields and plans the import again. The current
     // photo choices are not touched by the edit (they are re-read from the page, ticked as before the reload).
-    return html`<button type="button" class="secondary${i.kind === "invalid" ? " bad" : ""}" data-edit-open="${i.row}">✏️ ${L(lang, "تعديل", "Edit")}</button>
+    return html`${open}
   <dialog class="edit-dialog" data-edit-dialog="${i.row}"><div class="stack">
   <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")}</h2>
   ${fields.map((k) => field(i, k))}
@@ -130,18 +226,14 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     const text = originalOf(i);
     return text ? html`<details class="ie-original" data-original="${i.row}"${open ? raw(" open") : ""}><summary>💬 ${L(lang, "الرسالة الأصلية", "Original message")}</summary><p dir="auto">${text}</p></details>` : "";
   };
+  // A chat unit's window is in the page. An Excel row's window is fetched when its button is pressed (editDialogForm below): 50 rows
+  // of windows made every tab and page change render and send half a megabyte nobody had asked for.
   const chatDialogs = structured
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => {
+        if (!chat) return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}" data-lazy="/app/import/${imp.id}/dialog/${i.row}"></dialog>`;
         const cells = cellsOf.get(i.row) || {};
         const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
-        return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}"><form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}" class="stack" data-unit-edit-form>
-  <input type="hidden" name="_csrf" value="${extra.csrf || ""}">
-  <h2>✏️ ${L(lang, "تعديل الوحدة قبل الحفظ", "Edit the unit before saving")} · ${L(lang, "بوست", "Post")} ${i.row}</h2>
-  ${i.kind === "invalid" && i.reasons?.length ? html`<div class="uc-alert" role="alert">⛔ ${i.reasons.join(" · ")}</div>` : ""}
-  ${chat ? originalBox(i, true) : ""}
-  ${importEditor({ cells, areas: extra.areas || [], place: (extra.places || new Map()).get(i.row) || null, lang, missing })}
-  <div class="row"><button type="submit">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button><button type="button" class="secondary" data-edit-close>${L(lang, "إغلاق", "Close")}</button></div>
-</form></dialog>`;
+        return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}">${editDialogForm(imp, i, cells, lang, extra, { chat, missing, original: originalBox(i, true) })}</dialog>`;
       })
     : "";
   const editForms = canEdit && !structured
@@ -174,7 +266,9 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   ${have.length ? html`<details><summary>${L(lang, "صور الوحدة الحالية: علّم اللي تتشال", "The unit's current photos: tick the ones to remove")}</summary><div class="row thumbs">${have.map((x) => html`<label class="thumb"><input type="checkbox" form="apply-form" name="drop_${i.row}" value="${x.id}"${choice?.drop?.includes(x.id) ? raw(" checked") : ""}><img src="${x.url}" alt="" width="64" height="64" loading="lazy"><span class="muted">${L(lang, "شيل", "Remove")}</span></label>`)}</div></details>` : ""}
 </div>`;
   };
-  const box = (i, on = true) => (applied ? "" : html`<input type="checkbox" name="rows" value="${i.row}"${on ? raw(" checked") : ""}>`);
+  // A row an earlier Apply already saved shows a tick and is not sent again; every checkbox says which row it is for.
+  const box = (i, on = true) =>
+    applied ? "" : doneRows.has(i.row) ? html`<span class="chip good" role="img" data-row-saved="${i.row}" aria-label="${L(lang, "اتسجلت", "Saved")}">✅</span>` : html`<input type="checkbox" name="rows" value="${i.row}" aria-label="${where(i)}"${on ? raw(" checked") : ""}>`;
 
   // ---- WhatsApp posts: one organised card per unit ----------------------------------------------------------------
   // The rows a photo can be moved between: the post before and after it in the chat (units that will be saved or fixed).
@@ -189,6 +283,8 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const UC_LABEL = { district: ["المنطقة", "District"], floor: ["الدور", "Floor"], finishing: ["التشطيب", "Finishing"], delivery: ["التسليم", "Delivery"], bathrooms: ["الحمامات", "Bathrooms"], remaining_amount: ["المتبقي", "Remaining"], installment_value: ["القسط", "Installment"], installment_frequency: ["دورية القسط", "Frequency"], features: ["المميزات", "Features"] };
   const ucLabel = (k) => (UC_LABEL[k] || CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
   const ucValue = (k, v) => (k === "listing_type" ? (v === "rent" ? L(lang, "إيجار", "Rent") : v === "sale" ? L(lang, "بيع", "Sale") : v) : v);
+  // Discard: this unit is thrown out of the review (kept in the plan, never saved, brought back from the bar above the list).
+  const discardBtn = (i) => (chat && !applied ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="row" value="${i.row}" data-discard="${i.row}">🗑 ${L(lang, "تجاهل", "Discard")}</button>` : "");
   const chatCard = (i) => {
     const cells = cellsOf.get(i.row) || {};
     const bad = i.kind === "invalid";
@@ -202,9 +298,9 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     const kindChip = L(lang, KIND_LABEL[i.kind][0], KIND_LABEL[i.kind][1]);
     return html`<article class="unit-card${bad ? " is-bad" : ""}" data-row="${i.row}" data-card-kind="${i.kind}">
   <header class="uc-head">
-    ${bad || applied ? "" : box(i)}
+    ${applied ? "" : bad || i.kind === "forbidden" ? html`<input type="checkbox" disabled aria-label="${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Cannot be added until the details are completed")}" title="${L(lang, "مش هتتضاف قبل ما تكمل البيانات", "Cannot be added until the details are completed")}">` : box(i, (i.kind === "new" || i.kind === "changed") && remembered[i.row] !== "unchanged")}
     <div class="uc-title"><strong>${title || L(lang, "وحدة من غير بيانات", "Unit with no details")}</strong>
-      <span class="muted">${L(lang, "بوست", "Post")} ${i.row}${post.sender ? ` · ${post.sender}` : ""}${post.at ? ` · ${post.at}` : ""}</span></div>
+      <span class="muted">${L(lang, "بوست", "Post")} ${i.row}${post.sender ? html` · ${/^[+\d\s().-]+$/.test(post.sender) ? phoneLtr(post.sender) : post.sender}` : ""}${post.at ? ` · ${post.at}` : ""}</span></div>
     <span class="chip${bad ? " bad" : ""}">${kindChip}</span>
     <span class="uc-code${missing.has("code") ? " missing" : ""}">${i.code || L(lang, "(كود تلقائي)", "(auto code)")}</span>
   </header>
@@ -217,21 +313,21 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   })}</dl></section>`)}</div>
   ${originalBox(i, false)}
   ${i.kind === "new" && i.warnings?.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}
-  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
   ${i.kind === "review"
-    ? html`<div class="stack" data-review-note><p class="warn">${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
-    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    ? html`<div class="stack" data-review-note><p class="muted" data-not-ticked>${L(lang, "مش متعلّمة: اختار تدمجها ولا تضيفها بكود جديد وبعدين علّمها.", "Not ticked: choose merge or a new code, then tick it.")}</p><p class="warn">${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
     <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
-    <input name="code_${i.row}" form="apply-form" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div></div>`
+    <input name="code_${i.row}" form="apply-form" aria-label="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div></div>`
     : ""}
   ${notesOf(i)}${photosOf(i)}
-  <footer class="uc-foot">${editor(i)}</footer>
+  <footer class="uc-foot">${editor(i)}${discardBtn(i)}</footer>
 </article>`;
   };
   const chatList = (rows) => html`<div class="uc-list">${rows.map(chatCard)}</div>`;
 
   // Fix-many-rows-at-once (and the failed-rows download) are manager tools: data entry gets the plain review.
-  const stats = !applied && sheetRows && !extra.dataEntry ? Imports.batchStats(imp.payload) : null;
+  const stats = !applied && sheetRows && !extra.dataEntry ? extra.stats || Imports.batchStats(imp.payload) : null;
   const batch =
     stats && (stats.no_type || stats.several_prices || stats.dollars || stats.unknown_types.length || stats.status_hints.length || Object.keys(stats.remembered).length)
       ? html`<section class="card stack" data-batch>
@@ -267,13 +363,13 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
       <label data-word-val="finishing">${L(lang, "التشطيب", "Finishing")}<select name="v_finishing">${Imports.FINISHING_KEYS.map((k) => html`<option value="${k}"${val("finishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FINISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
       <label data-word-val="furnishing">${L(lang, "الفرش", "Furnishing")}<select name="v_furnishing">${Imports.FURNISHING_KEYS.map((k) => html`<option value="${k}"${val("furnishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FURNISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
       <label data-word-val="features">${L(lang, "الميزة", "Feature")}<input name="v_features" value="${val("features") || u.value}" maxlength="120"></label>
-      <button class="secondary">${L(lang, "طبّق", "Apply")}</button></div></form>`;
+      <button>${L(lang, "طبّق", "Apply")}</button></div></form>`;
     })}</div>`
     : ""}
   ${stats.status_hints.length
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="status_words"><input type="hidden" name="action" value="status_words">
     <p>${L(lang, `ملاحظات ${stats.status_hints.reduce((n, h) => n + h.count, 0)} صف بتقول إن الوحدة اتأجرت أو اتباعت أو مش متاحة (${stats.status_hints.map((h) => `${h.count} ${h.status === "sold" ? "اتأجرت/اتباعت" : "مش متاحة"}`).join("، ")}). نسجلهم بالحالة دي؟`, `${stats.status_hints.reduce((n, h) => n + h.count, 0)} rows say in their notes the unit is rented, sold or not available (${stats.status_hints.map((h) => `${h.count} ${h.status === "sold" ? "rented or sold" : "not available"}`).join(", ")}). Save them with that status?`)}</p>
-    <div class="row"><button name="value" value="yes" class="secondary">${L(lang, "أيوه، سجلهم بالحالة", "Yes, save them with that status")}</button><button name="value" value="no" class="secondary">${L(lang, "لا، سيبهم متاحين", "No, leave them available")}</button></div>
+    <div class="row"><button name="value" value="yes">${L(lang, "أيوه، سجلهم بالحالة", "Yes, save them with that status")}</button><button name="value" value="no" class="secondary">${L(lang, "لا، سيبهم متاحين", "No, leave them available")}</button></div>
     <p class="muted"${stats.remembered.status_words !== undefined ? raw(' data-remembered="status"') : ""}>${stats.remembered.status_words !== undefined ? L(lang, `المرة اللي فاتت اخترت: ${stats.remembered.status_words ? "أيوه" : "لا"}. بنسألك كل مرة.`, `Last time you chose: ${stats.remembered.status_words ? "yes" : "no"}. We still ask each time.`) : L(lang, "إجابتك بتتحفظ كاقتراح للمرة الجاية.", "Your answer is kept as a suggestion for the next upload.")}</p></form>`
     : ""}
   ${Object.keys(stats.remembered).length
@@ -304,43 +400,91 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     paged && pages > 1
       ? html`<nav class="row" data-pager>${page > 1 ? html`<a class="chip" href="${href({ page: page - 1 })}" rel="prev">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${page} / ${pages}</span>${page < pages ? html`<a class="chip" href="${href({ page: page + 1 })}" rel="next">${L(lang, "التالي", "Next")}</a>` : ""}</nav>`
       : "";
-  const ready = (counts.new || 0) + (counts.changed || 0);
+  const ready = items.filter((i) => ["new", "changed"].includes(i.kind) && !doneRows.has(i.row)).length;
+  // What Save does by default: only new and changed units are ticked. Errors (and units that are not the person's) never are.
+  const earlierUnchanged = (kind) => items.filter((i) => i.kind === kind && remembered[i.row] === "unchanged").length;
+  const readyNew = (counts.new || 0) - earlierUnchanged("new");
+  const readyChanged = (counts.changed || 0) - earlierUnchanged("changed");
+  const errorsN = (counts.invalid || 0) + (counts.forbidden || 0);
+  const goneEarlier = [...gone].filter((n) => remembered[n] === "discarded").length;
+  // "N already imported · Show": the posts saved by an earlier import of this chat are out of the way until asked for.
+  const savedBar =
+    chat && !applied && savedBefore.length
+      ? html`<p class="card notice row" role="status" data-saved-bar data-saved="${savedBefore.length}">✅ ${L(lang, `${savedBefore.length} بوست اتحمل قبل كده`, `${savedBefore.length} already imported`)} · <a class="chip" href="${showSaved ? `/app/import/${imp.id}` : `/app/import/${imp.id}?show_saved=1`}" data-saved-toggle>${showSaved ? L(lang, "اخفيهم", "Hide") : L(lang, "اعرضهم", "Show")}</a></p>`
+      : "";
+  const forgetBar =
+    chat && !applied && imp.payload.chat_fp
+      ? html`<form method="post" action="/app/import/${imp.id}/forget-decisions" class="row" data-forget-form><button type="submit" class="secondary small" data-forget-decisions>🧹 ${L(lang, "انسَ القرارات المحفوظة للشات ده", "Forget remembered decisions for this chat")}</button></form>`
+      : "";
+  const discardedBar =
+    chat && !applied && gone.size
+      ? html`<form method="post" action="/app/import/${imp.id}/discard" class="card stack" data-discarded-bar><input type="hidden" name="on" value="0">
+  <div class="row"><span>🗑 ${L(lang, `${gone.size} وحدة متجاهلة${goneEarlier ? ` (${goneEarlier} من تحميل قبل كده)` : ""}`, `${gone.size} discarded${goneEarlier ? ` (${goneEarlier} discarded earlier)` : ""}`)}</span><button type="submit" name="scope" value="all" class="secondary small" data-restore-all>${L(lang, "رجّع الكل", "Restore all")}</button></div>
+  <details><summary>${L(lang, "اعرضهم", "Show them")}</summary><ul>${[...gone].sort((a, b) => a - b).map((n) => {
+    const c = (sheetRows || []).find((r) => r.rowNumber === n)?.cells || {};
+    return html`<li><span class="muted">${L(lang, "بوست", "Post")} ${n} · ${[c.property_type, c.compound].filter(Boolean).join(" · ")}</span> <button type="submit" name="row" value="${n}" class="secondary small" data-restore="${n}">↩️ ${L(lang, "رجّعها", "Restore")}</button></li>`;
+  })}</ul></details></form>`
+      : "";
 
+  // The sheet has no owner phone column: nothing can be saved until every row has one. One phone for the rows is the quick way out.
+  const noPhoneCard =
+    !chat && !applied && imp.payload.info?.no_phone_column
+      ? html`<section class="card stack" data-no-phone>
+  <h2>📞 ${L(lang, "الشيت مفيهوش عمود تليفون المالك", "The sheet has no owner phone column")}</h2>
+  <p>${L(lang, "من غير تليفون المالك الوحدة مبتتسجلش. اكتب رقم واحد لكل الصفوف، أو صلّح كل صف لوحده.", "A unit cannot be saved without the owner's phone. Type one phone for all rows, or fix each row on its own.")}</p>
+  ${extra.dataEntry ? "" : html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="owner_phone"><input type="hidden" name="action" value="owner_phone"><input type="hidden" name="_csrf" value="${extra.csrf || ""}">
+  <label>${L(lang, "رقم تليفون المالك", "Owner phone")}<input name="value" type="tel" inputmode="tel" autocomplete="off" maxlength="40" required placeholder="01012345678">${phoneHelp(lang)}</label>
+  <div class="row"><button name="scope" value="missing">${L(lang, "استخدمه للصفوف اللي من غير رقم", "Use it for rows with no phone")}</button><button name="scope" value="all" class="secondary">${L(lang, "استخدمه لكل الصفوف", "Use it for all rows")}</button></div></form>`}
+</section>`
+      : "";
+  const skippedTabs = chat ? [] : tabsNotRead(imp.payload);
+  const skippedLine = skippedTabs.length
+    ? html`<p class="card muted" data-tabs-not-read>📑 ${L(lang, "تابات متقراتش", "Tabs not read")}: ${skippedTabs.map((t) => `${t.name || "—"} (${L(lang, ...(SKIP_WHY[t.reason] || [t.reason, t.reason]))})`).join(L(lang, "، ", ", "))}</p>`
+    : "";
+  const readCard = chat ? "" : readingCard(imp, lang, extra);
   return html`<h1>📥 ${L(lang, "مراجعة التحميل", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 ${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
-${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
+${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null, applied ? 0 : ready) : ""}
+${noPhoneCard}${skippedLine}${readCard}
+${query.batch_error === "bad_phone" ? html`<p class="card notice bad" role="alert" data-batch-error="bad_phone">⚠️ ${L(lang, "الرقم مش صحيح. اكتب رقم زي 01012345678، أو رقم أجنبي بـ + وكود الدولة.", "That number is not valid. Type a number like 01012345678, or a foreign one with + and the country code.")}</p>` : ""}
+${query.mapping === "empty" ? html`<p class="card notice bad" role="alert" data-mapping-error>⚠️ ${L(lang, "بالاختيار ده السعر أو المساحة بقوا فاضيين في كل الصفوف. رجّعنا القراءة زي ما كانت.", "With that choice price or area would be empty on every row. We kept the earlier reading.")}</p>` : ""}
 ${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
 ${kindNav}${tabsNav}
+${savedBar}${discardedBar}${forgetBar}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
 <button type="submit" hidden tabindex="-1" aria-hidden="true"></button><input type="hidden" name="back" value="${href({ page })}">
-${chat && !applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-all>${L(lang, "اختار الكل", "Select all")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button><span class="muted">${L(lang, "الوحدات الناقصة مش بتتضاف: عدّلها الأول.", "Units missing details are not added: edit them first.")}</span></p>` : ""}
+${!applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-valid>${L(lang, "اختار كل الصالح", "Select all valid")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button>${chat && errorsN ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="errors" data-discard-errors>🗑 ${L(lang, `تجاهل الوحدات اللي فيها أخطاء (${errorsN})`, `Discard units with errors (${errorsN})`)}</button>` : ""}${chat && counts.unchanged ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="unchanged" data-discard-unchanged>🗑 ${L(lang, `تجاهل الوحدات اللي مفيش تغيير فيها (${counts.unchanged})`, `Discard units with no changes (${counts.unchanged})`)}</button>` : ""}${chat ? html`<span class="muted">${L(lang, "الوحدات الناقصة أو اللي فيها أخطاء أو مفيش فيها تغيير مش بتتحفظ.", "Units with errors, missing details or no changes are not saved.")}</span>` : ""}</p>` : ""}
 ${section("review", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}
+  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}
     <p class="warn" data-review-note>${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
-    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
     <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
-    <input name="code_${i.row}" form="apply-form" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div>
+    <input name="code_${i.row}" form="apply-form" aria-label="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div>
     ${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("new", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("invalid", (rows) => chat ? chatList(rows) : html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
-${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
-${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${where(i)} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير", "Same as in the app, nothing to change")}${notesOf(i)}</li>`)}</ul>`)}
+${section("invalid", (rows) => chat ? chatList(rows) : html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${unitLine(i)}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
+${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code} ${discardBtn(i)}</li>`)}</ul>`)}
+${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${where(i)} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير (مش هتتحفظ ولا هتتلمس)", "Same as in the app, nothing to change (not saved or touched)")}${notesOf(i)} ${discardBtn(i)}</li>`)}</ul>`)}
 ${pager}
 ${!extra.dataEntry && (counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-failed-download><a class="secondary button" href="/app/import/${imp.id}/failed.xlsx" download>⬇️ ${L(lang, `نزّل الصفوف اللي مش هتتسجل (${(counts.invalid || 0) + (counts.forbidden || 0)}) إكسيل بعمود السبب`, `Download the rows that will not import (${(counts.invalid || 0) + (counts.forbidden || 0)}) as Excel, with a Reason column`)}</a></p>` : ""}
-  ${applied ? "" : html`<div class="row"><button type="submit">✅ ${L(lang, paged ? "طبّق المختار في الصفحة دي" : "طبّق المختار", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
+  ${chat && !applied ? html`<p class="card notice" role="status" data-save-summary data-total="${items.length + gone.size}" data-errors="${errorsN}" data-unchanged="${counts.unchanged || 0}" data-discarded="${gone.size}">${summaryLine(lang, readyNew + readyChanged, readyNew, readyChanged, items.length + gone.size - readyNew - readyChanged, errorsN, counts.unchanged || 0, gone.size)}</p>` : ""}
+  ${applied ? "" : html`<div class="row"><button type="submit" data-save-button${chat && !(readyNew + readyChanged) ? raw(" disabled") : ""}>✅ ${L(lang, paged ? "طبّق اللي اخترته في الصفحة دي" : "طبّق اللي اخترته", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}${chat ? html` (<span data-save-count>${readyNew + readyChanged}</span>)` : ""}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
 </form>
 ${editForms}${chatDialogs}`;
 }
 
-function resultCard(r, lang, undoId = null) {
-  const line = (label, list) => (list && list.length ? html`<li>${label}: ${list.length} <span class="muted">${list.join("، ")}</span></li>` : "");
+/** The "Applied" card. `left`: units of the plan still to apply (the plan stays open after a partial Apply). */
+function resultCard(r, lang, undoId = null, left = 0) {
+  const line = (label, list, fmt = String) => (list && list.length ? html`<li>${label}: ${list.length} <span class="muted">${list.map(fmt).join("، ")}</span></li>` : "");
+  // A failed unit says why ("NH-1: owner phone is missing"); results saved before that held the code alone.
+  const failed = (f) => Imports.failedLine(f, lang);
   return html`<div class="card notice" data-result id="import-result" tabindex="-1">
   <h2>✅ ${L(lang, "اتطبق", "Applied")}</h2>
   ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتمسحت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are deleted; changed units are back to their earlier values.")}</p>` : ""}
@@ -349,10 +493,55 @@ function resultCard(r, lang, undoId = null) {
     ${line(L(lang, "اتضافت", "Created"), r.created)}
     ${line(L(lang, "اتعدلت", "Updated"), r.updated)}
     ${line(L(lang, "اتغيرت من شخص تاني بعد المراجعة (متعدلتش)", "Changed by someone else since the review (not applied)"), r.conflicts)}
-    ${line(L(lang, "متطبقتش", "Not applied"), r.failed)}
+    ${line(L(lang, "متطبقتش", "Not applied"), r.failed, failed)}
+    ${line(L(lang, "مفيش تغيير: اتساب ومتلمسش", "Unchanged, skipped"), r.unchanged)}
+    ${line(L(lang, "فيها أخطاء أو مش من حقك: اتساب", "Errors or not yours, skipped"), r.blocked)}
+    ${line(L(lang, "متجاهلة: اتساب", "Discarded, skipped"), r.discarded)}
+    ${line(L(lang, "متسجلتش عشان وصلت للحد الأقصى للوحدات", "Not saved: your unit limit was reached"), r.limit_skipped)}
   </ul>
   ${r.limit ? html`<p class="notice bad" data-unit-limit>${Plans.unitLimitText(r.limit, lang)}</p>` : ""}
+  ${left ? html`<p data-still-open>${L(lang, `لسه ${left} وحدة مستنية في الصفحة تحت. راجعها وطبّق تاني.`, `${left} units are still waiting below. Review them and apply again.`)}</p>` : ""}
 </div>`;
+}
+
+/** An Excel import being saved in the background: a bar that applypoll.js moves, and a reload when it ends. */
+function applyingCard(imp, lang) {
+  const p = imp.result?.progress || {};
+  const total = Number(p.total) || 0;
+  const done = Number(p.done) || 0;
+  return html`<h1>📥 ${L(lang, "بنسجّل الوحدات…", "Saving your units…")} <span class="muted">${imp.filename || ""}</span></h1>
+<div class="card stack" data-apply-poll="/app/import/${imp.id}/apply-status" role="status">
+  <progress class="pbar" max="${total || 1}" value="${done}"></progress>
+  <p><span data-apply-count>${total ? `${done} / ${total}` : ""}</span></p>
+  <p class="muted">${L(lang, "سيب الصفحة مفتوحة لحد ما نخلّص. لو قفلتها، ارجع لها وهتكمل لوحدها.", "Keep this page open until we finish. If you close it, come back and it carries on by itself.")}</p>
+</div>`;
+}
+
+/** "How we read your file": per tab, which column became which field, what was left out, and (for a fresh plan) a dropdown per column. */
+function readingCard(imp, lang, extra) {
+  const infos = (Array.isArray(imp.payload.tabs) ? imp.payload.tabs : []).filter((t) => t.rows || (t.cols || []).length);
+  if (!infos.length) return "";
+  const fieldName = (k) => (CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
+  const colName = (c) => c.h || `${L(lang, "عمود", "Column")} ${c.c}`;
+  const canChange = imp.status === "ready" && Array.isArray(imp.payload.grid?.tabs) && Imports.appliedRows(imp).size === 0 && !extra.dataEntry;
+  const keys = [...new Set(SheetImport.COLUMNS.map(([k]) => k))];
+  return html`<details class="card stack" data-read-card><summary>🔎 ${L(lang, "إزاي قرينا الملف", "How we read your file")}</summary>
+  ${infos.map((t) => html`<div class="stack" data-read-tab="${t.name}">
+    <h3>${t.name || "—"} <span class="muted">${t.rows || 0} ${L(lang, "صف", "rows")}</span></h3>
+    <p class="row">${(t.cols || []).filter((c) => c.k).map((c) => html`<span class="chip good" data-col-map="${c.k}">${colName(c)} → ${fieldName(c.k)}</span>`)}</p>
+    ${t.ignored?.length ? html`<p class="muted" data-ignored>${L(lang, "أعمدة اتساب (منعرفهاش)", "Columns left out (not known)")}: ${t.ignored.join("، ")}</p>` : ""}
+    ${t.shifted ? html`<p class="muted" data-shifted>${L(lang, "العناوين كانت مزحزحة عن أعمدتها، فرتبناها حسب اللي جواها.", "The headers were shifted off their columns, so we matched them by what the columns hold.")}</p>` : ""}
+    ${t.compound_from_tab ? html`<p class="muted" data-compound-from-tab>${L(lang, `مفيش عمود كمبوند: خدنا اسم التاب «${t.name}» ككمبوند.`, `No compound column: the tab name “${t.name}” is used as the compound.`)}</p>` : ""}
+    ${t.mode === "content" || t.mode === "headers+content" ? html`<p class="muted" data-mode>${L(lang, "بعض الأعمدة معرفناهاش من عنوانها، عرفناها من اللي مكتوب فيها.", "Some columns were recognised by what they hold, not by a header.")}</p>` : ""}
+    ${canChange && (t.cols || []).length
+      ? html`<details><summary>${L(lang, "غيّر قراءة التاب ده", "Change how this tab is read")}</summary>
+      <form method="post" action="/app/import/${imp.id}/mapping" class="stack" data-mapping-form>
+      <input type="hidden" name="_csrf" value="${extra.csrf || ""}"><input type="hidden" name="tab" value="${t.name}">
+      ${t.cols.map((c) => html`<label>${colName(c)}<select name="map_${c.c}"><option value=""${c.k ? "" : raw(" selected")}>${L(lang, "— سيبه —", "— leave out —")}</option>${keys.map((k) => html`<option value="${k}"${c.k === k ? raw(" selected") : ""}>${fieldName(k)}</option>`)}</select></label>`)}
+      <p class="muted">${L(lang, "الصفوف هتتقرا من الأول، وتعديلاتك على الصفحة دي هتتمسح.", "The rows are read again from the start, and your edits on this page are reset.")}</p>
+      <button type="submit" class="secondary">${L(lang, "اقرا التاب بالاختيارات دي", "Read the tab with these choices")}</button></form></details>` : ""}
+  </div>`)}
+</details>`;
 }
 
 /** A post's photos from a chat export zip: thumbnails, and a warning when a photo is already on a unit. */
@@ -398,7 +587,7 @@ ${undecided ? html`<section class="card stack" data-group-listing-type><p>${L(la
     const twin = r?.same_as !== undefined && r?.same_as !== null;
     const state = !r ? "pending" : r.error ? "error" : r.ok ? (r.duplicate || twin ? "duplicate" : "ok") : "incomplete";
     return html`<li class="card" data-post="${i}" data-state="${state}">
-  <div class="row">${!applied && r?.ok ? html`<input type="checkbox" name="rows" value="${i}"${r.duplicate || twin ? "" : raw(" checked")}>` : ""}<strong>${p.sender || L(lang, "بوست", "Post")}</strong> <span class="muted">${p.at || ""}</span></div>
+  <div class="row">${!applied && r?.ok ? html`<input type="checkbox" name="rows" value="${i}"${r.duplicate || twin ? "" : raw(" checked")}>` : ""}<strong>${p.sender ? (/^[+\d\s().-]+$/.test(p.sender) ? phoneLtr(p.sender) : p.sender) : L(lang, "بوست", "Post")}</strong> <span class="muted">${p.at || ""}</span></div>
   <p class="muted">${p.text.slice(0, 280)}</p>
   ${photosLine(p, lang)}
   ${r?.ok ? html`<p>${stripMarkdown(Describe.compactLine({ ...r.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}</p>` : ""}
@@ -410,6 +599,28 @@ ${undecided ? html`<section class="card stack" data-group-listing-type><p>${L(la
   })}</ol>
 ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار", "Add the selected units")}</button>`}
 </form></div>`;
+}
+
+/**
+ * The import date range, the same options as the app: since the last import of this chat (only once the chat is known), the last 7, 30 or 90
+ * days, everything, or a custom range. The bounds come from domain/chatParse.js rangeBounds (the browser and the group form both use it).
+ * data: the box is read by chatphotos.js (data-cp-range / data-cp-since / data-cp-until), else the plain form fields range / since / until.
+ */
+function rangeControls(lang, { data = false, last = true } = {}) {
+  const sel = data ? raw("data-cp-range") : raw('name="range"');
+  const since = data ? raw("data-cp-since") : raw('name="since"');
+  const until = data ? raw("data-cp-until") : raw('name="until"');
+  return html`<fieldset class="stack" data-range><legend>${L(lang, "حمّل البوستات من", "Import posts from")}</legend>
+  <select ${sel} aria-label="${L(lang, "المدى", "Range")}">
+    ${last ? html`<option value="last"${data ? raw(" hidden disabled") : ""}>${L(lang, "من آخر تحميل", "Since last import")}</option>` : ""}
+    <option value="7">${L(lang, "آخر 7 أيام", "Last 7 days")}</option>
+    <option value="30" selected>${L(lang, "آخر 30 يوم", "Last 30 days")}</option>
+    <option value="90">${L(lang, "آخر 90 يوم", "Last 90 days")}</option>
+    <option value="all">${L(lang, "الكل", "All")}</option>
+    <option value="custom">${L(lang, "تاريخ محدد", "Custom range")}</option>
+  </select>
+  <span class="row" data-range-custom${data ? raw(" hidden") : ""}><label>${L(lang, "من", "From")}<input type="date" ${since} value="${Chat.defaultSince()}"></label><label>${L(lang, "لحد", "Until")}<input type="date" ${until}></label></span>
+  ${data ? html`<span class="muted" data-cp-last-note></span>` : ""}</fieldset>`;
 }
 
 function register(web, { pool, page, assets }) {
@@ -425,10 +636,10 @@ function register(web, { pool, page, assets }) {
     const err = (n) => (notice && tab === n ? notice : "");
     // The chat-export reader. "posts": the units are read from the posts (the WhatsApp import); "codes": photos go to units
     // already in the app by the code in the description. The date comes first; the order/gap settings sit under Advanced.
-    const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-summary-url="/app/import/match/summary" data-editor-url="/app/import/match/editor" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
+    const cpBox = (mode) => html`<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-codes-url="${mode === "posts" ? "/app/import/match/codes" : ""}" data-start-url="/app/import/match/start" data-plan-url="/app/import/match/plan" data-decisions-url="/app/import/decisions" data-summary-url="/app/import/match/summary" data-editor-url="/app/import/match/editor" data-plan-photo-url="/app/import/match/p/{id}/photo/{row}" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}" data-unit-photos-url="/app/import/match/unit/{code}/photos" data-unit-remove-url="/app/import/match/unit/{code}/photos/remove" data-log-url="/app/import/match/log" data-heic-url="${assets.url("heic2any.js")}">
   <h2>${mode === "posts" ? html`💬 ${L(lang, "تحميل وحدات من شات واتساب بالصور", "Import units from a WhatsApp chat, with photos")}` : html`📷 ${L(lang, "تطابق الصور مع وحدات موجودة", "Match photos to units already in the app")}`}</h2>
   <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيتحمل، فمفيش حد أقصى لحجمه. بنوزع كل صورة على بوستها، وإنت بتراجع وتعدّل وترتب الصور قبل أي حفظ. الفيديوهات مش بتتحمل. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its post, and you review, edit and order the photos before anything is saved. Videos are not uploaded. Only the photos you choose are saved.")}</p>
-  <label>${L(lang, "من تاريخ", "From date")}<input type="date" data-cp-since value="${Chat.defaultSince()}"></label>
+  ${rangeControls(lang, { data: true, last: mode === "posts" })}
   <input type="file" accept=".zip,.txt,application/zip,text/plain" data-cp-file>
   <input type="hidden" data-cp-mode value="${mode}">
   <details class="stack" data-cp-advanced><summary>${L(lang, "إعدادات متقدمة", "Advanced")}</summary>
@@ -445,25 +656,25 @@ function register(web, { pool, page, assets }) {
   <button type="button" data-cp-read>${L(lang, "اقرأ الملف", "Read the file")}</button>
   <div data-cp-out></div>
 </div>`;
-    const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
+    const cpScripts = html`<script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("chatfingerprint.js")}"></script><script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>`;
     return html`<h1>${L(lang, "تحميل", "Import")}</h1>
 ${tabs("import_tab", [...(dataEntry ? [] : [
   [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack" data-xi data-progress data-grid-url="/app/import/excel/grid">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>📊 ${L(lang, "شيت إكسيل (مقارنة بالمخزون)", "Excel sheet (compared with your inventory)")}</h2>
   <p class="muted">${L(lang, "هنوريك الجديد والمتغير قبل أي حفظ. ينفع شيت التصدير من البوت أو", "You see what is new and what changed before anything is saved. The bot's export works, or")} <a href="/app/import/template.xlsx">${L(lang, "النموذج ده", "this template")}</a>.</p>
-  <input type="file" name="sheet" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-  <p class="muted">${L(lang, "كل التابات بتتقري في المتصفح، والتاب اسمه بيبقى الكمبوند لو مفيش عمود كمبوند.", "Every tab is read in your browser; a tab's name is the compound when the sheet has no compound column.")}</p>
+  <input type="file" name="sheet" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required>
+  <p class="muted">${L(lang, "كل التابات بتتقري في المتصفح، والتاب اسمه بيبقى الكمبوند لو مفيش عمود كمبوند.", "Every tab is read in your browser; a tab's name is the compound when the sheet has no compound column.")} ${L(lang, "ملف .xlsx أو .csv.", "An .xlsx or .csv file.")}</p>
   <p data-xi-status class="card notice" role="status" hidden></p>
   <button type="submit">${L(lang, "قارن", "Compare")}</button>
-  <script src="${assets.url("zipread.js")}"></script><script src="${assets.url("xlsxread.js")}"></script><script src="${assets.url("ximport.js")}"></script>
+  <script src="${assets.url("zipread.js")}" defer></script><script src="${assets.url("xlsxread.js")}" defer></script><script src="${assets.url("ximport.js")}" defer></script>
 </form>`]]),
   [html`<span class="ti">💬</span>${L(lang, "تحميل من واتساب", "WhatsApp import")}`, html`${err(1)}${cpBox("posts")}
   <details class="card stack" data-paste-import>
     <summary>${L(lang, "من غير صور: الصق البوستات أو حمل شات (.txt)", "Without photos: paste the posts or upload a chat (.txt)")}</summary>
     <form method="post" action="/app/import/group" enctype="multipart/form-data" class="stack" data-progress>
       <input type="hidden" name="_csrf" value="${req.session.csrf}">
-      <label>${L(lang, "حمّل البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
+      ${rangeControls(lang)}
       <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
       <label>${L(lang, "أو حمل تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
       <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
@@ -476,11 +687,18 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
 
   web.get("/import", (req, res) => importPage(req, res, importHub(req)));
 
-  web.get("/import/template.xlsx", async (_req, res) => {
+
+
+  web.get("/import/template.xlsx", async (req, res) => {
+    const lang = langOf(req);
     const buf = await ImportTemplate.build({
       sheetName: "Inventory",
       headers: TEMPLATE_HEADERS,
-      required: [1, 2, 3, 4, 5],
+      required: [1, 2, 3, 4, 5, 19],
+      rtl: lang === "ar",
+      lists: lang === "ar"
+        ? { 3: ["شقة", "فيلا", "تاون هاوس", "توين هاوس", "دوبلكس", "بنتهاوس", "استوديو", "شاليه"], 4: ["بيع", "ايجار"], 10: ["تشطيب كامل", "سوبر لوكس", "نص تشطيب", "بدون تشطيب"], 15: ["شهري", "ربع سنوي", "نصف سنوي", "سنوي"], 18: ["متاحة", "مباعة", "غير متاحة"] }
+        : { 3: ["apartment", "villa", "townhouse", "twin villa", "duplex", "penthouse", "studio", "chalet"], 4: ["sale", "rent"], 10: ["fully finished", "super lux", "semi finished", "core and shell"], 15: ["monthly", "quarterly", "semi-annual", "annual"], 18: ["available", "sold", "not available"] },
       samples: [
         ["SAMPLE-1", "Hyde Park", "شقة", "بيع", "8.5 مليون", 150, 3, 2, 4, "تشطيب كامل", "2027 Q3", "3 مليون", "5.5 مليون", 250000, "ربع سنوي", "بحري، ناصية", "التجمع الخامس", "متاحة", "مثال: أحمد", "01000000000", "صف تجريبي، امسحه"],
         ["SAMPLE-2", "Mountain View", "فيلا", "بيع", "21 مليون", 320, 4, 4, "", "سوبر لوكس", "جاهز", "", "", "", "", "حديقة، مسبح", "الشيخ زايد", "متاحة", "مثال: منى", "01100000000", "صف تجريبي، امسحه"]
@@ -488,7 +706,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       text: [20],
       readme: [
         ["الكود اختياري: لو فاضي النظام يعمله.", "Code is optional: left empty, the system makes one."],
-        ["لازم الكمبوند، النوع، بيع/إيجار، السعر والمساحة.", "Compound, property type, sale/rent, price and area are needed."],
+        ["لازم الكمبوند، النوع، بيع/إيجار، السعر والمساحة وتليفون المالك.", "Compound, property type, sale/rent, price, area and the owner phone are needed."],
         ["السعر يقبل «8.5 مليون» أو 8500000.", "Price accepts '8.5 million' or 8500000."],
         ["التحميل للمديرين بس، وبتشوف كل صف هيعمل إيه قبل الحفظ.", "Import is for managers; you see what every row will do before anything is saved."]
       ]
@@ -517,12 +735,15 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="big">⚠️ ${L(lang, "الملف كبير. افتحه من متصفح حديث (كروم أو سفاري) عشان يتقري في المتصفح بدل السيرفر.", "The file is large. Open this page in a current browser (Chrome or Safari) so the file is read in the browser, not on the server.")}</p>` }), 422);
     }
     try {
-      sheet = await Sheets.readInventorySheet(file?.buffer);
+      // Same reading as the browser's: every visible tab, columns by content, tab name as the compound.
+      sheet = await Sheets.readInventoryGrid(file?.buffer, { filename: String(file?.originalname || "").slice(0, 120) });
     } catch (err) {
       const msg = {
-        NOT_XLSX: L(lang, "الملف لازم يكون إكسيل .xlsx.", "The file must be an .xlsx workbook."),
+        NOT_XLSX: L(lang, "الملف لازم يكون إكسيل .xlsx أو CSV.", "The file must be an .xlsx workbook or a CSV."),
+        NOT_TEXT: isOle(file?.buffer) ? L(lang, "ده إكسيل قديم (.xls). احفظ الملف كـ .xlsx وارفعه تاني.", "This is an old Excel file (.xls). Save the file as .xlsx and try again.") : L(lang, "الملف لازم يكون إكسيل .xlsx أو CSV.", "The file must be an .xlsx workbook or a CSV."),
         TOO_LARGE: L(lang, "الملف أكبر من 5 ميجا.", "The file is larger than 5 MB."),
         NO_HEADER: L(lang, "مش لاقيين صف العناوين (الكود، الكمبوند، السعر، المساحة…).", "No header row found (code, compound, price, area, …)."),
+        NO_TABS: L(lang, "مش لاقيين صف العناوين (الكود، الكمبوند، السعر، المساحة…).", "No header row found (code, compound, price, area, …)."),
         TOO_MANY_ROWS: L(lang, `أكتر من ${Sheets.MAX_ROWS} صف.`, `More than ${Sheets.MAX_ROWS} rows.`)
       }[err.code];
       if (!msg) throw err;
@@ -535,7 +756,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert" data-import-error="empty-column">⚠️ ${L(lang, `العمود ده فاضي في كل الصفوف: ${list}. ملفش اتحفظ حاجة. ضيف القيم وحمل تاني.`, `These columns are empty on every row: ${list}. Nothing was saved. Fill them in and upload again.`)}</p>` }), 422);
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
-    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped, skipped: sheet.skipped || [] }, { filename: String(file.originalname || "").slice(0, 120) });
+    const id = await Imports.savePlan(pool, broker, "excel", planPayload(plan, sheet, skippedTabsOf(sheet, sheet.skippedTabs), { rawTabs: sheet.rawTabs, byFileRow: sheet.rawTabs?.length === 1 }), { filename: String(file.originalname || "").slice(0, 120) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "excel", rows: sheet.rows.length, counts: plan.counts } });
     return res.redirect(303, `/app/import/${id}`);
   });
@@ -582,7 +803,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       return say(422, L(lang, `العمود ده فاضي في كل الصفوف: ${missing.map((k) => name[k] || k).join("، ")}. ملفش اتحفظ حاجة.`, `These columns are empty on every row: ${missing.map((k) => name[k] || k).join(", ")}. Nothing was saved.`), { empty: missing });
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
-    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped, skipped: sheet.skipped, tabs: sheet.tabs, defaults: sheet.defaults }, { filename: String(req.body?.filename || "").slice(0, 120) });
+    const id = await Imports.savePlan(pool, broker, "excel", planPayload(plan, sheet, skippedTabsOf(sheet, req.body?.skipped), { rawTabs: tabs }), { filename: String(req.body?.filename || "").slice(0, 120) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "excel", rows: sheet.rows.length, tabs: sheet.tabs.length, counts: plan.counts } });
     return res.json({ url: `/app/import/${id}` });
   });
@@ -594,7 +815,11 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
-    const found = Chat.candidatePosts(text, { since: req.body.since });
+    // The range: the same options as the app. "Since last import" needs the chat's remembered decisions (its fingerprint from the file name and first message).
+    const range = String(req.body.range || (req.body.since ? "custom" : "30"));
+    const chatFp = file && ChatFp.isChatFp(ChatFp.chatFingerprint(file.originalname || "", ChatFp.firstHeaderOf(text))) ? ChatFp.chatFingerprint(file.originalname || "", ChatFp.firstHeaderOf(text)) : null;
+    const lastImportAt = range === "last" && chatFp ? (await Decisions.list(pool, broker.agency_id, chatFp)).last_import_at : null;
+    const found = Chat.candidatePosts(text, ChatParse.rangeBounds(range, { lastImportAt, since: req.body.since, until: req.body.until }));
     if (file && isZip(file.buffer)) {
       return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert" data-import-error="zip">⚠️ ${L(lang, "الـ zip بالصور بيتفتح من الجزء الأول في الصفحة (تحميل من واتساب).", "A zip with photos goes in the file box at the top of this tab.")}</p>` }), 422);
     }
@@ -609,6 +834,47 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group", posts: found.posts.length, skipped: found.skipped, duplicates: found.duplicates } });
     return res.redirect(303, `/app/import/${id}`);
+  });
+
+  // Read one tab again with other columns chosen for its fields. Only a plan nothing was applied from (row numbers must not move).
+  web.post("/import/:id/mapping", managersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const imp = await Imports.loadImport(pool, broker, req.params.id);
+    const grid = imp?.payload?.grid;
+    if (!imp || imp.kind !== "excel" || imp.status !== "ready" || !Array.isArray(grid?.tabs) || new Date(imp.expires_at) <= new Date() || Imports.appliedRows(imp).size) return next();
+    const info = (imp.payload.tabs || []).find((t) => t.name === String(req.body?.tab ?? ""));
+    if (!info) return next();
+    const allowed = new Set(SheetImport.COLUMNS.map(([k]) => k));
+    const overrides = { ...(imp.payload.overrides || {}) };
+    const mine = { ...(overrides[info.name] || {}) };
+    for (const c of info.cols || []) {
+      const v = req.body?.[`map_${c.c}`];
+      if (typeof v !== "string" || (v !== "" && !allowed.has(v))) continue;
+      if (v !== (c.k || "")) mine[c.c] = v;
+    }
+    overrides[info.name] = mine;
+    let sheet;
+    try {
+      sheet = SheetGrid.buildSheet(grid.tabs, { filename: String(imp.filename || ""), overrides });
+    } catch (err) {
+      if (!err.code) throw err;
+      return res.redirect(303, `/app/import/${imp.id}?mapping=empty`);
+    }
+    if (SheetImport.emptyRequired(sheet.rows).length) return res.redirect(303, `/app/import/${imp.id}?mapping=empty`);
+    if (grid.by_file_row) for (const r of [...sheet.rows, ...sheet.skipped]) r.rowNumber = r.sheetRow;
+    const plan = await Imports.planExcel(pool, broker, sheet, { lang });
+    const old = imp.payload.skipped_tabs || [];
+    const payload = planPayload(plan, sheet, [...old.filter((t) => t.reason !== "no_columns"), ...skippedTabsOf(sheet)], { rawTabs: grid.tabs, overrides, byFileRow: grid.by_file_row });
+    await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [imp.id, JSON.stringify(payload)]);
+    return res.redirect(303, `/app/import/${imp.id}`);
+  });
+
+  // Where a background Apply is (the review page polls this; an Apply whose server stopped is taken up again here).
+  web.get("/import/:id/apply-status", async (req, res, next) => {
+    const out = await Imports.applyStatus(pool, req.session.broker, req.params.id);
+    if (!out) return next();
+    return res.set("Cache-Control", "no-store").json(out);
   });
 
   // The rows this import did not take, as an Excel file: the sheet's values as they are plus a "Reason" column.
@@ -651,11 +917,41 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     return res.redirect(303, `/app/import/${req.params.id}?undone=1#import-result`);
   });
 
-  web.get("/import/:id", async (req, res, next) => {
+  // The remembered decisions of a chat (the browser asks before reading the zip: "since the last import" needs the date). Same service as the app's API.
+  web.get("/import/decisions", importersOnly, async (req, res) => {
+    const fp = String(req.query.chat_fp || "");
+    if (!ChatFp.isChatFp(fp)) return res.status(400).json({ error: "bad_chat_fp" });
+    const out = await Decisions.list(pool, req.session.broker.agency_id, fp);
+    return res.set("Cache-Control", "no-store").json({ last_import_at: out.last_import_at, count: Object.keys(out.decisions).length });
+  });
+
+  // One Excel row's Edit window, fetched when its button is pressed (the page holds an empty shell for it).
+  web.get("/import/:id/dialog/:row", importersOnly, async (req, res, next) => {
     const lang = langOf(req);
     const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
+    const row = Number(req.params.row);
+    if (!imp || imp.kind !== "excel" || imp.status !== "ready" || !imp.payload || imp.payload.source === "chat") return next();
+    const i = (imp.payload.items || []).find((x) => x.row === row);
+    const cells = ((imp.payload.rows || []).find((r) => r.rowNumber === row) || {}).cells;
+    if (!i || !cells) return next();
+    const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
+    const place = cells.compound ? await require("../../services/placeSuggest").placeChip(pool, { compound: cells.compound }, lang).catch(() => null) : null;
+    const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
+    res.set("Cache-Control", "no-store");
+    return res.type("html").send(String(editDialogForm(imp, i, cells, lang, { areas, places: new Map([[row, place]]), csrf: req.session.csrf }, { missing })));
+  });
+
+  web.get("/import/:id", async (req, res, next) => {
+    const lang = langOf(req);
+    let imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
     if (!imp) return next();
+    // A plan still "applying" is asked about once: one whose server stopped is taken up again, and one that just finished shows its result.
+    if (imp.kind === "excel" && imp.status === "applying") {
+      await Imports.applyStatus(pool, req.session.broker, imp.id);
+      imp = (await Imports.loadImport(pool, req.session.broker, req.params.id)) || imp;
+    }
     if (imp.kind === "leads") return res.redirect(303, `/app/leads/import/${imp.id}`);
+    if (imp.kind === "excel" && imp.status === "applying") return importPage(req, res, html`${excelPlanPage(imp, lang)}<script src="${assets.url("applypoll.js")}"></script>`);
     imp.canUndo = isManager(req.session.broker) ? await Imports.canUndo(pool, req.session.broker, imp) : false;
     if (imp.kind === "excel" && imp.payload?.source === "chat") {
       // A chat import: the photos of the units that will be updated, so the person can pick which to keep or remove.
@@ -666,19 +962,17 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
         for (const r of rows) existing.set(r.listing_id, [...(existing.get(r.listing_id) || []), { id: r.id, url: r.url }]);
       }
       const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
-      const places = new Map();
-      const PlaceSuggest = require("../../services/placeSuggest");
-      for (const r of imp.payload.rows || []) if (r.cells?.compound) places.set(r.rowNumber, await PlaceSuggest.placeChip(pool, { compound: r.cells.compound }, lang).catch(() => null));
+      const places = await placesOf(pool, imp, lang, req.query || {});
       return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { existing, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script>`);
     }
-    const typePlaces = imp.kind === "excel" ? await Imports.typeWordPlaces(pool, Imports.batchStats(imp.payload).unknown_types.map((u) => u.value)) : {};
+    const stats = imp.kind === "excel" ? Imports.batchStats(imp.payload) : null; // worked out once: the page reuses it
+    const typePlaces = imp.kind === "excel" ? await Imports.typeWordPlaces(pool, stats.unknown_types.map((u) => u.value)) : {};
     if (imp.kind === "excel") {
-      // Excel rows use the same Edit window as the WhatsApp import: the compound is searched in the list (suggestions, chips), not typed.
+      // Excel rows use the same Edit window as the WhatsApp import (the compound is searched in the list). The window is fetched when
+      // its button is pressed, with its own place chip, so the page itself needs no place lookups: they were one query per compound.
       const areas = await require("../../services/areas").approvedAreas(pool).catch(() => []);
       const places = new Map();
-      const PlaceSuggest = require("../../services/placeSuggest");
-      for (const r of imp.payload.rows || []) if (r.cells?.compound) places.set(r.rowNumber, await PlaceSuggest.placeChip(pool, { compound: r.cells.compound }, lang).catch(() => null));
-      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, areas, places, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script><script src="${assets.url("wordfields.js")}"></script>`);
+      return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, areas, places, stats, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script><script src="${assets.url("wordfields.js")}"></script>`);
     }
     return importPage(req, res, groupPage(imp, lang));
   });
@@ -737,7 +1031,23 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     }
     const out = await Imports.batchExcel(pool, req.session.broker, req.params.id, { action: String(req.body.action || ""), value: String(req.body.value || ""), scope: req.body.scope === "all" ? "all" : "missing", from: String(req.body.from || "").slice(0, 80) }, { lang });
     if (!out) return next();
+    if (out.error) return res.redirect(303, `/app/import/${req.params.id}?batch_error=${encodeURIComponent(out.error)}#batch-done`);
     return res.redirect(303, `/app/import/${req.params.id}?batch=${out.touched}#batch-done`);
+  });
+
+  // Discard (or restore) units of a chat review: one row, or every row with errors / with no changes, or everything (restore).
+  web.post("/import/:id/discard", importersOnly, async (req, res, next) => {
+    const scope = ["errors", "unchanged", "all"].includes(req.body?.scope) ? req.body.scope : null;
+    const n = await Imports.setDiscarded(pool, req.session.broker, req.params.id, { rows: [].concat(req.body?.row ?? []), scope, on: req.body?.on !== "0" });
+    if (n === null) return next();
+    return res.redirect(303, `/app/import/${req.params.id}`);
+  });
+
+  // Forget what the agency remembered about this chat's posts (every broker, the website and the app): the plan starts plain again.
+  web.post("/import/:id/forget-decisions", importersOnly, async (req, res, next) => {
+    const n = await Imports.forgetChatDecisions(pool, req.session.broker, req.params.id);
+    if (n === null) return next();
+    return res.redirect(303, `/app/import/${req.params.id}`);
   });
 
   web.post("/import/:id/apply", importersOnly, async (req, res, next) => {
@@ -745,7 +1055,8 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     const { broker } = req.session;
     const imp = await Imports.loadImport(pool, broker, req.params.id);
     if (!imp || imp.kind === "leads") return next();
-    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => ["new", "changed"].includes(i.kind)).map((i) => i.row) : [].concat(req.body.rows || []);
+    const done = imp.kind === "excel" ? Imports.appliedRows(imp) : new Set();
+    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => ["new", "changed"].includes(i.kind) && !done.has(i.row) && !["saved", "unchanged"].includes((imp.payload.remembered || {})[i.row])).map((i) => i.row) : [].concat(req.body.rows || []);
     // Chat imports: per row the choice (merge or a new code) and the photos to keep or remove.
     const resolutions = {};
     const photoChoices = {};
@@ -758,14 +1069,22 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       else if (m[1] === "code") resolutions[n] = { ...(resolutions[n] || {}), code: String(req.body[key] || "").trim().slice(0, 30) };
       else photoChoices[n] = { keep: list(req.body[`keep_${n}`]).map(Number).filter(Number.isInteger), drop: list(req.body[`drop_${n}`]).filter((x) => /^[0-9a-f-]{36}$/.test(x)) };
     }
+    // Excel: the rows are saved in the background (the page shows a bar and comes back by itself); a group import is quick and waits.
     const result =
       imp.kind === "excel"
-        ? await Imports.applyExcel(pool, broker, imp.id, { rows, lang, resolutions, photoChoices })
+        ? await Imports.startApplyExcel(pool, broker, imp.id, { rows, lang, resolutions, photoChoices })
         : await Imports.applyGroup(pool, broker, imp.id, { rows, lang });
     if (!result) {
       return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "التحميل ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);
     }
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_apply", metadata: { kind: imp.kind, ...Object.fromEntries(Object.entries(result).map(([k, v]) => [k, v.length])) } });
+    // A small import is finished before the page loads (no flash of the progress bar); a big one is left running and the page polls.
+    if (imp.kind === "excel") {
+      let timer;
+      await Promise.race([Imports.waitForApply(imp.id).catch(() => {}), new Promise((resolve) => (timer = setTimeout(resolve, APPLY_GRACE_MS)))]);
+      clearTimeout(timer);
+    }
+    // Only the lists of a result are counted (an Excel start answers with a status, a limit or a number).
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_apply", metadata: { kind: imp.kind, rows: rows.length, ...Object.fromEntries(Object.entries(result).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length])) } });
     return res.redirect(303, `/app/import/${imp.id}#import-result`);
   });
 

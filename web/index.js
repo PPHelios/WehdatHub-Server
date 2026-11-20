@@ -138,10 +138,23 @@ function mountWeb(app, { pool, config }) {
   });
   // After the plan period ended (grace, read-only, blocked): the banner on every page and the write guard (lib/planGuard.js).
   priv.use(require("../lib/planGuard").web(pool, { page }));
+  // Features the workspace does not get (lib/entitlements.js) are refused here too, not only hidden from the menu.
+  priv.use(require("../lib/entitlements").web(pool, { page }));
   // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   priv.use(async (req, _res, next) => {
-    if (req.method === "GET" && req.session?.broker?.agency_id) req.session.solo = await require("../lib/credits").isSoloCached(pool, req.session.broker.agency_id);
+    const b = req.session?.broker;
+    if (b?.agency_id) {
+      const ws = await require("../lib/workspace").stateOf(pool, b.agency_id, { role: b.role }).catch(() => null);
+      if (ws) {
+        b.workspace = ws;
+        req.session.solo = ws.solo;
+        // Data entry sees Owners on the menu only while the agency allows it (services/unitRights.js).
+        if (req.method === "GET" && Authz.isDataEntry(b)) b.rights = await require("../services/unitRights").rights(pool, b).catch(() => null);
+        // Market analytics: the menu item shows only for managers of an agency the owner switched it on for (the page checks again).
+        if (require("../services/analytics").isAgencyManager(b)) b.analytics_enabled = ws.analytics;
+      }
+    }
     return next();
   });
   // Data entry: only units (add, edit, look up), search, settings and notifications. Everything else is closed to them.

@@ -244,9 +244,9 @@ function register(web, { pool }) {
     try {
       // The WhatsApp import is rules only: AI is never asked and no credits are spent. What the parser cannot read is completed in the Edit window.
       const useAi = false;
-      const out = await ChatPlan.planChat(pool, broker, posts, { AI: useAi ? AI : null, ctx: { pool, broker, agency: req.session.agency, lang }, lang, filename: String(req.body?.filename || "").slice(0, 120) || null });
+      const out = await ChatPlan.planChat(pool, broker, posts, { AI: useAi ? AI : null, ctx: { pool, broker, agency: req.session.agency, lang }, lang, filename: String(req.body?.filename || "").slice(0, 120) || null, chatFp: String(req.body?.chat_fp || "") });
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, rules_only: !useAi, ai: out.ai, ai_blocked: out.aiBlocked, counts: out.counts } });
-      return res.json({ id: out.id, posts: out.posts, ai: out.ai, ...(out.aiBlocked ? { ai_blocked: out.aiBlocked, message: AiBlock.text(out.aiBlocked, lang) } : {}) });
+      return res.json({ id: out.id, posts: out.posts, ai: out.ai, kinds: out.kinds, remembered: out.remembered, ...(out.aiBlocked ? { ai_blocked: out.aiBlocked, message: AiBlock.text(out.aiBlocked, lang) } : {}) });
     } catch (err) {
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", status: "error", error_code: "chat_plan_failed", total_duration_ms: Date.now() - t0, metadata: { kind: "chat", posts: posts.length, message: String(err.message || "").slice(0, 120) } });
       return res.status(500).json({ error: "plan_failed", message: lang === "en" ? "Could not read the posts. Try again." : "مقدرناش نقرا البوستات. جرب تاني." });
@@ -262,6 +262,9 @@ function register(web, { pool }) {
     const imp = await Imports.loadImport(pool, broker, req.params.id);
     const have = imp?.payload?.photos?.[String(row)] || [];
     if (!imp || imp.kind !== "excel" || imp.payload?.source !== "chat" || imp.status !== "ready" || !(imp.payload.rows || []).some((r) => r.rowNumber === row)) return res.status(404).json({ missing: true });
+    // A unit the save will not touch (unchanged, not the person's, or thrown away in the review) gets no photo stored.
+    const item = (imp.payload.items || []).find((i) => i.row === row);
+    if (["unchanged", "forbidden"].includes(item?.kind) || (imp.payload.discarded || []).map(Number).includes(row)) return res.json({ skipped: true });
     if (have.length >= MAX_PHOTOS) return res.json({ full: true });
     let jpeg;
     try {

@@ -54,5 +54,7 @@ test("a compound that is not on the list is a warning on a New row (not a block)
   expect(page.text).toMatch(/مش في القائمة/);
   expect(page.text).not.toMatch(/data-kind="invalid"/);
   // The Edit window is the structured editor: the same place search with suggestions and chips as the WhatsApp import.
-  expect(page.text).toMatch(/data-importeditor/);
+  const lazy = /data-lazy="([^"]+)"/.exec(page.text); // fetched when the Edit button is pressed
+  expect(lazy).toBeTruthy();
+  expect((await agent.get(lazy[1])).text).toMatch(/data-importeditor/);
 });
