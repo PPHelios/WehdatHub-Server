@@ -227,7 +227,7 @@ function register(web, { pool, page }) {
     const bad = (msg) => page(req, res, { title: L(req.lang, "الكود", "Code"), langSwitch: true, body: codeForm({ pre, next, phone, lang: req.lang, message: msg }) }, 422);
     const ipGate = await RateLimit.hit(pool, `login_confirm:ip:${req.ip}`, RateLimit.LIMITS.loginConfirmIp);
     if (!ipGate.allowed) return tooMany(page, req, res, ipGate);
-    const phoneGate = await RateLimit.hit(pool, `login_code_try:phone:${phone}`, { limit: 5, windowSec: 900 });
+    const phoneGate = await RateLimit.hit(pool, `login_code_try:phone:${phone}:ip:${req.ip}`, { limit: 5, windowSec: 900 });
     if (!phoneGate.allowed) return tooMany(page, req, res, phoneGate);
     const { rows } = await pool.query(
       `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang

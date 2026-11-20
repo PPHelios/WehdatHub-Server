@@ -56,7 +56,7 @@ function register(api, { pool }) {
     const phone = phoneOf(req.body?.phone);
     const ipGate = await RateLimit.hit(pool, `login_confirm:ip:${req.ip}`, RateLimit.LIMITS.loginConfirmIp);
     if (!ipGate.allowed) return res.set("Retry-After", String(ipGate.retryAfterSec)).status(429).json({ error: "too_many" });
-    const phoneGate = await RateLimit.hit(pool, `login_code_try:phone:${phone}`, { limit: 5, windowSec: 900 });
+    const phoneGate = await RateLimit.hit(pool, `login_code_try:phone:${phone}:ip:${req.ip}`, { limit: 5, windowSec: 900 });
     if (!phoneGate.allowed) return res.set("Retry-After", String(phoneGate.retryAfterSec)).status(429).json({ error: "too_many" });
     const found = (await pool.query(BROKER_BY_PHONE, [phone])).rows[0];
     const demo = WebAuth.demoLoginAccepted(process.env, found, req.body?.code);
