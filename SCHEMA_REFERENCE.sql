@@ -1989,6 +1989,32 @@ CREATE TABLE IF NOT EXISTS public.analytics_funnel_monthly (
   agencies_n integer
 );
 
+CREATE TABLE IF NOT EXISTS public.areas_backup_141 (
+  id uuid,
+  parent_id uuid,
+  name_key text,
+  name_en text,
+  name_ar text,
+  aliases text[],
+  lat double precision,
+  lng double precision,
+  status text,
+  source text,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone,
+  reject_reason text,
+  place_type text,
+  governorate text,
+  disambiguation_note text,
+  google_place_id text
+);
+
+CREATE TABLE IF NOT EXISTS public.map_places_location_backup_141 (
+  id uuid,
+  area_id uuid,
+  subzone_id uuid
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);

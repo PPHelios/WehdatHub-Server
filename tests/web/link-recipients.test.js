@@ -71,7 +71,9 @@ test("each counted open is kept with its device class and a visitor hash, and no
   const made = await b.agent.post("/app/units/RC-5/share").type("form").send({ _csrf: b.csrf, lang: "en" });
   const url = made.text.match(/data-share-url>([^<]+)</)[1];
   const path = url.replace(/^https?:\/\/[^/]+/, "");
+  await h.pool.query("UPDATE share_links SET created_at = now() - interval '1 minute'"); // opens in the first 10 s are the share-sheet preview and not counted
   await request(h.app.app).get(path).set("User-Agent", IPHONE).set("X-Forwarded-For", "197.1.2.3");
+  await h.pool.query("UPDATE share_link_opens SET opened_at = now() - interval '1 minute'"); // the same visitor within 10 s is one open
   await request(h.app.app).get(path).set("User-Agent", IPHONE).set("X-Forwarded-For", "197.1.2.3");
   const opens = await h.query("SELECT device, visitor FROM share_link_opens");
   expect(opens).toHaveLength(2);
