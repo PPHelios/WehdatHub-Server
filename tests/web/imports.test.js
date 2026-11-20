@@ -153,8 +153,10 @@ describe("Excel diff import", () => {
     const id = importId(res);
     const page = await agent.get(res.headers.location);
     // The Edit windows are fetched when their button is pressed: the page holds an empty shell for each editable row.
-    expect(page.text).toMatch(/data-edit-dialog="5" data-lazy="\/app\/import\/[^"]+\/dialog\/5"/); // the invalid row (BAD-1) is editable
-    expect(page.text).toMatch(/data-edit-dialog="2" data-lazy=/); // so is a changed row
+    expect(page.text).toMatch(/data-edit-dialog="5" data-dialog-src="\/app\/import\/[^"]+\/dialog\/5"/); // the invalid row (BAD-1) is editable
+    expect(page.text).toMatch(/data-edit-dialog="2" data-dialog-src=/); // so is a changed row
+    // app.js fetches every [data-lazy] on load: one on each row's dialog fired N requests at once and drained the DB pool (E103 timeout).
+    expect(page.text).not.toMatch(/data-lazy/);
     expect(page.text).not.toMatch(/data-edit-dialog="3"/); // an unchanged one is not
     const win = await agent.get(`/app/import/${id}/dialog/2`); // the structured editor: place search, chips
     expect(win.status).toBe(200);

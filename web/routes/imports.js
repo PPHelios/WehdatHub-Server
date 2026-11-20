@@ -123,14 +123,16 @@ function viewOf(imp, query = {}) {
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
   // A chat plan is at most 40 posts: every kind on one page, so the "will save" line counts the whole plan.
   const paged = items.length > PAGED_FROM;
-  const kinds = KIND_ORDER.filter((k) => counts[k]);
+  // "Hide unchanged": units the file says nothing new about are left out of the list (still counted in the lines above); never when they are all there is.
+  const hideSame = query.hide_unchanged === "1" && KIND_ORDER.some((k) => k !== "unchanged" && counts[k]);
+  const kinds = KIND_ORDER.filter((k) => counts[k] && !(hideSame && k === "unchanged"));
   const kind = paged ? (kinds.includes(query.kind) ? query.kind : counts.review ? "review" : counts.invalid ? "invalid" : kinds[0]) : null;
   const tab = paged && query.tab ? String(query.tab) : null;
   const shown = paged ? items.filter((i) => i.kind === kind && (!tab || i.tab === tab)) : items;
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const page = Math.min(pages, Math.max(1, Number(query.page) || 1));
   const slice = paged ? shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : items;
-  return { applied, chat, gone, remembered, showSaved, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice };
+  return { applied, chat, gone, remembered, showSaved, hideSame, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice };
 }
 
 /** The place chip of each row on the page, worked out once per distinct compound (not for every row of a 5000-row sheet). */
@@ -172,14 +174,14 @@ function editDialogForm(imp, i, cells, lang, extra, { chat = false, missing = []
 
 function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const { rows: sheetRows, columns, tabs: tabInfos, defaults } = imp.payload;
-  const { applied, chat, gone, remembered, showSaved, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice } = viewOf(imp, query);
+  const { applied, chat, gone, remembered, showSaved, hideSame, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice } = viewOf(imp, query);
   const doneRows = Imports.appliedRows(imp);
   if (imp.status === "applying") return applyingCard(imp, lang);
-  const href = (o) => `/app/import/${imp.id}?${new URLSearchParams(Object.entries({ kind, tab, page: 1, ...o }).filter(([, v]) => v !== null && v !== undefined)).toString()}`;
+  const href = (o) => `/app/import/${imp.id}?${new URLSearchParams(Object.entries({ kind, tab, page: 1, hide_unchanged: hideSame ? "1" : null, ...o }).filter(([, v]) => v !== null && v !== undefined)).toString()}`;
   const where = (i) => (i.tab ? `${i.tab} · ${L(lang, "صف", "row")} ${i.sheet_row}` : `${L(lang, "صف", "Row")} ${i.row}`);
   const section = (k, body) => {
     const rows = slice.filter((i) => i.kind === k);
-    if (!rows.length) return "";
+    if (!rows.length || (hideSame && k === "unchanged")) return "";
     return html`<section class="card" data-kind="${k}"><h2>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} (${paged ? shown.length : rows.length})</h2>${body(rows)}</section>`;
   };
   const notesOf = (i) => (i.notes?.length ? html`<div class="warn muted" data-notes="${i.row}">${i.notes.join(" · ")}</div>` : "");
@@ -230,7 +232,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   // of windows made every tab and page change render and send half a megabyte nobody had asked for.
   const chatDialogs = structured
     ? slice.filter((i) => ["new", "changed", "invalid", "review"].includes(i.kind)).map((i) => {
-        if (!chat) return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}" data-lazy="/app/import/${imp.id}/dialog/${i.row}"></dialog>`;
+        if (!chat) return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}" data-dialog-src="/app/import/${imp.id}/dialog/${i.row}"></dialog>`;
         const cells = cellsOf.get(i.row) || {};
         const missing = i.kind === "invalid" ? [...new Set([...(i.needs || []), ...Imports.missingCells(cells, lang)])] : [];
         return html`<dialog class="edit-dialog" data-edit-dialog="${i.row}">${editDialogForm(imp, i, cells, lang, extra, { chat, missing, original: originalBox(i, true) })}</dialog>`;
@@ -447,6 +449,7 @@ ${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `$
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null, applied ? 0 : ready) : ""}
 ${noPhoneCard}${skippedLine}${readCard}
 ${query.batch_error === "bad_phone" ? html`<p class="card notice bad" role="alert" data-batch-error="bad_phone">⚠️ ${L(lang, "الرقم مش صحيح. اكتب رقم زي 01012345678، أو رقم أجنبي بـ + وكود الدولة.", "That number is not valid. Type a number like 01012345678, or a foreign one with + and the country code.")}</p>` : ""}
+${query.batch_error === "conflict" || query.edit_conflict ? html`<p class="card notice bad" role="alert" data-edit-conflict>⚠️ ${L(lang, "الخطة اتغيرت وانت بتعدل. افتح التعديل تاني وجرب.", "The plan changed while you were editing. Open the edit again and try once more.")}</p>` : ""}
 ${query.mapping === "empty" ? html`<p class="card notice bad" role="alert" data-mapping-error>⚠️ ${L(lang, "بالاختيار ده السعر أو المساحة بقوا فاضيين في كل الصفوف. رجّعنا القراءة زي ما كانت.", "With that choice price or area would be empty on every row. We kept the earlier reading.")}</p>` : ""}
 ${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
@@ -454,7 +457,7 @@ ${kindNav}${tabsNav}
 ${savedBar}${discardedBar}${forgetBar}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
 <button type="submit" hidden tabindex="-1" aria-hidden="true"></button><input type="hidden" name="back" value="${href({ page })}">
-${!applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-valid>${L(lang, "اختار كل الصالح", "Select all valid")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button>${chat && errorsN ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="errors" data-discard-errors>🗑 ${L(lang, `تجاهل الوحدات اللي فيها أخطاء (${errorsN})`, `Discard units with errors (${errorsN})`)}</button>` : ""}${chat && counts.unchanged ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="unchanged" data-discard-unchanged>🗑 ${L(lang, `تجاهل الوحدات اللي مفيش تغيير فيها (${counts.unchanged})`, `Discard units with no changes (${counts.unchanged})`)}</button>` : ""}${chat ? html`<span class="muted">${L(lang, "الوحدات الناقصة أو اللي فيها أخطاء أو مفيش فيها تغيير مش بتتحفظ.", "Units with errors, missing details or no changes are not saved.")}</span>` : ""}</p>` : ""}
+${!applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-valid>${L(lang, "اختار كل الصالح", "Select all valid")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button>${chat && errorsN ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="errors" data-discard-errors>🗑 ${L(lang, `تجاهل الوحدات اللي فيها أخطاء (${errorsN})`, `Discard units with errors (${errorsN})`)}</button>` : ""}${counts.unchanged ? html`<a class="chip${hideSame ? " on" : ""}" href="${href({ hide_unchanged: hideSame ? null : "1" })}" data-hide-unchanged>${hideSame ? L(lang, `اعرض اللي مفيش تغيير (${counts.unchanged})`, `Show unchanged (${counts.unchanged})`) : L(lang, `اخفي اللي مفيش تغيير (${counts.unchanged})`, `Hide unchanged (${counts.unchanged})`)}</a>` : ""}${chat && counts.unchanged ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="unchanged" data-discard-unchanged>🗑 ${L(lang, `تجاهل الوحدات اللي مفيش تغيير فيها (${counts.unchanged})`, `Discard units with no changes (${counts.unchanged})`)}</button>` : ""}${chat ? html`<span class="muted">${L(lang, "الوحدات الناقصة أو اللي فيها أخطاء أو مفيش فيها تغيير مش بتتحفظ.", "Units with errors, missing details or no changes are not saved.")}</span>` : ""}</p>` : ""}
 ${section("review", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
   (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}
     <p class="warn" data-review-note>${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
@@ -985,13 +988,18 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     // The structured editor (chat units) also posts the unit box's own fields: place, feature chips.
     const areas = req.body && req.body.compound !== undefined ? await require("../../services/areas").approvedAreas(pool).catch(() => []) : [];
     if (req.body && req.body.compound !== undefined) Object.assign(cells, cellsFromForm(req.body, { areas }));
+    const row = Number(req.params.row);
     const ok = await Imports.editExcelRow(pool, req.session.broker, req.params.id, Number(req.params.row), cells, { lang });
-    if (!ok) return next();
+    if (!ok) {
+      // The plan moved under the edit (another save, a batch change or Apply): say so instead of a blank 404.
+      const cur = await Imports.loadImport(pool, req.session.broker, req.params.id);
+      if (cur && cur.kind === "excel" && cur.status === "ready" && (cur.payload.items || []).some((i) => i.row === row) && !(cur.payload.applied_rows || []).map(Number).includes(row)) return res.redirect(303, `/app/import/${req.params.id}?edit_conflict=1`);
+      return next();
+    }
     // A new compound asked for in the window: its Arabic name and map link are kept for after the unit is saved.
     const newPlace = require("../../domain/importEditorCells").newPlaceOf(req.body || {});
     if (newPlace) await Imports.setNewPlace(pool, req.session.broker, req.params.id, Number(req.params.row), newPlace);
     // The photo ticks and order on the page when Save was pressed (sent along by chatreview.js) stay as they were.
-    const row = Number(req.params.row);
     const many = (v) => [].concat(v === undefined ? [] : v).map(String);
     if (req.body[`order_${row}`] !== undefined) {
       await Imports.setPhotoChoice(pool, req.session.broker, req.params.id, row, { order: many(req.body[`order_${row}`]), keep: many(req.body[`keep_${row}`]), drop: many(req.body[`drop_${row}`]) });

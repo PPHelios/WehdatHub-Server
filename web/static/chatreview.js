@@ -16,7 +16,7 @@
         if (dlg && dlg.showModal) dlg.showModal();
         else if (dlg) dlg.setAttribute("open", "");
       };
-      var lazy = dlg && dlg.getAttribute("data-lazy");
+      var lazy = dlg && dlg.getAttribute("data-dialog-src");
       if (lazy && !dlg.firstElementChild) {
         // An Excel row's window is fetched now: the button waits (turned off) until it arrives.
         if (open.disabled) return;
@@ -28,7 +28,17 @@
             dlg.dispatchEvent(new CustomEvent("htmx:load", { bubbles: true }));
             show();
           })
-          .catch(function () { window.location.reload(); })
+          .catch(function () {
+            // A reload would loop while the database is slow: say it next to the button and let a second press retry.
+            var msg = open.parentNode.querySelector("[data-edit-load-error]");
+            if (!msg) {
+              msg = document.createElement("small");
+              msg.setAttribute("data-edit-load-error", "");
+              msg.setAttribute("role", "alert");
+              open.insertAdjacentElement("afterend", msg);
+            }
+            msg.textContent = document.documentElement.lang === "ar" ? "ما اتحملش. جرب تاني." : "It did not load. Try again.";
+          })
           .then(function () { open.disabled = false; });
         return;
       }

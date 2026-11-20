@@ -44,6 +44,29 @@ async function seed() {
   return { agent, csrf, id: res.body.id, res };
 }
 
+test("the code check says whether a post would change the unit it names: no change, will change, or new", async () => {
+  await h.insertListing({ code: "HP-1", details: { owner_phone: "01012345678" } });
+  await h.insertListing({ code: "HP-2", details: { owner_phone: "01012345678" } });
+  const { agent, csrf } = await signIn(h, "manager");
+  const posts = POSTS.map((p, i) => ({ code: ["HP-1", "HP-2", "HP-7"][i], text: p.text, at: "2099-01-01T00:00:00Z" }));
+  const res = await agent.post("/app/import/match/codes").set("X-CSRF-Token", csrf).send({ codes: ["HP-1", "HP-2", "HP-7"], posts });
+  expect(res.body.codes["HP-1"]).toMatchObject({ state: "update", change: { kind: "unchanged", n: 0 } });
+  expect(res.body.codes["HP-2"]).toMatchObject({ state: "update", change: { kind: "update" } });
+  expect(res.body.codes["HP-2"].change.n).toBeGreaterThan(0);
+  expect(res.body.codes["HP-7"]).toEqual({ state: "new" });
+});
+
+test("a chip hides the units with no change from the review, and brings them back", async () => {
+  const { agent, id } = await seed();
+  const all = await agent.get(`/app/import/${id}`);
+  expect(all.text).toMatch(/data-kind="unchanged"/);
+  expect(all.text).toMatch(/data-hide-unchanged[^>]*>[^<]*(Hide unchanged|اخفي اللي مفيش تغيير)/);
+  const hidden = await agent.get(`/app/import/${id}?hide_unchanged=1`);
+  expect(hidden.text).not.toMatch(/data-kind="unchanged"/);
+  expect(hidden.text).toMatch(/data-kind="changed"/); // the others stay
+  expect(hidden.text).toMatch(/data-hide-unchanged[^>]*>[^<]*(Show unchanged|اعرض اللي مفيش تغيير)/);
+});
+
 test("the plan carries the chat fingerprint and each post's own; nothing remembered yet", async () => {
   const { id, res } = await seed();
   expect(res.body.remembered).toEqual({});

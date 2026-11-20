@@ -116,7 +116,7 @@ function quoted(e, cells, lang) {
 const ERROR_NEEDS = { code: "code", property_type: "property_type", price_value: "price_value", currency: "price_value", area_value: "area_value" };
 const ERROR_LABELS = {
   code: ["كود غير صالح", "Invalid code"],
-  property_type: ["نوع غير معروف", "Unknown type"],
+  property_type: ["نوع الوحدة", "Unit type"],
   price_value: ["سعر غير صحيح", "Invalid price"],
   currency: ["السعر بعملة غير الجنيه (لازم جنيه مصري)", "Price not in EGP (must be Egyptian pounds)"],
   area_value: ["مساحة غير صحيحة", "Invalid area"]
@@ -131,8 +131,16 @@ const NOTE = {
   dupDb: (code, lang) => (lang === "en" ? `Looks like your existing unit ${code}` : `شكلها نفس وحدتك ${code}`),
   dupRow: (row, lang) => (lang === "en" ? `Looks like row ${row} in this sheet` : `شكلها نفس الصف ${row} في الشيت`),
   codeMade: (lang) => (lang === "en" ? "No code in the sheet: numbered in the sheet's own pattern" : "مفيش كود في الشيت: اتعمل بنفس نمط أكواد الشيت"),
-  codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت")
+  codePattern: (lang) => (lang === "en" ? "Code does not follow the sheet's pattern" : "الكود مش على نمط أكواد الشيت"),
+  fromText: (keys, lang) => (lang === "en" ? "Read from text: " : "اتقرا من النص: ") + keys.map((k) => TEXT_LABEL[k][lang === "en" ? 1 : 0]).join(lang === "en" ? ", " : "، ")
 };
+// Fields the text reader may fill, their words for the note, and cells that never hold free text (a code or phone is its own value).
+const TEXT_LABEL = {
+  price_value: ["السعر", "price"], area_value: ["المساحة", "area"], property_type: ["النوع", "type"], owner_phone: ["تليفون المالك", "owner phone"],
+  bedrooms: ["الغرف", "rooms"], bathrooms: ["الحمامات", "baths"], compound: ["الكمبوند", "compound"], listing_type: ["بيع أو إيجار", "sale or rent"], land_area: ["الأرض", "land"]
+};
+const TEXT_FIELDS = Object.keys(TEXT_LABEL);
+const TEXT_SKIP = ["code", "owner_phone", "unit_no", "floor", "delivery", "bedrooms", "bathrooms", "installment_years"];
 // "UPtown cairo" and "UPtown" are the same compound: the city word at the end is not part of the name.
 const compoundKey = (v) => normalizeSearch(v).replace(/\s+(cairo|new cairo|القاهره|القاهرة|مصر|egypt)$/, "").trim();
 
@@ -218,18 +226,55 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
   }
   // A cell with several prices takes the long-term or monthly one; a price in dollars is kept in dollars (saved with its
   // currency, like a unit added by voice or text); search converts it.
-  const parsed = sheet.rows.map((r) => {
-    // An installment plan in the price cell is read whole by the importer (not as one of several prices).
-    const price = Mixed.installmentOf(r.cells.price_value) ? { value: r.cells.price_value, usd: false } : Mixed.cellPrice(r.cells.price_value);
+  let places; // the approved places, loaded once and only if a row needs the text reader
+  const parsed = [];
+  for (const r0 of sheet.rows) {
+    let r = r0;
+    const draftOf = (cells) => {
+      // An installment plan in the price cell is read whole by the importer (not as one of several prices).
+      const price = Mixed.installmentOf(cells.price_value) ? { value: cells.price_value, usd: false } : Mixed.cellPrice(cells.price_value);
+      return { price, row: SheetImport.rowToDraft(price.value === cells.price_value ? cells : { ...cells, price_value: price.value }) };
+    };
+    let { price, row } = draftOf(r.cells);
+    // A row still missing something may hold it in a text cell (a whole unit in one cell, two columns pasted into one):
+    // the chat text reader fills only what the row leaves empty; a value in its own column always wins.
+    // Keys filled by an earlier plan are carried on the row, so the "Read from text" note survives a re-plan.
+    let fromText = [...(r0.from_text || [])];
+    const lacks = row.errors.length || !row.draft.price_value || !row.draft.area_value || !row.draft.property_type;
+    // A missing phone alone only sends a cell to the reader when it holds a long digit run (most sheets have no phone column).
+    const lacksPhone = !row.draft.details?.owner_phone;
+    const texts = lacks || lacksPhone ? Object.entries(r.cells).filter(([k, v]) => !TEXT_SKIP.includes(k) && typeof v === "string" && /\S\s+\S/.test(v) && /\d/.test(v) && (lacks || /[0-9٠-٩]{10,}/.test(v.replace(/[\s-]/g, "")))) : [];
+    if (texts.length) {
+      if (places === undefined) places = await require("./chatPlan").loadPlaces(pool).catch(() => null);
+      const cells = { ...r.cells };
+      for (const [, v] of texts) {
+        const got = require("../domain/chatListing").parsePost(v, places).cells;
+        for (const k of TEXT_FIELDS) {
+          // A cell that failed to read for its own field (the price cell holding "4 مليون 150م شقة") may be replaced.
+          const own = row.errors.includes(k) && ["price_value", "area_value", "property_type"].includes(k);
+          if (got[k] && (SheetImport.isEmpty(cells[k]) || (own && !fromText.includes(k)))) {
+            cells[k] = got[k];
+            fromText.push(k);
+          }
+        }
+      }
+      if (fromText.length) {
+        // Written back onto the caller's row so the stored plan (and its Edit window) holds the values the text gave.
+        // A field the person clears in Edit can be filled from the text again on the next plan.
+        r0.cells = cells;
+        r0.from_text = fromText;
+        r = r0;
+        ({ price, row } = draftOf(cells));
+      }
+    }
     const usd = price.usd ? price.value : null;
-    const row = SheetImport.rowToDraft(price.value === r.cells.price_value ? r.cells : { ...r.cells, price_value: price.value });
     if (usd && row.draft) row.draft.details = { ...(row.draft.details || {}), currency: "USD" };
     // A cell with several prices: the price the rule did not pick is kept in the description, with the one it picked.
     if (!price.usd && price.value !== r.cells.price_value && row.draft) {
       row.draft.details = { ...(row.draft.details || {}), clean_summary: [row.draft.details?.clean_summary, String(r.cells.price_value).trim()].filter(Boolean).join(" · ") };
     }
-    return { rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd), hint: SheetImport.statusHint(r.cells) };
-  });
+    parsed.push({ rowNumber: r.rowNumber, tab: r.tab || null, sheetRow: r.sheetRow || null, ...row, cells: r.cells, fromText, dollar: usd ? { usd } : null, codeMade: Boolean(r.code_made), codeOdd: Boolean(r.code_odd), hint: SheetImport.statusHint(r.cells) });
+  }
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];
   const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
   const byCode = new Map(found.map((l) => [l.code_norm, l]));
@@ -279,6 +324,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
     if (p.dollar) base.notes.push(NOTE.dollar(p.dollar.usd, lang));
     if (p.codeMade) base.notes.push(NOTE.codeMade(lang));
     if (p.codeOdd) base.notes.push(NOTE.codePattern(lang));
+    if (p.fromText.length) base.notes.push(NOTE.fromText(p.fromText, lang));
     if (p.hint) base.status_hint = p.hint;
     if (p.errors.length) {
       items.push({ ...base, kind: "invalid", reasons: p.errors.map((e) => quoted(e, p.cells, lang)), needs: [...new Set(p.errors.map((e) => ERROR_NEEDS[e]).filter(Boolean))] });
@@ -467,7 +513,7 @@ async function savePlan(pool, broker, kind, payload, { filename = null, status =
 
 async function loadImport(pool, broker, id) {
   if (!/^[0-9a-f-]{36}$/.test(String(id))) return null;
-  const { rows } = await pool.query("SELECT * FROM web_imports WHERE id = $1 AND agency_id = $2 AND broker_id = $3", [id, broker.agency_id, broker.id]);
+  const { rows } = await pool.query("SELECT *, xmin::text AS row_version FROM web_imports WHERE id = $1 AND agency_id = $2 AND broker_id = $3", [id, broker.agency_id, broker.id]);
   return rows[0] || null;
 }
 
@@ -982,21 +1028,46 @@ async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } 
       delete target.code_odd;
     }
     const value = String(v ?? "").slice(0, MAX_CELL).trim();
+    // A value the person changed is theirs now, no longer "read from text".
+    if (target.from_text && String(target.cells[key] ?? "") !== value) target.from_text = target.from_text.filter((k) => k !== key);
     if (value) target.cells[key] = value;
     else delete target.cells[key];
   }
   // A type word the app did not know, fixed by hand in the review, is learned for the next upload.
   const newType = SheetImport.propertyType(target.cells.property_type);
   if (typeKey(oldType) && !SheetImport.propertyType(oldType) && newType) await savePrefs(pool, broker.agency_id, { types: { [typeKey(oldType)]: newType } });
-  const [item] = (await planExcel(pool, broker, { rows: [target] }, { lang, source: imp.payload.source || null })).items;
-  if (item.code && ["new", "changed"].includes(item.kind) && items.some((i) => i.row !== item.row && i.code === item.code && ["new", "changed"].includes(i.kind))) {
-    Object.assign(item, { kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
-  }
+  const oldCode = items[at].code;
+  const plan = (rowsToPlan) => planExcel(pool, broker, { rows: rowsToPlan }, { lang, source: imp.payload.source || null });
+  const markRepeat = (item) => {
+    if (item.code && ["new", "changed"].includes(item.kind) && items.some((i) => i.row !== item.row && i.code === item.code && ["new", "changed"].includes(i.kind))) {
+      Object.assign(item, { kind: "invalid", reasons: [lang === "en" ? "Code repeated in the sheet" : "الكود مكرر في الشيت"], needs: ["code"] });
+    }
+  };
+  const [item] = (await plan([target])).items;
+  markRepeat(item);
   items[at] = item;
+  // The twins of the old code were marked "repeated" only because of this row: plan them again now that it has moved on.
+  if (oldCode && item.code !== oldCode) {
+    const thrown = rowSet(imp.payload.discarded);
+    const applied = appliedRows(imp);
+    const twins = items.filter((i) => i.row !== item.row && i.code === oldCode && i.kind === "invalid" && (i.reasons || []).some((r) => /Code repeated in the sheet|الكود مكرر في الشيت/.test(r)) && !thrown.has(i.row) && !applied.has(i.row));
+    const twinRows = rows.filter((r) => twins.some((t) => t.row === r.rowNumber));
+    if (twinRows.length) {
+      for (const fresh of (await plan(twinRows)).items) {
+        items[items.findIndex((i) => i.row === fresh.row)] = fresh;
+        markRepeat(fresh);
+      }
+    }
+  }
   const columns = [...new Set([...(imp.payload.columns || []), ...Object.keys(target.cells)])];
   const info = imp.payload.info ? { ...imp.payload.info, no_phone_column: !columns.includes("owner_phone") } : imp.payload.info;
-  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, items, counts: countKinds(items), columns, ...(info ? { info } : {}) })]);
-  return true;
+  return savePayload(pool, id, imp, { ...imp.payload, items, counts: countKinds(items), columns, ...(info ? { info } : {}) });
+}
+
+/** Writes a whole payload only if nobody changed the row since it was loaded (xmin) and it is still ready; false when refused. */
+async function savePayload(pool, id, imp, payload) {
+  const res = await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready' AND xmin::text = $3", [id, JSON.stringify(payload), imp.row_version]);
+  return res.rowCount > 0;
 }
 
 /* Batch changes: one decision for every row it fits (rent for the whole sheet, how to read several prices, a dollar rate). */
@@ -1179,13 +1250,11 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
       }
     }
     if (!touched) {
-      await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, defaults })]);
-      return { touched: 0 };
+      return (await savePayload(pool, id, imp, { ...imp.payload, defaults })) ? { touched: 0 } : { touched: 0, error: "conflict" };
     }
   } else if (action === "forget_prefs") {
     await forgetPrefs(pool, broker.agency_id);
-    await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, remembered: {} })]);
-    return { touched: 0 };
+    return (await savePayload(pool, id, imp, { ...imp.payload, remembered: {} })) ? { touched: 0 } : { touched: 0, error: "conflict" };
   }
   if (!touched) return { touched: 0 };
   if (action === "price_pick") await savePrefs(pool, broker.agency_id, { price_pick: value });
@@ -1196,7 +1265,7 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
   // The rows an Apply wrote keep their item; the others take the new plan (one item per row, in the old order).
   const fresh = new Map(plan.items.map((i) => [i.row, i]));
   const items = applied.size ? oldItems.map((o) => (applied.has(o.row) ? o : fresh.get(o.row) || o)) : plan.items;
-  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...imp.payload, ...plan, items, counts: countKinds(items), rows: allRows, defaults, ...(columns ? { columns } : {}) })]);
+  if (!(await savePayload(pool, id, imp, { ...imp.payload, ...plan, items, counts: countKinds(items), rows: allRows, defaults, ...(columns ? { columns } : {}) }))) return { touched: 0, error: "conflict" };
   return { touched };
 }
 

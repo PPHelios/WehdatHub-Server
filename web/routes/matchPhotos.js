@@ -100,7 +100,7 @@ function register(web, { pool }) {
 
   // The codes the posts of a freshly read zip write: which already belong to a unit (update, with its photo count), which are
   // free (new) and which are a unit the person may not change. One call for all posts, before anything is uploaded.
-  web.post("/import/match/codes", importersOnly, express.json({ limit: "50kb" }), async (req, res) => {
+  web.post("/import/match/codes", importersOnly, express.json({ limit: "400kb" }), async (req, res) => {
     const { broker } = req.session;
     const t0 = Date.now();
     const wanted = [...new Set((Array.isArray(req.body?.codes) ? req.body.codes : []).map((c) => String(c || "").trim().slice(0, 40)).filter(Boolean))].slice(0, 200);
@@ -126,6 +126,20 @@ function register(web, { pool }) {
       for (const l of hidden) out[byNorm.get(l.code_norm)] = { state: "taken" };
     }
     for (const c of wanted) if (!out[c]) out[c] = { state: "new" };
+    // For the units that exist: would this post change anything? The same planner the app uses (rules only, nothing is written).
+    // Capped, so a big chat costs a bounded number of checks; a post past the cap just shows "exists".
+    const asked = [];
+    for (const p of Array.isArray(req.body?.posts) ? req.body.posts : []) {
+      const code = String(p?.code || "").trim().slice(0, 40);
+      if (out[code]?.state === "update" && out[code].change === undefined && asked.length < ChatPlan.MAX_APP_POSTS) {
+        out[code].change = null;
+        asked.push({ id: code, text: String(p.text || "").slice(0, 4000), at: p.at || null });
+      }
+    }
+    if (asked.length) {
+      const { posts: plans } = await ChatPlan.planPosts(pool, broker, asked, { lang: langOf(req) }).catch(() => ({ posts: [] }));
+      for (const a of plans) if (["unchanged", "update", "older"].includes(a.kind) && out[a.id]) out[a.id].change = { kind: a.kind, n: (a.changes || []).length };
+    }
     res.set("Cache-Control", "no-store");
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "chat_import_codes", total_duration_ms: Date.now() - t0, metadata: { channel: "web", codes: wanted.length, update: Object.values(out).filter((x) => x.state === "update").length, taken: Object.values(out).filter((x) => x.state === "taken").length, fresh: Object.values(out).filter((x) => x.state === "new").length } });
     return res.json({ codes: out, max_photos: MAX_PHOTOS });

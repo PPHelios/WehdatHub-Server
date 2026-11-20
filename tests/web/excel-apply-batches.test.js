@@ -328,3 +328,29 @@ describe("plan duplicate check reads once and gives the same answer (#11)", () =
     expect(calls).toBeLessThanOrEqual(2 * 2); // two distinct compounds: resolved once each (plus the unknown-compound check shares the result)
   });
 });
+
+describe("editing a plan row", () => {
+  test("a write that lost a race is refused, not overwritten (xmin guard)", async () => {
+    const { id } = await plan(3);
+    // Another save lands between this edit's read and its write.
+    const racing = { query: async (sql, args) => {
+      if (/^UPDATE web_imports SET payload/.test(sql)) await h.pool.query("UPDATE web_imports SET payload = jsonb_set(payload, '{marker}', '1'::jsonb) WHERE id = $1", [id]);
+      return h.pool.query(sql, args);
+    } };
+    expect(await Imports.editExcelRow(racing, broker, id, 2, { price_value: "9000000" }, { lang: "en" })).toBe(false);
+    const imp = await row(id);
+    expect(imp.payload.marker).toBe(1);
+    expect(imp.payload.rows[0].cells.price_value).not.toBe("9000000");
+    // The same guard makes a batch change report a conflict.
+    const out = await Imports.batchExcel({ query: racing.query, connect: (...a) => h.pool.connect(...a) }, broker, id, { action: "listing_type", value: "rent", scope: "all" }, { lang: "en" });
+    expect(out).toEqual({ touched: 0, error: "conflict" });
+  });
+
+  test("the twin of a repeated code becomes valid when the first row's code changes", async () => {
+    const { id, plan: p } = await plan(3, (i) => cells(i, { code: i === 3 ? "X-9" : "X-1" }), ["code", "compound", "property_type", "listing_type", "price_value", "area_value", "bedrooms", "owner_phone"]);
+    expect(p.items.find((i) => i.row === 3).reasons[0]).toMatch(/repeated/);
+    expect(await Imports.editExcelRow(h.pool, broker, id, 2, { code: "X-2" }, { lang: "en" })).toBe(true);
+    const items = (await row(id)).payload.items;
+    expect(items.find((i) => i.row === 3).kind).toBe("new");
+  });
+});

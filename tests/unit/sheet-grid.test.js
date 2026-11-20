@@ -49,10 +49,44 @@ describe("tabs", () => {
     expect(c).toMatchObject({ owner_name: "Ahmed Hassan", owner_phone: "01001000000", property_type: "apartment", price_value: "30k", area_value: "120 m", code: "AB-1", compound: "El Patio" });
   });
 
-  test("a row with text only in a column nobody can read is reported with its tab and row, hidden-name tabs are not places", () => {
-    const sheet = buildSheet([{ name: "Sheet1", rows: [row(1, ...HEAD, "extra"), row(2, "a", 1001, "villa", "x", "10k", "3 bed", "100m", "d", "C1"), row(3, null, null, null, null, null, null, null, null, null, "memo")] }]);
-    expect(sheet.skipped).toEqual([{ rowNumber: 2, sheetRow: 3, tab: "Sheet1" }]);
+  test("a row with fewer than two real values is dropped, a punctuation-only cell counts as empty, hidden-name tabs are not places", () => {
+    const sheet = buildSheet([{ name: "Sheet1", rows: [
+      row(1, ...HEAD, "extra"),
+      row(2, "a", 1001, "villa", "x", "10k", "3 bed", "100m", "d", "C1"),
+      row(3, null, null, null, null, null, null, null, null, null, "memo"), // text only in an unknown column
+      row(4, null, null, null, null, "65000", null, null, null, null), // one stray number
+      row(5, null, "-", "`", null, "70k", null, null, null, null), // punctuation + one number
+      row(6, null, null, "`", null, "65k", null, "160m", null, null) // a real unit with a junk type
+    ] }]);
+    expect(sheet.skipped).toEqual([]);
+    expect(sheet.rows.map((r) => r.sheetRow)).toEqual([2, 6]);
+    expect(sheet.rows[1].cells.property_type).toBeUndefined();
     expect(sheet.rows[0].cells.compound).toBeUndefined();
+  });
+
+  test("one long text is kept as free text (notes) whatever its column; n/a and a short word or stray number are dropped", () => {
+    const long = "شقة 3 غرف 150م التجمع الخامس 4 مليون 01012345678";
+    const sheet = buildSheet([{ name: "Sheet1", rows: [
+      row(1, ...HEAD),
+      row(2, "a", 1001, "villa", "x", "10k", "3 bed", "100m", "d", "C1"),
+      row(3, null, null, null, null, null, null, null, null, long), // the long text sits in the code column
+      row(4, "n/a", "لا يوجد", null, null, "n/a", null, null, null, null), // only "nothing" words
+      row(5, null, null, null, null, null, null, null, null, "villa"), // one short word
+      row(6, null, null, null, null, "65000", null, null, null, null) // one stray number
+    ] }]);
+    expect(sheet.rows.map((r) => r.sheetRow)).toEqual([2, 3]);
+    expect(sheet.rows[1].cells).toEqual({ notes: long });
+  });
+
+  test("a lone long line with no digit or no space (a footer) is dropped", () => {
+    const sheet = buildSheet([{ name: "Sheet1", rows: [
+      row(1, ...HEAD),
+      row(2, "a", 1001, "villa", "x", "10k", "3 bed", "100m", "d", "C1"),
+      row(3, null, null, null, null, null, null, null, null, "Prepared by Ahmed Hassan"), // long, no digit
+      row(4, null, null, null, null, null, null, null, null, "0100123456789012345"), // digits, no space
+      row(5, null, null, null, null, null, null, null, null, "Total units listed: 120") // long, digit and space: kept
+    ] }]);
+    expect(sheet.rows.map((r) => r.sheetRow)).toEqual([2, 5]);
   });
 
   test("rent or sale from a name: only when it says one of them", () => {

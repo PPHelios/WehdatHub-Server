@@ -20,7 +20,7 @@
       stageShrink: "تصغير وتحميل الصور", of: "من", left: "دقيقة متبقية تقريباً", done: "خلص", uploaded: "اتحملت", dup: "مكررة (موجودة)", full: "الوحدة اكتملت 15 صورة", unreadable: "مش قابلة للقراءة", failed: "فشلت", cancelled: "اتلغى",
       seeUnits: "افتح الوحدات", seeReview: "افتح المراجعة", nothing: "مفيش صور لتحميلها.", noPosts: "ملقيناش بوستات فيها وحدات.", cap: "بنقرا لحد 40 بوست في المرة. غيّر التاريخ للباقي.", post: "بوست", tooMany: "اتجاوزت الحد", rateWait: "بنستنى شوية…", startFail: "مقدرناش نبدأ التحميل. جرب تاني.",
       aiUpTo: "ذكاء اصطناعي: حتى", aiCredits: "رصيد", aiOffLabel: "من غير ذكاء اصطناعي: قراءة بالقواعد بس", 
-      codeChecking: "بنراجع الأكواد…", codeNew: "وحدة جديدة", codeUpdate: "تحديث للوحدة", codeHas: "فيها صور", codeTaken: "الكود ده لوحدة مش من حقك تعدلها", codeDup: "نفس الكود في بوست", codeFail: "مقدرناش نراجع الأكواد دلوقتي: هتتراجع في المراجعة.",
+      codeChecking: "بنراجع الأكواد…", codeNew: "وحدة جديدة", codeUpdate: "الوحدة موجودة", codeSame: "مفيش تغيير", codeChanges: "هتتعدّل", codeOlder: "الوحدة أحدث من البوست", codeHas: "فيها صور", codeTaken: "الكود ده لوحدة مش من حقك تعدلها", codeDup: "نفس الكود في بوست", codeFail: "مقدرناش نراجع الأكواد دلوقتي: هتتراجع في المراجعة.",
       videos: "فيديو اتتخطى (مش بيتحمل)", videosTotal: "فيديو أو ملف اتتخطى ومش هيتحمل", pickNote: "اختار 15 صورة بس: أول 15 معلّمين، والباقي علّمه بإيدك. استخدم ◀ ▶ لترتيب الصور.", stageRead: "قراءة الملف", stageMatch: "توزيع الصور على البوستات", stagePosts: "قراءة بيانات الوحدات", stageUpload: "تحميل الصور", leaveWarn: "لو قفلت الصفحة التحميل هيقف.",
       verify: "راجع الصور", swap: "بدّل الصور مع الوحدة اللي بعدها", full15: "الوحدة وصلت 15 صورة. شيل علامة صورة تانية أو شيل صورة قديمة.", oldPhotos: "صور الوحدة الحالية: علّم اللي تتشال", removeFail: "مقدرناش نشيل الصور القديمة", heicFail: "صور HEIC متحولتش", converted: "صور اتحولت من HEIC", aiOff: "الذكاء الاصطناعي مش متاح: القراءة بالقواعد بس.", errors: "أخطاء", planFail: "مقدرناش نقرا البوستات. جرب تاني.", edit: "تعديل", editDone: "تم", description: "الوصف", original: "الرسالة الأصلية", summaryLoading: "جاري قراءة بيانات الوحدة…", missingField: "ناقص", missingNote: "بيانات ناقصة: اضغط تعديل وكملها، وإلا الوحدة مش هتتضاف.",
       discard: "تجاهل", restore: "رجّع", restoreAll: "رجّع الكل", discardedWord: "متجاهلة", discardErrors: "تجاهل الوحدات اللي فيها أخطاء", selectValid: "اختار كل الصالح", unchangedSkipped: "صورة لوحدات مفيش فيها تغيير (اتساب)",
@@ -37,7 +37,7 @@
       stageShrink: "Shrinking and uploading photos", of: "of", left: "min left (about)", done: "Done", uploaded: "uploaded", dup: "duplicates (already there)", full: "unit already has 15 photos", unreadable: "unreadable", failed: "failed", cancelled: "Cancelled",
       seeUnits: "Open units", seeReview: "Open the review", nothing: "No photos to upload.", noPosts: "No posts describing a unit were found.", cap: "Up to 40 posts at a time. Change the date for the rest.", post: "Post", tooMany: "over the limit", rateWait: "Waiting a moment…", startFail: "Could not start the import. Try again.",
       aiUpTo: "AI: up to", aiCredits: "credits", aiOffLabel: "no AI: rules only", 
-      codeChecking: "Checking the codes…", codeNew: "New unit", codeUpdate: "Updates unit", codeHas: "already has photos", codeTaken: "Code belongs to a unit you can't change", codeDup: "Same code as post", codeFail: "Could not check the codes now: they are checked again in the review.",
+      codeChecking: "Checking the codes…", codeNew: "New unit", codeUpdate: "Unit already added", codeSame: "no change", codeChanges: "will change", codeOlder: "unit is newer than the post", codeHas: "already has photos", codeTaken: "Code belongs to a unit you can't change", codeDup: "Same code as post", codeFail: "Could not check the codes now: they are checked again in the review.",
       videos: "videos skipped (not uploaded)", videosTotal: "videos or files skipped and not uploaded", pickNote: "Choose 15 photos only: the first 15 are ticked, tick the others by hand. Use ◀ ▶ to put the photos in order.", stageRead: "Reading the file", stageMatch: "Placing photos on posts", stagePosts: "Reading the units", stageUpload: "Uploading photos", leaveWarn: "Closing this page stops the upload.",
       verify: "Verify photos", swap: "Swap photos with the next unit", full15: "The unit is at 15 photos. Untick another photo or remove an old one.", oldPhotos: "The unit's current photos: tick the ones to remove", removeFail: "Could not remove the old photos", heicFail: "HEIC photos that could not be converted", converted: "photos converted from HEIC", aiOff: "AI is not available: read with the rules only.", errors: "Errors", planFail: "Could not read the posts. Try again.", edit: "Edit", editDone: "Done", description: "Description", original: "Original message", summaryLoading: "Reading the unit details…", missingField: "Missing", missingNote: "Details missing: press Edit and complete them, or the unit will not be added.",
       discard: "Discard", restore: "Restore", restoreAll: "Restore all", discardedWord: "discarded", discardErrors: "Discard units with errors", selectValid: "Select all valid", unchangedSkipped: "photos of unchanged units (skipped)",
@@ -190,7 +190,7 @@
     var tCodes = Date.now();
     state.codeState = "checking";
     render();
-    fetch(root.getAttribute("data-codes-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ codes: codes }) })
+    fetch(root.getAttribute("data-codes-url"), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ codes: codes, posts: state.res.posts.filter(function (p) { return p.code; }).map(function (p) { return { code: p.code, text: textOf(p), at: p.at || null }; }) }) })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("http_" + r.status)); })
       .then(function (j) { if (ask !== codeAsk) return; steps.push({ step: "codes", ms: Date.now() - tCodes, ok: true, meta: { codes: codes.length } }); flush(); state.codeInfo = j.codes || {}; state.codeState = "done"; render(); })
       .catch(function (err) { if (ask !== codeAsk) return; steps.push({ step: "codes", ms: Date.now() - tCodes, ok: false, error: (err && err.message) || "codes_failed", meta: { codes: codes.length } }); flush(); state.codeState = "failed"; render(); });
@@ -367,7 +367,12 @@
     if (state.codeState === "failed") return el("span", { class: "muted", "data-cp-code-state": "failed", text: TEXT.codeFail });
     var info = state.codeInfo && state.codeInfo[x.code];
     if (!info) return null;
-    if (info.state === "update") return el("span", { class: "chip on", "data-cp-code-state": "update", text: "🔄 " + TEXT.codeUpdate + " " + info.code + (info.photos ? " · " + info.photos + " " + TEXT.codeHas : "") });
+    if (info.state === "update") {
+      // Whether the post would change the unit, known from the server's planner: no change, will change (how many fields), or the unit is newer.
+      var ch = info.change;
+      var verdict = !ch ? "" : ch.kind === "unchanged" ? TEXT.codeSame : ch.kind === "older" ? TEXT.codeOlder : TEXT.codeChanges + (ch.n ? " (" + ch.n + ")" : "");
+      return el("span", { class: ch && ch.kind === "update" ? "chip on" : "chip", "data-cp-code-state": "update", "data-cp-change": ch ? ch.kind : "", text: (ch && ch.kind === "update" ? "🔄 " : "✔ ") + TEXT.codeUpdate + " " + info.code + (verdict ? " · " + verdict : "") + (info.photos ? " · " + info.photos + " " + TEXT.codeHas : "") });
+    }
     if (info.state === "taken") return el("span", { class: "warn", "data-cp-code-state": "taken", text: "⛔ " + TEXT.codeTaken });
     return el("span", { class: "chip", "data-cp-code-state": "new", text: "🆕 " + TEXT.codeNew + " " + x.code });
   }
