@@ -40,9 +40,9 @@ function searchText(a) {
 }
 
 /** An area or sub-zone: one searchable box with suggestions, like the compound box. The hidden select keeps the id the form sends. */
-function areaBox(lang, { name, label, placeholder, selectedId, rows, selectInner }) {
+function areaBox(lang, { name, label, placeholder, selectedId, rows, selectInner, off }) {
   const chosen = rows.find((r) => String(r.id) === String(selectedId));
-  return html`<label${req(label)}>${label}<input type="text" data-list="${name}-list" autocomplete="off" data-area-input="${name}" data-msg-pick="${L(lang, "اختار من القايمة.", "Pick one from the suggestions.")}" value="${chosen ? chosen.text : ""}" placeholder="${placeholder}"><select name="${name}" hidden>${selectInner}</select><datalist id="${name}-list"></datalist><span class="ubox-list area-list" data-area-list role="listbox" hidden></span></label>`;
+  return html`<label${req(label)}>${label}<input type="text" data-list="${name}-list" autocomplete="off" data-area-input="${name}" data-msg-pick="${L(lang, "اختار من القايمة.", "Pick one from the suggestions.")}" value="${chosen ? chosen.text : ""}" placeholder="${placeholder}"${off ? raw(" disabled") : ""}><select name="${name}" hidden>${selectInner}</select><datalist id="${name}-list"></datalist><span class="ubox-list area-list" data-area-list role="listbox" hidden></span></label>`;
 }
 
 // Small stroke icons (no emoji in headings or buttons: the form reads as a product, not a chat).
@@ -106,7 +106,7 @@ function unitBox(v, areas, lang, place, opts = {}) {
         selectInner: html`<option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}" data-search="${searchText(a)}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}`
       })}
       ${areaBox(lang, {
-        name: "subzone_id", label: L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)"), selectedId: v.subzone_id, rows: areas.filter((a) => a.parent_id).map(rowOf),
+        name: "subzone_id", off: !v.area_id, label: L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)"), selectedId: v.subzone_id, rows: areas.filter((a) => a.parent_id).map(rowOf),
         placeholder: L(lang, "ابحث بالعربي أو الإنجليزي، مثال: البنفسج", "Search in Arabic or English, e.g. Al Banafseg"),
         selectInner: html`<option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}" data-parent="${t.id}" data-search="${searchText(a)}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}`
       })}
