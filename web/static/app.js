@@ -1794,6 +1794,7 @@
     var subBox = areaSel.form.querySelector('input[data-area-input="subzone_id"]');
     if (!subSel || !subBox) return;
     fillAreaList(subBox);
+    subBox.disabled = !areaSel.value; // sub-zone waits for an area
     var opt = subSel.selectedOptions[0];
     if (subSel.value && areaSel.value && opt && opt.getAttribute("data-parent") !== areaSel.value) {
       subBox.value = "";

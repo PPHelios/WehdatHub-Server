@@ -18,3 +18,9 @@ test("area and sub-zone options carry both names and aliases, and each box has a
   expect(html).toContain("e.g. Al Banafseg");
   expect(html).not.toMatch(/placeholder="[^"]*[؀-ۿ]/); // an English page has no Arabic letters in a placeholder
 });
+
+test("sub-zone box is disabled until an area is picked", () => {
+  const render = (values) => String(unitForm({ lang: "en", csrf: "x", areas, values, extraValues: { feature: [], features: [], compound_new: "1" }, mode: "new" }));
+  expect(render({})).toMatch(/data-area-input="subzone_id"[^>]*disabled/);
+  expect(render({ area_id: "1" })).not.toMatch(/data-area-input="subzone_id"[^>]*disabled/);
+});
