@@ -34,7 +34,7 @@ const COLORS = Object.freeze({
 });
 
 /** Corners and heights shared by every button and field. Buttons come in three sizes with the same corners. */
-const SHAPE = Object.freeze({ radius: 20, "radius-btn": 14, "radius-field": 12, "btn-sm": 40, "btn-md": 48, "btn-lg": 56 });
+const SHAPE = Object.freeze({ radius: 20, "radius-btn": 14, "radius-field": 12, "btn-sm": 44, "btn-md": 48, "btn-lg": 56 });
 
 /**
  * Pairs that must be readable: [text, surface, least contrast]. 4.5 is the level for normal text, 3 for large text,
