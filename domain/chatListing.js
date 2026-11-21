@@ -49,6 +49,35 @@ function findCompound(text, places) {
   return null;
 }
 
+// Arabic number words, folded (alef forms, ة->ه, ى->ي). shortcut: area only, up to the thousands; no millions, no fractions.
+const WORD_NUM = {};
+"واحد 1 اتنين 2 اثنين 2 تلاته 3 ثلاثه 3 اربعه 4 خمسه 5 سته 6 سبعه 7 تمانيه 8 ثمانيه 8 تسعه 9 عشره 10 احداشر 11 اتناشر 12 عشرين 20 تلاتين 30 ثلاثين 30 اربعين 40 خمسين 50 ستين 60 سبعين 70 تمانين 80 ثمانين 80 تسعين 90 ميه 100 مايه 100 مئه 100 مائه 100 ميت 100 ميتين 200 مئتين 200 مائتين 200 تلتميه 300 ثلاثميه 300 ربعميه 400 اربعميه 400 خمسميه 500 ستميه 600 سبعميه 700 تمنميه 800 تسعميه 900 الف 1000 الفين 2000"
+  .split(" ").forEach((w, i, a) => { if (i % 2 === 0) WORD_NUM[w] = Number(a[i + 1]); });
+const foldWord = (w) => w.replace(/[ً-ْ]/g, "").replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+const wordValue = (w) => { const f = foldWord(w); return WORD_NUM[f] ?? (f.startsWith("و") ? WORD_NUM[f.slice(1)] : undefined); };
+
+/** "مساحة مية وخمسين متر" -> "مساحة 150 متر": a run of number words next to an area label or "متر" becomes digits. */
+function areaWordsToDigits(text) {
+  const parts = text.split(/(\s+)/); // words at even indexes, spaces at odd
+  for (let i = 0; i < parts.length; i += 2) {
+    if (wordValue(parts[i]) === undefined) continue;
+    let j = i;
+    while (j + 2 < parts.length && wordValue(parts[j + 2]) !== undefined) j += 2;
+    if (/^(?:ال)?مساح[ةه]$/.test(parts[i - 2] || "") || /^(?:متر|م2|م²)$/.test(parts[j + 2] || "")) {
+      let total = 0, cur = 0;
+      for (let k = i; k <= j; k += 2) {
+        const v = wordValue(parts[k]);
+        if (v === 1000) { total += (cur || 1) * 1000; cur = 0; }
+        else if (v === 100 && cur > 0 && cur < 10) cur *= 100;
+        else cur += v;
+      }
+      parts.splice(i, j - i + 1, String(total + cur));
+    }
+    else i = j;
+  }
+  return parts.join("");
+}
+
 /** An area number that is not the land, garden or roof: the first "150 م" or "مساحة 150". */
 function findArea(text) {
   // The built-up area is the unit's area (a villa lists land and built-up apart).
@@ -100,7 +129,7 @@ function sizeSpans(t) {
  */
 function parsePost(text, places = null, from = {}) {
   const original = String(text || "").slice(0, 4000);
-  let t = toAsciiDigits(original).replace(/[‎‏‪-‮]/g, "");
+  let t = areaWordsToDigits(toAsciiDigits(original).replace(/[‎‏‪-‮]/g, ""));
   const full = t;
   const cells = {};
   const set = (k, v) => {
