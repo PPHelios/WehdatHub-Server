@@ -733,6 +733,7 @@
       "TOLERANCE": "Number",
       "placeKey": ["l"],
       "comparable": ["l"],
+      "sameProperty": ["a", "b"],
       "sameUnit": ["a", "b"],
       "sameCompound": ["a", "b"],
       "catalogueMatch": ["a", "b"]
@@ -753,42 +754,6 @@
       "classify": ["reason"],
       "label": ["key", "lang"],
       "winRate": ["won", "lost"]
-    },
-    "domain/analyticsBands.js": {
-      "BEDROOM_BANDS": "Array",
-      "BUDGET_EDGES": "Object",
-      "budgetBands": ["listingType"],
-      "bedroomBand": ["n"],
-      "budgetBand": ["listingType", "amount"],
-      "searchCell": ["used"],
-      "sourceKey": ["source"],
-      "lostKey": ["reason"],
-      "percentile": ["values", "p"],
-      "median": ["values"],
-      "round": ["n", "d"],
-      "cairoDay": ["d"],
-      "cairoHour": ["d"],
-      "addDays": ["day", "n"]
-    },
-    "domain/analyticsFunnel.js": {
-      "agencyRows": ["leads", "dealsByAgency", "month"],
-      "marketRow": ["rows", "month"]
-    },
-    "domain/analyticsMarket.js": {
-      "computeCells": ["rows", "day"],
-      "MIN_SOLD": "Number"
-    },
-    "domain/analyticsPrivacy.js": {
-      "MIN_AGENCIES": "Number",
-      "MIN_ROWS": "Number",
-      "MIN_LEADS_PER_AGENCY": "Number",
-      "MIN_SEARCHES": "Number",
-      "FORBIDDEN": "Array",
-      "passes": ["cell"],
-      "suppress": ["cell"],
-      "keepPassing": ["cells"],
-      "problems": ["value", "path"],
-      "assertClean": ["value"]
     },
     "lib/ai.js": {
       "TIERS": "Array",
@@ -1025,11 +990,6 @@
       "buildMultiPlanWorkbook": ["params"],
       "buildRejectionWorkbook": ["params"],
       "sanitizeCellValue": ["val"]
-    },
-    "lib/failureInfo.js": {
-      "SEVERITIES": "Array",
-      "describe": ["operationType", "code"],
-      "SEVERITY_SQL": "String"
     },
     "lib/failureLog.js": {
       "middleware": ["pool", "params"],
@@ -1329,19 +1289,6 @@
       "botDigits": ["raw"],
       "startLink": ["botPhone", "lang"],
       "startLines": ["plan", "botPhone"]
-    },
-    "lib/ownerAlerts.js": {
-      "CATEGORIES": "Array",
-      "SEVERITIES": "Array",
-      "SEVERITY_LABELS": "Object",
-      "DEFAULTS": "Object",
-      "KEY": "String",
-      "get": ["pool", "params"],
-      "save": ["pool", "input"],
-      "allowed": ["pool", "categoryId"],
-      "permits": ["settings", "categoryId"],
-      "clean": ["v"],
-      "invalidate": []
     },
     "lib/pdfPages.js": {
       "pageCount": ["buffer"],

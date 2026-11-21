@@ -85,7 +85,7 @@ function unitBox(v, areas, lang, place, opts = {}) {
     </div>
     <div class="ubox-list" id="ubox-list" data-ubox-list role="listbox" hidden></div>
     <div class="ubox-chips" data-ubox-chips>
-      ${place ? html`<span class="chip chip-place" data-ubox-chip="place" data-state="${placeState}">${ICON.pin}<span data-chip-text>${place.label}</span>${isNew ? html`<em class="chip-tag">${L(lang, "جديد", "new")}</em>` : ""}${chipX(place.label)}</span>` : ""}
+      ${place ? html`<span class="chip chip-place" data-ubox-chip="place" data-state="${placeState}">${ICON.pin}<span data-chip-text data-place-name="${place.label}">${place.label}${(place.phases || []).filter((p) => p.selected).map((p) => " · " + p.label).join("")}</span>${isNew ? html`<em class="chip-tag">${L(lang, "جديد", "new")}</em>` : ""}${chipX(place.label)}</span>` : ""}
       ${(v.feature || []).filter((k) => Features.featureLabel(k)).map((k) => html`<span class="chip chip-feature" data-ubox-chip="feature" data-key="${k}"><span data-chip-text>${Features.featureLabel(k, lang)}</span>${chipX(Features.featureLabel(k, lang))}<input type="hidden" name="feature" value="${k}"></span>`)}
       ${others.map((o) => html`<span class="chip chip-other" data-ubox-chip="other"><span data-chip-text>${o}</span> <em class="chip-tag">${L(lang, "مش في القائمة", "not in the list")}</em>${chipX(o)}</span>`)}
     </div>

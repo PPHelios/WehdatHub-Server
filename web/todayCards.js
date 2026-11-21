@@ -3,19 +3,23 @@
 "use strict";
 
 const { html } = require("./html");
+const { statusForm } = require("./views/units");
 
 const url = (code) => `/app/units/${encodeURIComponent(code)}`;
 
 /** Old units: a row each opens the unit, with the unit's own Sold / Archive / Still available buttons there. */
-function oldUnitsCard(c, en) {
+function oldUnitsCard(c, en, csrf = "", back = "/app") {
   if (!c?.oldUnits) return "";
   const o = c.oldUnits;
-  return html`<section class="card stack" data-today-card="old-units">
-  <h2><a href="/app/units?status=active&old=1">${en ? `Units to check (${o.total})` : `وحدات محتاجة مراجعة (${o.total})`}</a></h2>
-  <p class="muted">${en ? "Nobody has confirmed these for 21 days. Open a unit to mark it sold, archived or still available." : "محدش أكدها بقالها 21 يوم. افتح الوحدة وغيّر حالتها: اتباعت، أرشيف أو لسه متاحة."}</p>
-  <ul class="rows">${o.items.map((u) => html`<li><a class="listrow" href="${url(u.code)}"><span><b>${u.code}</b> · ${u.line}</span><span class="muted">${u.hidden ? (en ? "hidden" : "مخفية") : en ? `${u.days} days` : `${u.days} يوم`}</span></a></li>`)}</ul>
+  // Folds like the app's card: the arrow is the summary's own (app.css: details.card > summary).
+  return html`<details class="card" data-today-card="old-units" open>
+  <summary><h2>${en ? `Units to check (${o.total})` : `وحدات محتاجة مراجعة (${o.total})`}</h2></summary>
+  <div class="stack">
+  <p class="muted">${en ? "Nobody has confirmed these for 21 days. Mark each one: still available, sold or archived." : "محدش أكدها بقالها 21 يوم. اختار لكل وحدة: لسه متاحة، اتباعت، أو أرشيف."}</p>
+  <ul class="rows">${o.items.map((u) => html`<li><a class="listrow" href="${url(u.code)}"><span><b>${u.code}</b> · ${u.line}</span><span class="muted">${u.hidden ? (en ? "hidden" : "مخفية") : en ? `${u.days} days` : `${u.days} يوم`}</span></a>${u.hidden ? "" : statusForm(u.code, en, csrf, back)}</li>`)}</ul>
   ${o.total > o.items.length ? html`<a class="btn secondary" href="/app/units?status=active&old=1">${en ? `${o.total - o.items.length} more` : `${o.total - o.items.length} كمان`}</a>` : ""}
-</section>`;
+  </div>
+</details>`;
 }
 
 function infoCards(c, en) {
@@ -52,8 +56,8 @@ function infoCards(c, en) {
 }
 
 /** All the cards of a person's Today. */
-function render(cards, en) {
-  return html`${infoCards(cards, en)}${oldUnitsCard(cards, en)}`;
+function render(cards, en, csrf = "") {
+  return html`${infoCards(cards, en)}${oldUnitsCard(cards, en, csrf)}`;
 }
 
 module.exports = { render, oldUnitsCard };

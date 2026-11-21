@@ -5,6 +5,7 @@
 
 const Vis = require("../lib/visibility");
 const Store = require("../lib/listingStore");
+const { phaseOf } = require("../lib/unitPhase");
 const Storage = require("../lib/supabase");
 const UnitFilters = require("../domain/unitFilters");
 const Authz = require("../lib/authz");
@@ -27,7 +28,9 @@ const COLS = `listings.id, listings.code, listings.status, listings.title, listi
   listings.price_display, listings.area_value, listings.bedrooms, listings.bathrooms, listings.compound, listings.district, listings.city,
   listings.finishing, listings.furnishing, listings.floor_level, listings.is_ready, listings.delivery_year, listings.delivery_quarter,
   listings.down_payment_value, listings.installment_years, listings.installment_value, listings.confirmed_at, listings.updated_at, listings.created_at,
-  listings.broker_id`;
+  listings.broker_id,
+  (SELECT a.name_ar FROM areas a WHERE a.id = listings.subzone_id AND a.place_type = 'phase') AS phase_ar,
+  (SELECT a.name_en FROM areas a WHERE a.id = listings.subzone_id AND a.place_type = 'phase') AS phase_en`;
 
 const oneOf = (v, list) => (list.includes(String(v || "")) ? String(v) : "");
 const photoOf = (url) => (url ? Storage.photoUrl(url) : null);
@@ -49,6 +52,8 @@ function unitView(r) {
     bathrooms: r.bathrooms,
     compound: r.compound,
     compoundEn: r.compound_en || r.details?.compound_en || null,
+    phase: r.phase_ar || r.phase_en || null,
+    phaseEn: r.phase_en || r.phase_ar || null,
     district: r.district,
     city: r.city,
     finishing: r.finishing,
@@ -180,6 +185,7 @@ function register(api, { pool }) {
     ]);
     return res.json({
       ...unitView(found),
+      ...(await phaseOf(pool, found.subzone_id)),
       mine: found.broker_id === broker.id,
       canEdit: Boolean(mayWrite),
       features: found.feature_keys || [],
