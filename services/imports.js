@@ -363,7 +363,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
       }
       const patch = Edits.diffPatch(existing, ev.listing);
       // A code written in a chat post that belongs to a different unit of the agency: the person chooses (merge or a new code).
-      if (asNew?.ok && !Dup.sameUnit(asNew.listing, existing)) {
+      if (asNew?.ok && !Dup.sameProperty(asNew.listing, existing)) {
         items.push({
           ...base,
           code: existing.code,

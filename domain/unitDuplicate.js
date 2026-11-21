@@ -34,13 +34,19 @@ function samePlace(a, b) {
   return [b.district, b.city, b.location].some((v) => v && normalizeSearch(v) === pa.district);
 }
 
-/** a looks like b (b is the stored or earlier unit). */
+/** The same physical unit: place, bedrooms, property type and area. Sale or rent and the price may change. */
+function sameProperty(a, b) {
+  if (!placeKey(a) || !placeKey(b) || !(Number(a.area_value) > 0) || !(Number(b.area_value) > 0)) return false;
+  if ((a.bedrooms ?? -1) !== (b.bedrooms ?? -1)) return false;
+  if (a.property_type && b.property_type && a.property_type !== b.property_type) return false;
+  return samePlace(a, b) && near(a.area_value, b.area_value);
+}
+
+/** a looks like b (b is the stored or earlier unit): the same property, same listing type and same price. */
 function sameUnit(a, b) {
   if (!comparable(a) || !comparable(b)) return false;
   if ((a.listing_type || "sale") !== (b.listing_type || "sale")) return false;
-  if ((a.bedrooms ?? -1) !== (b.bedrooms ?? -1)) return false;
-  if (a.property_type && b.property_type && a.property_type !== b.property_type) return false;
-  return samePlace(a, b) && near(a.area_value, b.area_value) && near(a.price_value, b.price_value);
+  return sameProperty(a, b) && near(a.price_value, b.price_value);
 }
 
 /** Same compound: the canonical compound key when both have one (synonyms, Arabic/English), else the normalized name. */
@@ -70,4 +76,4 @@ function catalogueMatch(a, b) {
   return near(area, from) && near(price, b.price_value);
 }
 
-module.exports = { TOLERANCE, placeKey, comparable, sameUnit, sameCompound, catalogueMatch };
+module.exports = { TOLERANCE, placeKey, comparable, sameProperty, sameUnit, sameCompound, catalogueMatch };

@@ -8,7 +8,7 @@ const Phone = require("../../domain/phone");
 const { isManager, isAgencyOwner, isDataEntry } = require("../../lib/authz");
 const Portfolio = require("../../services/privatePortfolio");
 const Vis = require("../../lib/visibility");
-const { html, escapeHtml } = require("../html");
+const { html, escapeHtml, phoneLtr } = require("../html");
 
 const { L } = require("../../lib/copy");
 const { phoneHelp } = require("../views/phoneHelp");
@@ -52,7 +52,7 @@ async function unitOwnerBlock(pool, viewer, listing, lang, csrf, notice = null) 
   </form></details>`
     : "";
   if (!owner && !move) return "";
-  return html`<p data-unit-owner>${notice || ""}${owner ? html`👤 ${L(lang, "المالك", "Owner")}: <a href="/app/owners/${owner.id}">${owner.name || L(lang, "بدون اسم", "No name")}</a>` : ""}</p>${move}`;
+  return html`<p data-unit-owner>${notice || ""}${owner ? html`👤 ${L(lang, "المالك", "Owner")}: <a href="/app/owners/${owner.id}">${/^[+\d\s().-]+$/.test(owner.name || "") ? phoneLtr(owner.name) : owner.name || L(lang, "بدون اسم", "No name")}</a>` : ""}</p>${move}`;
 }
 
 function register(web, { pool, page }) {
