@@ -342,7 +342,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   ${stats.several_prices
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="price_pick"><input type="hidden" name="action" value="price_pick">
     <p>${L(lang, `${stats.several_prices} صف فيهم أكتر من سعر في الخانة (طويل ومدة قصيرة ويومي).`, `${stats.several_prices} rows list several prices in one cell (long term, short term, daily).`)}</p>
-    <div class="row"><button name="value" value="long" class="${stats.remembered.price_pick === "long" ? "" : "secondary"}"${stats.remembered.price_pick === "long" ? raw(' data-remembered="price_pick"') : ""}>${L(lang, "خد السعر الطويل أو الشهري", "Use the long-term or monthly price")}</button><button name="value" value="first" class="${stats.remembered.price_pick === "first" ? "" : "secondary"}"${stats.remembered.price_pick === "first" ? raw(' data-remembered="price_pick"') : ""}>${L(lang, "خد أول سعر", "Use the first price")}</button></div>
+    <div class="row"><button name="value" value="long" class="${stats.remembered.price_pick === "long" ? "" : "secondary"}"${stats.remembered.price_pick === "long" ? raw(' data-remembered="price_pick"') : ""}>${L(lang, `خد السعر الطويل أو الشهري (${stats.price_pick_ok.long} صف)`, `Use the long-term or monthly price (${stats.price_pick_ok.long} rows)`)}</button><button name="value" value="first" class="${stats.remembered.price_pick === "first" ? "" : "secondary"}"${stats.remembered.price_pick === "first" ? raw(' data-remembered="price_pick"') : ""}>${L(lang, `خد أول سعر (${stats.price_pick_ok.first} صف)`, `Use the first price (${stats.price_pick_ok.first} rows)`)}</button></div>
     <p class="muted">${L(lang, "السعر اليومي مبيتاخدش أبداً، والنص الأصلي بيتحفظ في الملاحظات.", "A daily price is never used; the original text is kept in the notes.")}</p></form>`
     : ""}
   ${stats.unknown_types.length
@@ -365,7 +365,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
       <label data-word-val="finishing">${L(lang, "التشطيب", "Finishing")}<select name="v_finishing">${Imports.FINISHING_KEYS.map((k) => html`<option value="${k}"${val("finishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FINISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
       <label data-word-val="furnishing">${L(lang, "الفرش", "Furnishing")}<select name="v_furnishing">${Imports.FURNISHING_KEYS.map((k) => html`<option value="${k}"${val("furnishing") === k ? raw(" selected" + mem) : ""}>${(Describe.FURNISHING_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}</option>`)}</select></label>
       <label data-word-val="features">${L(lang, "الميزة", "Feature")}<input name="v_features" value="${val("features") || u.value}" maxlength="120"></label>
-      <button>${L(lang, "طبّق", "Apply")}</button></div></form>`;
+      <button>${L(lang, `طبّق على ${u.count} صف`, `Apply to ${u.count} rows`)}</button></div></form>`;
     })}</div>`
     : ""}
   ${stats.status_hints.length
@@ -451,7 +451,7 @@ ${noPhoneCard}${skippedLine}${readCard}
 ${query.batch_error === "bad_phone" ? html`<p class="card notice bad" role="alert" data-batch-error="bad_phone">⚠️ ${L(lang, "الرقم مش صحيح. اكتب رقم زي 01012345678، أو رقم أجنبي بـ + وكود الدولة.", "That number is not valid. Type a number like 01012345678, or a foreign one with + and the country code.")}</p>` : ""}
 ${query.batch_error === "conflict" || query.edit_conflict ? html`<p class="card notice bad" role="alert" data-edit-conflict>⚠️ ${L(lang, "الخطة اتغيرت وانت بتعدل. افتح التعديل تاني وجرب.", "The plan changed while you were editing. Open the edit again and try once more.")}</p>` : ""}
 ${query.mapping === "empty" ? html`<p class="card notice bad" role="alert" data-mapping-error>⚠️ ${L(lang, "بالاختيار ده السعر أو المساحة بقوا فاضيين في كل الصفوف. رجّعنا القراءة زي ما كانت.", "With that choice price or area would be empty on every row. We kept the earlier reading.")}</p>` : ""}
-${query.batch ? html`<p class="card notice" role="status" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
+${query.batch ? html`<p class="card notice ${Number(query.batch) ? "ok" : "bad"}" role="${Number(query.batch) ? "status" : "alert"}" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
 ${batch}
 ${kindNav}${tabsNav}
 ${savedBar}${discardedBar}${forgetBar}
@@ -477,6 +477,7 @@ ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="$
 ${section("unchanged", (rows) => html`<ul class="muted">${rows.map((i) => html`<li data-row="${i.row}">${where(i)} (${i.code}): ${L(lang, "نفس اللي في التطبيق، مفيش حاجة هتتغير (مش هتتحفظ ولا هتتلمس)", "Same as in the app, nothing to change (not saved or touched)")}${notesOf(i)} ${discardBtn(i)}</li>`)}</ul>`)}
 ${pager}
 ${!extra.dataEntry && (counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-failed-download><a class="secondary button" href="/app/import/${imp.id}/failed.xlsx" download>⬇️ ${L(lang, `نزّل الصفوف اللي مش هتتسجل (${(counts.invalid || 0) + (counts.forbidden || 0)}) إكسيل بعمود السبب`, `Download the rows that will not import (${(counts.invalid || 0) + (counts.forbidden || 0)}) as Excel, with a Reason column`)}</a></p>` : ""}
+  ${!extra.dataEntry && !chat ? html`<p class="row" data-fixed-download><a class="secondary button" href="/app/import/${imp.id}/fixed.xlsx" download>⬇️ ${L(lang, "نزّل الشيت بعد التعديلات (عشان ترفعه تاني من غير ما تتعدل كل مرة)", "Download the fixed sheet (upload it again later without fixing everything)")}</a></p>` : ""}
   ${chat && !applied ? html`<p class="card notice" role="status" data-save-summary data-total="${items.length + gone.size}" data-errors="${errorsN}" data-unchanged="${counts.unchanged || 0}" data-discarded="${gone.size}">${summaryLine(lang, readyNew + readyChanged, readyNew, readyChanged, items.length + gone.size - readyNew - readyChanged, errorsN, counts.unchanged || 0, gone.size)}</p>` : ""}
   ${applied ? "" : html`<div class="row"><button type="submit" data-save-button${chat && !(readyNew + readyChanged) ? raw(" disabled") : ""}>✅ ${L(lang, paged ? "طبّق اللي اخترته في الصفحة دي" : "طبّق اللي اخترته", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}${chat ? html` (<span data-save-count>${readyNew + readyChanged}</span>)` : ""}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
 </form>
@@ -490,7 +491,10 @@ function resultCard(r, lang, undoId = null, left = 0) {
   const failed = (f) => Imports.failedLine(f, lang);
   return html`<div class="card notice" data-result id="import-result" tabindex="-1">
   <h2>✅ ${L(lang, "اتطبق", "Applied")}</h2>
-  ${r.undone ? html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتمسحت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are deleted; changed units are back to their earlier values.")}</p>` : ""}
+  ${r.undone ? "" : (r.created || []).length + (r.updated || []).length
+    ? html`<p class="notice ok" role="status" data-apply-summary>✅ ${L(lang, `اتطبق ${(r.created || []).length + (r.updated || []).length} وحدة.`, `${(r.created || []).length + (r.updated || []).length} units applied.`)}</p>`
+    : html`<p class="notice bad" role="alert" data-apply-summary>⚠️ ${L(lang, "مفيش وحدة اتطبقت. شوف السبب تحت.", "No unit was applied. See the reason below.")}</p>`}
+  ${r.undone ?html`<p data-undone>↩️ ${L(lang, "اتراجع عنه. الوحدات المتضافة اتمسحت، والمتعدلة رجعت لقيمها.", "Undone. Units it added are deleted; changed units are back to their earlier values.")}</p>` : ""}
   ${undoId && !r.undone ? html`<p><a class="secondary button" href="/app/import/${undoId}/undo" data-undo-link>↩️ ${L(lang, "تراجع عن التحميل ده", "Undo this import")}</a></p>` : ""}
   <ul>
     ${line(L(lang, "اتضافت", "Created"), r.created)}
@@ -880,15 +884,20 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     return res.set("Cache-Control", "no-store").json(out);
   });
 
-  // The rows this import did not take, as an Excel file: the sheet's values as they are plus a "Reason" column.
-  web.get("/import/:id/failed.xlsx", managersOnly, async (req, res, next) => {
-    const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
-    if (!imp || imp.kind !== "excel") return next();
-    const { buffer } = await FailedRows.failedRowsWorkbook(imp.payload, { lang: langOf(req) });
-    return res
-      .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="not-imported-rows.xlsx"', "Cache-Control": "no-store" })
-      .send(buffer);
-  });
+  // Excel files of an import plan (see lib/importFailed.js): one handler for each download link.
+  const sendSheet = (path, build, filename) =>
+    web.get(path, managersOnly, async (req, res, next) => {
+      const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
+      if (!imp || imp.kind !== "excel") return next();
+      const { buffer } = await build(imp.payload, { lang: langOf(req) });
+      return res
+        .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="${filename}"`, "Cache-Control": "no-store" })
+        .send(buffer);
+    });
+  // The whole sheet after the fixes made on the review page, for the next upload.
+  sendSheet("/import/:id/fixed.xlsx", FailedRows.fixedRowsWorkbook, "fixed-sheet.xlsx");
+  // The rows this import did not take: the sheet's values as they are plus a "Reason" column.
+  sendSheet("/import/:id/failed.xlsx", FailedRows.failedRowsWorkbook, "not-imported-rows.xlsx");
 
   // Undo the last applied import: a confirm page with what will happen, then one press to do it.
   web.get("/import/:id/undo", managersOnly, async (req, res, next) => {

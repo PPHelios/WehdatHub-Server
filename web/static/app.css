@@ -2621,11 +2621,11 @@ section[data-kind] ul > li[data-row] > .muted { overflow-wrap: anywhere; }
 form[data-word-form], form[data-batch-form], div[data-batch-form] { padding: 14px 16px; border: 1px solid var(--line); border-inline-start: 5px solid var(--accent); border-radius: 14px; background: linear-gradient(180deg, var(--accent-soft), var(--card) 70%); gap: 12px; }
 form[data-batch-form="status_words"] { border-inline-start-color: var(--warn); background: linear-gradient(180deg, color-mix(in srgb, var(--warn) 14%, var(--card)), var(--card) 70%); }
 form[data-batch-form="status_words"] > p:first-of-type::before { content: "📋 "; }
-form[data-word-form] > .row:first-of-type strong { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--brand); color: var(--brand-ink); font-weight: 700; }
+form[data-word-form] > .row:first-of-type strong { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-weight: 700; }
 form[data-word-form] > .row:first-of-type .muted { padding: 2px 8px; border-radius: 999px; background: var(--soft); font-weight: 600; }
 form[data-word-form] label { font-weight: 600; color: var(--ink); }
 form[data-word-form] select, form[data-word-form] input:not([type="hidden"]) { border-color: var(--accent); background: var(--card); }
-form[data-word-form] .row > button:not(.secondary), form[data-batch-form] .row > button:not(.secondary) { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
+form[data-word-form] .row > button:not(.secondary), form[data-batch-form] .row > button:not(.secondary) { background: var(--brand); color: var(--on-brand); border-color: var(--brand); font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
 form[data-batch-form] .row > button.secondary { border-color: var(--accent); color: var(--ink); }
 
 /* The bar and the dimmed page while an import tab or page loads. */

@@ -14,7 +14,7 @@ const PROPERTY_TYPES = [...APARTMENT_LIKE, "studio", ...VILLA_LIKE, ...COMMERCIA
 // already has a value). Floor is not asked for a house (it has none) or land.
 const FIELD_TYPES = {
   land_area: [...VILLA_LIKE, "land"],
-  garden_area: [...VILLA_LIKE, "duplex", "apartment", "chalet", "triplex"],
+  garden_area: PROPERTY_TYPES, // every type: a garden can be on any unit, and a garden value adds the private_garden chip
   roof_area: [...VILLA_LIKE, "duplex", "penthouse", "triplex", "triplex_roof", "sky_loft", "roof"],
   floor_level: [...APARTMENT_LIKE, "studio", ...COMMERCIAL]
 };

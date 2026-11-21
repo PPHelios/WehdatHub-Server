@@ -136,7 +136,11 @@ function pickPrice(raw, rule) {
   const cands = parts.map((part) => ({ part, v: amountOf(part) })).filter((c) => c.v && !DAILY.test(c.part));
   if (rule === "first") return cands[0]?.v ?? null;
   // The monthly price first, else the long-term one. The other prices stay in the description (see services/imports.js).
-  if (rule === "long") return (cands.find((c) => MONTH.test(c.part)) || cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part)))?.v ?? null;
+  // "long_or_next" (the batch button) also takes the next non-daily price when no price is labelled long-term or monthly.
+  if (rule === "long" || rule === "long_or_next") {
+    const labelled = cands.find((c) => MONTH.test(c.part)) || cands.find((c) => LONG.test(c.part) && !SHORT.test(c.part));
+    return (labelled || (rule === "long_or_next" ? cands[0] : undefined))?.v ?? null;
+  }
   return null;
 }
 
@@ -214,4 +218,31 @@ function installmentOf(raw) {
   return { price_value: stated ?? down + remaining, down_payment_value: down, remaining_amount: remaining };
 }
 
-module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN, cellPrice, installmentOf };
+/**
+ * An area cell that also gives the garden, in English or Arabic, in any of these forms:
+ *   "135/30", "135/30 garden", "135 garden 30", "garden 30 / 135", "135 م جنينة 30 م", "جنينه 30 و 135"
+ * The number before the garden word (or the first of a slash pair) is the area, the other is the garden. → { area, garden } | null
+ * A single number with a garden word ("garden 80") is not split: it is left to the other area rules.
+ */
+const GARDEN_WORD = "garden|jardin|جاردن|جاردنز|جنينه|جنينة|جنينات|حديقه|حديقة";
+const UNIT_WORD = "(?:sqm|sq\\.?\\s*m|m2|m²|م²|م2|متر(?:\\s*مربع)?|م|m)?";
+const N = "(\\d+(?:\\.\\d+)?)";
+const SEP = "(?:\\s*(?:/|\\+|&|,|-|و|and)\\s*)?";
+const GARDEN_AFTER = new RegExp(`^\\s*${N}\\s*${UNIT_WORD}\\s*${SEP}\\s*(?:${GARDEN_WORD})\\s*[:=]?\\s*${N}\\s*${UNIT_WORD}\\s*$`, "i"); // 135 garden 30
+const GARDEN_FIRST = new RegExp(`^\\s*(?:${GARDEN_WORD})\\s*[:=]?\\s*${N}\\s*${UNIT_WORD}\\s*(?:/|\\+|&|,|-|و|and)\\s*${N}\\s*${UNIT_WORD}\\s*$`, "i"); // garden 30 / 135 (a separator is needed)
+const SLASH_PAIR = new RegExp(`^\\s*${N}\\s*${UNIT_WORD}\\s*[/+]\\s*${N}\\s*${UNIT_WORD}\\s*(${GARDEN_WORD})?\\s*$`, "i"); // 135/30 (garden)
+
+function gardenSplit(raw) {
+  const s = String(raw ?? "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  let m = GARDEN_AFTER.exec(s);
+  if (m) return { area: Number(m[1]), garden: Number(m[2]) };
+  m = GARDEN_FIRST.exec(s);
+  if (m) return { area: Number(m[2]), garden: Number(m[1]) };
+  m = SLASH_PAIR.exec(s);
+  // Without the garden word a slash pair is only a garden when the second figure is the smaller one ("120/130" is a size range).
+  if (m && (m[3] || Number(m[2]) < Number(m[1]))) return { area: Number(m[1]), garden: Number(m[2]) };
+  return null;
+}
+
+module.exports = { areas, rooms, priceText, priceIn, pickPrice, dollars, readText, FOREIGN, cellPrice, installmentOf, gardenSplit };

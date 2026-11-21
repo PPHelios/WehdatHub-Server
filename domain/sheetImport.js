@@ -23,6 +23,7 @@ const COLUMNS = [
   ["address", /^(address|full address|location|unit location|العنوان بالكامل|العنوان التفصيلي|العنوان بالتفصيل|الموقع)$/],
   ["details_text", /^(details|detail|تفاصيل|التفاصيل)$/],
   ["land_area", /^(land|land area|مساحه الارض|مساحه ارض|الارض)$/],
+  ["garden_area", /^(garden|garden area|جنينه|جنينة|الجنينه|الجنينة|مساحه الجنينه|مساحة الجنينة|حديقه|حديقة)$/],
   ["summary_en", /^summary/],
   ["description", /(description|الوصف|وصف)/],
   ["title", /^(title|العنوان)$/],
@@ -287,6 +288,12 @@ function expand(input) {
       cells.price_value = p.price_value;
     }
   }
+  // "135/30", "135 garden 30", "garden 30 / 135" (English or Arabic): the area and the garden in one cell.
+  const pair = typeof cells.area_value === "string" ? Mixed.gardenSplit(cells.area_value) : null;
+  if (pair) {
+    cells.area_value = pair.area;
+    put("garden_area", pair.garden);
+  }
   if (!blank("area_value") && typeof cells.area_value === "string" && /[a-zA-Z\u0600-\u06FF]/.test(cells.area_value)) {
     const a = Mixed.areas(cells.area_value);
     if (a.area_value || a.land_area) {
@@ -421,6 +428,10 @@ function rowToDraft(input = {}) {
   if (has("land_area")) {
     const land = read("land_area");
     if (land > 0) draft.details.land_area = land;
+  }
+  if (has("garden_area")) {
+    const garden = read("garden_area");
+    if (garden > 0) draft.details.garden_area = garden;
   }
   if (numNotes.length) draft.details.notes = [draft.details.notes, ...numNotes].filter(Boolean).join(" · ");
   if (has("notes")) draft.details.notes = [text(cells.notes, 1000), draft.details.notes].filter(Boolean).join(" · ") || null;
