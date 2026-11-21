@@ -95,6 +95,13 @@ function cellsOfPost(post, places, lang) {
 const digits = (s) => String(s || "").replace(/\D/g, "");
 const unitRef = (ex) => ({ code: ex.code, version: ex.version, updated_at: ex.updated_at || null });
 
+/** The changes between the stored unit and `cols`, in Arabic and English (from_ar/to_ar, from_en/to_en). */
+function changeLines(ex, cols, keep) {
+  const ar = Imports.describeChanges(ex, cols, "ar").filter(keep);
+  const en = Imports.describeChanges(ex, cols, "en").filter(keep);
+  return ar.map((c, n) => ({ field: c.field, from: c.from, to: c.to, from_ar: c.from, from_en: en[n]?.from ?? c.from, to_ar: c.to, to_en: en[n]?.to ?? c.to }));
+}
+
 /** What one post would do to the broker's own inventory, as the app shows it. Nothing is written. */
 async function planOnePost(pool, broker, post, places, lang) {
   const id = post && post.id !== undefined ? post.id : null;
@@ -114,7 +121,8 @@ async function planOnePost(pool, broker, post, places, lang) {
   if (!ex) return { ...answer, errors: ["not_found"] };
   answer.code = ex.code;
   answer.existing = unitRef(ex);
-  if (item.code_taken) return { ...answer, kind: "other_unit" };
+  // The post names another unit: what would differ from the stored one is listed, so the card can show it.
+  if (item.code_taken) return { ...answer, kind: "other_unit", changes: changeLines(ex, merge ? merge.patch : {}, (c) => !NEVER_CHANGE.has(c.field)) };
 
   const cols = merge ? merge.patch : item.patch || {};
   const was = Form.formFromUnit(ex);
@@ -125,11 +133,7 @@ async function planOnePost(pool, broker, post, places, lang) {
   const newPhone = cols.details?.owner_phone;
   if (!String(ex.details?.owner_phone || "").trim() && newPhone && digits(text).includes(digits(newPhone))) patch.owner_phone = String(newPhone);
   const keep = (c) => !NEVER_CHANGE.has(c.field) || (c.field === "details.owner_phone" && "owner_phone" in patch);
-  const ar = Imports.describeChanges(ex, cols, "ar").filter(keep);
-  const en = Imports.describeChanges(ex, cols, "en").filter(keep);
-  answer.changes = ar
-    .map((c, n) => ({ field: c.field, from: c.from, to: c.to, from_ar: c.from, from_en: en[n]?.from ?? c.from, to_ar: c.to, to_en: en[n]?.to ?? c.to }))
-    .filter((c) => c.field !== "delivery" || "delivery_year" in patch || "delivery_quarter" in patch);
+  answer.changes = changeLines(ex, cols, keep).filter((c) => c.field !== "delivery" || "delivery_year" in patch || "delivery_quarter" in patch);
   if (!Object.keys(patch).length) return { ...answer, kind: "unchanged", changes: [] };
   if (post.at && ex.updated_at && new Date(ex.updated_at) > new Date(post.at)) return { ...answer, kind: "older" };
   answer.kind = "update";

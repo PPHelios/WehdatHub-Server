@@ -51,7 +51,7 @@ async function resolve(db, fields) {
   if (!typed) {
     // A phase picked with no compound (Madinaty B10) brings its parent compound (Madinaty), as the phase's own compound.
     const phase = areas.find((a) => a.id === fields.subzone_id && a.place_type === "phase");
-    const owner = phase ? (await db.query("SELECT id, name_en, name_ar FROM map_places WHERE approved AND area_id = $1 LIMIT 1", [phase.parent_id])).rows[0] : null;
+    const owner = phase ? (await db.query("SELECT id, name_en, name_ar FROM map_places WHERE approved AND area_id = $1 ORDER BY name_en LIMIT 1", [phase.parent_id])).rows[0] : null;
     if (owner) return { place_id: owner.id, compound_state: null, compound: owner.name_ar || owner.name_en, compound_en: owner.name_en || null, ...locate(areas, fields, null) };
     return { place_id: null, compound_state: null, ...locate(areas, fields, null) };
   }

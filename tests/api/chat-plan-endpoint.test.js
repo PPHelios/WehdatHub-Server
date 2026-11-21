@@ -81,6 +81,7 @@ test("other_unit: the code belongs to a different unit", async () => {
   const auth = await authFor(h.BROKERS.broker);
   const res = await plan(auth, [{ id: 1, fields: { code: "U4" }, text: "Code U4 Hyde Park villa for sale 400m 5 bedrooms 5 bathrooms price: 30000000 01099998888", at: new Date(Date.now() + 60000).toISOString() }]);
   expect(res.body.posts[0]).toMatchObject({ kind: "other_unit", code: "U4", patch: {} });
+  expect(res.body.posts[0].changes.map((c) => c.field)).toContain("price_value"); // what differs from the stored unit, for the card
 });
 
 test("forbidden: a colleague's unit", async () => {

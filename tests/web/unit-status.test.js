@@ -30,6 +30,17 @@ describe("unit status on the web", () => {
     expect(await statusOf("VIL-41")).toBe("sold");
   });
 
+  test("still available on an active unit confirms it again (confirmed_at moves, status stays)", async () => {
+    await h.insertListing({ code: "VIL-45", compound: "Hyde Park" });
+    await h.query("UPDATE listings SET confirmed_at = now() - interval '30 days' WHERE code_norm = upper('VIL-45')");
+    const { agent, csrf } = await signIn(h, "manager");
+    const r = await agent.post("/app/units/VIL-45/status").type("form").send({ _csrf: csrf, status: "active" });
+    expect(r.status).toBe(303);
+    expect(await statusOf("VIL-45")).toBe("active");
+    const [row] = await h.query("SELECT confirmed_at FROM listings WHERE code_norm = upper('VIL-45')");
+    expect(Date.now() - new Date(row.confirmed_at).getTime()).toBeLessThan(60000);
+  });
+
   test("an unknown status is refused and the unit stays as it was", async () => {
     await h.insertListing({ code: "VIL-42", compound: "Hyde Park" });
     const { agent, csrf } = await signIn(h, "manager");
