@@ -19,10 +19,12 @@ Type your request as on WhatsApp ("3-bedroom apartment in New Cairo under 9M"), 
 • Tap *⭐ Save search* and come back later: it tells you how many units are *new*.
 
 *➕ Adding and editing*
-• *➕ Add*: fill in the fields, or paste the description and tap *✨ Fill from text*, or tap *🎙️ Record voice* and speak.
-• Tap *📋 Review* to see what is missing before saving, then *✅ Save*.
-• Photos: up to 15 per unit.
-• Edit from the unit page with *✏️ Edit*. If someone edits the same unit at the same time, the site asks you to reopen the edit (no change is lost).
+• *➕ Add*: fill in the 4-step wizard (Unit & Place, Size & Price, Delivery & Payment, Owner & Photos), or paste the WhatsApp description and tap *✨ Fill from text*, or tap *🎙️ Record voice* and speak.
+• Unified Place Box: typing compound or area shows auto-suggestions with geographic path chips; typing features adds removable feature chips.
+• Tap *📋 Review before saving* to inspect validation, warnings, and duplicate detection before tapping *✅ Save*.
+• Photos: up to 15 per unit, with drag-and-drop ordering and WhatsApp chat zip import support.
+• Edit from the unit page with *✏️ Edit*. If someone edits the same unit simultaneously, optimistic locking protects your changes.
+• Full illustrated beginner guide with step-by-step examples: `docs/pilot/add-edit-unit-guide-en.md`.
 
 *📥 Importing*
 • *Excel sheet*: upload the sheet (or the export from the bot). You see what is new and what changed (from → to) before anything is saved, and choose what to apply.

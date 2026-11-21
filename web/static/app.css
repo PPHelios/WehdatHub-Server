@@ -2649,3 +2649,33 @@ nav[data-kind-nav] a[aria-disabled="true"], nav[data-pager] a[aria-disabled="tru
 .ie-seg input[value="sale"]:checked + span { background: var(--ok-soft); color: var(--ok-ink); border-color: var(--ok); box-shadow: none; }
 .ie-seg input[value="rent"]:checked + span { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); box-shadow: none; }
 .ie-block.missing .ie-seg { border-style: dashed; border-color: var(--bad); }
+
+/* Guide screenshot cards */
+.guide-shot {
+  margin: 14px 0 20px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+.guide-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.guide-shot figcaption {
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--soft);
+  border-top: 1px solid var(--line);
+}
+.guide-example {
+  border-inline-start: 5px solid var(--brand);
+  background: var(--brand-soft, rgba(37, 99, 235, 0.08));
+  padding: 14px 16px;
+  border-radius: 12px;
+  margin: 14px 0;
+}
