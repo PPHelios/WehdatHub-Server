@@ -1711,9 +1711,10 @@
     var c = areaBoxOf(box);
     var typed = normalizeArea(box.value);
     if (!c || !typed) return "";
-    var hit = Array.prototype.filter.call(c.sel.options, function (opt) {
+    var hits = Array.prototype.filter.call(c.sel.options, function (opt) {
       return opt.value && areaTerms(opt).some(function (t) { return normalizeArea(t) === typed; });
-    })[0];
+    });
+    var hit = hits.filter(function (o) { return o.value === c.sel.value; })[0] || hits[0]; // keep the picked one among same names
     return hit ? hit.value : "";
   };
   // The suggestion list: every name and alias of the areas; for a sub-zone, only the chosen area's sub-zones.
@@ -1742,13 +1743,22 @@
     var pop = box.parentNode && box.parentNode.querySelector("[data-area-list]");
     if (!c || !pop) return;
     var typed = normalizeArea(box.value);
-    var hits = Array.prototype.map.call(c.list.options, function (o) { return o.value; }).filter(function (t) {
-      return !typed || normalizeArea(t).indexOf(typed) >= 0;
+    var areaSel = box.form.querySelector('select[name="area_id"]');
+    var under = c.sel.name === "subzone_id" && areaSel && areaSel.value ? areaSel.value : null;
+    var opts = Array.prototype.filter.call(c.sel.options, function (o) { return o.value && (under === null || o.getAttribute("data-parent") === under); });
+    var count = {};
+    opts.forEach(function (o) { var k = normalizeArea(o.textContent); count[k] = (count[k] || 0) + 1; });
+    // One row per place (an alias hit shows the main name); same-named places show their parent so they can be told apart.
+    var hits = opts.filter(function (o) {
+      return !typed || areaTerms(o).some(function (t) { return normalizeArea(t).indexOf(typed) >= 0; });
     }).slice(0, 8);
     pop.innerHTML = "";
-    hits.forEach(function (t) {
+    hits.forEach(function (o) {
       var b = document.createElement("button");
-      b.type = "button"; b.className = "ubox-opt"; b.setAttribute("role", "option"); b.textContent = t;
+      var parent = o.parentNode && o.parentNode.label;
+      b.type = "button"; b.className = "ubox-opt"; b.setAttribute("role", "option");
+      b.setAttribute("data-id", o.value); b.setAttribute("data-name", o.textContent);
+      b.textContent = o.textContent + (count[normalizeArea(o.textContent)] > 1 && parent ? " — " + parent : "");
       pop.appendChild(b);
     });
     pop.hidden = !hits.length;
@@ -1758,7 +1768,9 @@
     if (!opt) return;
     e.preventDefault(); // keep the focus in the box
     var box = opt.closest("label").querySelector("[data-area-input]");
-    box.value = opt.textContent;
+    box.value = opt.getAttribute("data-name");
+    var c = areaBoxOf(box);
+    if (c) setAreaValue(c.sel, opt.getAttribute("data-id")); // by id: same-named places differ only by parent
     var pop = opt.parentNode;
     box.dispatchEvent(new Event("input", { bubbles: true }));
     box.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1868,6 +1880,7 @@
       placeOpenNew(b, false);
       b.areaSel.value = hit.area_id;
       if (b.subSel) b.subSel.value = hit.kind === "compound" || hit.subzone_id ? hit.subzone_id || "" : b.subSel.value;
+      b.areaSel.dispatchEvent(new Event("change", { bubbles: true })); // same handler as a manual pick: enables and refills the sub-zone box
       placeShowSummary(b);
       return;
     }

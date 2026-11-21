@@ -24,3 +24,21 @@ test("sub-zone box is disabled until an area is picked", () => {
   expect(render({})).toMatch(/data-area-input="subzone_id"[^>]*disabled/);
   expect(render({ area_id: "1" })).not.toMatch(/data-area-input="subzone_id"[^>]*disabled/);
 });
+
+test("sub-zone options carry their parent id, so the client shows only the chosen area's children (none without an area)", () => {
+  const two = [...areas, { id: "3", parent_id: null, name_en: "Giza", name_ar: "الجيزة", aliases: [] }, { id: "4", parent_id: "3", name_en: "Dokki", name_ar: "الدقي", aliases: [] }];
+  const html = String(unitForm({ lang: "en", csrf: "x", areas: two, values: {}, extraValues: { feature: [], features: [], compound_new: "1" }, mode: "new" }));
+  const subs = [...html.matchAll(/<option value="(\d+)" data-parent="(\d+)"/g)].map((m) => ({ id: m[1], parent: m[2] }));
+  const under = (area) => subs.filter((o) => area !== "" && o.parent === area).map((o) => o.id); // same rule as fillAreaList/showAreaList
+  expect(under("1")).toEqual(["2"]);
+  expect(under("3")).toEqual(["4"]);
+  expect(under("")).toEqual([]);
+  const js = require("fs").readFileSync("web/static/app.js", "utf8");
+  expect(js).toContain('o.getAttribute("data-parent") === under');
+});
+
+test("known-place fill fires the area change handler; the area list shows one row per place with parent on same names", () => {
+  const js = require("fs").readFileSync("web/static/app.js", "utf8");
+  expect(js).toMatch(/b\.areaSel\.value = hit\.area_id;[\s\S]*?b\.areaSel\.dispatchEvent\(new Event\("change"/);
+  expect(js).toContain("count[normalizeArea(o.textContent)] > 1 && parent");
+});
