@@ -9,7 +9,10 @@
   "use strict";
 
   const MAX_COLS = 80;
-  const MAX_ROWS_PER_TAB = 6000;
+  const MAX_ROWS_PER_TAB = 30000; // the whole-file cap below; a bigger tab is cut short here
+  const PART_ROWS = 5000; // rows per import sent to the server: lib/sheetGrid.js MAX_TOTAL_ROWS
+  const FILE_ROWS = 30000; // rows in the whole file: the grid route refuses more
+  const FILE_TABS = 60; // tabs in the whole file: lib/sheetGrid.js MAX_TABS
   const MAX_MERGE_ROWS = 2000;
   const MAX_SHEET_BYTES = 80 * 1024 * 1024; // uncompressed XML of one tab
   const fail = (code, message) => Object.assign(new Error(message), { code });
@@ -214,5 +217,69 @@
     return { tabs, skipped };
   }
 
-  return { readWorkbook, parseSheet, sharedStrings };
+  /** The header row (the row among the first 10 with the most text cells, earliest on a tie) and the rows above it. */
+  function headerRows(rows) {
+    let best = 0;
+    let at = 0;
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const n = rows[i].v.filter((x) => typeof x === "string").length;
+      if (n > best) {
+        best = n;
+        at = i;
+      }
+    }
+    return rows.slice(0, at + 1);
+  }
+
+  /**
+   * Cuts the tabs into parts of at most PART_ROWS rows: whole tabs where they fit, a tab that does not fit starts a new part, and a
+   * tab bigger than a part is cut by rows (its header rows repeated at the top of each later part, so every part reads on its own).
+   * @param {{ name: string, rows: { n: number, v: any[] }[] }[]} tabs
+   * @returns {{ name: string, rows: { n: number, v: any[] }[] }[][]} the parts in order; one part when the file fits
+   * @throws {Error} code TOO_LARGE above FILE_ROWS rows or FILE_TABS tabs
+   */
+  function splitParts(tabs) {
+    const total = tabs.reduce((n, t) => n + t.rows.length, 0);
+    if (total > FILE_ROWS || tabs.length > FILE_TABS) throw fail("TOO_LARGE", "The file is too large");
+    const parts = [];
+    let cur = [];
+    let room = PART_ROWS;
+    const flush = () => {
+      parts.push(cur);
+      cur = [];
+      room = PART_ROWS;
+    };
+    for (const tab of tabs) {
+      const len = tab.rows.length;
+      if (len <= room) {
+        cur.push(tab);
+        room -= len;
+        continue;
+      }
+      if (cur.length && len <= PART_ROWS) {
+        flush();
+        cur.push(tab);
+        room -= len;
+        continue;
+      }
+      const head = headerRows(tab.rows);
+      let pos = 0;
+      while (pos < len) {
+        if (room < head.length + 1) {
+          flush();
+          continue;
+        }
+        const lead = pos === 0 ? [] : head;
+        const take = Math.min(room - lead.length, len - pos);
+        cur.push({ name: tab.name, rows: lead.concat(tab.rows.slice(pos, pos + take)) });
+        room -= lead.length + take;
+        pos += take;
+        if (pos < len) flush();
+      }
+    }
+    if (cur.length) parts.push(cur);
+    return parts;
+  }
+
+  return { readWorkbook, parseSheet, sharedStrings, splitParts, PART_ROWS };
 });

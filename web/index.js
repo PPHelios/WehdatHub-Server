@@ -187,6 +187,10 @@ function mountWeb(app, { pool, config }) {
   web.use(async (err, req, res, _next) => {
     // Path only (query strings may carry tokens); the owner is alerted with the broker and the page. A 4xx (a too-large
     // or broken body) is the request's fault, not a bug.
+    if (err.type === "entity.too.large") {
+      const message = req.lang === "en" ? "File too large: remove tabs or columns you don't need." : "الملف كبير أوي: شيل التابات أو الأعمدة اللي مش محتاجها.";
+      return req.is("json") ? res.status(413).json({ message }) : page(req, res, { title: message, body: html`<div class="card notice bad"><h1>⚠️ ${message}</h1></div>` }, 413);
+    }
     const ours = !(err.status >= 400 && err.status < 500);
     const id = ours ? await ErrorReports.capture(err, { pool, source: "web", broker: req.session?.broker || null, path: `${req.method} ${req.baseUrl}${req.path}` }) : null;
     const ref = id ? ` #E${id}` : "";

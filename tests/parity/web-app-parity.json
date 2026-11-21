@@ -35,6 +35,8 @@
  "/import/:id/apply-status": "web-only: inventory imports",
  "/import/:id/dialog/:row": "web-only: inventory imports",
  "/import/:id/failed.xlsx": "web-only: inventory imports",
+ "/import/:id/fixed.xlsx": "web-only: inventory imports",
+ "/import/:id/diff.xlsx": "web-only: inventory imports",
  "/import/:id/undo": "web-only: inventory imports",
  "/import/decisions": "api:/units/chat-decisions",
  "/import/match/units": "web-only: inventory imports",

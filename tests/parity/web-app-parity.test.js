@@ -14,7 +14,7 @@ const read = (dir, re) => {
   }
   return out;
 };
-const webPages = read("web/routes", /web\.get\("([^"]*)"/g);
+const webPages = read("web/routes", /(?:web\.get|sendSheet)\("([^"]*)"/g);
 const apiRoutes = read("api", /api\.(?:get|post|put|patch|delete)\("([^"]*)"/g);
 
 test("every website page is in the parity map", () => {
