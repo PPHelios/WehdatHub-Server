@@ -85,11 +85,11 @@ describe("CSV", () => {
     expect(I.rowToLead({ phone: "01012345678", platform: "ig", source: "" }).source).toBe("Instagram");
     expect(I.rowToLead({ phone: "01012345678", source: "facebook" }).source).toBe("Facebook");
   });
-  test("limits: 2,000 rows and 5 MB", async () => {
-    const many = "name,phone\n" + Array.from({ length: 2001 }, (_, i) => `n${i},010${String(i).padStart(8, "0")}`).join("\n");
+  test("limits: 5,000 rows and 5 MB", async () => {
+    const many = "name,phone\n" + Array.from({ length: 5001 }, (_, i) => `n${i},010${String(i).padStart(8, "0")}`).join("\n");
     await expect(read(many)).rejects.toMatchObject({ code: "TOO_MANY_ROWS" });
     await expect(read(Buffer.alloc(S.MAX_BYTES + 1, 0x41))).rejects.toMatchObject({ code: "TOO_LARGE" });
-    const ok = "name,phone\n" + Array.from({ length: 2000 }, (_, i) => `n${i},010${String(i).padStart(8, "0")}`).join("\n");
-    expect((await read(ok)).rows).toHaveLength(2000);
+    const ok = "name,phone\n" + Array.from({ length: 5000 }, (_, i) => `n${i},010${String(i).padStart(8, "0")}`).join("\n");
+    expect((await read(ok)).rows).toHaveLength(5000);
   });
 });

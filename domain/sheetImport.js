@@ -109,6 +109,7 @@ function money(v) {
   const n = Number(m[1].replace(/,/g, ""));
   if (!Number.isFinite(n) || n <= 0) return null;
   const unit = m[2] || "";
+  if (n >= 1e6) return n; // "16,000,000 m": already in full, the unit is a stray label (C01)
   return /^(m|mn|million|مليون)$/.test(unit) ? Math.round(n * 1e6) : /^(k|الف|ألف|thousand)$/.test(unit) ? Math.round(n * 1e3) : n;
 }
 /**

@@ -26,6 +26,7 @@ const ParseLog = require("./chatParseLog");
 const Decisions = require("./chatDecisions");
 const { MAX_PHOTOS } = require("../lib/images");
 const Vis = require("../lib/visibility");
+const { logOperation } = require("../lib/db");
 
 const MONEY = ["price_value", "down_payment_value", "remaining_amount", "installment_value"];
 const DETAIL_LABELS = { owner_name: ["المالك", "Owner"], owner_phone: ["تليفون المالك", "Owner phone"], notes: ["ملاحظات", "Notes"], clean_summary: ["الوصف", "Description"], summary_en: ["الوصف بالإنجليزي", "English summary"], floor: ["الدور", "Floor"] };
@@ -616,6 +617,8 @@ const APPLY_STALE_MS = 120000; // an 'applying' plan with no heartbeat for this 
 const rowSet = (v) => new Set((Array.isArray(v) ? v : []).map(Number));
 /** Rows of a plan an Apply already wrote (the plan stays 'ready' while other rows remain). */
 const appliedRows = (imp) => new Set([...rowSet(imp?.payload?.applied_rows), ...rowSet(imp?.result?.applied_rows)]);
+/** The "Save all ready" rows: a new or changed unit no Apply wrote yet, not set aside as saved or unchanged in a chat. The page count, its confirm text and the apply filter all use this. */
+const isReadyRow = (imp, item, done = appliedRows(imp)) => ["new", "changed"].includes(item.kind) && !done.has(item.row) && !["saved", "unchanged"].includes((imp?.payload?.remembered || {})[item.row]);
 /** The new and changed rows no Apply wrote yet (a thrown-away row does not count). The plan closes when there are none. */
 function remainingRows(imp) {
   const done = appliedRows(imp);
@@ -680,10 +683,23 @@ async function applyExcel(pool, broker, id, opts = {}) {
  * running job here, no heartbeat for a while) is taken up again from the rows it already wrote.
  */
 async function applyStatus(pool, broker, id, { staleMs = APPLY_STALE_MS } = {}) {
-  let imp = await loadImport(pool, broker, id);
+  // Only the status, the progress and the list sizes: the payload and the lists themselves are not read on every poll.
+  const light = async () => {
+    if (!/^[0-9a-f-]{36}$/.test(String(id))) return null;
+    const { rows } = await pool.query(
+      `SELECT id, kind, status, result->'progress' AS progress, result->'apply_req' IS NOT NULL AS has_req,
+         jsonb_array_length(COALESCE(result->'created', '[]'::jsonb)) AS created_n,
+         jsonb_array_length(COALESCE(result->'updated', '[]'::jsonb)) AS updated_n,
+         jsonb_array_length(COALESCE(result->'failed', '[]'::jsonb)) AS failed_n
+       FROM web_imports WHERE id = $1 AND agency_id = $2 AND broker_id = $3`,
+      [id, broker.agency_id, broker.id]
+    );
+    return rows[0] || null;
+  };
+  let imp = await light();
   if (!imp || imp.kind !== "excel") return null;
   let resumed = false;
-  if (imp.status === "applying" && !applyJobs.has(id) && imp.result?.apply_req) {
+  if (imp.status === "applying" && !applyJobs.has(id) && imp.has_req) {
     const { rows } = await pool.query(
       `UPDATE web_imports SET result = jsonb_set(result, '{heartbeat}', to_jsonb(now()::text))
        WHERE id = $1 AND status = 'applying' AND (result->>'heartbeat')::timestamptz < now() - ($2::int * interval '1 millisecond') RETURNING *`,
@@ -692,18 +708,17 @@ async function applyStatus(pool, broker, id, { staleMs = APPLY_STALE_MS } = {}) 
     if (rows[0]) {
       launchApply(pool, broker, rows[0], rows[0].result.apply_req, false);
       resumed = true;
-      imp = rows[0];
+      imp = await light();
     }
   }
-  const r = imp.result || {};
   return {
     status: imp.status,
-    done: r.progress?.done || 0,
-    total: r.progress?.total || 0,
-    created: (r.created || []).length,
-    updated: (r.updated || []).length,
-    failed: (r.failed || []).length,
-    remaining: imp.status === "ready" ? remainingRows(imp).length : 0,
+    done: imp.progress?.done || 0,
+    total: imp.progress?.total || 0,
+    created: imp.created_n,
+    updated: imp.updated_n,
+    failed: imp.failed_n,
+    remaining: imp.status === "ready" ? remainingRows(await loadImport(pool, broker, id)).length : 0,
     resumed
   };
 }
@@ -793,12 +808,15 @@ async function runApply(pool, broker, imp, req, fresh) {
     }
   };
   const merge = async (item) => {
-    const res = await patchOne(pool, broker, item.merge?.code || item.code, item.merge?.patch || item.patch, item.merge?.version ?? item.version);
+    const patch = item.merge?.patch || item.patch || {};
+    const res = await patchOne(pool, broker, item.merge?.code || item.code, patch, item.merge?.version ?? item.version);
     if (res.outcome === "updated") {
       markDone(item.row);
       savedRows.add(item.row);
       result.updated.push(res.listing.code);
-      result.undo.changed.push({ code: res.listing.code, before: item.merge?.before || item.before || {}, version: res.listing.version });
+      // after + updated_at: undo only puts a unit back when it still holds exactly these values (see undoPreview).
+      const after = Object.fromEntries(Object.keys(patch).map((k) => [k, res.listing[k] === undefined ? null : res.listing[k]]));
+      result.undo.changed.push({ code: res.listing.code, before: item.merge?.before || item.before || {}, after, version: res.listing.version, updated_at: res.listing.updated_at });
       await withPhotos(item, res.listing);
     } else if (res.outcome === "conflict") result.conflicts.push(item.merge?.code || item.code);
     else result.failed.push({ code: item.merge?.code || item.code, reason: res.outcome === "forbidden" ? "forbidden" : "missing" });
@@ -966,20 +984,24 @@ async function attachChatPhotos(pool, broker, listing, photos, choice, result) {
 /* Undo: only the agency's last applied Excel import. Units it added are deleted like any unit (10 days in Recently deleted, then gone; they stop counting against the plan at once); units it changed get the
    values they had before. A unit edited since the import is skipped and listed, never overwritten. */
 
-/** The agency's last applied Excel import that was not undone yet; null when there is none. */
-async function lastApplied(pool, agencyId) {
+const UNDO_LAST = 10; // the agency's last applied Excel imports, within UNDO_DAYS, stay undoable
+const UNDO_DAYS = 30;
+const SKIP_CHANGED = "changed"; // the unit was edited by hand or changed by a later import (the page says it in words)
+
+/** Ids of the agency's last applied Excel imports that can still be undone (an Apply cut short counts when it wrote something). */
+async function undoableIds(pool, agencyId) {
   const { rows } = await pool.query(
-    `SELECT * FROM web_imports WHERE agency_id = $1 AND kind = 'excel' AND result IS NOT NULL
+    `SELECT id FROM web_imports WHERE agency_id = $1 AND kind = 'excel' AND result IS NOT NULL
+       AND applied_at > now() - interval '${UNDO_DAYS} days'
        AND (status = 'applied' OR (status IN ('ready', 'applying')
             AND jsonb_array_length(coalesce(result#>'{undo,made}', '[]'::jsonb)) + jsonb_array_length(coalesce(result#>'{undo,changed}', '[]'::jsonb)) > 0))
-     ORDER BY applied_at DESC LIMIT 1`,
+     ORDER BY applied_at DESC LIMIT ${UNDO_LAST}`,
     [agencyId]
   );
-  const imp = rows[0] || null;
-  return imp && imp.result?.undo && !imp.result.undone ? imp : null;
+  return rows.map((r) => r.id);
 }
 
-/** What undoing this import would do, without changing anything. */
+/** What undoing this import would do, without changing anything. A changed unit is put back only when its version is the one the import left and every column it wrote still holds the value it wrote. */
 async function undoPreview(pool, agencyId, imp) {
   const log = imp.result?.undo || { made: [], changed: [] };
   const archive = [];
@@ -988,22 +1010,25 @@ async function undoPreview(pool, agencyId, imp) {
   for (const m of log.made) {
     const { rows } = await pool.query("SELECT version, status FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [m.id, agencyId]);
     if (rows[0] && Number(rows[0].version) === Number(m.version) && rows[0].status !== "deleted") archive.push(m);
-    else skipped.push(m.code);
+    else skipped.push({ code: m.code, reason: SKIP_CHANGED });
   }
   for (const c of log.changed) {
-    const { rows } = await pool.query("SELECT version FROM listings WHERE " + Vis.units("listings") + " AND code_norm = $1 AND agency_id = $2", [normalizeCode(c.code), agencyId]);
-    if (rows[0] && Number(rows[0].version) === Number(c.version)) restore.push(c);
-    else skipped.push(c.code);
+    const { rows } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND code_norm = $1 AND agency_id = $2", [normalizeCode(c.code), agencyId]);
+    // Imports written before "after" was kept have no after: the version alone decides for them.
+    const intact = !c.after || Object.entries(c.after).every(([k, v]) => JSON.stringify(rows[0]?.[k] ?? null) === JSON.stringify(v ?? null));
+    if (rows[0] && Number(rows[0].version) === Number(c.version) && intact) restore.push(c);
+    else skipped.push({ code: c.code, reason: SKIP_CHANGED });
   }
-  return { archive, restore, skipped };
+  const passed = new Set([...archive, ...restore].map((x) => x.code));
+  return { archive, restore, skipped, passed };
 }
 
-/** Whether this broker may undo this import now (the last applied one, not yet undone). A plan still open for more rows, or one whose Apply was cut short, can be undone for what it wrote. */
+/** Whether this broker may undo this import now: one of the agency's last applied Excel imports, not yet undone. A plan still open for more rows, or one whose Apply was cut short, can be undone for what it wrote. */
 async function canUndo(pool, broker, imp) {
   if (!imp || imp.kind !== "excel" || !["applied", "ready", "applying"].includes(imp.status)) return false;
   if (imp.status === "applying" && (applyJobs.has(imp.id) || Date.now() - Date.parse(imp.result?.heartbeat || 0) < APPLY_STALE_MS)) return false;
-  const last = await lastApplied(pool, broker.agency_id);
-  return Boolean(last && last.id === imp.id);
+  if (!imp.result?.undo || imp.result.undone) return false;
+  return (await undoableIds(pool, broker.agency_id)).includes(imp.id);
 }
 
 /** Undoes the last applied Excel import. Claims it first, so a double press does nothing the second time. */
@@ -1023,25 +1048,27 @@ async function undoExcel(pool, broker, id) {
       [m.id, broker.agency_id, m.version, broker.id]
     );
     if (rowCount) out.archived.push(m.code);
-    else out.skipped.push(m.code);
+    else out.skipped.push({ code: m.code, reason: SKIP_CHANGED });
   }
   for (const c of plan.restore) {
     const res = await patchOne(pool, broker, c.code, c.before, c.version);
     if (res.outcome === "updated") out.restored.push(c.code);
-    else out.skipped.push(c.code);
+    else out.skipped.push({ code: c.code, reason: SKIP_CHANGED });
   }
-  // Photos the import added are taken off again; photos it removed from a merged unit are put back.
+  // Photos the import added are taken off again; photos it removed from a merged unit are put back. Only for units that passed the check above.
   for (const ph of imp.result?.undo?.photos || []) {
+    if (!plan.passed.has(ph.code)) continue;
     try {
       if (ph.added?.length) await pool.query("DELETE FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND url = ANY($3::text[])", [ph.id, broker.agency_id, ph.added]);
       for (const d of ph.dropped || []) {
         await pool.query("INSERT INTO listing_images (listing_id, agency_id, position, url, role, phash) VALUES ($1, $2, $3, $4, $5, $6::bit(64))", [ph.id, broker.agency_id, d.position, d.url, d.role || null, d.phash || null]);
       }
     } catch (err) {
-      out.skipped.push(`${ph.code} (photos)`);
+      out.skipped.push({ code: ph.code, reason: "photos" });
     }
   }
   await pool.query("UPDATE web_imports SET result = jsonb_set(result, '{undone}', $2::jsonb) WHERE id = $1", [id, JSON.stringify({ at: new Date().toISOString(), by: broker.id, archived: out.archived, restored: out.restored, skipped: out.skipped })]);
+  await logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "excel_import_undo", metadata: { import_id: id, archived: out.archived.length, restored: out.restored.length, skipped: out.skipped.length } }).catch(() => {});
   return out;
 }
 
@@ -1600,6 +1627,7 @@ module.exports = {
   applyStatus,
   waitForApply,
   remainingRows,
+  isReadyRow,
   appliedRows,
   failReason,
   failedLine,

@@ -928,9 +928,13 @@ fieldset.plancard .period input { position: static; opacity: 1; inset: auto; mar
 .ai-off-hint { display: block; margin-top: 0.25rem; }
 /* Kinds of a long import review (new, changed, problems…) as tabs that stay at the top while the list scrolls. */
 .kind-tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; background: var(--bg, #fff); border-block-end: 1px solid var(--line); }
-.kind-tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 8px 12px; min-height: 40px; border-radius: 10px; background: var(--soft); color: var(--ink); font-weight: 600; text-decoration: none; }
+.kind-tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 8px 12px; min-height: 44px; border-radius: 10px; background: var(--soft); color: var(--ink); font-weight: 600; text-decoration: none; }
 .kind-tab.on { background: var(--brand); color: var(--on-brand); }
 .kind-count { font-variant-numeric: tabular-nums; opacity: 0.85; }
+[data-tabs] .chip, [data-pager] .chip, [data-pick-all] .chip { min-height: 44px; }
+/* What will change on the review page: old value struck out, new value marked. */
+.diff ins { background: var(--ok-soft); color: var(--ok-ink); text-decoration: none; padding-inline: 3px; border-radius: 4px; }
+.diff del { color: var(--bad); }
 
 /* Search feedback: a spinner shows while a search is running (typing, or Enter with the AI), so the press is seen. */
 .spin { display: none; width: 14px; height: 14px; margin-inline-start: 6px; border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }

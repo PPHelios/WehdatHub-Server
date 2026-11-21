@@ -686,7 +686,8 @@
       "readText": ["raw"],
       "FOREIGN": "Object",
       "cellPrice": ["raw"],
-      "installmentOf": ["raw"]
+      "installmentOf": ["raw"],
+      "gardenSplit": ["raw"]
     },
     "domain/sheetSync.js": {
       "CHECK_EVERY_MS": "Number",
@@ -775,6 +776,9 @@
       "kindOf": ["err"],
       "resetOn": ["lang", "now"],
       "text": ["kind", "lang", "params"]
+    },
+    "lib/appBack.js": {
+      "appBack": ["value"]
     },
     "lib/assistantBot.js": {
       "command": ["broker", "params", "ctx"],
@@ -1089,7 +1093,9 @@
       "makeThumbBuffer": ["rawBuffer"]
     },
     "lib/importFailed.js": {
-      "failedRowsWorkbook": ["payload", "params"]
+      "failedRowsWorkbook": ["payload", "params"],
+      "fixedRowsWorkbook": ["payload", "params"],
+      "diffRowsWorkbook": ["payload", "params"]
     },
     "lib/importTemplate.js": {
       "build": ["params"]
@@ -1562,6 +1568,12 @@
     "lib/tgSetup.js": {
       "setup": ["params"],
       "COMMANDS": "Object"
+    },
+    "lib/unitPhase.js": {
+      "PHASE_NAME_COLS": "String",
+      "phaseOf": ["pool", "subzoneId"],
+      "phasesOf": ["pool", "subzoneId", "areaId", "lang"],
+      "editPhaseFields": ["pool", "listing", "lang"]
     },
     "lib/unitUploads.js": {
       "keysOf": ["body"],
@@ -2076,6 +2088,8 @@
     },
     "services/imports.js": {
       "fieldsOfCells": ["cells", "lang"],
+      "keepAppText": ["existing", "patch"],
+      "sameCompoundAs": ["resolved", "existing"],
       "typeWordPlaces": ["pool", "words"],
       "TYPE_WORD_CHOICES": "Array",
       "WORD_FIELDS": "Array",
@@ -2100,6 +2114,7 @@
       "applyStatus": ["pool", "broker", "id", "params"],
       "waitForApply": ["id"],
       "remainingRows": ["imp"],
+      "isReadyRow": ["imp", "item", "done"],
       "appliedRows": ["imp"],
       "failReason": ["reason", "lang"],
       "failedLine": ["f", "lang"],
@@ -3039,8 +3054,8 @@
       "safeNext": ["next"]
     },
     "web/todayCards.js": {
-      "render": ["cards", "en"],
-      "oldUnitsCard": ["c", "en"]
+      "render": ["cards", "en", "csrf"],
+      "oldUnitsCard": ["c", "en", "csrf", "back"]
     },
     "web/uploads.js": {
       "MB": "Number",
@@ -3139,7 +3154,8 @@
     "web/views/units.js": {
       "stripMarkdown": ["s"],
       "resultItem": ["l", "lang", "params"],
-      "factList": ["l", "lang", "params"]
+      "factList": ["l", "lang", "params"],
+      "statusForm": ["code", "en", "csrf", "back"]
     }
   },
   "invariant_variable_names": {

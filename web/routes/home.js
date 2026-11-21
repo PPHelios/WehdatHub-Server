@@ -104,7 +104,7 @@ ${groups.map((g) => {
     const en = broker.preferred_lang === "en";
     const now = new Date();
     const [welcome, day] = await Promise.all([Onboarding.welcomeFor(pool, broker), Today.build(pool, broker, now).catch(Swallow.logged(pool, "home.brief", null))]);
-    return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en }) });
+    return page(req, res, { title: en ? "Today" : "اليوم", body: todayPage({ broker, agency, welcome, day, now, en, csrf: req.session.csrf }) });
   });
 
   // Leases being tracked: the broker's own, a team lead's team, or all for managers (services/leases.js list).
@@ -125,7 +125,7 @@ const fmtTime = (d, en) => new Date(d).toLocaleTimeString(en ? "en-GB" : "ar-EG"
 const fmtDay = (d, en) => new Date(d).toLocaleDateString(en ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", weekday: "long", day: "numeric", month: "long" });
 
 /** Today: the broker's day at a glance (counts, then the people who need them now with Call and WhatsApp). */
-function todayPage({ broker, agency, welcome, day, now, en }) {
+function todayPage({ broker, agency, welcome, day, now, en, csrf }) {
   const d = day || { counts: { followUpsToday: 0, viewings: 0, newLeads: 0 }, tasks: [], moreTasks: 0, cards: {} };
   const chips = {
     late: [en ? "Late" : "متأخرة", "late", (t) => (t.at ? fmtDay(t.at, en) : "")],
@@ -168,7 +168,7 @@ ${welcome ? welcomeCard(welcome, en) : ""}
     : html`<p class="card muted empty">${en ? "Nothing waiting. Add a unit or a lead with the + button." : "مفيش حاجة مستنياك. ضيف وحدة أو عميل من زرار +."}</p>`}
   ${total > shown.length ? html`<a class="btn secondary" href="/app/leads?tab=overdue">${en ? `${total - shown.length} more` : `${total - shown.length} كمان`}</a>` : ""}
 </section>
-${TodayCards.render(d.cards || {}, en, req.session.csrf)}
+${TodayCards.render(d.cards || {}, en, csrf)}
 ${(d.leases || []).length
   ? html`<section class="stack" data-today-leases><div class="row between"><h2>🔑 ${en ? "Leases ending soon" : "عقود قربت تخلص"}</h2><a href="/app/leases">${en ? "All" : "الكل"}</a></div>
   ${(d.leases || []).slice(0, 5).map((z) => html`<a class="card task" href="/app/units/${encodeURIComponent(z.code)}#lease" data-lease-soon="${z.code}"><div class="row between"><span><b>${z.code}</b> <span class="muted">${z.tenant_name || ""}</span></span><span class="chip ${z.daysLeft <= 60 ? "late" : "new"}">${en ? `${z.daysLeft} days` : `${z.daysLeft} يوم`}</span></div></a>`)}</section>`

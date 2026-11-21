@@ -73,16 +73,16 @@ async function chatText(file) {
 
 const KIND_LABEL = {
   review: ["⚠️ راجع: نفس الكود أو وحدة شبيهة", "⚠️ Check: same code or a similar unit"],
-  new: ["🆕 جديدة", "🆕 New"],
-  changed: ["✏️ متغيرة", "✏️ Changed"],
-  unchanged: ["✔️ مفيش تغيير", "✔️ No changes"],
-  invalid: ["⛔ ناقصة أو غلط", "⛔ Invalid"],
+  new: ["🆕 جديدة · جاهزة للحفظ", "🆕 New · ready to save"],
+  changed: ["✏️ متغيرة · جاهزة للحفظ", "✏️ Changed · ready to save"],
+  unchanged: ["✔️ زي اللي في التطبيق", "✔️ Same as the app"],
+  invalid: ["⛔ محتاجة تصليح", "⛔ Needs a fix"],
   forbidden: ["🔒 مش من حقك تعدلها", "🔒 Not yours to change"]
 };
 
 const APPLY_GRACE_MS = 2500; // how long Apply waits for a small import before showing the progress page
 const PAGE_SIZE = 50;
-const PAGED_FROM = 200; // plans with more rows than this are shown one kind and one page at a time
+const PAGED_FROM = 30; // Excel plans with more rows than this are shown one kind and one page at a time
 const KIND_ORDER = ["invalid", "review", "new", "changed", "unchanged", "forbidden"];
 const CELL_LABEL = {
   listing_type: ["بيع / إيجار", "Sale or rent"],
@@ -122,16 +122,16 @@ function viewOf(imp, query = {}) {
   const items = imp.payload.items.filter((i) => !gone.has(i.row) && !hiddenSaved.has(i.row));
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
   // A chat plan is at most 40 posts: every kind on one page, so the "will save" line counts the whole plan.
-  const paged = items.length > PAGED_FROM;
+  const paged = !chat && items.length > PAGED_FROM;
   // "Hide unchanged": units the file says nothing new about are left out of the list (still counted in the lines above); never when they are all there is.
   const hideSame = query.hide_unchanged === "1" && KIND_ORDER.some((k) => k !== "unchanged" && counts[k]);
   const kinds = KIND_ORDER.filter((k) => counts[k] && !(hideSame && k === "unchanged"));
   const kind = paged ? (kinds.includes(query.kind) ? query.kind : counts.review ? "review" : counts.invalid ? "invalid" : kinds[0]) : null;
-  const tab = paged && query.tab ? String(query.tab) : null;
-  const shown = paged ? items.filter((i) => i.kind === kind && (!tab || i.tab === tab)) : items;
+  const tab = !chat && query.tab ? String(query.tab) : null; // a tab chip also filters a small file (X04)
+  const shown = paged ? items.filter((i) => i.kind === kind && (!tab || i.tab === tab)) : tab ? items.filter((i) => i.tab === tab) : items;
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const page = Math.min(pages, Math.max(1, Number(query.page) || 1));
-  const slice = paged ? shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : items;
+  const slice = paged ? shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : shown;
   return { applied, chat, gone, remembered, showSaved, hideSame, savedBefore, items, counts, paged, kinds, kind, tab, shown, pages, page, slice };
 }
 
@@ -182,7 +182,12 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const section = (k, body) => {
     const rows = slice.filter((i) => i.kind === k);
     if (!rows.length || (hideSame && k === "unchanged")) return "";
-    return html`<section class="card" data-kind="${k}"><h2>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} (${paged ? shown.length : rows.length})</h2>${body(rows)}</section>`;
+    const n = paged ? shown.length : rows.length;
+    // What will change: closed (open on its own tab) so the changed rows are not a wall; the diff download sits inside.
+    if (k === "changed" && !chat) {
+      return html`<details class="card" data-kind="changed"${paged ? raw(" open") : ""}><summary>✏️ ${L(lang, `اللي هيتغير (${n})`, `What will change (${n})`)}</summary>${extra.dataEntry ? "" : html`<p class="row" data-diff-download><a class="secondary button" href="/app/import/${imp.id}/diff.xlsx" download>⬇️ ${L(lang, "نزّل التغييرات إكسيل", "Download the changes as Excel")}</a></p>`}${body(rows)}</details>`;
+    }
+    return html`<section class="card" data-kind="${k}"><h2>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])} (${n})</h2>${body(rows)}</section>`;
   };
   const notesOf = (i) => (i.notes?.length ? html`<div class="warn muted" data-notes="${i.row}">${i.notes.join(" · ")}</div>` : "");
   // Editing is per row: a small form outside the apply form (forms cannot nest), its inputs joined by the form attribute.
@@ -286,7 +291,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const ucLabel = (k) => (UC_LABEL[k] || CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
   const ucValue = (k, v) => (k === "listing_type" ? (v === "rent" ? L(lang, "إيجار", "Rent") : v === "sale" ? L(lang, "بيع", "Sale") : v) : v);
   // Discard: this unit is thrown out of the review (kept in the plan, never saved, brought back from the bar above the list).
-  const discardBtn = (i) => (chat && !applied ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="row" value="${i.row}" data-discard="${i.row}">🗑 ${L(lang, "تجاهل", "Discard")}</button>` : "");
+  const discardBtn = (i) => (chat && !applied ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="row" value="${i.row}" data-discard="${i.row}">🗑 ${L(lang, "استبعد", "Leave out")}</button>` : "");
   const chatCard = (i) => {
     const cells = cellsOf.get(i.row) || {};
     const bad = i.kind === "invalid";
@@ -315,10 +320,10 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   })}</dl></section>`)}</div>
   ${originalBox(i, false)}
   ${i.kind === "new" && i.warnings?.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}
-  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul class="diff">${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
   ${i.kind === "review"
     ? html`<div class="stack" data-review-note><p class="muted" data-not-ticked>${L(lang, "مش متعلّمة: اختار تدمجها ولا تضيفها بكود جديد وبعدين علّمها.", "Not ticked: choose merge or a new code, then tick it.")}</p><p class="warn">${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
-    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul class="diff">${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
     <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
     <input name="code_${i.row}" form="apply-form" aria-label="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div></div>`
     : ""}
@@ -333,7 +338,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   const batch =
     stats && (stats.no_type || stats.several_prices || stats.dollars || stats.unknown_types.length || stats.status_hints.length || Object.keys(stats.remembered).length)
       ? html`<section class="card stack" data-batch>
-  <h2>🧰 ${L(lang, "تعديل جماعي", "Fix many rows at once")}</h2>
+  <h2>${L(lang, "تعديل جماعي", "Fix many rows at once")}</h2>
   ${stats.no_type
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="listing_type"><input type="hidden" name="action" value="listing_type">
     <p>${L(lang, `${stats.no_type} صف من غير بيع أو إيجار.`, `${stats.no_type} rows have no sale or rent.`)}${defaults?.file_type ? html` <span class="muted">${L(lang, "الملف اسمه بيقول", "The file name says")} ${defaults.file_type === "rent" ? L(lang, "إيجار", "rent") : L(lang, "بيع", "sale")}.</span>` : ""}</p>
@@ -377,7 +382,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   ${Object.keys(stats.remembered).length
     ? html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-prefs-used><input type="hidden" name="action" value="forget_prefs">
     <p class="muted">${L(lang, "اختياراتك القديمة ظاهرة كاقتراحات متحددة مسبقاً. مفيش حاجة بتتطبق من غير ما تدوس.", "Your earlier choices appear as pre-selected suggestions. Nothing is applied until you press a button.")}</p>
-    <button class="secondary">${L(lang, "انسَ اختياراتي المحفوظة", "Forget my saved choices")}</button></form>`
+    <button class="secondary">${L(lang, "امسح إجاباتي المحفوظة", "Reset my saved answers")}</button></form>`
     : ""}
   ${stats.dollars
     ? html`<p data-usd-info>${L(lang, `${stats.dollars} صف بالدولار. بيتسجلوا بالدولار من غير تحويل، والبحث بيحولهم بسعر الشركة.`, `${stats.dollars} rows are priced in dollars. They are saved in dollars, not converted; search converts them at the agency rate.`)}</p>`
@@ -387,10 +392,10 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
 
   // Kinds as tabs across the top of a long list: one kind at a time, always in view while scrolling.
   const kindNav = paged
-    ? html`<nav class="kind-tabs" role="tablist" aria-label="${L(lang, "الأنواع", "Kinds")}" data-kind-nav>${kinds.map((k) => html`<a role="tab" class="kind-tab${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-selected="true" aria-current="page"') : raw(' aria-selected="false"')}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}<span class="kind-count">${paged && k === kind && tab ? shown.length : counts[k]}</span></a>`)}</nav>`
+    ? html`<nav class="kind-tabs" aria-label="${L(lang, "الأنواع", "Kinds")}" data-kind-nav>${kinds.map((k) => html`<a class="kind-tab${k === kind ? " on" : ""}" href="${href({ kind: k, tab })}" data-kind-link="${k}"${k === kind ? raw(' aria-current="page"') : ""}>${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}<span class="kind-count">${paged && k === kind && tab ? shown.length : counts[k]}</span></a>`)}</nav>`
     : "";
   const tabsNav =
-    paged && Array.isArray(tabInfos) && tabInfos.length > 1
+    !chat && Array.isArray(tabInfos) && tabInfos.length > 1
       ? (() => {
           const per = new Map();
           for (const i of items) if (i.tab) per.set(i.tab, { n: (per.get(i.tab)?.n || 0) + 1, bad: (per.get(i.tab)?.bad || 0) + (i.kind === "invalid" ? 1 : 0) });
@@ -402,7 +407,10 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     paged && pages > 1
       ? html`<nav class="row" data-pager>${page > 1 ? html`<a class="chip" href="${href({ page: page - 1 })}" rel="prev">${L(lang, "السابق", "Previous")}</a>` : ""}<span class="muted">${page} / ${pages}</span>${page < pages ? html`<a class="chip" href="${href({ page: page + 1 })}" rel="next">${L(lang, "التالي", "Next")}</a>` : ""}</nav>`
       : "";
-  const ready = items.filter((i) => ["new", "changed"].includes(i.kind) && !doneRows.has(i.row)).length;
+  const todo = (kind) => items.filter((i) => i.kind === kind && Imports.isReadyRow(imp, i, doneRows)).length;
+  const ready = todo("new") + todo("changed");
+  // The yes/no before "Save all": the same counts the button saves (app.js asks it from data-confirm).
+  const confirmText = L(lang, `هنضيف ${todo("new")} وحدة جديدة ونعدّل ${todo("changed")} وحدة موجودة. تقدر تتراجع بعد كده.`, `Add ${todo("new")} new units and change ${todo("changed")} existing ones? You can undo it.`);
   // What Save does by default: only new and changed units are ticked. Errors (and units that are not the person's) never are.
   const earlierUnchanged = (kind) => items.filter((i) => i.kind === kind && remembered[i.row] === "unchanged").length;
   const readyNew = (counts.new || 0) - earlierUnchanged("new");
@@ -416,15 +424,15 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
       : "";
   const forgetBar =
     chat && !applied && imp.payload.chat_fp
-      ? html`<form method="post" action="/app/import/${imp.id}/forget-decisions" class="row" data-forget-form><button type="submit" class="secondary small" data-forget-decisions>🧹 ${L(lang, "انسَ القرارات المحفوظة للشات ده", "Forget remembered decisions for this chat")}</button></form>`
+      ? html`<form method="post" action="/app/import/${imp.id}/forget-decisions" class="row" data-forget-form><button type="submit" class="secondary small" data-forget-decisions>🧹 ${L(lang, "امسح إجاباتي المحفوظة للشات ده", "Reset my saved answers for this chat")}</button></form>`
       : "";
   const discardedBar =
     chat && !applied && gone.size
       ? html`<form method="post" action="/app/import/${imp.id}/discard" class="card stack" data-discarded-bar><input type="hidden" name="on" value="0">
-  <div class="row"><span>🗑 ${L(lang, `${gone.size} وحدة متجاهلة${goneEarlier ? ` (${goneEarlier} من تحميل قبل كده)` : ""}`, `${gone.size} discarded${goneEarlier ? ` (${goneEarlier} discarded earlier)` : ""}`)}</span><button type="submit" name="scope" value="all" class="secondary small" data-restore-all>${L(lang, "رجّع الكل", "Restore all")}</button></div>
+  <div class="row"><span>🗑 ${L(lang, `${gone.size} وحدة متجاهلة${goneEarlier ? ` (${goneEarlier} من تحميل قبل كده)` : ""}`, `${gone.size} discarded${goneEarlier ? ` (${goneEarlier} discarded earlier)` : ""}`)}</span><button type="submit" name="scope" value="all" class="secondary small" data-restore-all>${L(lang, "رجّع الكل", "Put all back")}</button></div>
   <details><summary>${L(lang, "اعرضهم", "Show them")}</summary><ul>${[...gone].sort((a, b) => a - b).map((n) => {
     const c = (sheetRows || []).find((r) => r.rowNumber === n)?.cells || {};
-    return html`<li><span class="muted">${L(lang, "بوست", "Post")} ${n} · ${[c.property_type, c.compound].filter(Boolean).join(" · ")}</span> <button type="submit" name="row" value="${n}" class="secondary small" data-restore="${n}">↩️ ${L(lang, "رجّعها", "Restore")}</button></li>`;
+    return html`<li><span class="muted">${L(lang, "بوست", "Post")} ${n} · ${[c.property_type, c.compound].filter(Boolean).join(" · ")}</span> <button type="submit" name="row" value="${n}" class="secondary small" data-restore="${n}">↩️ ${L(lang, "رجّعها", "Put back")}</button></li>`;
   })}</ul></details></form>`
       : "";
 
@@ -444,24 +452,26 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
     ? html`<p class="card muted" data-tabs-not-read>📑 ${L(lang, "تابات متقراتش", "Tabs not read")}: ${skippedTabs.map((t) => `${t.name || "—"} (${L(lang, ...(SKIP_WHY[t.reason] || [t.reason, t.reason]))})`).join(L(lang, "، ", ", "))}</p>`
     : "";
   const readCard = chat ? "" : readingCard(imp, lang, extra);
+  // The batch card, "how we read your file" and the chat's reset bar: one closed box so the page opens on the units.
+  const tools = batch || readCard || forgetBar ? html`<details class="card stack" data-tools><summary>🧰 ${L(lang, "أدوات", "Tools")}</summary>${batch}${readCard}${forgetBar}</details>` : "";
   return html`<h1>📥 ${L(lang, "مراجعة التحميل", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
-${paged ? "" : html`<p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
+${html`<p class="muted" data-counts>${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>`}
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null, applied ? 0 : ready) : ""}
-${noPhoneCard}${skippedLine}${readCard}
+${noPhoneCard}${skippedLine}
 ${query.batch_error === "bad_phone" ? html`<p class="card notice bad" role="alert" data-batch-error="bad_phone">⚠️ ${L(lang, "الرقم مش صحيح. اكتب رقم زي 01012345678، أو رقم أجنبي بـ + وكود الدولة.", "That number is not valid. Type a number like 01012345678, or a foreign one with + and the country code.")}</p>` : ""}
 ${query.batch_error === "conflict" || query.edit_conflict ? html`<p class="card notice bad" role="alert" data-edit-conflict>⚠️ ${L(lang, "الخطة اتغيرت وانت بتعدل. افتح التعديل تاني وجرب.", "The plan changed while you were editing. Open the edit again and try once more.")}</p>` : ""}
 ${query.mapping === "empty" ? html`<p class="card notice bad" role="alert" data-mapping-error>⚠️ ${L(lang, "بالاختيار ده السعر أو المساحة بقوا فاضيين في كل الصفوف. رجّعنا القراءة زي ما كانت.", "With that choice price or area would be empty on every row. We kept the earlier reading.")}</p>` : ""}
 ${query.batch ? html`<p class="card notice ${Number(query.batch) ? "ok" : "bad"}" role="${Number(query.batch) ? "status" : "alert"}" data-batch-done id="batch-done" tabindex="-1">${L(lang, `اتغير ${Number(query.batch) || 0} صف.`, `${Number(query.batch) || 0} rows changed.`)}</p>` : ""}
-${batch}
+${tools}
 ${kindNav}${tabsNav}
-${savedBar}${discardedBar}${forgetBar}
+${savedBar}${discardedBar}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack" id="apply-form">
 <button type="submit" hidden tabindex="-1" aria-hidden="true"></button><input type="hidden" name="back" value="${href({ page })}">
 ${!applied ? html`<p class="row" data-pick-all><button type="button" class="secondary small" data-rows-valid>${L(lang, "اختار كل الصالح", "Select all valid")}</button><button type="button" class="secondary small" data-rows-none>${L(lang, "الغي الكل", "Select none")}</button>${chat && errorsN ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="errors" data-discard-errors>🗑 ${L(lang, `تجاهل الوحدات اللي فيها أخطاء (${errorsN})`, `Discard units with errors (${errorsN})`)}</button>` : ""}${counts.unchanged ? html`<a class="chip${hideSame ? " on" : ""}" href="${href({ hide_unchanged: hideSame ? null : "1" })}" data-hide-unchanged>${hideSame ? L(lang, `اعرض اللي مفيش تغيير (${counts.unchanged})`, `Show unchanged (${counts.unchanged})`) : L(lang, `اخفي اللي مفيش تغيير (${counts.unchanged})`, `Hide unchanged (${counts.unchanged})`)}</a>` : ""}${chat && counts.unchanged ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="scope" value="unchanged" data-discard-unchanged>🗑 ${L(lang, `تجاهل الوحدات اللي مفيش تغيير فيها (${counts.unchanged})`, `Discard units with no changes (${counts.unchanged})`)}</button>` : ""}${chat ? html`<span class="muted">${L(lang, "الوحدات الناقصة أو اللي فيها أخطاء أو مفيش فيها تغيير مش بتتحفظ.", "Units with errors, missing details or no changes are not saved.")}</span>` : ""}</p>` : ""}
 ${section("review", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
   (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}
     <p class="warn" data-review-note>${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
-    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul>${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul class="diff">${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
     <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
     <input name="code_${i.row}" form="apply-form" aria-label="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div>
     ${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
@@ -470,7 +480,7 @@ ${section("new", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></
   (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul class="diff">${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("invalid", (rows) => chat ? chatList(rows) : html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${unitLine(i)}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code} ${discardBtn(i)}</li>`)}</ul>`)}
@@ -479,7 +489,7 @@ ${pager}
 ${!extra.dataEntry && (counts.invalid || 0) + (counts.forbidden || 0) ? html`<p class="row" data-failed-download><a class="secondary button" href="/app/import/${imp.id}/failed.xlsx" download>⬇️ ${L(lang, `نزّل الصفوف اللي مش هتتسجل (${(counts.invalid || 0) + (counts.forbidden || 0)}) إكسيل بعمود السبب`, `Download the rows that will not import (${(counts.invalid || 0) + (counts.forbidden || 0)}) as Excel, with a Reason column`)}</a></p>` : ""}
   ${!extra.dataEntry && !chat ? html`<p class="row" data-fixed-download><a class="secondary button" href="/app/import/${imp.id}/fixed.xlsx" download>⬇️ ${L(lang, "نزّل الشيت بعد التعديلات (عشان ترفعه تاني من غير ما تتعدل كل مرة)", "Download the fixed sheet (upload it again later without fixing everything)")}</a></p>` : ""}
   ${chat && !applied ? html`<p class="card notice" role="status" data-save-summary data-total="${items.length + gone.size}" data-errors="${errorsN}" data-unchanged="${counts.unchanged || 0}" data-discarded="${gone.size}">${summaryLine(lang, readyNew + readyChanged, readyNew, readyChanged, items.length + gone.size - readyNew - readyChanged, errorsN, counts.unchanged || 0, gone.size)}</p>` : ""}
-  ${applied ? "" : html`<div class="row"><button type="submit" data-save-button${chat && !(readyNew + readyChanged) ? raw(" disabled") : ""}>✅ ${L(lang, paged ? "طبّق اللي اخترته في الصفحة دي" : "طبّق اللي اخترته", paged ? "Apply the selected rows on this page" : "Apply the selected rows")}${chat ? html` (<span data-save-count>${readyNew + readyChanged}</span>)` : ""}</button>${paged && ready ? html`<button type="submit" name="all" value="1" class="secondary" data-apply-all>${L(lang, `طبّق كل الجديد والمتغير (${ready})`, `Apply all new and changed (${ready})`)}</button>` : ""}</div>`}
+  ${applied ? "" : html`<div class="row">${!chat && ready ? html`<button type="submit" name="all" value="1" data-apply-all data-confirm="${confirmText}">✅ ${L(lang, `احفظ كل الجاهز (${ready})`, `Save all ready (${ready})`)}</button>` : ""}<button type="submit" data-save-button${!chat && ready ? raw(' class="secondary"') : ""}${!chat ? html` data-confirm="${L(lang, "نحفظ الصفوف اللي علّمتها؟ تقدر تتراجع بعد كده.", "Save the ticked rows? You can undo it.")}"` : ""}${chat && !(readyNew + readyChanged) ? raw(" disabled") : ""}>${!chat && ready ? "" : "✅ "}${L(lang, paged ? "احفظ الصفوف اللي علّمتها في الصفحة دي" : "احفظ الصفوف اللي علّمتها", paged ? "Save the ticked rows on this page" : "Save the ticked rows")}${chat ? html` (<span data-save-count>${readyNew + readyChanged}</span>)` : ""}</button></div>`}
 </form>
 ${editForms}${chatDialogs}`;
 }
@@ -503,7 +513,7 @@ function resultCard(r, lang, undoId = null, left = 0) {
     ${line(L(lang, "متطبقتش", "Not applied"), r.failed, failed)}
     ${line(L(lang, "مفيش تغيير: اتساب ومتلمسش", "Unchanged, skipped"), r.unchanged)}
     ${line(L(lang, "فيها أخطاء أو مش من حقك: اتساب", "Errors or not yours, skipped"), r.blocked)}
-    ${line(L(lang, "متجاهلة: اتساب", "Discarded, skipped"), r.discarded)}
+    ${line(L(lang, "مستبعدة: اتساب", "Left out, skipped"), r.discarded)}
     ${line(L(lang, "متسجلتش عشان وصلت للحد الأقصى للوحدات", "Not saved: your unit limit was reached"), r.limit_skipped)}
   </ul>
   ${r.limit ? html`<p class="notice bad" data-unit-limit>${Plans.unitLimitText(r.limit, lang)}</p>` : ""}
@@ -751,7 +761,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
         TOO_LARGE: L(lang, "الملف أكبر من 5 ميجا.", "The file is larger than 5 MB."),
         NO_HEADER: L(lang, "مش لاقيين صف العناوين (الكود، الكمبوند، السعر، المساحة…).", "No header row found (code, compound, price, area, …)."),
         NO_TABS: L(lang, "مش لاقيين صف العناوين (الكود، الكمبوند، السعر، المساحة…).", "No header row found (code, compound, price, area, …)."),
-        TOO_MANY_ROWS: L(lang, `أكتر من ${Sheets.MAX_ROWS} صف.`, `More than ${Sheets.MAX_ROWS} rows.`)
+        TOO_MANY_ROWS: L(lang, `أكتر من ${SheetGrid.MAX_TOTAL_ROWS} صف.`, `More than ${SheetGrid.MAX_TOTAL_ROWS} rows.`)
       }[err.code];
       if (!msg) throw err;
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⚠️ ${msg}</p>` }), 422);
@@ -898,6 +908,8 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
   sendSheet("/import/:id/fixed.xlsx", FailedRows.fixedRowsWorkbook, "fixed-sheet.xlsx");
   // The rows this import did not take: the sheet's values as they are plus a "Reason" column.
   sendSheet("/import/:id/failed.xlsx", FailedRows.failedRowsWorkbook, "not-imported-rows.xlsx");
+  // What Save would change: Code, Tab, Row, Field, From, To.
+  sendSheet("/import/:id/diff.xlsx", FailedRows.diffRowsWorkbook, "changes.xlsx");
 
   // Undo the last applied import: a confirm page with what will happen, then one press to do it.
   web.get("/import/:id/undo", managersOnly, async (req, res, next) => {
@@ -907,13 +919,14 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     if (!imp || !(await Imports.canUndo(pool, broker, imp))) return next();
     const plan = await Imports.undoPreview(pool, broker.agency_id, imp);
     const names = (list) => list.map((x) => x.code).join("، ");
+    const SKIP_WHY = { changed: ["اتعدلت بإيدك أو اتغيرت من تحميل تاني", "edited by hand or changed by a later import"] };
     return importPage(req, res, html`<section class="card stack" data-undo-confirm>
   <h1>${L(lang, "تراجع عن التحميل ده؟", "Undo this import?")}</h1>
-  <p>${L(lang, "ده آخر تحميل اتطبق. التراجع ليه بس.", "This is the last import applied. Only this one can be undone.")}</p>
+  <p>${L(lang, "ده واحد من آخر ١٠ تحميلات اتطبقت في آخر ٣٠ يوم. بيتراجع عن اللي هو كتبه بس، والوحدات اللي اتغيرت بعده متتلمسش.", "This is one of the last 10 imports applied in the last 30 days. It undoes only what it wrote; units changed since are left alone.")}</p>
   <ul>
     ${plan.archive.length ? html`<li data-undo-archive>${L(lang, `هنمسح ${plan.archive.length} وحدة اتضافت (بتتحسب من الباقة تاني بعد المسح): `, `Delete ${plan.archive.length} units it added (they stop counting against your plan): `)}<span class="muted">${names(plan.archive)}</span></li>` : ""}
     ${plan.restore.length ? html`<li data-undo-restore>${L(lang, `هرجّع ${plan.restore.length} وحدة اتعدلت لقيمها القديمة: `, `Put back the earlier values of ${plan.restore.length} units it changed: `)}<span class="muted">${names(plan.restore)}</span></li>` : ""}
-    ${plan.skipped.length ? html`<li data-undo-skipped>${L(lang, `${plan.skipped.length} وحدة متتلمسش: اتعدلت بعد التحميل أو اتشالت. مش هتتغير: `, `${plan.skipped.length} units are left alone: changed or removed since the import. They will not change: `)}<span class="muted">${plan.skipped.join("، ")}</span></li>` : ""}
+    ${plan.skipped.length ? html`<li data-undo-skipped>${L(lang, `${plan.skipped.length} وحدة متتلمسش: اتعدلت بعد التحميل أو اتشالت. مش هتتغير: `, `${plan.skipped.length} units are left alone: changed or removed since the import. They will not change: `)}<span class="muted">${plan.skipped.map((s) => `${s.code} (${L(lang, ...SKIP_WHY[s.reason])})`).join("، ")}</span></li>` : ""}
   </ul>
   <p class="muted">${L(lang, "الوحدات المتمسحة بتفضل ١٠ أيام في «اتمسحت مؤخراً» وتقدر ترجعها.", "Deleted units stay 10 days in Recently deleted and can be restored.")}</p>
   <form method="post" action="/app/import/${imp.id}/undo" class="row">
@@ -1073,7 +1086,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     const imp = await Imports.loadImport(pool, broker, req.params.id);
     if (!imp || imp.kind === "leads") return next();
     const done = imp.kind === "excel" ? Imports.appliedRows(imp) : new Set();
-    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => ["new", "changed"].includes(i.kind) && !done.has(i.row) && !["saved", "unchanged"].includes((imp.payload.remembered || {})[i.row])).map((i) => i.row) : [].concat(req.body.rows || []);
+    const rows = req.body.all === "1" && imp.kind === "excel" ? (imp.payload.items || []).filter((i) => Imports.isReadyRow(imp, i, done)).map((i) => i.row) : [].concat(req.body.rows || []);
     // Chat imports: per row the choice (merge or a new code) and the photos to keep or remove.
     const resolutions = {};
     const photoChoices = {};
