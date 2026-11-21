@@ -73,6 +73,33 @@ function describeChanges(listing, patch, lang = "ar") {
   return out;
 }
 
+/**
+ * An Excel re-import keeps what the app already holds: notes and description the unit has are not overwritten by the sheet
+ * (the sheet is not the only place they are written), and a sold or archived status stays. Mutates `patch`.
+ * shortcut: only notes, description, English summary and status; price and other fields still take the sheet's value.
+ */
+function keepAppText(existing, patch) {
+  if (patch.details) {
+    const d = { ...patch.details };
+    for (const k of ["notes", "clean_summary", "summary_en"]) if (existing.details?.[k]) d[k] = existing.details[k];
+    patch.details = d;
+  }
+  // Returns the status the unit keeps (the sheet's one is skipped), or null.
+  if (patch.status && existing.status && existing.status !== "active") {
+    const kept = existing.status;
+    delete patch.status;
+    return kept;
+  }
+  return null;
+}
+
+/** Whether a resolved place is the unit's own compound (same place id, or same name under another spelling). */
+const sameCompoundAs = (resolved, existing) =>
+  Boolean(resolved) && ((Boolean(resolved.place_id) && resolved.place_id === existing.place_id) || (Boolean(resolved.compound) && compoundKey(resolved.compound) === compoundKey(existing.compound)));
+
+/** The price a batch "long" or "first" choice gives a cell (the long choice also takes the next non-daily price). */
+const pickPriceFor = (raw, choice) => Mixed.pickPrice(raw, choice === "long" ? "long_or_next" : choice);
+
 const stripLine = (t) => String(t || "").replace(/^``\s*·\s*/, "");
 const same = (a, b) => Boolean(a) && Boolean(b) && normalizeSearch(a) === normalizeSearch(b);
 
@@ -122,6 +149,10 @@ const ERROR_LABELS = {
   area_value: ["مساحة غير صحيحة", "Invalid area"]
 };
 const NOTE = {
+  statusKept: (status, lang) => {
+    const label = pick(STATUS[status], lang) || status;
+    return lang === "en" ? `Status kept as ${label} in the app; the sheet's status was not applied` : `الحالة اتسابت ${label} زي ما هي في التطبيق، والحالة اللي في الشيت متطبقتش`;
+  },
   compound: (raw, to, lang) => (lang === "en" ? `Compound "${raw}" matched to your existing "${to}"` : `الكمبوند "${raw}" اتربط بـ "${to}" الموجود عندك`),
   phone: (lang) => (lang === "en" ? "Owner phone does not look like a valid number (foreign numbers need the country code)" : "تليفون المالك مش شكل رقم صحيح (الرقم الأجنبي لازم يبدأ بكود الدولة)"),
   dollar: (usd, lang) => (lang === "en" ? `Priced in dollars: saved as $${usd}, not converted` : `السعر بالدولار: اتسجل ${usd}$ من غير تحويل`),
@@ -361,6 +392,15 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
         items.push({ ...base, code: existing.code, kind: "invalid", reasons: ev.blockers.map((b) => reasonOf(b, lang)), needs: needsOf(ev.blockers) });
         continue;
       }
+      // A sheet compound that is the unit's own place under another name ("5th square" = "فيفث سكوير") is not a change.
+      const typedName = String(ev.listing.compound || "").trim();
+      if (typedName && existing.compound && compoundKey(typedName) !== compoundKey(existing.compound)) {
+        const r = await resolveOf(typedName);
+        if (sameCompoundAs(r, existing)) {
+          ev.listing.compound = existing.compound;
+          if ("compound_en" in ev.listing) ev.listing.compound_en = existing.compound_en;
+        }
+      }
       const patch = Edits.diffPatch(existing, ev.listing);
       // A code written in a chat post that belongs to a different unit of the agency: the person chooses (merge or a new code).
       if (asNew?.ok && !Dup.sameProperty(asNew.listing, existing)) {
@@ -382,6 +422,10 @@ async function planExcel(pool, broker, sheet, { lang = "ar", source = null, seen
       // make an existing unit "changed". The owner phone is only ever read from the post's own text (never the sender's chat phone),
       // so it stays a real change.
       const AUTO = new Set(["details.notes", "details.clean_summary", "details.summary_en"]);
+      if (source !== "chat") {
+        const kept = keepAppText(existing, patch);
+        if (kept) base.notes.push(NOTE.statusKept(kept, lang));
+      }
       const changes = describeChanges(existing, patch, lang).filter((c) => source !== "chat" || !AUTO.has(c.field));
       items.push({
         ...base,
@@ -1149,6 +1193,8 @@ function batchStats(payload) {
   return {
     no_type: (payload.items || []).filter((i) => i.kind === "invalid" && (i.needs || []).includes("listing_type")).length,
     several_prices: rows.filter(hasSeveralPrices).length,
+    // How many rows each price choice will change (same rule as batchExcel).
+    price_pick_ok: Object.fromEntries(["long", "first"].map((c) => [c, rows.filter((r) => hasSeveralPrices(r) && pickPriceFor(cellText(r, "price_value"), c) !== null).length])),
     dollars: rows.filter(isDollars).length,
     status_hints: payload.defaults?.status_words ? [] : (() => {
       const by = {};
@@ -1203,7 +1249,7 @@ async function batchExcel(pool, broker, id, { action, value, scope = "missing", 
   } else if (action === "price_pick" && ["long", "first"].includes(value)) {
     for (const r of rows) {
       if (!hasSeveralPrices(r)) continue;
-      const v = Mixed.pickPrice(cellText(r, "price_value"), value);
+      const v = pickPriceFor(cellText(r, "price_value"), value);
       if (!v) continue;
       original(r, cellText(r, "price_value"));
       r.cells.price_value = v;
@@ -1528,6 +1574,8 @@ async function setNewPlace(pool, broker, id, row, { nameAr = "", pin = "" } = {}
 
 module.exports = {
   fieldsOfCells,
+  keepAppText,
+  sameCompoundAs,
   typeWordPlaces,
   TYPE_WORD_CHOICES,
   WORD_FIELDS,
