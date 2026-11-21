@@ -132,7 +132,8 @@ function leaseSection(listing, lease, lang, csrf, notice, tenants = [], contacts
 
 /** F10: the agency's leads to pick a tenant from (tenants first, then the most recent), as "L-0042 Name". */
 // The list shows cards only: the long text and cached-flyer columns are not read (every other column stays, so cards render as before).
-const LIST_COLS = "id,code,agency_id,broker_id,status,title,property_type,listing_type,price_value,price_display,area_value,bedrooms,location,features,language,lat,lng,location_name,details,flyer_url,hero_position,is_primary_developer,down_payment_value,installment_years,installment_value,payment_frequency,delivery_date,maintenance_pct,created_at,updated_at,compound,district,city,location_keywords,flyer_wa_media_id,flyer_wa_media_at,project_id,inventory_type,developer_unit_code,payment_terms,bathrooms,compound_en,delivery_year,delivery_quarter,delivery_month,is_ready,delivery_raw,feature_keys,features_other,remaining_amount,installments_end,confirmed_at,market,finishing,furnishing,floor_level,version,code_norm,compound_key,developer_key,area_key,stale_asked_at,stale_hidden_at,phase_id,is_private,owner_id,portal_listing_no,deleted_at,deleted_by";
+const LIST_COLS = "id,code,agency_id,broker_id,status,title,property_type,listing_type,price_value,price_display,area_value,bedrooms,location,features,language,lat,lng,location_name,details,flyer_url,hero_position,is_primary_developer,down_payment_value,installment_years,installment_value,payment_frequency,delivery_date,maintenance_pct,created_at,updated_at,compound,district,city,location_keywords,flyer_wa_media_id,flyer_wa_media_at,project_id,inventory_type,developer_unit_code,payment_terms,bathrooms,compound_en,delivery_year,delivery_quarter,delivery_month,is_ready,delivery_raw,feature_keys,features_other,remaining_amount,installments_end,confirmed_at,market,finishing,furnishing,floor_level,version,code_norm,compound_key,developer_key,area_key,stale_asked_at,stale_hidden_at,phase_id,is_private,owner_id,portal_listing_no,deleted_at,deleted_by,"
+  + "(SELECT a.name_ar FROM areas a WHERE a.id = listings.subzone_id AND a.place_type = 'phase') AS phase_ar,(SELECT a.name_en FROM areas a WHERE a.id = listings.subzone_id AND a.place_type = 'phase') AS phase_en";
 
 function register(web, { pool, page }) {
   /** The units list; a bulk edit's answer shows on top of it (notice). */
@@ -183,7 +184,7 @@ function register(web, { pool, page }) {
     const lab = (map, key) => (lang === "en" ? map[key][1] : map[key][0]);
     const pages = Math.max(1, Math.ceil(total / UNITS_PAGE));
     // A data entry person has no Today: the units nobody has confirmed (agency-wide) sit above their list instead.
-    const oldStrip = Authz.isDataEntry(broker) && status === "active" && !(Number(req.query.page) > 0) ? TodayCards.oldUnitsCard({ oldUnits: await Today.oldUnitsFor(pool, broker) }, lang === "en") : "";
+    const oldStrip = Authz.isDataEntry(broker) && status === "active" && !(Number(req.query.page) > 0) ? TodayCards.oldUnitsCard({ oldUnits: await Today.oldUnitsFor(pool, broker) }, lang === "en", req.session.csrf, req.originalUrl) : "";
     return page(req, res, {
       title: L(lang, "الوحدات", "Units"),
       nav: "units",
@@ -221,7 +222,7 @@ ${rows.length
   ? html`<p class="muted small" data-total="${total}">${L(lang, `${total} وحدة${pages > 1 ? ` · صفحة ${pageNo + 1} من ${pages}` : ""} · علّم الوحدات عشان تغيّر حالتها مرة واحدة.`, `${total} unit(s)${pages > 1 ? ` · page ${pageNo + 1} of ${pages}` : ""} · tick units to change them together.`)}</p>
 ${status === "deleted"
   ? html`<ol class="results">${rows.map((r) => html`<li class="card result" data-deleted-code="${r.code}"><div class="row between"><span><b dir="ltr">${r.code}</b> <span class="muted">${Describe.typeLabel(r, lang)}${r.compound ? ` · ${r.compound}` : ""}</span></span><span class="muted small">${L(lang, `تتمسح بعد ${deletedDaysLeft(r)} يوم`, `purged in ${deletedDaysLeft(r)} day(s)`)}</span></div><form method="post" action="/app/units/${encodeURIComponent(r.code)}/restore" class="row"><button type="submit" class="secondary small" data-restore>↩️ ${L(lang, "رجّعها", "Restore")}</button></form></li>`)}</ol>`
-  : html`<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true, thumb: covers.get(r.id) }))}</ol>`}
+  : html`<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true, thumb: covers.get(r.id), actions: oldOnly ? { csrf: req.session.csrf, can: (row) => Authz.canEdit(broker, row), back: req.originalUrl } : null }))}</ol>`}
 ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn secondary" href="${link({ page: pageNo - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${pageNo + 1 < pages ? html`<a class="btn secondary" href="${link({ page: pageNo + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>` : ""}
 <form id="bulk" method="post" action="/app/units/bulk" class="bulkbar">
   <select name="action" aria-label="${L(lang, "للمختار", "Selected")}">
@@ -264,6 +265,8 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing || !Authz.canView(broker, listing)) return res.status(404).type("text/plain").send("Not found");
     const status = String(req.body.status || "");
+    // Back to the page that posted (the review lists), only inside the app.
+    const back = String(req.body.back || "");
     if (!["active", "sold", "archived"].includes(status)) return res.status(400).type("text/plain").send("Unknown status");
     if (listing.status === "deleted") return res.status(400).type("text/plain").send("Unit is deleted");
     if (!Authz.canEdit(broker, listing)) return res.status(403).type("text/plain").send("Not allowed");
@@ -275,7 +278,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       if (out.conflict) return res.status(409).type("text/plain").send("Changed by someone else, try again");
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: changed ? `listing_status_${status}` : "listing_confirmed", metadata: { from: listing.status } });
     }
-    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
+    return res.redirect(303, back.startsWith("/app/") && !back.startsWith("//") ? back : `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
   });
 
   /* Bulk edit from the units list: the answer shows on the list itself. */

@@ -111,6 +111,13 @@
         b.setAttribute("aria-pressed", !same && b.getAttribute("data-phase") === id ? "true" : "false");
       });
       setSelect(subSel, same ? phasesEl.getAttribute("data-base") || "" : id);
+      // The place chip says the phase too: "Madinaty · B10".
+      var pc = placeChip();
+      var pt = pc && pc.querySelector("[data-chip-text]");
+      if (pt) {
+        var on = phasesEl.querySelector('[data-phase][aria-pressed="true"]');
+        pt.textContent = pt.getAttribute("data-place-name") + (on ? " · " + on.textContent : "");
+      }
       changed();
     }
 
@@ -120,6 +127,7 @@
       if (old) old.remove();
       var c = chip("place", it.label || it.name_ar || it.name_en);
       c.setAttribute("data-state", "known");
+      c.querySelector("[data-chip-text]").setAttribute("data-place-name", it.label || it.name_ar || it.name_en);
       chips.insertBefore(c, chips.firstChild);
       openNew(false);
       compound.value = it.kind === "compound" ? (it.label || it.name_ar || it.name_en) : "";

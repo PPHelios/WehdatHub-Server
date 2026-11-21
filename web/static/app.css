@@ -442,6 +442,16 @@ ol.results, ul.results { list-style: none; padding: 0; margin: 0; display: grid;
 :root[data-theme="dark"] .uc-top .uc-price { color: #f8fafc; }
 .uc-sub { font-size: 0.9rem; color: var(--muted); font-weight: 500; }
 .uc-size { font-size: 0.92rem; font-weight: 700; color: var(--ink); }
+/* A card's details fold like the other cards: the arrow turns down when open, points outward when folded (left in Arabic). */
+.uc-more { margin-top: 4px; }
+.uc-more > summary { cursor: pointer; font-weight: 700; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; list-style: none; min-height: 40px; }
+.uc-more > summary::-webkit-details-marker { display: none; }
+.uc-more > summary::after { content: ""; width: 8px; height: 8px; border-inline-end: 2px solid var(--muted); border-block-end: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.18s var(--ease); flex: none; }
+.uc-more[open] > summary::after { transform: rotate(45deg); }
+[dir="rtl"] .uc-more > summary::after { transform: rotate(45deg); }
+[dir="rtl"] .uc-more[open] > summary::after { transform: rotate(-45deg); }
+.uc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0; }
+.uc-actions .small { min-height: 40px; }
 .unitcard .tags { margin: 0; gap: 6px 8px; }
 .unitcard .tags li {
   padding: 5px 12px;

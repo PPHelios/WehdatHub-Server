@@ -7,6 +7,7 @@ const L = require("../lib/listing");
 const AI = require("../lib/ai");
 const AiBlock = require("../lib/aiBlock");
 const Store = require("../lib/listingStore");
+const { phaseOf } = require("../lib/unitPhase");
 const Edits = require("../lib/edits");
 const Authz = require("../lib/authz");
 const Rights = require("../services/unitRights");
@@ -275,7 +276,7 @@ function register(api, { pool }) {
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing) return res.status(404).json({ error: "not_found" });
     if (!Authz.canEdit(broker, listing)) return res.status(403).json({ error: "forbidden" });
-    return res.json({ code: listing.code, version: listing.version, updated_at: listing.updated_at || null, compound: listing.compound || null, compound_en: listing.compound_en || null, area_id: listing.area_id || null, subzone_id: listing.subzone_id || null, fields: Form.formFromUnit(listing) });
+    return res.json({ code: listing.code, version: listing.version, updated_at: listing.updated_at || null, compound: listing.compound || null, compound_en: listing.compound_en || null, area_id: listing.area_id || null, subzone_id: listing.subzone_id || null, fields: { ...Form.formFromUnit(listing), phase_label: (await phaseOf(pool, listing.subzone_id)).phase || "" } });
   });
 
   // Save changes to one unit: the version the screen was opened at must still be current (409 otherwise). Photos are not
