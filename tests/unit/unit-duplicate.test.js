@@ -29,3 +29,12 @@ test("without a place, an area or a price nothing is compared", () => {
   expect(Dup.sameUnit({ ...base, price_value: null }, base)).toBe(false);
   expect(Dup.comparable(base)).toBe(true);
 });
+
+test("sameProperty ignores sale/rent and price; place, bedrooms, type and area still decide", () => {
+  expect(Dup.sameProperty({ ...base, listing_type: "rent", price_value: 2700 }, base)).toBe(true);
+  expect(Dup.sameProperty({ ...base, price_value: 9.5e6 }, base)).toBe(true);
+  expect(Dup.sameProperty({ ...base, area_value: 160 }, base)).toBe(false);
+  expect(Dup.sameProperty({ ...base, bedrooms: 2 }, base)).toBe(false);
+  expect(Dup.sameProperty({ ...base, compound: "Mivida" }, base)).toBe(false);
+  expect(Dup.sameUnit({ ...base, listing_type: "rent" }, base)).toBe(false); // sameUnit (duplicate warnings) unchanged
+});

@@ -48,6 +48,7 @@ function unitView(r) {
     bedrooms: r.bedrooms,
     bathrooms: r.bathrooms,
     compound: r.compound,
+    compoundEn: r.compound_en || r.details?.compound_en || null,
     district: r.district,
     city: r.city,
     finishing: r.finishing,

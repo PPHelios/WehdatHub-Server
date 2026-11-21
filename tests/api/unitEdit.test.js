@@ -136,3 +136,49 @@ test("lease, private details and project link from the app follow the same rules
   expect((await api().post("/api/v1/units/R-1/private").set(auth).send({ pin: "not a pin" })).status).toBe(422);
   expect((await api().post("/api/v1/units/R-1/lease").set(await login("colleague")).send({ startDate: "2026-01-01", months: 12 })).status).toBe(403);
 });
+
+test("renaming a unit's code in the edit form: a free code is saved, a code another unit uses is a 409 code_used", async () => {
+  await ownUnit();
+  await h.insertListing({ code: "B-2", compound: "Mivida", price_value: 5e6, bedrooms: 2 });
+  const auth = await login("broker");
+  const open = await api().get("/api/v1/units/A-1/edit").set(auth);
+  const taken = await api().post("/api/v1/units/A-1/edit").set(auth).send({ version: open.body.version, fields: { ...open.body.fields, code: "B-2" } });
+  expect(taken.status).toBe(409);
+  expect(taken.body.error).toBe("code_used");
+  expect(taken.body.code).toBe("B-2");
+  expect(taken.body.message).toBeTruthy();
+  const renamed = await api().post("/api/v1/units/A-1/edit").set(auth).send({ version: open.body.version, fields: { ...open.body.fields, code: "C-3" } });
+  expect(renamed.status).toBe(200);
+  expect(renamed.body.code).toBe("C-3");
+  const rows = await h.query("SELECT code FROM listings WHERE agency_id = $1 ORDER BY code", [h.BROKERS.broker.agency_id]);
+  expect(rows.map((r) => r.code)).toEqual(["B-2", "C-3"]);
+});
+
+test("'still available' on an active unit confirms it again (confirmed_at moves, status stays)", async () => {
+  await ownUnit();
+  await h.query(`UPDATE listings SET confirmed_at = now() - interval '30 days' WHERE code = 'A-1' AND agency_id = $1`, [h.BROKERS.broker.agency_id]);
+  const auth = await login("broker");
+  const r = await api().post("/api/v1/units/A-1/status").set(auth).send({ status: "active" });
+  expect(r.status).toBe(200);
+  const [row] = await h.query("SELECT status, confirmed_at FROM listings WHERE code = 'A-1' AND agency_id = $1", [h.BROKERS.broker.agency_id]);
+  expect(row.status).toBe("active");
+  expect(Date.now() - new Date(row.confirmed_at).getTime()).toBeLessThan(60000);
+  const today = await api().get("/api/v1/today").set(auth);
+  expect((today.body.cards?.oldUnits?.items ?? []).map((i) => i.code)).not.toContain("A-1");
+});
+
+test("picking a phase with no compound brings its parent compound (Madinaty B10 -> Madinaty)", async () => {
+  await h.query(`INSERT INTO areas (id, name_key, name_en, name_ar, status, place_type) VALUES ('a0000000-0000-0000-0000-0000000000d1', 'madinaty', 'Madinaty', 'مدينتي', 'approved', 'city_or_district') ON CONFLICT DO NOTHING`);
+  await h.query(`INSERT INTO areas (id, name_key, name_en, name_ar, status, place_type, parent_id) VALUES ('a0000000-0000-0000-0000-0000000000d2', 'madinaty b10', 'Madinaty B10', 'مدينتي B10', 'approved', 'phase', 'a0000000-0000-0000-0000-0000000000d1') ON CONFLICT DO NOTHING`);
+  await h.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved, area_id) VALUES ('madinaty test', 'Madinaty', 'مدينتي', 30.1, 31.6, true, 'a0000000-0000-0000-0000-0000000000d1')`);
+  await h.insertListing({ code: "MIR46", compound: "Mivida", price_value: 9e6, bedrooms: 3 });
+  await h.query(`UPDATE listings SET details = jsonb_build_object('owner_name', 'Owner Ali', 'owner_phone', '01012345678') WHERE code = 'MIR46' AND agency_id = $1`, [h.BROKERS.broker.agency_id]);
+  const auth = await login("broker");
+  const open = await api().get("/api/v1/units/MIR46/edit").set(auth);
+  const r = await api().post("/api/v1/units/MIR46/edit").set(auth).send({ version: open.body.version, fields: { ...open.body.fields, compound: "", area_id: "a0000000-0000-0000-0000-0000000000d1", subzone_id: "a0000000-0000-0000-0000-0000000000d2" } });
+  expect(r.status).toBe(200);
+  const [row] = await h.query("SELECT compound, compound_en, subzone_id FROM listings WHERE code = 'MIR46' AND agency_id = $1", [h.BROKERS.broker.agency_id]);
+  expect(row.compound).toBe("مدينتي");
+  expect(row.compound_en).toBe("Madinaty");
+  expect(row.subzone_id).toBe("a0000000-0000-0000-0000-0000000000d2");
+});

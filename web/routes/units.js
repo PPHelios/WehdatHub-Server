@@ -268,10 +268,12 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
     if (listing.status === "deleted") return res.status(400).type("text/plain").send("Unit is deleted");
     if (!Authz.canEdit(broker, listing)) return res.status(403).type("text/plain").send("Not allowed");
     if (!(await require("../../services/unitRights").mayWrite(pool, broker))) return res.status(403).type("text/plain").send("Not allowed: the agency owner switched off unit changes for brokers");
-    if (listing.status !== status) {
-      const out = await Store.applyListingPatch(pool, broker, { listing, patch: { status } });
+    // "Still available" on an active unit: an empty patch still sets confirmed_at (same as the app).
+    if (listing.status !== status || status === "active") {
+      const changed = listing.status !== status;
+      const out = await Store.applyListingPatch(pool, broker, { listing, patch: changed ? { status } : {} });
       if (out.conflict) return res.status(409).type("text/plain").send("Changed by someone else, try again");
-      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: `listing_status_${status}`, metadata: { from: listing.status } });
+      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: listing.code, operation_type: changed ? `listing_status_${status}` : "listing_confirmed", metadata: { from: listing.status } });
     }
     return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
   });

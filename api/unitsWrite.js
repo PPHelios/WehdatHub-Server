@@ -97,10 +97,12 @@ function register(api, { pool }) {
     if (!["active", "sold", "archived"].includes(status)) return res.status(422).json({ error: "unknown_status" });
     if (listing.status === "deleted") return res.status(422).json({ error: "deleted" });
     if (!Authz.canEdit(b, listing) || !(await Rights.mayWrite(pool, b))) return res.status(403).json({ error: "forbidden" });
-    if (listing.status !== status) {
-      const out = await Store.applyListingPatch(pool, b, { listing, patch: { status } });
+    // "Still available" on an active unit: an empty patch still sets confirmed_at (the unit is vouched for again).
+    if (listing.status !== status || status === "active") {
+      const changed = listing.status !== status;
+      const out = await Store.applyListingPatch(pool, b, { listing, patch: changed ? { status } : {} });
       if (out.conflict) return res.status(409).json({ error: "conflict" });
-      logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: `listing_status_${status}`, metadata: { from: listing.status } });
+      logOperation(pool, { agency_id: b.agency_id, broker_id: b.id, listing_code: listing.code, operation_type: changed ? `listing_status_${status}` : "listing_confirmed", metadata: { from: listing.status } });
     }
     return res.json({ ok: true, status });
   });
@@ -243,9 +245,12 @@ function register(api, { pool }) {
       if (r.compound_state === "needs_fix") blockers.push({ field: "compound", label: L10n(lang, "الكمبوند مش في القائمة. اختاره من القائمة أو علّم \"مش في القائمة\".", "This compound is not on the list. Pick it, or mark it as new.") });
     }
     // A new unit (the app sends new_unit: true) whose typed code is already taken is refused at the first check, as on the website.
-    if ((req.body?.new_unit === true || req.body?.new_unit === "1") && String(fields.code || "").trim()) {
-      const taken = await Store.findByCode(pool, broker.agency_id, String(fields.code).trim());
-      if (taken) blockers.push({ field: "code", label: L10n(lang, `الكود ${taken.code} مستخدم لوحدة تانية. افتحها أو اكتب كود تاني.`, `The code ${taken.code} is used by another unit. Open it or type another code.`) });
+    // An edit that renames the unit is checked the same way.
+    const typedCode = String(fields.code || "").trim();
+    const renamed = Boolean(existing && typedCode && typedCode.toUpperCase() !== existing.code.toUpperCase());
+    if (typedCode && (req.body?.new_unit === true || req.body?.new_unit === "1" || renamed)) {
+      const taken = await Store.findByCode(pool, broker.agency_id, typedCode);
+      if (taken && taken.id !== existing?.id) blockers.push({ field: "code", label: L10n(lang, `الكود ${taken.code} مستخدم لوحدة تانية. افتحها أو اكتب كود تاني.`, `The code ${taken.code} is used by another unit. Open it or type another code.`) });
     }
     // The place rules, as on the website: a compound brings its area; a compound or area the list does not know needs the area picked (it goes to approval).
     let placed = null;
@@ -292,6 +297,14 @@ function register(api, { pool }) {
       const tooLong = FormChecks.lengthBlockers(fieldsOf(req.body), lang); if (tooLong.length) { ev.blockers.push(...tooLong); ev.ok = false; }
       if (!ev.ok) return { rollback: true, listing, ev };
       const patch = Edits.diffPatch(listing, ev.listing);
+      // A typed code that differs from the unit's own is a rename: it must be free in the agency (the unique index is the last check).
+      const typed = String(fieldsOf(req.body).code || "").trim();
+      const newCode = typed ? L.generateListingCode(typed, listing.property_type).code : null;
+      if (newCode && newCode.toUpperCase() !== listing.code.toUpperCase()) {
+        const taken = await Store.findByCode(client, broker.agency_id, newCode);
+        if (taken && taken.id !== listing.id) return { rollback: true, code_used: taken.code };
+        patch.code = newCode;
+      }
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, conflict: true };
       if (res2.forbidden) return { rollback: true, forbidden: true };
@@ -302,6 +315,7 @@ function register(api, { pool }) {
     if (out.missing) return res.status(404).json({ error: "not_found" });
     if (out.forbidden) return res.status(403).json({ error: "forbidden" });
     if (out.conflict) return res.status(409).json({ error: "conflict" });
+    if (out.code_used) return res.status(409).json({ error: "code_used", code: out.code_used });
     if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev, fields, lang) });
     require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", total_duration_ms: Date.now() - t0, metadata: { columns: out.columns, save_key: Boolean(saveKey) } });
     return res.json({ code: out.saved.code, version: out.saved.version });
