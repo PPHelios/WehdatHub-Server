@@ -423,7 +423,21 @@
     xhr.onerror = function () { stop(UP.net); };
     xhr.ontimeout = function () { stop(UP.fail); };
     xhr.onload = function () {
-      if (xhr.responseURL && xhr.responseURL !== location.href) { location.assign(xhr.responseURL); return; }
+      // Only a redirect (a good answer at another URL) is followed: a refusal (422, 429) came from the form's own address, which has no page to GET.
+      if (xhr.status < 400 && xhr.responseURL && xhr.responseURL !== location.href) { location.assign(xhr.responseURL); return; }
+      // A refusal shows its message as an error in the form (already in the user's language) and keeps what was typed.
+      if (xhr.status >= 400 && form.id !== "unit-form" && window.DOMParser) {
+        var nb = new DOMParser().parseFromString(xhr.responseText, "text/html").querySelector(".notice.bad[role=alert]");
+        if (nb) {
+          if (box.parentNode) box.parentNode.removeChild(box);
+          var oldErr = form.querySelector(":scope > .notice.bad");
+          if (oldErr) oldErr.remove();
+          form.insertBefore(document.importNode(nb, true), form.firstChild.nextSibling);
+          for (var q = 0; q < controls.length; q++) controls[q].disabled = false;
+          setFormBusy(form, false);
+          return;
+        }
+      }
       // A refusal on the unit form keeps the form as it is (the chosen photos can't be refilled by a script): only the
       // message, the review and the Save button are taken from the answer.
       if (form.id === "unit-form" && xhr.status >= 400 && xhr.status < 500 && window.DOMParser) {

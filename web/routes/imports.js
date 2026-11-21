@@ -575,7 +575,7 @@ function photosLine(post, lang) {
 </div>`;
 }
 
-function groupPage(imp, lang) {
+function groupPage(imp, lang, cut = 0) {
   const posts = imp.payload.posts || [];
   const results = imp.payload.results || [];
   const done = results.filter(Boolean).length;
@@ -595,6 +595,7 @@ function groupPage(imp, lang) {
   const suggest = said.length && said.every((v) => v === said[0]) ? said[0] : null;
   const undecided = !applied && results.some((r) => r && !r.error && !r.fields?.listing_type);
   return html`<div id="group-status"><h1>📥 ${L(lang, "تحميل من الجروب", "Group import")}</h1>
+${cut > 0 ? html`<p class="card notice" role="status" data-cut-notice>ℹ️ ${L(lang, `${cut} بوست مش متحمّلين لأن الحد ${Chat.MAX_POSTS} بوست.`, `${cut} posts were left out (limit ${Chat.MAX_POSTS}).`)}</p>` : ""}
 ${imp.result ? resultCard(imp.result, lang, imp.canUndo ? imp.id : null) : ""}
 ${undecided ? html`<section class="card stack" data-group-listing-type><p>${L(lang, "في بوستات مش مكتوب فيها بيع ولا إيجار. اختار للكل:", "Some posts do not say sale or rent. Choose for all of them:")}</p>
 <form method="post" action="/app/import/${imp.id}/listing-type" class="row">${suggest ? html`<p class="muted" data-suggest="${suggest}">${L(lang, `${said.length} بوست مكتوب فيهم ${suggest === "rent" ? "إيجار" : "بيع"}.`, `${said.length} post(s) here say ${suggest}.`)}</p>` : ""}<button type="submit" name="value" value="rent" class="${suggest === "sale" ? "secondary" : ""}">${L(lang, "الكل إيجار", "All rent")}</button> <button type="submit" name="value" value="sale" class="${suggest === "rent" ? "secondary" : ""}">${L(lang, "الكل بيع", "All sale")}</button></form></section>` : ""}
@@ -691,7 +692,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
     <summary>${L(lang, "من غير صور: الصق البوستات أو حمل شات (.txt)", "Without photos: paste the posts or upload a chat (.txt)")}</summary>
     <form method="post" action="/app/import/group" enctype="multipart/form-data" class="stack" data-progress>
       <input type="hidden" name="_csrf" value="${req.session.csrf}">
-      ${rangeControls(lang)}
+      ${rangeControls(lang, { last: false })}
       <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
       <label>${L(lang, "أو حمل تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
       <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
@@ -850,7 +851,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       filename: file ? String(file.originalname || "").slice(0, 120) : null
     });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group", posts: found.posts.length, skipped: found.skipped, duplicates: found.duplicates } });
-    return res.redirect(303, `/app/import/${id}`);
+    return res.redirect(303, `/app/import/${id}${found.truncated ? `?cut=${found.truncated}` : ""}`);
   });
 
   // Read one tab again with other columns chosen for its fields. Only a plan nothing was applied from (row numbers must not move).
@@ -999,7 +1000,7 @@ ${tabs("import_tab", [...(dataEntry ? [] : [
       const places = new Map();
       return importPage(req, res, html`${excelPlanPage(imp, lang, req.query || {}, { typePlaces, areas, places, stats, csrf: req.session.csrf, dataEntry: isDataEntry(req.session.broker) })}<script src="${assets.url("unitBox.js")}"></script><script src="${assets.url("chatreview.js")}"></script><script src="${assets.url("wordfields.js")}"></script>`);
     }
-    return importPage(req, res, groupPage(imp, lang));
+    return importPage(req, res, groupPage(imp, lang, Math.min(9999, Number(req.query.cut) || 0)));
   });
 
   // Edit one row of a ready plan: the whole sheet is planned again with the changed cells (same rules as an upload).

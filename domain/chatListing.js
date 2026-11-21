@@ -11,7 +11,7 @@ const { readAmounts } = require("./read/amount");
 const { readRooms } = require("./read/rooms");
 const { readArea } = require("./read/area");
 const { readFloor } = require("./read/floor");
-const { norm } = require("./read/numbers");
+const { norm, toAsciiDigits } = require("./read/numbers");
 const Places = require("./mapPlaces");
 const Features = require("./features");
 const Sanity = require("./read/sanity");
@@ -100,7 +100,7 @@ function sizeSpans(t) {
  */
 function parsePost(text, places = null, from = {}) {
   const original = String(text || "").slice(0, 4000);
-  let t = latin(original).replace(/[‎‏‪-‮]/g, "");
+  let t = toAsciiDigits(original).replace(/[‎‏‪-‮]/g, "");
   const full = t;
   const cells = {};
   const set = (k, v) => {

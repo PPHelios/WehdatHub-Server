@@ -146,6 +146,7 @@
   // The chat's own id (file name + first message header, domain/chatFingerprint.js) and what the agency decided about it before.
   async function rememberChat(name, text) {
     if (!window.ChatFingerprint) return;
+    var sameChat = state.chatFp === ChatFingerprint.chatFingerprint(name, ChatFingerprint.firstHeaderOf(text));
     state.chatFp = ChatFingerprint.chatFingerprint(name, ChatFingerprint.firstHeaderOf(text));
     var url = root.getAttribute("data-decisions-url");
     if (!url || state.mode !== "posts") return;
@@ -158,7 +159,7 @@
     var opt = sel && sel.querySelector('option[value="last"]');
     if (opt && state.lastImportAt) {
       opt.hidden = false; opt.disabled = false;
-      sel.value = "last";
+      if (!sameChat) sel.value = "last"; // a re-read of the same chat keeps the range the person chose
       var note = $("last-note");
       if (note) note.textContent = TEXT.lastImport + " " + String(state.lastImportAt).slice(0, 10);
     } else if (opt) { opt.hidden = true; opt.disabled = true; if (sel.value === "last") sel.value = "30"; }
