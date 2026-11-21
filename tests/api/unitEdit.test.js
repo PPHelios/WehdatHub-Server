@@ -182,3 +182,16 @@ test("picking a phase with no compound brings its parent compound (Madinaty B10 
   expect(row.compound_en).toBe("Madinaty");
   expect(row.subzone_id).toBe("a0000000-0000-0000-0000-0000000000d2");
 });
+
+test("a rename shows the new code in the review; a code that cleans to under 2 characters is refused", async () => {
+  await ownUnit();
+  const auth = await login("broker");
+  const open = await api().get("/api/v1/units/A-1/edit").set(auth);
+  const rv = await api().post("/api/v1/units/review").set(auth).send({ fields: { ...open.body.fields, code: "c-9" }, photoCount: 0, code: "A-1" });
+  expect(rv.body.changes.find((c) => c.field === "code")).toMatchObject({ from: "A-1", to: "C-9" });
+  const bad = await api().post("/api/v1/units/A-1/edit").set(auth).send({ version: open.body.version, fields: { ...open.body.fields, code: "#" } });
+  expect(bad.status).toBe(422);
+  expect(bad.body.error).toBe("code_invalid");
+  const [row] = await h.query("SELECT code FROM listings WHERE code = 'A-1' AND agency_id = $1", [h.BROKERS.broker.agency_id]);
+  expect(row.code).toBe("A-1");
+});

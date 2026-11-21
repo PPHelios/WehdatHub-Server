@@ -30,6 +30,7 @@ const Catalogue = require("../services/catalogue");
 
 const MAX_DESCRIBE = 4000;
 const { L: L10n } = require("../lib/copy");
+const sameCode = (a, b) => String(a || "").trim().toUpperCase() === String(b || "").trim().toUpperCase();
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const filesOf = (req, name) => (req.files && req.files[name]) || [];
 
@@ -247,7 +248,8 @@ function register(api, { pool }) {
     // A new unit (the app sends new_unit: true) whose typed code is already taken is refused at the first check, as on the website.
     // An edit that renames the unit is checked the same way.
     const typedCode = String(fields.code || "").trim();
-    const renamed = Boolean(existing && typedCode && typedCode.toUpperCase() !== existing.code.toUpperCase());
+    const renamed = Boolean(existing && typedCode && !sameCode(typedCode, existing.code));
+    if (renamed && !L.generateListingCode(typedCode, existing.property_type).explicit) blockers.push({ field: "code", label: L10n(lang, "الكود لازم يكون حرفين أو أكتر (حروف أو أرقام).", "The code needs at least 2 letters or digits.") });
     if (typedCode && (req.body?.new_unit === true || req.body?.new_unit === "1" || renamed)) {
       const taken = await Store.findByCode(pool, broker.agency_id, typedCode);
       if (taken && taken.id !== existing?.id) blockers.push({ field: "code", label: L10n(lang, `الكود ${taken.code} مستخدم لوحدة تانية. افتحها أو اكتب كود تاني.`, `The code ${taken.code} is used by another unit. Open it or type another code.`) });
@@ -260,7 +262,10 @@ function register(api, { pool }) {
     }
     const ok = blockers.length === 0;
     const duplicate = ok ? await Store.findDuplicate(pool, broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
-    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: FormChecks.changesOf(existing, ev.listing, lang), place: placed ? { area_id: placed.area_id || null, subzone_id: placed.subzone_id || null, compound: placed.compound || null, compound_state: placed.compound_state || null } : null });
+    // A rename is listed first, so the broker sees the new code before saving.
+    const newCode = renamed ? L.generateListingCode(typedCode, existing.property_type).code : null;
+    const codeChange = renamed ? [{ field: "code", ar: "الكود", en: "Code", from: existing.code, to: newCode, from_ar: existing.code, from_en: existing.code, to_ar: newCode, to_en: newCode }] : [];
+    return res.json({ ok, blockers, warnings: warningsOf(ev, lang), duplicate: duplicate || null, changes: [...codeChange, ...FormChecks.changesOf(existing, ev.listing, lang)], place: placed ? { area_id: placed.area_id || null, subzone_id: placed.subzone_id || null, compound: placed.compound || null, compound_state: placed.compound_state || null } : null });
   });
 
   // The unit's fields as the form names them, for the edit screen. Whoever may edit the unit may open this.
@@ -298,14 +303,23 @@ function register(api, { pool }) {
       if (!ev.ok) return { rollback: true, listing, ev };
       const patch = Edits.diffPatch(listing, ev.listing);
       // A typed code that differs from the unit's own is a rename: it must be free in the agency (the unique index is the last check).
+      // A typed code that differs is a rename: it must be a real code (2+ characters) and free in the agency.
       const typed = String(fieldsOf(req.body).code || "").trim();
-      const newCode = typed ? L.generateListingCode(typed, listing.property_type).code : null;
-      if (newCode && newCode.toUpperCase() !== listing.code.toUpperCase()) {
-        const taken = await Store.findByCode(client, broker.agency_id, newCode);
+      if (typed && !sameCode(typed, listing.code)) {
+        const named = L.generateListingCode(typed, listing.property_type);
+        if (!named.explicit) return { rollback: true, code_invalid: true };
+        const taken = await Store.findByCode(client, broker.agency_id, named.code);
         if (taken && taken.id !== listing.id) return { rollback: true, code_used: taken.code };
-        patch.code = newCode;
+        patch.code = named.code;
       }
-      const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
+      let res2;
+      try {
+        res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
+      } catch (e) {
+        // Two renames to the same free code at once: the unique index refuses the second one.
+        if (e.code === "23505" && patch.code) return { rollback: true, code_used: patch.code };
+        throw e;
+      }
       if (res2.conflict) return { rollback: true, conflict: true };
       if (res2.forbidden) return { rollback: true, forbidden: true };
       await SaveKeys.attach(client, broker.agency_id, saveKey, res2.listing.code);
@@ -315,6 +329,7 @@ function register(api, { pool }) {
     if (out.missing) return res.status(404).json({ error: "not_found" });
     if (out.forbidden) return res.status(403).json({ error: "forbidden" });
     if (out.conflict) return res.status(409).json({ error: "conflict" });
+    if (out.code_invalid) return res.status(422).json({ error: "code_invalid" });
     if (out.code_used) return res.status(409).json({ error: "code_used", code: out.code_used });
     if (!out.saved) return res.status(422).json({ error: "incomplete", blockers: blockersOf(out.ev, fields, lang) });
     require("../lib/db").logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "app_unit_edit", total_duration_ms: Date.now() - t0, metadata: { columns: out.columns, save_key: Boolean(saveKey) } });
