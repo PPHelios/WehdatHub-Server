@@ -2063,7 +2063,6 @@
     },
     "services/failures.js": {
       "TYPES": "Array",
-      "KEEP_DAYS": "Number",
       "PAGE": "Number",
       "list": ["pool", "params"],
       "filters": ["pool"],
@@ -3050,7 +3049,8 @@
     "web/security.js": {
       "CSP": "String",
       "securityHeaders": ["_req", "res", "next"],
-      "sameOrigin": []
+      "sameOrigin": [],
+      "allowWebAnalytics": ["res"]
     },
     "web/session.js": {
       "SESSION_COOKIE": [],
