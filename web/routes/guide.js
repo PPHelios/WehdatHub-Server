@@ -133,7 +133,7 @@ const FAQ = [
   [["المدير بيشوف الوحدات الخاصة بمالك الشركة؟", "Can managers see units the agency owner marked private?"], ["لأ. الوحدة الخاصة مخفية عن أي حد غير مالك الشركة، حتى المديرين.", "No. A private unit is hidden from everyone except the agency owner, managers included."]],
   [["البوت فهم غلط؛ أصلّحه إزاي؟", "The bot got something wrong. How do I fix it?"], ["قبل الحفظ دوس «✏️ تعديل». بعد الحفظ: «تعديل الكود السعر ٩٫٥ مليون» أو من الموقع.", "Before saving tap \"✏️ Edit\". After saving: \"edit CODE price 9.5M\" or use the website."]],
   [["في حاجة مش شغالة.", "Something isn't working."], ["ابعت «عطل» واللي حصل للبوت، أو «🐞 بلّغ عن مشكلة» تحت أي صفحة. هيوصلك رقم البلاغ.", "Send \"bug\" and what happened to the bot, or use \"🐞 Report a problem\" at the bottom of any page. You get a report number."]],
-  [["ليه تيليجرام مش واتساب؟", "Why Telegram and not WhatsApp?"], ["تيليجرام مجاني للرسايل والصور والأزرار، فالتنبيهات مش بتتكلف. واتساب بيفضل للتواصل مع العملاء.", "Telegram is free for messages, photos and buttons, so alerts cost nothing. WhatsApp stays for talking to clients."]],
+  [["ليه تيليجرام مش واتساب؟", "Why Telegram and not WhatsApp?"], ["تيليجرام بيوصلك التنبيهات، وتقدر تستقبلها كمان على الموقع والتطبيق. واتساب للتواصل مع العملاء.", "You can get alerts on Telegram, the website and the phone app. WhatsApp is for talking to clients."]],
   [["الموقع بطيء أول ما بفتحه.", "The website is slow the first time I open it."], ["في فترة التجربة السيرفر بينام لما محدش بيستخدمه، وأول فتحة ممكن تاخد دقيقة.", "During the trial the server sleeps when nobody uses it, so the first load can take up to a minute."]]
 ];
 
@@ -145,24 +145,24 @@ const WEB_FAQ = [
 ];
 
 const EXCEL_FAQ = [
-  [["هل يستهلك استيراد الإكسيل من رصيد الذكاء الاصطناعي؟", "Does Excel import consume AI credits?"], ["لا نهائياً. قراءة ملفات الإكسيل (.xlsx و .csv) ومطابقة الأعمدة تتم بقواعد برمجية مجانية بالكامل داخل المتصفح (0 AI Credits).", "Never. Reading Excel spreadsheets (.xlsx and .csv) and column mapping runs purely rule-based inside the browser with zero AI credit consumption."]],
-  [["ماذا يحدث إذا كان الملف يحتوي على شيتات فارغة؟", "What happens if the workbook contains empty sheets?"], ["يقوم النظام بفحص كل شيت واستبعاد الشيتات الفارغة تلقائياً بدون إيقاف عملية الاستيراد، ويوضح ذلك في تقرير المعاينة.", "The system inspects every tab and automatically skips empty sheets without halting the import, reporting them clearly in the preview."]],
-  [["هل يمكنني التراجع عن عملية الاستيراد بعد تطبيقها؟", "Can I undo an applied import?"] , ["نعم، يحتفظ النظام بسجل كامل لآخر 10 عمليات استيراد لمدة 30 يوماً، مما يتيح لك حذف الوحدات المضافة أو استعادة الأسعار السابقة بنقرة واحدة.", "Yes! The system keeps a 30-day reversible undo stack for the last 10 imports, allowing you to delete newly added units or revert modified prices with one click."]],
-  [["ما هي الأعمدة الإجبارية التي لا يمكن الاستيراد بدونها؟", "Which columns are mandatory for Excel import?"], ["الأعمدة الإجبارية الستة هي: الكمبوند، نوع الوحدة، الغرض (بيع أو إيجار)، السعر الإجمالي، المساحة، ورقم تليفون المالك.", "The 6 required columns are: Compound, Property Type, Purpose (Sale/Rent), Price, Area (sqm), and Owner Phone."]]
+  [["هل يستهلك استيراد الإكسيل من رصيد الذكاء الاصطناعي؟", "Does Excel import consume AI credits?"], ["لا نهائياً. قراءة ملفات الإكسيل (.xlsx و .csv) ومطابقة الأعمدة مجانية بالكامل داخل المتصفح ولا تخصم أي رصيد من باقة شركتك.", "Never. Reading Excel files (.xlsx and .csv) and column matching is completely free in the browser and does not consume any AI credits."]],
+  [["ماذا يحدث إذا كان الملف يحتوي على شيتات فارغة؟", "What happens if the file contains empty sheets?"], ["يتخطى النظام الشيتات الفارغة تلقائياً بدون إيقاف باقي الشيتات، ويوضح ذلك في تقرير المعاينة.", "The system automatically skips empty sheets without stopping the rest of the file, showing them clearly in the preview report."]],
+  [["هل يمكنني التراجع عن عملية الاستيراد بعد تطبيقها؟", "Can I undo an import after saving?"], ["نعم، يمكنك التراجع عن أي عملية استيراد خلال 30 يوماً بنقرة واحدة، واستعادة الأسعار السابقة أو حذف الوحدات التي تمت إضافتها.", "Yes, you can undo any import within 30 days with a single click, restoring previous prices or deleting newly added listings."]],
+  [["ما هي الأعمدة الأساسية التي لا يمكن الاستيراد بدونها؟", "Which columns are required for Excel import?"], ["الأعمدة الأساسية الستة هي: الكمبوند، نوع الوحدة، الغرض (بيع أو إيجار)، السعر الإجمالي، المساحة، ورقم تليفون المالك.", "The 6 essential columns are: Compound, Property Type, Purpose (Sale/Rent), Price, Area, and Owner Phone."]]
 ];
 
 const CHAT_FAQ = [
-  [["هل يتم حفظ رقم مرسل الواتساب كرقم لمالك الوحدة؟", "Is the WhatsApp sender's phone saved as the owner's phone?"], ["لا نهائياً. يتم حفظ رقم هاتف الراسل فقط كمرجع تسويقي في الملاحظات، ولا يتم اعتماده كرقم مالك الوحدة حفاظاً على السرية.", "Never. The sender's phone number is recorded strictly in the notes as an internal source reference and is never assigned as the unit owner's phone."]],
-  [["ما هو الحد الأقصى لعدد الصور في الإعلان الواحد؟", "What is the maximum number of photos per listing?"], ["الحد الأقصى هو 15 صورة لكل وحدة. يتم اختيار الصورة الأولى تلقائياً كصورة غلاف، مع إمكانية إعادة الترتيب وحذف الصور المكررة.", "The ceiling is 15 photos per listing. The first image is automatically designated as the hero cover, with full controls to reorder and discard duplicates."]],
-  [["ماذا يحدث لرسائل طلبات الشراء (Looking for) داخل الشات؟", "What happens to buyer request messages in the chat?"], ["يقوم الفلتر الذكي باستبعاد رسائل الطلبات (مثل «مطلوب» أو «محتاج») تلقائياً حتى لا يتم تسجيلها كوحدات بالمخزون.", "Smart filters automatically identify and exclude buyer inquiry messages (e.g., 'Looking for', 'Wanted', 'مطلوب') so they never clutter your property inventory."]],
-  [["من يملك صلاحية استيراد شات الواتساب؟", "Who has permission to import WhatsApp chats?"], ["خاصية استيراد الشات متاحة للمديرين (Managers) ومدخلي البيانات (Data Entry) فقط، ومغلقة أمام البروكر العادي.", "WhatsApp chat intake is restricted to Managers and Data Entry clerks only; frontline brokers cannot access it."]]
+  [["هل يتم حفظ رقم مرسل رسالة الواتساب كرقم لمالك الوحدة؟", "Is the WhatsApp sender's phone saved as the owner's phone?"], ["لا نهائياً. رقم الراسل في الجروب يُحفظ فقط في الملاحظات كمرجع لمصدر العقار، ولا يُسجل كرقم للمالك حفاظاً على خصوصيتك وسرية بياناتك.", "Never. The group sender's number is recorded only in internal notes as a source reference, and is never set as the unit owner's phone to protect your privacy."]],
+  [["كم عدد الصور المسموح بها لكل عقار؟", "How many photos are allowed per listing?"], ["يمكنك إضافة حتى 15 صورة لكل وحدة. الصورة الأولى تصبح تلقائياً صورة الغلاف، ويمكنك تقديم أو تأخير أي صورة بسهولة.", "You can attach up to 15 photos per listing. The first image becomes the cover photo, and you can easily reorder or delete images."]],
+  [["ماذا يحدث لرسائل طلبات الشراء داخل الشات؟", "What happens to buyer requests in the chat?"], ["الرسائل التي تبدأ بكلمات طلب (مثل «مطلوب» أو «محتاج شقة») يتم استبعادها تلقائياً حتى لا تدخل في مخزون العقارات المعروضة.", "Messages starting with buyer requests (like 'wanted' or 'looking for') are automatically filtered out so they never clutter your property inventory."]],
+  [["من يملك صلاحية استيراد شات الواتساب في الشركة؟", "Who has permission to import WhatsApp chats?"] , ["خاصية استيراد الشات متاحة لمديري الوكالة ولمسؤولي إدخال البيانات، ومغلقة أمام باقي البروكرز للحفاظ على تنظيم المخزون.", "WhatsApp chat intake is available to managers and data entry staff to keep inventory organized."]]
 ];
 
 const LEADS_FAQ = [
-  [["ماذا يعني تنبيه تعارض الزملاء (Colleague Duplicate Guard)؟", "What is the Colleague Duplicate Guard?"], ["هو نظام حماية ذكي يمنع تكرار تسجيل العميل، وينبه المدير بوجود تعارض مع إخفاء بيانات العميل واسم الزميل لحماية سرية العمل داخل الوكالة.", "A collision guard preventing duplicate client intake: it alerts the manager while strictly concealing client data and colleague identity from the inquiring broker."]],
-  [["كم مدة التراجع المتاحة بعد تعديل مرحلة العميل؟", "How long is the undo window after mutating a lead?"], ["متاح لك التراجع الفوري عن أي تغيير (مثل تغيير المرحلة أو المتابعة) خلال 10 دقائق كاملة عبر زر «↩️ تراجع».", "You have a 10-minute reversible window to rollback any lead mutation (stage shift, follow-up, note, assignment) via the undo button."]],
-  [["كيف يحسب النظام مواعيد الرد في غير أوقات العمل؟", "How are response deadlines calculated outside working hours?"], ["تُحسب مهل الاستجابة حصراً خلال ساعات العمل بتوقيت القاهرة (9 ص إلى 9 م). الرسالة الواردة ليلاً يبدأ عدادها في التاسعة صباحاً.", "Response deadlines accrue strictly during Cairo working hours (e.g. 9:00 AM - 9:00 PM). A lead received at night pauses until 9:00 AM."]],
-  [["كيف يتوافق النظام مع قانون حماية البيانات الشخصية المصري (PDPL)؟", "How does WehdatHub comply with Egyptian PDPL?"], ["يوفر النظام إمكانية تصدير بيانات العميل في ملف مضغوط، والمسح النهائي المشفر برقم الهاش (lead_erasures)، والتطهير التلقائي بعد 18 شهراً من الركود.", "Compliant with Egyptian Law 151/2020: exportable client ZIPs, phone-hashed permanent erasure (lead_erasures), and automatic 18-month inactivity purging."]]
+  [["ماذا يحدث لو سجلت رقم عميل موجود مسبقاً مع زميلي في الشركة؟", "What happens if I enter a client already with a colleague?"], ["يظهر لك تنبيه أصفر فوري بأن الرقم مسجل مع زميل. للحفاظ على سرية العمل وخصوصية الزملاء، لن تظهر لك بيانات العميل أو اسم زميلك، ويتم إخطار المدير للتنسيق بينكما.", "You get an immediate yellow alert that the client is already with a colleague. To protect teamwork and privacy, you won't see your colleague's name or client details, and the manager is notified to coordinate."]],
+  [["كم مدة التراجع المتاحة لو عدلت مرحلة عميل أو بياناته بالخطأ؟", "How long do I have to undo a change on a client?"], ["يمكنك التراجع الفوري عن أي إجراء (تغيير المرحلة، تسجيل مكالمة، موعد متابعة) خلال 10 دقائق كاملة عبر زر «↩️ تراجع» الأخضر في أعلى الصفحة.", "You can immediately undo any action (stage change, call log, follow-up date) within 10 full minutes using the green '↩️ Undo' button at the top of the page."]],
+  [["كيف يتم حساب وقت الرد على العميل خارج مواعيد العمل؟", "How is response time calculated outside working hours?"], ["عداد مهلة الرد يعمل فقط أثناء ساعات العمل الرسمية بتوقيت القاهرة (مثلاً من 9 صباحاً إلى 9 مساءً). لو ورد عميل في منتصف الليل، يبدأ العداد في التاسعة صباحاً.", "The response timer runs strictly during official working hours in Cairo time (e.g. 9:00 AM to 9:00 PM). If a lead arrives overnight, the timer begins at 9:00 AM."]],
+  [["إذا طلب العميل مسح بياناته نهائياً، كيف نتصرف؟", "What if a client asks us to delete their data?"] , ["يفتح المدير صفحة العميل ويختار «مسح نهائي» ويؤكد العملية. يتم حذف السجل بالكامل، وينبهك النظام تلقائياً إذا حاول أي زميل تسجيل نفس الرقم مستقبلاً.", "A manager opens the client page, chooses 'Erase for good', and confirms. The record is permanently deleted, and the system alerts your team if anyone tries to re-enter the same number later."]]
 ];
 
 /** A command's words as <code> chips. */
@@ -324,7 +324,7 @@ function webGuideContent(lang, assets) {
 
   <h3>${T(lang, ["1. تعديل المواصفات والأسعار", "1. Updating Specifications and Pricing"])}</h3>
   <ul>
-    <li>${T(lang, ["تحديث أي حقل مباشرة (مثل السعر أو حالة الوحدة إلى مباعة). الحماية التزامنية تمنع تعارض تعديل الزملاء.", "Update any field directly. Concurrency locks prevent collision if colleagues edit simultaneously."])}</li>
+    <li>${T(lang, ["تحديث أي بيان مباشرة (مثل السعر أو حالة الوحدة إلى مباعة). ينبهك النظام إذا كان زميل يعدل نفس الوحدة في نفس الوقت لمنع التضارب.", "Update any field directly (like price or marking as sold). The system alerts you if a colleague is editing the same unit at the same time to prevent conflicts."])}</li>
   </ul>
   ${shot("guide/edit-unit-01-place-features.png", T(lang, ["شاشة التعديل: شريط التنقل السريع والمكان والمواصفات", "Edit Screen: Quick navigation bar, location, and property specifications"]))}
   ${shot("guide/edit-unit-02-size-price.png", T(lang, ["تعديل المساحة والسعر وحالة التشطيب والفرش", "Updating area, asking price, finishing, and furnishing"]))}
@@ -337,7 +337,7 @@ function webGuideContent(lang, assets) {
 
   <h3>${T(lang, ["3. تنبيه الوحدات المكررة الذكي والحفظ", "3. Smart Duplicate Listing Alert & Save"])}</h3>
   <ul>
-    <li>${T(lang, ["تنبيه أصفر ذكي عند تشابه الوحدة مع أخرى في المخزون لحماية قاعدة البيانات من التكرار.", "Smart duplicate alert flags existing properties matching specs before saving."])}</li>
+    <li>${T(lang, ["تنبيه أصفر ذكي ينبهك في حال وجود وحدة مسجلة مسبقاً بنفس المواصفات لتجنب التكرار.", "Smart duplicate alert flags existing properties matching specs before saving."])}</li>
   </ul>
   ${shot("guide/edit-unit-05-review-summary.png", T(lang, ["تنبيه كشف الوحدات المتشابهة، خانة التأكيد، وزر حفظ التعديلات", "Duplicate listing detection alert, confirmation checkbox, and Save button"]))}
 </section>
@@ -380,102 +380,101 @@ function excelGuideContent(lang, assets) {
   return html`
 <nav class="card row" aria-label="${T(lang, ["محتويات دليل إكسيل", "Excel Guide Contents"])}">
   <a href="#excel-upload">📑 ${T(lang, ["رفع الملف والشيتات", "Upload & Sheets"])}</a>
-  <a href="#excel-mapping">🔤 ${T(lang, ["مطابقة الأعمدة", "Column Mapping"])}</a>
-  <a href="#excel-diff">🔍 ${T(lang, ["مراجعة الفروق", "Diff Preview"])}</a>
-  <a href="#excel-rules">🛡️ ${T(lang, ["قواعد التشغيل ومنع التكرار", "Rules & Dedup"])}</a>
+  <a href="#excel-mapping">🔤 ${T(lang, ["مطابقة الأعمدة", "Column Matching"])}</a>
+  <a href="#excel-diff">🔍 ${T(lang, ["مراجعة التغييرات", "Review Changes"])}</a>
+  <a href="#excel-rules">🛡️ ${T(lang, ["حماية التكرار والتراجع", "Duplicates & Undo"])}</a>
   <a href="#excel-faq">❓ ${T(lang, ["أسئلة شائعة", "Excel FAQ"])}</a>
 </nav>
 
 <section class="card" id="excel-upload">
-  <h2>📑 ${T(lang, ["الخطوة 1: رفع ملف الإكسيل والتعامل مع الشيتات المتعددة", "Step 1: Uploading Excel Workbooks & Multi-Sheet Processing"])}</h2>
+  <h2>📑 ${T(lang, ["الخطوة 1: رفع ملف الإكسيل والتعامل مع الشيتات المتعددة", "Step 1: Uploading Excel Workbooks & Multiple Sheets"])}</h2>
   <p>${T(lang, [
-    "تتيح لك ميزة استيراد الإكسيل (/app/import/excel) تحميل محفظة عقاراتك كاملة في ثوانٍ. تتم قراءة الملفات في المتصفح مباشرة عبر تقنية Web Workers بدون إرهاق السيرفر وبدون استهلاك أي رصيد من الذكاء الاصطناعي (0 AI Credits).",
-    "Excel import (/app/import/excel) uploads entire property portfolios in seconds. Files are parsed in-browser via Web Workers with zero server load and zero AI credit consumption."
+    "تتيح لك ميزة استيراد الإكسيل تحميل محفظة عقاراتك بالكامل في ثوانٍ. تتم قراءة الملفات في متصفحك مباشرة بسرعة وأمان ودون استهلاك أي رصيد من رصيد الذكاء الاصطناعي لشركتك.",
+    "Excel import lets you upload your entire property inventory in seconds. Files are read directly in your browser quickly and safely, without using any AI credits."
   ])}</p>
 
   <div class="guide-example">
-    <strong>${T(lang, ["قواعد ملفات الإكسيل والشيتات المتعددة:", "Workbook & Multi-Sheet Rules:"])}</strong>
+    <strong>${T(lang, ["إرشادات رفع الملف والشيتات:", "File & Sheet Guidelines:"])}</strong>
     <ul>
-      <li>${T(lang, ["الصيغ المدعومة: يقبل النظام ملفات .xlsx وملفات .csv بحجم يصل إلى 5 ميجابايت.", "Supported Formats: accepts .xlsx and .csv workbooks up to 5 MB."])}</li>
-      <li>${T(lang, ["الشيتات المتعددة (Multi-sheet): يدعم النظام المصنفات الضخمة التي تضم حتى 60 شيت (Sheet) وما يصل إلى 5,000 صف عقاري في المرة الواحدة.", "Multi-Sheet Support: handles workbooks with up to 60 sheets and up to 5,000 unit rows per import."])}</li>
-      <li>${T(lang, ["استبعاد الشيتات الفارغة تلقائياً: الشيتات التي لا تحتوي على بيانات يتم استبعادها الذاتي دون إيقاف باقي الشيتات.", "Empty Sheets: sheets without valid data are safely skipped while active sheets proceed smoothly."])}</li>
-      <li>${T(lang, ["توليد الكمبوند من اسم التاب: إذا كان الشيت مخصصاً لكمبوند معين ولا يحتوي عموداً لاسم الكمبوند، يعتمد النظام اسم التاب تلقائياً كاسم للكمبوند.", "Compound from Tab: if a sheet lacks a compound column, the tab name automatically assigns the compound."])}</li>
-      <li>${T(lang, ["صلاحية الاستيراد: خاصية استيراد الإكسيل مقتصرة حصرياً على مديري الوكالة ومالكها (Authz.isManager).", "Role Gate: Excel import is strictly restricted to Agency Owners and Managers (Authz.isManager)."])}</li>
+      <li>${T(lang, ["الصيغ المدعومة: يقبل النظام ملفات .xlsx وملفات .csv بحجم يصل إلى 5 ميجابايت.", "Supported Formats: accepts .xlsx and .csv files up to 5 MB."])}</li>
+      <li>${T(lang, ["الشيتات المتعددة: يمكنك رفع ملفات ضخمة تحتوي على عشرات الشيتات وآلاف الوحدات دفعة واحدة.", "Multiple Sheets: you can upload large files containing multiple sheets and thousands of properties at once."])}</li>
+      <li>${T(lang, ["تخطي الشيتات الفارغة تلقائياً: الشيتات التي لا تحتوي على بيانات يتخطاها النظام تلقائياً ويستكمل باقي الملف بسلاسة.", "Skipping Empty Sheets: empty sheets are skipped automatically while active sheets proceed smoothly."])}</li>
+      <li>${T(lang, ["اسم الكمبوند من اسم الشيت: لو الشيت مخصص لكمبوند معين ولا يوجد عمود لاسم الكمبوند، يعتمد النظام اسم الشيت تلقائياً كاسم للكمبوند.", "Compound Name from Sheet: if a sheet is dedicated to a compound without a compound column, the tab name is used automatically."])}</li>
+      <li>${T(lang, ["الصلاحيات: ميزة استيراد الإكسيل متاحة لمديري الوكالة ومالكها.", "Permissions: Excel import is available to agency managers and owners."])}</li>
     </ul>
   </div>
   ${shot("guide/import-excel-01-upload-sheets.png", T(lang, ["منطقة رفع ملف الإكسيل واختيار الشيتات واستبعاد الشيتات الفارغة", "Excel upload dropzone, multi-sheet selection, and empty sheet exclusion"]))}
 </section>
 
 <section class="card" id="excel-mapping">
-  <h2>🔤 ${T(lang, ["الخطوة 2: التعرف التلقائي على الأعمدة وتصحيح الأخطاء الإملائية", "Step 2: Header Detection & Typo-Tolerant Column Mapping"])}</h2>
+  <h2>🔤 ${T(lang, ["الخطوة 2: التعرف التلقائي على الأعمدة وتصحيح العناوين", "Step 2: Checking Columns & Smart Header Matching"])}</h2>
   <p>${T(lang, [
-    "يحتوي محرك الاستيراد على خوارزمية تعرف ذكية تقارن عناوين الأعمدة في ملفك مع الحقول المعتمدة في WehdatHub، حتى لو كانت الكلمات تحتوي على أخطاء إملائية شائعة.",
-    "The import engine features smart fuzzy distance matching that accurately detects headers even with common typos."
+    "يتعرف النظام تلقائياً على عناوين الأعمدة في ملفك ويربطها بالخانات المناسبة، حتى لو كانت الكلمات تحتوي على اختصارات أو أخطاء إملائية شائعة.",
+    "The system automatically detects column headers in your file and pairs them with the right fields, even with common typos or abbreviations."
   ])}</p>
 
-  <h3>${T(lang, ["الأعمدة الإجبارية والحقول الأساسية", "Required Columns & Mandatory Fields"])}</h3>
+  <h3>${T(lang, ["الأعمدة الأساسية والمطلوبة", "Required Columns & Essential Fields"])}</h3>
   <ul>
-    <li>${T(lang, ["الأعمدة الإجبارية الستة: الكمبوند (Compound)، نوع الوحدة (Property Type)، الغرض (بيع أو إيجار Purpose)، السعر (Price)، المساحة (Area)، ورقم تليفون المالك (Owner Phone).", "Mandatory Columns: Compound, Property Type, Purpose (Sale/Rent), Price, Area, and Owner Phone."])}</li>
-    <li>${T(lang, ["تصحيح الأخطاء التلقائي: يتعرف النظام تلقائياً على الكلمات المشوهة مثل (descibation, deatils, phone numper) ويربطها بالحقل الصحيح.", "Typo Tolerance: words like 'descibation', 'deatils', or 'phone numper' are automatically recognized and mapped."])}</li>
-    <li>${T(lang, ["كشف انزياح الأعمدة (Shifted Headers): إذا كان هناك عمود فارغ تسبب في زحزحة البيانات، ينبهك النظام ويعيد محاذاة الأعمدة هندسياً.", "Shifted Headers: detects offset columns and automatically realigns data cells."])}</li>
-    <li>${T(lang, ["إعادة التعيين اليدوي: يمكنك في أي وقت فتح بطاقة الأدوات وتغيير مطابقة أي عمود وإعادة الحساب فوراً.", "Manual Remapping: open Tools to reassign any column mapping and recalculate on the fly."])}</li>
+    <li>${T(lang, ["الأعمدة الستة المطلوبة: الكمبوند، نوع الوحدة، الغرض (بيع أو إيجار)، السعر، المساحة، ورقم تليفون المالك.", "6 Essential Columns: Compound, Property Type, Purpose (Sale/Rent), Price, Area, and Owner Phone."])}</li>
+    <li>${T(lang, ["فهم الاختصارات والأخطاء: يتعرف النظام تلقائياً على الكلمات الشائعة (مثل descibation أو phone numper) ويربطها بالحقل الصحيح.", "Typo Tolerance: common variations and misspellings are recognized and matched to the right fields."])}</li>
+    <li>${T(lang, ["التعديل اليدوي في أي وقت: يمكنك في أي وقت فتح قائمة الأعمدة وتغيير مطابقة أي عمود وإعادة الحساب فوراً قبل الحفظ.", "Manual Adjustment: you can change any column mapping from the dropdowns at any time before proceeding."])}</li>
   </ul>
-  ${shot("guide/import-excel-02-mapping-headers.png", T(lang, ["شاشة مطابقة الأعمدة والتعرف الذكي على الحقول والأخطاء الإملائية", "Column mapping interface with smart header detection and typo correction"]))}
+  ${shot("guide/import-excel-02-mapping-headers.png", T(lang, ["شاشة مطابقة الأعمدة والتعرف الذكي على الحقول وتصحيح الأخطاء", "Column mapping interface with smart header detection and typo correction"]))}
 </section>
 
 <section class="card" id="excel-diff">
-  <h2>🔍 ${T(lang, ["الخطوة 3: شاشة معاينة الفروق والتعديلات قبل الحفظ (Diff Preview)", "Step 3: Pre-Import Diff Preview & Row Categorization"])}</h2>
+  <h2>🔍 ${T(lang, ["الخطوة 3: مراجعة التغييرات والتعديلات قبل الحفظ", "Step 3: Reviewing Changes & Classifications Before Saving"])}</h2>
   <p>${T(lang, [
-    "قبل أن يدخل أي تعديل إلى قاعدة البيانات الحية، يعرض لك النظام شاشة معاينة تفصيلية (/app/import/:id) تصنف كل صف في ملفك بدقة متناهية:",
-    "Before committing changes to the live database, the diff preview screen (/app/import/:id) classifies every row:"
+    "قبل اعتماد أي تعديل أو حفظه، يعرض لك النظام شاشة معاينة واضحة تصنف كل عقار في ملفك بالألوان لسهولة المراجعة:",
+    "Before saving any changes, the preview screen classifies every property with intuitive color coding:"
   ])}</p>
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
     <div class="notice ok">
       <strong>🆕 جديدة (New):</strong>
-      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة جديدة لم تسجل من قبل. سيتم إنشاؤها وتوليد كود مميز لها.", "Brand new listing. Will be created with an auto-generated unique code."])}</p>
+      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة جديدة لم تسجل من قبل. سيتم إنشاؤها وتوليد كود خاص بها.", "Brand new listing. Will be added to your inventory with a unique code."])}</p>
     </div>
     <div class="notice" style="border-inline-start-color: #1971c2;">
-      <strong>✏️ متغيرة (Changed):</strong>
-      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة مسجلة بالفعل حدث تغيير في سعرها أو مواصفاتها. يظهر لك النظام التغيير بوضوح: السعر القديم ➡ السعر الجديد.", "Existing listing with detected modifications, rendered as an inline diff: Old Price ➡ New Price."])}</p>
+      <strong>✏️ تعديل (Updated):</strong>
+      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة مسجلة بالفعل حدث تغيير في سعرها أو تفاصيلها. يوضح لك النظام التغيير بوضوح: السعر القديم ➡ السعر الجديد.", "Existing listing with detected updates, showing old vs new values clearly."])}</p>
     </div>
     <div class="notice warn">
-      <strong>⚠️ مراجعة (Review):</strong>
-      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة متشابهة في المواصفات بنسبة تتجاوز 90% (قاعدة P13). يوفر لك النظام خيارين: إما الدمج مع الوحدة القديمة أو الإضافة كوحدة جديدة.", "Matches an existing unit within ±5% specs (P13 rule). Choose between Merge into existing or Add as new code."])}</p>
+      <strong>⚠️ للمراجعة (Review):</strong>
+      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة تبدو مشابهة جداً لوحدة قائمة. يتيح لك النظام إما تحديث الوحدة القديمة أو إضافتها كوحدة جديدة.", "Unit very similar to an existing one. You can choose whether to update the existing unit or add as new."])}</p>
     </div>
     <div class="notice">
       <strong>✔️ متطابقة (Unchanged):</strong>
-      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["بيانات مطابقة تماماً للمسجل في التطبيق. يتم تخطيها تلقائياً لتوفير الوقت.", "Identical to current inventory records. Safely skipped by default."])}</p>
+      <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["بيانات مطابقة تماماً للمسجل عندك، يتم تخطيها تلقائياً لتوفير الوقت.", "Identical to current inventory records. Safely skipped by default."])}</p>
     </div>
   </div>
   ${shot("guide/import-excel-03-diff-preview.png", T(lang, ["شاشة معاينة الفروق والتعديلات وتصنيف الصفوف قبل الحفظ", "Diff preview screen displaying row classifications and inline changes"]))}
 </section>
 
 <section class="card" id="excel-rules">
-  <h2>🛡️ ${T(lang, ["الخطوة 4: قواعد التشغيل · منع التكرار P13 وحدود السعة والتراجع", "Step 4: Operational Rules, P13 Safeguards, Quotas & Undo Stack"])}</h2>
+  <h2>🛡️ ${T(lang, ["الخطوة 4: حماية المخزون من التكرار وسعة الباقة والتراجع", "Step 4: Duplicate Protection, Plan Capacity & 30-Day Undo"])}</h2>
   <p>${T(lang, [
-    "لحماية مخزون الوكالة من التشويه أو ضياع البيانات، يطبق WehdatHub ضوابط تشغيلية صارمة:",
-    "To protect your agency's inventory integrity, WehdatHub enforces robust operational safeguards:"
+    "للحفاظ على نظافة بيانات شركتك وحمايتها، يطبق WehdatHub ضوابط حماية تلقائية تضمن راحة بالك:",
+    "To protect your agency's inventory integrity, WehdatHub enforces automatic safeguards:"
   ])}</p>
 
-  <h3>${T(lang, ["1. قاعدة منع التكرار الهندسية (P13 Rule)", "1. P13 Geometric Deduplication Safeguard"])}</h3>
+  <h3>${T(lang, ["1. الحماية الذكية من تكرار الوحدات", "1. Smart Duplicate Listing Protection"])}</h3>
   <p>${T(lang, [
-    "يقارن النظام 5 معايير هندسية متزامنة: (الكمبوند، نوع العقار، عدد الغرف، المساحة بفارق ±5%، والسعر بفارق ±5%). في حال التطابق، يمنع النظام التكرار العشوائي ويوجه الصف إلى قسم «المراجعة» لاتخاذ القرار الأنسب.",
-    "Evaluates 5 concurrent parameters: Compound, Property Type, Bedrooms, Area (±5%), and Price (±5%). Matches are flagged under 'Review' to prevent duplicate pollution."
+    "يقارن النظام الكمبوند ونوع العقار والغرف والمساحة والسعر. في حال وجود وحدة مشابهة، ينبهك النظام ويوجهها لقسم «المراجعة» لتتخذ القرار الأنسب وتتجنب التكرار العشوائي.",
+    "Checks compound, property type, bedrooms, area, and price. If a similar unit exists, it is flagged under Review so you can choose the best action without cluttering inventory."
   ])}</p>
 
-  <h3>${T(lang, ["2. فحص سعة باقة الوكالة (Agency Unit Quota)", "2. Agency Plan Unit Capacity Quota"])}</h3>
+  <h3>${T(lang, ["2. فحص سعة باقة الوكالة", "2. Agency Plan Capacity Check"])}</h3>
   <p>${T(lang, [
-    "يفحص النظام تلقائياً السعة المتبقية في باقة وكالتك قبل بدء الحفظ. إذا تجاوز الملف سعة الباقة، يحفظ النظام الوحدات حتى اكتمال السعة ويضع باقي الصفوف في قائمة التخطي الآمن (limit_skipped) دون أي عطل.",
-    "Automatically verifies remaining unit capacity on your agency plan. If an import exceeds quota, units up to capacity are saved while surplus rows are safely held in 'limit_skipped' without data loss."
+    "يتأكد النظام تلقائياً من عدد الوحدات المتبقية في باقة شركتك قبل الحفظ. إذا تجاوز الملف السعة المتاحة، يحفظ النظام الوحدات حتى اكتمال السعة ويحتفظ بباقي الصفوف بأمان لتتمكن من إضافتها لاحقاً.",
+    "Automatically checks remaining unit capacity on your plan. If an import exceeds quota, units up to capacity are saved while surplus rows are safely held without data loss."
   ])}</p>
 
-  <h3>${T(lang, ["3. التراجع الشامل خلال 30 يوماً (Reversible Undo)", "3. 30-Day Reversible Undo Stack"])}</h3>
+  <h3>${T(lang, ["3. التراجع بنقرة واحدة خلال 30 يوماً", "3. 30-Day One-Click Undo"])}</h3>
   <p>${T(lang, [
-    "أي عملية استيراد إكسيل يمكن التراجع عنها بالكامل خلال 30 يوماً عبر الرابط /app/import/:id/undo. يتم حذف الوحدات التي تم إنشاؤها (مما يحرر سعة الباقة فوراً) وإعادة الأسعار والمواصفات السابقة للوحدات المحدثة.",
-    "Any applied import can be fully rolled back within 30 days via /app/import/:id/undo, deleting created listings (restoring plan quota) and restoring prior field values."
+    "يمكنك التراجع عن أي عملية استيراد إكسيل بالكامل خلال 30 يوماً. يتم حذف الوحدات التي تمت إضافتها واستعادة الأسعار والتفاصيل السابقة للوحدات المحدثة بنقرة زر واحدة.",
+    "Any applied import can be fully rolled back within 30 days, deleting newly added units and restoring prior prices and details with a single click."
   ])}</p>
-  ${shot("guide/import-excel-04-rules-dedup.png", T(lang, ["قواعد كشف التكرار P13 وفحص سعة الباقة وإمكانية التراجع الكامل", "P13 duplicate rules, quota checks, and 30-day reversible undo"]))}
+  ${shot("guide/import-excel-04-rules-dedup.png", T(lang, ["قواعد منع التكرار وفحص سعة الباقة وإمكانية التراجع الكامل", "Duplicate rules, quota checks, and 30-day reversible undo"]))}
 </section>
 
 <section class="card" id="excel-faq">
@@ -494,85 +493,85 @@ function chatGuideContent(lang, assets) {
 
   return html`
 <nav class="card row" aria-label="${T(lang, ["محتويات دليل شات واتساب", "WhatsApp Chat Intake Contents"])}">
-  <a href="#chat-upload">📦 ${T(lang, ["رفع الشات والفلاتر", "Upload & Filters"])}</a>
-  <a href="#chat-extract">📝 ${T(lang, ["استخراج العقارات", "Extraction"])}</a>
-  <a href="#chat-photos">📸 ${T(lang, ["ربط الصور والترتيب", "Photos & Order"])}</a>
-  <a href="#chat-assign">👤 ${T(lang, ["التخصيص والأمان", "Assignment & Rules"])}</a>
+  <a href="#chat-upload">📦 ${T(lang, ["رفع الشات والفترة", "Upload & Filters"])}</a>
+  <a href="#chat-extract">📝 ${T(lang, ["استخراج الإعلانات", "Extraction"])}</a>
+  <a href="#chat-photos">📸 ${T(lang, ["ربط وترتيب الصور", "Photos & Order"])}</a>
+  <a href="#chat-assign">👤 ${T(lang, ["التخصيص والسرية", "Assignment & Privacy"])}</a>
   <a href="#chat-faq">❓ ${T(lang, ["أسئلة شائعة", "Chat FAQ"])}</a>
 </nav>
 
 <section class="card" id="chat-upload">
-  <h2>📦 ${T(lang, ["الخطوة 1: رفع أرشيف الشات وتحديد النطاق الزمني", "Step 1: Uploading WhatsApp Export Archives & Date Range Filtering"])}</h2>
+  <h2>📦 ${T(lang, ["الخطوة 1: رفع أرشيف الشات واختيار الفترة الزمنية", "Step 1: Uploading WhatsApp Export Archives & Date Range Filtering"])}</h2>
   <p>${T(lang, [
-    "يتيح لك تبويب استيراد الشات (/app/import) تحويل محادثات ومجموعات واتساب العقارية إلى وحدات منظمة مع صورها بنقرة واحدة، دون الحاجة لإدخال يدوي.",
-    "WhatsApp chat intake (/app/import) converts group chats and forwarded listings into structured listings complete with matched photos."
+    "تتيح لك هذه الميزة سحب إعلانات العقارات من جروبات ومحادثات واتساب وتحويلها إلى وحدات منظمة مع صورها بنقرة واحدة، دون الحاجة لنقلها يدوياً إعلاناً بإعلان.",
+    "WhatsApp chat intake converts forwarded listings and group messages into structured property cards complete with photos in one click, without manual typing."
   ])}</p>
 
   <div class="guide-example">
-    <strong>${T(lang, ["آلية المعالجة والفلترة الزمنية:", "Processing Mechanics & Date Filters:"])}</strong>
+    <strong>${T(lang, ["إرشادات رفع الشات والفلترة الزمنية:", "Upload Guidelines & Date Filters:"])}</strong>
     <ul>
-      <li>${T(lang, ["معالجة كاملة داخل المتصفح: يتم فك ضغط ملف .zip وقراءة الصور وسجل المحادثة _chat.txt داخل المتصفح (Client-side JSZip). لا يتم إرسال ملفات ضخمة للسيرفر مما يمنع انقطاع الاتصال.", "In-Browser Unpacking: .zip archives and photos are parsed directly in the user's browser via JSZip, avoiding server memory spikes and upload timeouts."])}</li>
-      <li>${T(lang, ["استهلاك الذكاء الاصطناعي: 0 كريديت! المعالجة تتم بقواعد هندسية ولغوية متطورة دون استهلاك رصيد الذكاء الاصطناعي لوكالتك.", "AI Credit Consumption: 0 Credits! Operates 100% rule-based without consuming your agency's AI quota."])}</li>
-      <li>${T(lang, ["خيارات النطاق الزمني: يدعم النظام فلاتر متعددة: آخر 7 أيام، آخر 30 يوماً (الافتراضي)، آخر 90 يوماً، كل الشات، أو «منذ آخر استيراد» الذكي الذي يقرأ فقط الإعلانات الجديدة منذ آخر عملية.", "Date Range Controls: filter by Last 7 days, Last 30 days (default), Last 90 days, All time, or smart incremental 'Since last import'."])}</li>
-      <li>${T(lang, ["صلاحية الاستيراد: مقتصرة على المديرين ومدخلي البيانات (Authz.isManager || Authz.isDataEntry).", "Role Gate: restricted to Managers and Data Entry operators (Authz.isManager || Authz.isDataEntry)."])}</li>
+      <li>${T(lang, ["معالجة سريعة وآمنة في المتصفح: يتم فك ضغط ملف .zip وقراءة الصور وسجل المحادثة مباشرة في متصفحك بسرعة فائقة وبكل أمان.", "Fast & Secure In-Browser Processing: zip files, photos, and messages are processed directly in your browser quickly and securely."])}</li>
+      <li>${T(lang, ["استهلاك الذكاء الاصطناعي: مجاني تماماً! لا تستهلك هذه الميزة أي رصيد من باقة الذكاء الاصطناعي لشركتك.", "AI Credit Usage: Completely free! This feature uses zero AI credits from your agency plan."])}</li>
+      <li>${T(lang, ["خيارات الفترة الزمنية: يمكنك تحديد نطاق الإعلانات: آخر 7 أيام، آخر 30 يوماً، كل الشات، أو «منذ آخر استيراد» لقراءة الإعلانات الجديدة فقط وتجنب الإعلانات السابقة.", "Date Range Controls: filter by Last 7 days, Last 30 days, All time, or 'Since last import' to process only new listings."])}</li>
+      <li>${T(lang, ["صلاحية الاستيراد: متاحة لمديري الوكالة ولمسؤولي إدخال البيانات.", "Permissions: available to agency managers and data entry staff."])}</li>
     </ul>
   </div>
   ${shot("guide/import-chat-01-upload-filters.png", T(lang, ["شاشة رفع أرشيف شات واتساب وتحديد النطاق الزمني", "WhatsApp chat zip upload interface and date range controls"]))}
 </section>
 
 <section class="card" id="chat-extract">
-  <h2>📝 ${T(lang, ["الخطوة 2: استخراج الإعلانات وتصفية طلبات الشراء (Looking for)", "Step 2: Listing Extraction & Filtering Out Buyer Requests"])}</h2>
+  <h2>📝 ${T(lang, ["الخطوة 2: استخراج الإعلانات وتصفية طلبات الشراء", "Step 2: Listing Extraction & Filtering Out Buyer Requests"])}</h2>
   <p>${T(lang, [
-    "يحلل النظام نصوص المحادثات بدقة هندسية عالية لتمييز الوحدات الحقيقية المعروضة للبيع أو الإيجار وفصلها عن الرسائل العشوائية وطلبات البحث:",
-    "The parser analyzes chat text to extract genuine listings while discarding casual conversation and buyer requests:"
+    "يقوم النظام بقراءة نصوص المحادثة لتمييز الوحدات الحقيقية المعروضة للبيع أو الإيجار وفصلها عن الأحاديث العامة وطلبات المشترين:",
+    "The system analyzes chat messages to extract genuine listings while discarding casual chat and buyer requests:"
   ])}</p>
 
   <ul>
-    <li>${T(lang, ["معايير الإعلان المكتمل (looksLikeListing): يجب ألا يقل طول الرسالة عن 30 حرفاً، وتحتوي على رقم/كلمة سعر (مثل مليون، ألف، EGP)، وكلمة عقارية ومساحة (شقة، فيلا، م²).", "Listing Criteria (looksLikeListing): minimum 30 characters, requiring price cues (million, k, EGP) and property keywords/area (apartment, villa, sqm)."])}</li>
-    <li>${T(lang, ["استبعاد طلبات المشترين (Looking for Filters): الرسائل التي تبدأ بكلمات طلب (مطلوب، عايز، محتاج، ابحث عن، looking for) يتم استبعادها تلقائياً ولا تُسجل كوحدات بالمخزون.", "Request Filtering: buyer inquiries starting with 'looking for', 'مطلوب', 'عايز' are filtered out automatically."])}</li>
-    <li>${T(lang, ["دعم التنسيقات: يدعم النظام صيغ تصدير واتساب على أجهزة آيفون (iOS) وأندرويد (Android) بمختلف لغات النظام.", "Cross-Platform Support: seamlessly parses both iOS and Android WhatsApp timestamp formats in Arabic and English."])}</li>
+    <li>${T(lang, ["تمييز الإعلانات المكتملة: يتعرف النظام على الرسائل التي تحتوي على تفاصيل عقار حقيقي، مثل السعر والمساحة والكمبوند ونوع الوحدة.", "Identifying Real Listings: detects messages with property details like price, area, compound, and unit type."])}</li>
+    <li>${T(lang, ["استبعاد طلبات المشترين تلقائياً: الرسائل التي تبدأ بكلمات طلب (مثل: مطلوب، عايز، محتاج، ابحث عن) يتم استبعادها تلقائياً حتى لا تسجل كوحدات بالمخزون.", "Filtering Buyer Requests: buyer inquiries starting with 'looking for', 'wanted', 'مطلوب', or 'محتاج' are automatically filtered out."])}</li>
+    <li>${T(lang, ["دعم جميع الهواتف: يدعم النظام ملفات المحادثة المصدرة من أجهزة آيفون (iOS) وأندرويد باللغتين العربية والإنجليزية.", "Cross-Platform Support: seamlessly reads chat exports from both iPhone and Android in Arabic and English."])}</li>
   </ul>
   ${shot("guide/import-chat-02-parse-extract.png", T(lang, ["شاشة استخراج بيانات العقار من رسالة الواتساب واستبعاد طلبات البحث", "Property listing extraction preview and buyer request filtering"]))}
 </section>
 
 <section class="card" id="chat-photos">
-  <h2>📸 ${T(lang, ["الخطوة 3: ربط الصور بالعقارات ومنع التكرار وسقف 15 صورة", "Step 3: Photo Attachment, Perceptual Hash Dedup & 15-Photo Ceiling"])}</h2>
+  <h2>📸 ${T(lang, ["الخطوة 3: ربط الصور بالعقارات واختيار صورة الغلاف", "Step 3: Photo Attachment, Duplicate Filtering & Cover Selection"])}</h2>
   <p>${T(lang, [
-    "تعتبر مطابقة الصور بالنصوص التحدي الأكبر في جروبات الواتساب. يوفر WehdatHub خوارزمية ذكية لمطابقة الصور بإعلاناتها الصحيحة بدقة فائقة:",
-    "Attaching photos to their matching descriptions is handled through sophisticated burst clustering and visual hashing:"
+    "في مجموعات واتساب، غالباً ما تُرسل الصور في رسائل منفصلة عن النص. يحل النظام هذه المشكلة ويربط الصور بإعلاناتها المناسبة تلقائياً:",
+    "In WhatsApp groups, photos often arrive in separate messages from descriptions. The system pairs them automatically:"
   ])}</p>
 
   <h3>${T(lang, ["قواعد مطابقة وترتيب الصور", "Photo Matching & Ordering Rules"])}</h3>
   <ul>
-    <li>${T(lang, ["تجميع الرسائل المتتالية (Burst Window): يجمع النظام الصور والنصوص المرسلة في نافذة زمنية واحدة (الافتراضي 10 دقائق) من نفس الراسل.", "Burst Window: clusters messages and attachments sent within a 10-minute gap by the same participant."])}</li>
-    <li>${T(lang, ["إشارات الاتجاه في النص: يتعرف النظام تلقائياً على عبارات التوجيه في نص الرسالة (مثل «صور فوق» أو «صور تحت») ويربط الصور بالاتجاه المناسب.", "Direction Cues: detects phrases like 'صور فوق' (photos above) or 'صور تحت' (photos below) to pair media correctly."])}</li>
-    <li>${T(lang, ["الفحص الإدراكي للصور ومنع التكرار (Perceptual Hashing): يفحص النظام بصمة كل صورة، ويستبعد الصور المكررة في نفس الإعلان أو المعروضة في إعلانات سابقة.", "Perceptual Image Hashing: hashes each photo to detect and eliminate duplicate or twin images automatically."])}</li>
-    <li>${T(lang, ["سقف 15 صورة وصورة الغلاف: الحد الأقصى لكل وحدة هو 15 صورة. الصورة الأولى تصبح تلقائياً هي صورة الغلاف التسويقية للعملاء، ويمكنك تقديم أو تأخير أي صورة بأزرار (↑ / ↓).", "15-Photo Ceiling & Cover: maximum 15 photos per listing. The first image serves as the cover photo, with quick reordering controls (↑ / ↓)."])}</li>
+    <li>${T(lang, ["تجميع الرسائل المتتالية: يجمع النظام الصور والنصوص المرسلة في وقت متقارب من نفس الراسل ويربطها بالعقار المناسب.", "Smart Photo Grouping: pairs photos and text sent around the same time by the same participant with the right listing."])}</li>
+    <li>${T(lang, ["فهم إشارات الاتجاه في النص: يتعرف النظام تلقائياً على عبارات مثل «صور فوق» أو «صور تحت» لربط الصور بدقة.", "Direction Cues: understands hints like 'photos above' or 'photos below' to connect images accurately."])}</li>
+    <li>${T(lang, ["حذف الصور المكررة تلقائياً: يفحص النظام الصور ويستبعد الصور المكررة في نفس الإعلان أو المعروضة في إعلانات سابقة.", "Automatic Duplicate Filtering: detects and removes duplicate images within the same listing or across previous posts."])}</li>
+    <li>${T(lang, ["سقف 15 صورة واختيار الغلاف: الحد الأقصى لكل وحدة هو 15 صورة. الصورة الأولى تصبح تلقائياً هي صورة الغلاف للعملاء، ويمكنك تقديم أو تأخير أي صورة بأزرار (↑ / ↓).", "15-Photo Limit & Cover Selection: maximum 15 photos per listing. The first image serves as the cover photo, with quick reordering controls (↑ / ↓)."])}</li>
   </ul>
-  ${shot("guide/import-chat-03-photos-matching.png", T(lang, ["معرض ربط صور الواتساب بالعقارات وضبط الغلاف ومنع الصور المكررة", "Matched photo gallery with cover selection and perceptual hash duplicate filtering"]))}
+  ${shot("guide/import-chat-03-photos-matching.png", T(lang, ["معرض ربط صور الواتساب بالعقارات وضبط الغلاف ومنع الصور المكررة", "Matched photo gallery with cover selection and duplicate filtering"]))}
 </section>
 
 <section class="card" id="chat-assign">
-  <h2>👤 ${T(lang, ["الخطوة 4: حل النزاعات وتخصيص البروكر وقاعدة حماية رقم المالك", "Step 4: Conflict Resolution, Broker Assignment & Owner Contact Security"])}</h2>
+  <h2>👤 ${T(lang, ["الخطوة 4: حماية رقم المالك وتخصيص البروكر المسئول", "Step 4: Owner Contact Privacy & Broker Assignment"])}</h2>
   <p>${T(lang, [
-    "قبل اعتماد حفظ الوحدات في المخزون، يضمن النظام التحقق من ملكية البيانات وحماية سرية الاتصال:",
+    "قبل اعتماد حفظ الوحدات في المخزون، يضمن النظام حماية سرية بياناتك وتنظيم المتابعة بين فريق العمل:",
     "Before finalizing intake, the system enforces broker accountability and strict contact privacy:"
   ])}</p>
 
   <div class="callout-box alert">
-    <strong style="color: #e03131;">🔒 قاعدة أمان جوهرية: رقم مرسل الواتساب ليس رقم المالك!</strong>
+    <strong style="color: #e03131;">🔒 قاعدة أمان أساسية: رقم مرسل الواتساب ليس رقم المالك!</strong>
     <p style="margin: 4px 0 0; font-size: 12px; color: #4c596f;">
       ${T(lang, [
-        "رقم تليفون الراسل في جروب الواتساب يُحفظ فقط في خانة الملاحظات كمرجع للمصدر، ولا يتم تعيينه أبداً كرقم مالك الوحدة. يجب استخراج رقم المالك الحقيقي من نص الإعلان أو كتابته يدوياً لحماية خصوصية وسرية الشركة.",
-        "The WhatsApp sender's phone number is saved strictly in the notes as an internal source reference and is NEVER assigned as the unit owner's phone. True owner contacts must be extracted or entered manually."
+        "رقم تليفون الراسل في جروب الواتساب يُحفظ فقط في خانة الملاحظات كمرجع للمصدر، ولا يتم تعيينه أبداً كرقم مالك الوحدة. يجب كتابة رقم المالك الحقيقي من نص الإعلان أو إدخاله يدوياً لحماية خصوصية وسرية الشركة.",
+        "The WhatsApp sender's phone number is saved strictly in notes as a source reference and is NEVER assigned as the unit owner's phone. True owner contacts must be taken from the ad text or entered manually."
       ])}
     </p>
   </div>
 
   <ul>
-    <li>${T(lang, ["حل تعارض الوحدات المتشابهة: إذا كان الإعلان يطابق وحدة سابقة (P13)، يتيح لك النظام دمج الصور والأسعار الجديدة في الوحدة القديمة أو إنشاء كود جديد.", "Conflict Resolution: if an ad matches an existing property (P13), choose between merging new photos/price or creating a fresh code."])}</li>
-    <li>${T(lang, ["تخصيص البروكر المسئول: يتم إسناد الوحدات المعتمدة إلى حسابك أو إلى البروكر الذي تحدده ليتولى تسويقها ومتابعتها.", "Broker Assignment: newly imported listings are assigned directly to the importing agent or assigned team member."])}</li>
-    <li>${T(lang, ["سقف الدفعة: حد أقصى 40 إعلان في الدفعة الواحدة لضمان سرعة المعالجة ودقة المراجعة.", "Batch Ceiling: capped at 40 listings per import session for optimal speed and review accuracy."])}</li>
+    <li>${T(lang, ["حل تعارض الوحدات المتشابهة: إذا كان الإعلان يطابق وحدة سابقة، يتيح لك النظام دمج الصور والأسعار الجديدة في الوحدة القديمة أو إنشاء كود جديد.", "Conflict Resolution: if an ad matches an existing property, choose between updating the existing unit or creating a new listing."])}</li>
+    <li>${T(lang, ["تخصيص البروكر المسئول: يتم إسناد الوحدات المعتمدة إلى حسابك أو إلى البروكر الذي تحدده ليتولى تسويقها ومتابعتها.", "Broker Assignment: imported listings are assigned directly to you or to the team member you select."])}</li>
+    <li>${T(lang, ["دفعات مناسبة للمراجعة: حد أقصى 40 إعلاناً في الدفعة الواحدة لضمان سرعة المعالجة ودقة المراجعة قبل الحفظ.", "Manageable Batches: capped at 40 listings per session for fast, accurate review."])}</li>
   </ul>
   ${shot("guide/import-chat-04-conflict-assign.png", T(lang, ["شاشة حل النزاعات وتخصيص البروكر المسئول وحماية رقم المالك", "Conflict resolution, broker assignment selector, and owner phone protection notice"]))}
 </section>
@@ -593,158 +592,153 @@ function leadsGuideContent(lang, assets) {
 
   return html`
 <nav class="card row" aria-label="${T(lang, ["محتويات دليل العملاء", "Lead Management Contents"])}">
-  <a href="#lead-create">➕ ${T(lang, ["إضافة العميل والتوحيد", "Add & Normalize"])}</a>
-  <a href="#lead-guard">🛡️ ${T(lang, ["حماية تعارض الزملاء Q2", "Collision Guard"])}</a>
+  <a href="#lead-create">➕ ${T(lang, ["تسجيل العميل", "Add Lead"])}</a>
+  <a href="#lead-guard">🛡️ ${T(lang, ["تنبيه تعارض الزملاء", "Colleague Alert"])}</a>
   <a href="#lead-undo">↩️ ${T(lang, ["تراجع 10 دقائق", "10-Min Undo"])}</a>
-  <a href="#lead-pod">👥 ${T(lang, ["فرق العمل المصغرة", "Sub-team Pods"])}</a>
+  <a href="#lead-pod">👥 ${T(lang, ["متابعة فريق العمل", "Team Follow-Up"])}</a>
   <a href="#lead-pipeline">📊 ${T(lang, ["لوحة مسار المبيعات", "Pipeline Board"])}</a>
-  <a href="#lead-rules">⏰ ${T(lang, ["مواعيد العمل والقواعد", "Cairo Working Hours"])}</a>
-  <a href="#lead-away">🌴 ${T(lang, ["إجازات البروكرز", "Broker Away"])}</a>
-  <a href="#lead-privacy">🔒 ${T(lang, ["حوكمة الخصوصية PDPL", "PDPL Governance"])}</a>
+  <a href="#lead-rules">⏰ ${T(lang, ["مواعيد العمل والرد", "Working Hours"])}</a>
+  <a href="#lead-away">🌴 ${T(lang, ["إجازات البروكرز", "Broker Leave"])}</a>
+  <a href="#lead-privacy">🔒 ${T(lang, ["خصوصية ومسح البيانات", "Privacy & Erasure"])}</a>
   <a href="#lead-faq">❓ ${T(lang, ["أسئلة شائعة", "Leads FAQ"])}</a>
 </nav>
 
 <!-- القسم الأول: منظور البروكر ورئيس الفريق -->
 <section class="card" id="lead-create">
-  <h2>➕ ${T(lang, ["الجزء 1: تسجيل العميل الجديد والتوحيد القياسي لرقم الهاتف (E.164)", "Part 1: New Lead Registration & Egyptian Phone Normalization (E.164)"])}</h2>
+  <h2>➕ ${T(lang, ["الجزء 1: تسجيل العميل الجديد وضبط رقم الهاتف تلقائياً", "Part 1: New Lead Registration & Automatic Phone Formatting"])}</h2>
   <p>${T(lang, [
-    "يوفر WehdatHub طرقاً متعددة ومرنة لتسجيل العملاء الجدد: عبر استمارة الموقع (/app/leads/new)، أو مشاركة الشاشة من الموبايل (/app/share)، أو إرسال فويس نوت ورسالة نصية للبوت ليقوم الذكاء الاصطناعي باستخراج بيانات العميل وطلبه تلقائياً.",
-    "WehdatHub supports flexible lead intake: web form (/app/leads/new), mobile OS share target (/app/share), or sending a voice note or message to the bot for instant AI parsing."
+    "يوفر WehdatHub طرقاً مرنة وسريعة لتسجيل العملاء الجدد: عبر استمارة الموقع، أو بمشاركة جهة الاتصال من تليفونك، أو بإرسال رسالة أو فويس نوت لبوت تيليجرام ليقوم بفهم طلب العميل وتفاصيله فوراً.",
+    "WehdatHub supports flexible ways to register new clients: via the web form, sharing a contact from your phone, or sending a voice note or message to the Telegram bot."
   ])}</p>
 
   <div class="guide-example">
-    <strong>${T(lang, ["التوحيد القياسي للأرقام المصرية (domain/phone.js):", "Egyptian Phone Normalization Rules:"])}</strong>
+    <strong>${T(lang, ["قواعد أرقام الهواتف وحماية البيانات:", "Phone Number & Data Rules:"])}</strong>
     <ul>
-      <li>${T(lang, ["تحويل الأرقام العربية والهندية: يتم تحويل الأرقام المكتوبة بالصيغة العربية (٠١٠١٢٣٤٥٦٧٨) تلقائياً إلى أرقام قياسية ASCII.", "Digit Conversion: Arabic-Indic digits (٠-٩) are normalized to standard ASCII digits."])}</li>
-      <li>${T(lang, ["التنسيق الدولي E.164: تحويل الأرقام المحلية (01xxxxxxxxx) إلى الصيغة الدولية الموحدة (+201xxxxxxxxx).", "E.164 Normalization: converts local mobile format (01xxxxxxxxx) into international E.164 (+201xxxxxxxxx)."])}</li>
-      <li>${T(lang, ["تخزين الأرقام: تُخزن الأرقام في قاعدة البيانات بصيغة الأرقام الدولية بدون علامة زائد (مثال: 201012345678) لتسهيل الربط مع رسائل واتساب والمكالمات.", "Database Storage: saved as international digits without plus (e.g. 201012345678) for instant WhatsApp and dialer integration."])}</li>
-      <li>${T(lang, ["عزل مدخل البيانات (Data Entry Barrier): دور مدخل البيانات (data_entry) محظور تماماً من رؤية العملاء أو الوصول لبيانات CRM لحماية سرية عملاء الشركة.", "Data Entry Isolation: data_entry roles are strictly barred from viewing or managing CRM leads (HTTP 403)."])}</li>
+      <li>${T(lang, ["التعرف التلقائي على الأرقام: سواء كتبت الرقم بالأرقام العربية (٠١٠١٢٣٤٥٦٧٨) أو الإنجليزية (01012345678)، يضبطه النظام تلقائياً ليكون جاهزاً للاتصال المباشر ورسائل واتساب بنقرة واحدة.", "Automatic Digit Formatting: whether entered in Arabic or English digits, the phone number is formatted ready for instant calling and WhatsApp messaging."])}</li>
+      <li>${T(lang, ["حماية سرية العملاء: حسابات إدخال البيانات في الشركة مخصصة لإدخال الوحدات فقط، وممنوعة تماماً من رؤية قائمة العملاء للحفاظ على سرية بياناتك.", "Client Data Confidentiality: data entry accounts are restricted to property inventory and cannot view client contacts, keeping your customer data secure."])}</li>
     </ul>
   </div>
-  ${shot("guide/lead-intake-01-create-normalize.png", T(lang, ["شاشة تسجيل العميل الجديد والتحويل القياسي التلقائي لرقم الهاتف E.164", "New lead registration and automated E.164 phone normalization"]))}
+  ${shot("guide/lead-intake-01-create-normalize.png", T(lang, ["شاشة تسجيل العميل الجديد والضبط التلقائي لرقم الهاتف", "New lead registration and automatic phone formatting"]))}
 </section>
 
 <section class="card" id="lead-guard">
-  <h2>🛡️ ${T(lang, ["حماية تعارض الزملاء الذكية (Colleague Duplicate Guard - Q2)", "Colleague Duplicate Guard & Collision Alerts (Q2)"])}</h2>
+  <h2>🛡️ ${T(lang, ["تنبيه تعارض الزملاء الذكي عند إدخال عميل مسجل مسبقاً", "Smart Colleague Duplicate Alert When Entering Existing Leads"])}</h2>
   <p>${T(lang, [
-    "عندما يحاول بروكر إدخال رقم هاتف مسجل بالفعل مع زميل آخر في نفس الوكالة، يفعل النظام حماية فورية ذكية لمنع التصادم الداخلي وتسريب بيانات العملاء:",
-    "When an agent enters a phone number already assigned to a colleague, the system triggers real-time collision guards without leaking client data:"
+    "عندما تحاول إدخال رقم هاتف مسجل بالفعل مع زميل آخر في نفس الوكالة، ينبهك النظام فوراً لمنع التضارب وحماية خصوصية الجميع:",
+    "When you enter a phone number already assigned to a colleague in your agency, the system alerts you immediately to keep work organized:"
   ])}</p>
 
   <ul>
-    <li>${T(lang, ["الحماية الفورية أثناء الكتابة (/app/leads/check): بمجرد كتابة الرقم يظهر تنبيه أصفر واضح: «👥 الرقم ده عميل مع زميل. لو حفظت، مديرك هيتبلّغ».", "Real-Time Typing Check (/app/leads/check): warns immediately: '👥 This client is with a colleague. If you save, your manager is alerted.'"]) }</li>
-    <li>${T(lang, ["حماية السرية التامة: لا يتم إظهار اسم الزميل الآخر، ولا تفاصيل العميل، ولا وحداته للبروكر السائل لحماية خصوصية الزملاء.", "Strict Data Secrecy: conceals colleague identity, client name, and interaction history from the inquiring broker."])}</li>
-    <li>${T(lang, ["إخطار فوري للمدير: يتم تسجيل محاولة الاتصال في سجل الأحداث وإرسال تنبيه عاجل لمدير الوكالة ليتخذ القرار (إما إعادة التعيين أو إبقاء العميل مع زميله).", "Instant Manager Alert: alerts agency managers with full context to reassign or retain the lead."])}</li>
-    <li>${T(lang, ["فروق أنماط فرق العمل (Team Styles): في النمط المشترك (Shared) يرى الجميع الليدات للقراءة، بينما في النمط الهرمي (Structured) تُعزل الليدات تماماً وتنشط حماية Q2 الصارمة.", "Team Style Mechanics: Shared mode permits agency-wide read access; Structured mode enforces strict lead isolation and active collision guards."])}</li>
+    <li>${T(lang, ["تنبيه فوري أثناء الكتابة: بمجرد كتابة الرقم يظهر تنبيه أصفر واضح: «👥 الرقم ده عميل مع زميل. لو حفظت، مديرك هيتبلّغ».", "Instant Alert While Typing: as soon as you type the number, a clear yellow notice warns: '👥 This client is with a colleague. If you save, your manager is alerted.'"])}</li>
+    <li>${T(lang, ["سرية تامة لبيانات الزميل والعميل: لحماية الخصوصية، لا يظهر لك اسم الزميل الآخر ولا تفاصيل العميل لمنع أي تضارب بين أعضاء الفريق.", "Full Privacy Protection: conceals colleague identity and client history to prevent conflict."])}</li>
+    <li>${T(lang, ["إخطار المدير للتنسيق: يتلقى مدير الوكالة تنبيهاً فورياً بالتفاصيل الكاملة ليتخذ القرار المناسب والتنسيق بينكما.", "Instant Manager Notification: agency managers receive an alert with full context to coordinate between colleagues."])}</li>
   </ul>
   ${shot("guide/lead-intake-02-duplicate-guard.png", T(lang, ["تنبيه حماية تعارض الزملاء الذكي وإخطار الإدارة دون كشف بيانات العميل", "Smart colleague duplicate collision guard and manager notification"]))}
 </section>
 
 <section class="card" id="lead-undo">
-  <h2>↩️ ${T(lang, ["مكدس التراجع الفوري عن تعديلات العميل (10-Minute Reversible Undo Stack)", "10-Minute Reversible Lead Mutation Undo Stack"])}</h2>
+  <h2>↩️ ${T(lang, ["إمكانية التراجع الفوري عن تعديلات العميل لمدة 10 دقائق", "10-Minute Instant Undo for Any Lead Changes"])}</h2>
   <p>${T(lang, [
-    "كل إجراء يتخذه البروكر على العميل (تغيير المرحلة، تسجيل اتصال، تحديد موعد متابعة، أو كتابة ملاحظة) محمي بمكدس تراجع فوري لمدة 10 دقائق:",
-    "Every lead action (stage transition, call logging, follow-up scheduling, notes) is protected by a 10-minute reversible undo window:"
+    "كل إجراء يتخذه البروكر على العميل (تغيير المرحلة، تسجيل اتصال، تحديد موعد متابعة، أو كتابة ملاحظة) محمي بإمكانية التراجع الفوري لمدة 10 دقائق كاملة:",
+    "Every lead action (stage transition, call logging, follow-up scheduling, notes) is protected by a 10-minute undo option:"
   ])}</p>
 
   <ul>
-    <li>${T(lang, ["زر تراجع فوري: يظهر شريط أخضر أعلى صفحة العميل يحتوي على زر «↩️ تراجع» مع عداد تنازلي للـ 10 دقائق.", "One-Click Rollback: a prominent green banner with an active 10-minute countdown offers instant rollback."])}</li>
-    <li>${T(lang, ["الأحداث القابلة للتراجع (Reversible Events): يشمل التراجع تغيير المرحلة (Stage)، تعيين موعد المتابعة، تسجيل الاتصال، والملاحظات.", "Covered Actions: stage shifts, follow-ups, call logs, notes, and broker assignments."])}</li>
-    <li>${T(lang, ["حماية التزامن (Concurrency Guard): إذا أجرى مدير أو زميل تعديلاً أحدث على العميل، يُقفل التراجع تلقائياً (undo_blocked) لمنع الكتابة العكسية غير المتناسقة.", "Concurrency Protection: if subsequent modifications occur on the lead, undo is locked (undo_blocked) to prevent state inconsistency."])}</li>
+    <li>${T(lang, ["زر تراجع فوري: يظهر شريط أخضر أعلى صفحة العميل يحتوي على زر «↩️ تراجع» مع عداد تنازلي للـ 10 دقائق.", "One-Click Rollback: a prominent green banner at the top of the client page offers an '↩️ Undo' button with a 10-minute timer."])}</li>
+    <li>${T(lang, ["ما يشمله التراجع: يشمل التراجع تغيير مرحلة العميل، وتعديل موعد المتابعة، وتسجيل المكالمة، والملاحظات الأخيرة.", "Covered Actions: stage shifts, follow-ups, call logs, and notes."])}</li>
   </ul>
   ${shot("guide/lead-intake-03-undo-stack.png", T(lang, ["شريط التراجع الفوري عن تعديلات العميل المتاح لمدة 10 دقائق", "10-minute reversible mutation undo banner"]))}
 </section>
 
 <section class="card" id="lead-pod">
-  <h2>👥 ${T(lang, ["إدارة فرق العمل المصغرة وصلاحيات رئيس الفريق (Sub-team Pod Management)", "Sub-Team Pod Management & Team Lead Reassignment Controls"])}</h2>
+  <h2>👥 ${T(lang, ["متابعة فريق العمل وصلاحيات رئيس الفريق", "Team Follow-Up & Team Lead Tools"])}</h2>
   <p>${T(lang, [
-    "في باقة الوكالات (Agency Tier - 15 مقعد فأكثر)، يدعم WehdatHub تقسيم الوكالة إلى فرق عمل فرعية مصغرة يقودها رئيس فريق (Team Lead):",
-    "In Agency Tier (15+ seats), WehdatHub unlocks sub-team pods managed by Team Leads:"
+    "في الشركات التي تضم فرق عمل متعددة، يدعم WehdatHub تعيين رؤساء فرق لتسهيل المتابعة اليومية ومساندة البروكرز:",
+    "In agencies with multiple sales teams, WehdatHub supports Team Leads to manage daily follow-up and assist brokers:"
   ])}</p>
 
   <ul>
-    <li>${T(lang, ["ربط البروكر برئيس فريقه: يرتبط كل بروكر برئيس فريقه في قاعدة البيانات عبر الحقل (brokers.team_lead_id).", "Pod Association: frontline brokers are linked to their team lead via brokers.team_lead_id."])}</li>
-    <li>${T(lang, ["صلاحيات رئيس الفريق: يرى رئيس الفريق كل عملاء البروكرز التابعين لفريقه، ويتلقى إشعارات بنشاطهم ومتابعاتهم المتأخرة.", "Team Lead Visibility: oversees all leads assigned to brokers within their pod and receives team alerts."])}</li>
-    <li>${T(lang, ["إعادة توزيع العملاء داخل الفريق: يحق لرئيس الفريق إعادة توزيع الليدات بين أعضاء فريقه أو تحويل العميل لنفسه مباشرة دون الحاجة لمدير الوكالة.", "Pod Reassignment: team leads can reassign leads among pod members or to themselves without escalating to agency owners."])}</li>
+    <li>${T(lang, ["متابعة عملاء الفريق: يرى رئيس الفريق كل عملاء البروكرز التابعين لفريقه، ويتلقى تنبيهات بالمتابعات المتأخرة لمساعدتهم على سرعة الإنجاز.", "Team Oversight: team leads oversee leads assigned to their team members and receive reminders for overdue follow-ups."])}</li>
+    <li>${T(lang, ["إعادة توزيع العملاء داخل الفريق: يحق لرئيس الفريق إعادة توزيع الليدات بين أعضاء فريقه أو تحويل العميل لنفسه مباشرة لمساندة العميل دون الحاجة لانتظار مدير الوكالة.", "Reassigning Within Team: team leads can reassign leads among team members or take them over directly without waiting for senior managers."])}</li>
   </ul>
   ${shot("guide/lead-intake-04-team-lead-pod.png", T(lang, ["شاشة إدارة فريق العمل المصغر وصلاحيات رئيس الفريق لإعادة التوزيع", "Sub-team pod management and team lead reassignment controls"]))}
 </section>
 
 <!-- القسم الثاني: منظور مدير ومالك الوكالة -->
 <section class="card" id="lead-pipeline">
-  <h2>📊 ${T(lang, ["الجزء 2: لوحة مسار المبيعات الشاملة للوكالة وتتبع المراحل والكانبان", "Part 2: Agency Sales Pipeline Funnel & Interactive Kanban Board"])}</h2>
+  <h2>📊 ${T(lang, ["الجزء 2: لوحة مسار المبيعات الشاملة ومتابعة الصفقات والكانبان", "Part 2: Sales Pipeline Overview, Deal Stages & Kanban Board"])}</h2>
   <p>${T(lang, [
-    "يمتلك مديرو الوكالة رؤية شاملة لكافة عملاء وصفقات الشركة من خلال لوحة تحكم تفاعلية (/app/leads و /app/leads/board):",
-    "Agency managers maintain complete operational oversight through the pipeline dashboard (/app/leads and /app/leads/board):"
+    "يمتلك مديرو الوكالة رؤية شاملة لكافة عملاء وصفقات الشركة من خلال لوحة تحكم تفاعلية وقائمة صفقات منظمة:",
+    "Agency managers maintain complete oversight through the pipeline dashboard and interactive Kanban board:"
   ])}</p>
 
   <ul>
-    <li>${T(lang, ["مراحل مسار المبيعات المعتمدة: (جديد New ➡ تم التواصل Contacted ➡ مهتم Interested ➡ معاينة Viewing ➡ تفاوض Negotiation ➡ تم البيع Won / ضائعة Lost).", "Standard Pipeline Stages: New ➡ Contacted ➡ Interested ➡ Viewing ➡ Negotiation ➡ Won / Lost."])}</li>
-    <li>${T(lang, ["سبب الخسارة الإجباري (Lost Reason): عند تحويل العميل إلى «صفقة ضائعة»، يلزم النظام البروكر باختيار سبب الخسارة (مثل السعر، الموقع، المنافسين) لتحليل أسباب الفقد وتحسين الأداء.", "Mandatory Lost Reason: marking a lead Lost requires specifying the root cause for win/loss analytics."])}</li>
-    <li>${T(lang, ["دمج العملاء المكررين (Lead Merge): دمج سجلين لنفس العميل مع تأكيد كتابة كود العميل مرتين، ونقل كافة المكالمات والمتابعات والعروض إلى السجل الأساسي وحذف السجل المكرر.", "Duplicate Merge: consolidates duplicate records after typing reference code twice, migrating history and viewings."])}</li>
-    <li>${T(lang, ["محفظة كبار العملاء السرية (VIP Portfolio): يمتلك مالك الوكالة وحده حق تعليم أي عميل أو وحدة كـ «خاصة» (is_private)، لتختفي تماماً عن باقي البروكرز والمديرين.", "Private VIP Portfolio: agency owners can mark leads private (is_private), concealing them from all other staff."])}</li>
+    <li>${T(lang, ["مراحل مسار المبيعات المعتمدة: (جديد ➡ تم التواصل ➡ مهتم ➡ معاينة ➡ تفاوض ➡ تم البيع بنجاح / صفقة ضائعة).", "Standard Pipeline Stages: (New ➡ Contacted ➡ Interested ➡ Viewing ➡ Negotiation ➡ Won / Lost)."])}</li>
+    <li>${T(lang, ["تحديد سبب ضياع الصفقة: عند تحويل العميل إلى «صفقة ضائعة»، يطلب النظام تحديد سبب الخسارة (مثل: السعر، الموقع، المنافسين) لتحليل أسباب الفقد وتحسين أداء الفريق.", "Specifying Lost Reason: marking a deal as Lost prompts for the reason (price, location, competitor) to help the agency improve performance."])}</li>
+    <li>${T(lang, ["دمج العملاء المكررين: إذا سُجل نفس العميل مرتين، يمكنك دمجهما في ملف واحد لنقل جميع المكالمات والمتابعات والعروض وحذف السجل المكرر.", "Merging Duplicate Leads: consolidates duplicate records into one profile, migrating all notes, calls, and sent listings."])}</li>
+    <li>${T(lang, ["عملاء مالك الشركة الخاصين: يمتلك مالك الوكالة وحده حق تعليم أي عميل أو وحدة كـ «خاصة»، لتختفي تماماً عن باقي الفريق وتبقى للمالك وحده.", "Private VIP Clients: agency owners can mark specific leads or units as private, keeping them visible strictly to the owner."])}</li>
   </ul>
   ${shot("guide/lead-manager-01-pipeline-board.png", T(lang, ["لوحة مسار المبيعات الشاملة للوكالة وتتبع مراحل الصفقات والكانبان", "Agency sales pipeline funnel and interactive Kanban board"]))}
 </section>
 
 <section class="card" id="lead-rules">
-  <h2>⏰ ${T(lang, ["قواعد توزيع العملاء المتقدمة ومواعيد العمل وحساب المهل بتوقيت القاهرة", "Advanced Lead Rules, Cairo Working Hours & Multi-Hop Auto-Reassignment"])}</h2>
+  <h2>⏰ ${T(lang, ["مواعيد العمل وحساب مهل الرد بتوقيت القاهرة والتحويل التلقائي", "Working Hours, Cairo Response Timers & Auto-Reassignment"])}</h2>
   <p>${T(lang, [
-    "لضمان سرعة الاستجابة للعملاء الجدد، يطبق WehdatHub نظام قواعد تشغيل متقدم يحسب المهل الزمنية بدقة متناهية:",
-    "To maximize speed-to-lead, WehdatHub provides advanced routing rules configured per agency:"
+    "لضمان سرعة الاستجابة للعملاء الجدد وعدم إهمال أي ليد، يتيح النظام ضبط مواعيد العمل وقواعد التحويل التلقائي:",
+    "To maximize speed-to-lead and prevent forgotten inquiries, the system provides working hours and smart reassignment rules:"
   ])}</p>
 
   <div class="guide-example">
-    <strong>${T(lang, ["آلية حساب مواعيد الاستجابة والتحويل التلقائي:", "Working Hour Deadlines & Multi-Hop Rules:"])}</strong>
+    <strong>${T(lang, ["آلية مواعيد الاستجابة والتحويل التلقائي:", "Working Hour Timers & Auto-Reassignment:"])}</strong>
     <ul>
-      <li>${T(lang, ["حساب المهل بتوقيت القاهرة (Africa/Cairo): تُحسب ساعات العمل ومواعيد الاستجابة حصراً داخل التوقيت الفعلي للقاهرة (مع التكيف مع التوقيت الصيفي والشتوي).", "Cairo Timezone Calculations: response deadlines accrue strictly during agency active hours in Africa/Cairo."])}</li>
-      <li>${T(lang, ["إيقاف العداد خارج ساعات العمل: إذا ورد ليد جديد في الساعة 2:00 فجراً وساعات العمل تبدأ 9:00 ص، يتوقف العداد ولا تبدأ مهلة الـ 30 دقيقة إلا في تمام التاسعة صباحاً.", "After-Hours Pause: a lead arriving at 2:00 AM pauses until 9:00 AM opening before the response countdown begins."])}</li>
-      <li>${T(lang, ["التحويل التلقائي المتعدد (Multi-hop Auto-reassignment): إذا لم يتواصل البروكر مع العميل قبل انتهاء المهلة، يحول النظام العميل تلقائياً إلى زميل آخر داخل الفريق، ثم لرئيس الفريق، ثم لمدير الوكالة بعد قفزتين (Max 2 jumps).", "Multi-Hop Escalation: uncontacted leads hop via round-robin to a pod peer, then team lead, then managers after max jumps."])}</li>
+      <li>${T(lang, ["حساب المواعيد بتوقيت القاهرة: تُحسب ساعات العمل ومواعيد الاستجابة وفقاً للتوقيت المحلي للشركة في القاهرة.", "Cairo Timezone Calculations: response deadlines accrue strictly during agency active hours in Cairo time."])}</li>
+      <li>${T(lang, ["إيقاف العداد خارج مواعيد العمل: إذا ورد عميل جديد في وقت متأخر من الليل ومواعيد العمل تبدأ 9:00 ص، يتوقف العداد ولا تبدأ مهلة الرد إلا في تمام التاسعة صباحاً.", "After-Hours Pause: a lead arriving late at night pauses until 9:00 AM opening before the response countdown begins."])}</li>
+      <li>${T(lang, ["التحويل التلقائي لو لم يتم التواصل: إذا لم يتواصل البروكر مع العميل خلال المهلة المحددة، يحول النظام العميل تلقائياً إلى زميل آخر متاح أو لرئيس الفريق لضمان عدم ضياع الفرصة.", "Auto-Reassignment if Uncontacted: if an agent does not contact a lead within the deadline, the system automatically routes the lead to an available teammate or team lead."])}</li>
     </ul>
   </div>
   ${shot("guide/lead-manager-02-rules-schedule.png", T(lang, ["قواعد توزيع العملاء المتقدمة ومواعيد العمل وحساب مهل الاستجابة بتوقيت القاهرة", "Advanced lead routing, Cairo working hours, and response deadlines"]))}
 </section>
 
 <section class="card" id="lead-away">
-  <h2>🌴 ${T(lang, ["إدارة حالة توفر وإجازات البروكرز (Broker Away Status)", "Broker Availability & Away Status Management"])}</h2>
+  <h2>🌴 ${T(lang, ["تسجيل إجازات البروكرز وتخطي التوزيع أثناء الغياب", "Broker Availability & Vacation Mode Management"])}</h2>
   <p>${T(lang, [
-    "عند قيام بروكر بأخذ إجازة أو عدم توفره للرد، تتيح لوحة الإدارة تسجيل حالته كـ «في إجازة» (Away Until) لضمان عدم ضياع العملاء الجدد:",
-    "When an agent takes leave, managers set their status to Away Until to safeguard client response times:"
+    "عند قيام بروكر بأخذ إجازة، تتيح لوحة الإدارة تسجيل حالته كـ «في إجازة» لضمان عدم ضياع العملاء الجدد:",
+    "When an agent takes leave, managers set their status to 'On leave' to keep customer service uninterrupted:"
   ])}</p>
 
   <ul>
-    <li>${T(lang, ["التخطي التلقائي من دور التوزيع: يتم استبعاد البروكر في حالة الإجازة تلقائياً من نظام التوزيع الدائري (Round-Robin) فلا تُسند إليه أي ليدات جديدة أثناء غيابه.", "Round-Robin Bypass: away brokers are automatically skipped during new lead distribution."])}</li>
-    <li>${T(lang, ["تحويل تنبيهات المتابعة للمديرين: تنبيهات المتابعات الدورية لعملاء البروكر أثناء إجازته يتم توجيهها لمدير الوكالة للمتابعة المؤقتة.", "Alert Redirection: follow-up reminders on active leads route to managers for temporary handling."])}</li>
-    <li>${T(lang, ["إنهاء الإجازة الفوري: يمكن للمدير أو البروكر إنهاء حالة الإجازة بنقرة واحدة ليعود فوراً إلى دور التوزيع واستقبال العملاء.", "Instant Return: status can be restored to Active anytime to re-enter lead rotation."])}</li>
+    <li>${T(lang, ["التخطي التلقائي من دور التوزيع: يتم استبعاد البروكر في إجازته تلقائياً من استقبال العملاء الجدد حتى يعود لمباشرة عمله.", "Skipping During Leave: away brokers are automatically skipped in new lead rotation until they return."])}</li>
+    <li>${T(lang, ["تحويل تنبيهات المتابعة للمديرين مؤقتاً: تنبيهات المتابعات الدورية لعملاء البروكر أثناء إجازته يتم توجيهها لمدير الوكالة للمتابعة المؤقتة.", "Alert Redirection: follow-up reminders on active leads route to managers for temporary handling."])}</li>
+    <li>${T(lang, ["العودة الفورية للعمل: يمكن للمدير أو البروكر إنهاء حالة الإجازة بنقرة واحدة ليعود فوراً إلى دور التوزيع واستقبال العملاء.", "Instant Return: status can be restored to Active anytime to re-enter lead rotation immediately."])}</li>
   </ul>
   ${shot("guide/lead-manager-03-broker-away.png", T(lang, ["جدول توفر البروكرز وتسجيل الإجازات واستبعاد البروكر غير المتاح من التوزيع", "Broker availability, Away status, and round-robin bypass"]))}
 </section>
 
 <section class="card" id="lead-privacy">
-  <h2>🔒 ${T(lang, ["حوكمة الخصوصية وقانون حماية البيانات الشخصية المصري (Egyptian PDPL Compliance)", "Regulatory Privacy Governance & Egyptian PDPL Compliance (Law 151/2020)"])}</h2>
+  <h2>🔒 ${T(lang, ["إدارة خصوصية العملاء وتصدير أو مسح البيانات عند الطلب", "Client Privacy, Data Export & Erasing Upon Request"])}</h2>
   <p>${T(lang, [
-    "يلتزم WehdatHub بأعلى معايير حوكمة البيانات وأحكام قانون حماية البيانات الشخصية المصري رقم 151 لسنة 2020:",
-    "WehdatHub fully complies with Egyptian Personal Data Protection Law (Law 151/2020):"
+    "يلتزم WehdatHub بأعلى معايير حماية البيانات الشخصية، ويوفر لإدارة الوكالة أدوات واضحة وسهلة لحماية بيانات العملاء:",
+    "WehdatHub adheres to personal data protection standards, providing managers with clear tools to govern customer privacy:"
   ])}</p>
 
-  <h3>${T(lang, ["1. تصدير بيانات العميل الكاملة (Client Data Export)", "1. Right to Access & Client Data Export"])}</h3>
+  <h3>${T(lang, ["1. تصدير بيانات العميل الكاملة", "1. Exporting Complete Client Records"])}</h3>
   <p>${T(lang, [
-    "يحق لمدير الوكالة تصدير ملف كامل ببيانات العميل في أرشيف مضغوط (client-L-XXXX.zip) يحتوي على ملف JSON مقروء آلياً وملف TXT مقروء بشرياً بجميع تعاملاته وروابط الوحدات التي أرسلت له وموافقاته المسجلة.",
-    "Managers can export full client records as a ZIP archive containing structured JSON and human-readable TXT covering requests, links, and consent timestamps."
+    "لو طلب العميل نسخة من بياناته، يحق لمدير الوكالة بنقرة واحدة تصدير ملف منظم بجميع تعاملات العميل وروابط الوحدات التي أرسلت له.",
+    "If a client requests a copy of their data, managers can export an organized archive of all their requests and shared property links."
   ])}</p>
 
-  <h3>${T(lang, ["2. الحذف النهائي المشفر بالهاش (Phone-Hashed Permanent Erasure)", "2. Phone-Hashed Permanent Erasure (lead_erasures)"])}</h3>
+  <h3>${T(lang, ["2. مسح بيانات العميل نهائياً عند الطلب", "2. Permanent Client Data Erasure Upon Request"])}</h3>
   <p>${T(lang, [
-    "عند طلب العميل مسح بياناته نهائياً، يفتح المدير صفحة العميل ويختار «مسح نهائي» مع إدخال آخر 4 أرقام من موبايل العميل (تأكيد أمني). يقوم النظام بحذف السجل نهائياً وتشفير رقم الهاتف بواسطة خوارزمية HMAC-SHA256 وتخزينه في جدول lead_erasures. إذا حاول أي بروكر إدخال نفس الرقم مستقبلاً، يحذره النظام فوراً بأن العميل طلب سابقاً حذف بياناته.",
-    "Upon deletion requests, managers confirm the action by typing the client's last 4 phone digits. The record is permanently deleted and the phone is hashed with HMAC-SHA256 into lead_erasures. Re-intake alerts that the client previously requested erasure."
+    "عند رغبة العميل في حذف بياناته، يفتح المدير صفحة العميل ويختار «مسح نهائي» مع إدخال آخر 4 أرقام من موبايل العميل لتأكيد العملية. يتم حذف السجل بالكامل، ويتذكر النظام هذا الرقم المحذوف لتنبيه أي بروكر لو حاول إدخاله مستقبلاً بالخطأ.",
+    "When a client requests erasure, the manager chooses 'Erase for good' and confirms by entering the last 4 digits of the client's phone. The record is permanently deleted, and the system remembers the deletion to alert your team if anyone tries to re-enter it later."
   ])}</p>
 
-  <h3>${T(lang, ["3. دورة تطهير الركود بعد 18 شهراً (18-Month Inactivity Purge)", "3. 18-Month Inactivity Retention Sweep"])}</h3>
+  <h3>${T(lang, ["3. تنظيف السجلات القديمة غير النشطة", "3. Cleaning Up Inactive Records"])}</h3>
   <p>${T(lang, [
-    "يطبق النظام دورة تنظيف دورية (retentionSweep) كل 6 ساعات تبحث عن أي عميل لم يُسجل عليه أي نشاط أو اتصال منذ 18 شهراً كاملاً. يرسل النظام إخطاراً يومياً للمدير قبل الحذف بـ 30 يوماً، ثم يتم مسح السجلات الخاملة تلقائياً امتثالاً للقانون.",
-    "Automated sweep cleans leads with zero touchpoints for 18 months, dispatching daily advance warnings to managers 30 days prior."
+    "ينبه النظام مدير الوكالة بالعملاء الذين لم يُسجل عليهم أي اتصال أو تفاعل منذ 18 شهراً كاملاً، لإتاحة تنظيف السجلات القديمة وإبقاء قاعدة البيانات منظمة وحديثة.",
+    "The system alerts managers about dormant leads with zero activity for 18 months, allowing them to clean up old records and keep the database relevant."
   ])}</p>
-  ${shot("guide/lead-manager-04-pdpl-governance.png", T(lang, ["حوكمة الخصوصية وقانون حماية البيانات المصري والمسح المشفر وتطهير 18 شهراً", "PDPL privacy governance, phone-hashed erasure, and 18-month inactivity purge"]))}
+  ${shot("guide/lead-manager-04-pdpl-governance.png", T(lang, ["إدارة الخصوصية وحماية بيانات العملاء والمسح النهائي الآمن", "Privacy governance, client data protection, and permanent erasure"]))}
 </section>
 
 <section class="card" id="lead-faq">

@@ -669,6 +669,67 @@ body:has(input.pick:checked) .bulkbar { display: flex; }
 .funnel a { color: inherit; text-decoration: none; font-size: 0.92rem; }
 .funnel progress { width: 100%; }
 .funnel b { text-align: end; }
+
+/* Agency dashboard: one reporting toolbar, one metric band and an actionable overview. */
+.agency-dashboard-head { display: grid; gap: 16px; align-items: center; margin-block: 12px 20px; }
+.agency-dashboard-head h1 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.25rem); }
+.agency-dashboard-head form { gap: 8px; }
+.agency-dashboard-head .seg { margin: 0; }
+.agency-dashboard-head select { min-width: 0; background-color: var(--card); }
+.agency-dashboard-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin-block: 0 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.agency-dashboard-metrics .kpi {
+  min-width: 0;
+  gap: 6px;
+  padding: 14px clamp(12px, 2vw, 24px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.agency-dashboard-metrics .kpi:nth-child(even) { border-inline-start: 1px solid var(--line); }
+.agency-dashboard-metrics .kpi:nth-child(n+3) { border-block-start: 1px solid var(--line); }
+.agency-dashboard-metrics .kpi strong { font-size: clamp(1.3rem, 2.4vw, 2rem); overflow-wrap: anywhere; }
+.agency-dashboard-overview { display: grid; gap: 12px; padding-block-start: 14px; }
+.agency-dashboard-overview > .card {
+  min-width: 0;
+  margin: 0;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: none;
+}
+.agency-dashboard-overview h2 { font-size: 1.05rem; margin-block-end: 12px; }
+.agency-dashboard-clear { margin: 0; padding-block: 8px; }
+.agency-dashboard-report-links { margin-block: 0; align-self: start; }
+.agency-dashboard .funnel li { grid-template-columns: minmax(6rem, auto) minmax(0, 1fr) minmax(2ch, auto); min-height: 28px; }
+.agency-dashboard .funnel b { font-variant-numeric: tabular-nums; }
+.agency-dashboard .funnel progress {
+  appearance: none;
+  height: 7px;
+  border: none;
+  border-radius: 4px;
+  background: var(--soft);
+}
+.agency-dashboard .funnel progress::-webkit-progress-bar { border-radius: 4px; background: var(--soft); }
+.agency-dashboard .funnel progress::-webkit-progress-value { border-radius: 4px; background: var(--accent-ink); }
+.agency-dashboard .funnel progress::-moz-progress-bar { border-radius: 4px; background: var(--accent-ink); }
+@media (min-width: 620px) {
+  .agency-dashboard-head form { grid-template-columns: auto repeat(2, minmax(0, auto)); }
+  .agency-dashboard-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .agency-dashboard-metrics .kpi:nth-child(n+3) { border-block-start: 0; }
+  .agency-dashboard-metrics .kpi + .kpi { border-inline-start: 1px solid var(--line); }
+  .agency-dashboard-overview { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+}
+@media (min-width: 1100px) {
+  .agency-dashboard-head { grid-template-columns: minmax(0, 1fr) auto; }
+}
 .board { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .board summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 52px; padding: 6px 4px; cursor: pointer; }
 .board summary .muted { flex-basis: 100%; padding-inline-start: 38px; }
@@ -2652,30 +2713,34 @@ nav[data-kind-nav] a[aria-disabled="true"], nav[data-pager] a[aria-disabled="tru
 
 /* Guide screenshot cards */
 .guide-shot {
-  margin: 14px 0 20px;
-  border-radius: 14px;
+  margin: 16px auto 22px;
+  max-width: 480px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--line);
   background: var(--card-bg);
-  box-shadow: var(--shadow);
+  box-shadow: 0 2px 10px rgba(10, 20, 40, 0.06);
 }
 .guide-shot img {
   display: block;
   width: 100%;
+  max-width: 100%;
   height: auto;
 }
 .guide-shot figcaption {
-  padding: 10px 14px;
-  font-size: 0.88rem;
-  font-weight: 600;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
   color: var(--muted);
   background: var(--soft);
   border-top: 1px solid var(--line);
+  text-align: center;
 }
 .guide-example {
-  border-inline-start: 5px solid var(--brand);
-  background: var(--brand-soft, rgba(37, 99, 235, 0.08));
-  padding: 14px 16px;
-  border-radius: 12px;
+  border-inline-start: 4px solid var(--brand);
+  background: var(--brand-soft, rgba(37, 99, 235, 0.06));
+  padding: 12px 16px;
+  border-radius: 10px;
   margin: 14px 0;
+  font-size: 0.94rem;
 }
