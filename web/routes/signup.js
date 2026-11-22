@@ -9,7 +9,6 @@
 const Signup = require("../../services/signup");
 const TrialSignup = require("../../services/trialSignup");
 const Referrals = require("../../services/referrals");
-const Plans = require("../../domain/plans");
 const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
@@ -17,6 +16,7 @@ const { MARK } = require("../icons");
 
 const { L } = require("../../lib/copy");
 const ERRORS = {
+  closed: ["التجربة دي مش متاحة دلوقتي. اختار تجربة تانية لو موجودة.", "This trial is currently closed. Choose another trial if available."],
   agency: ["اكتب اسم الشركة.", "Enter the agency name."],
   name: ["اكتب اسمك.", "Enter your name."],
   phone: ["رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."],
@@ -34,12 +34,12 @@ function closedPage(lang) {
 <p><a class="btn" href="/?lang=${lang}#try">${L(lang, "احجز عرض مباشر", "Book a live demo")}</a></p></div>`;
 }
 
-function signupForm(lang, { error, values = {} } = {}) {
+function signupForm(lang, { error, values = {}, tiers } = {}) {
   return html`<form method="post" action="/app/signup" class="card stack auth" id="signup">
   <div class="auth-head">
     <span class="auth-mark" aria-hidden="true">${MARK}</span>
     <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
-    <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية من غير كارت ومن غير موافقة. بتتأكد من رقمك على تيليجرام في ثواني. بعدها تختار باقة، وبياناتك مش بتتمسح أبداً.`, `A ${Plans.TRIAL.days}-day free trial with no card and no approval. You confirm your number on Telegram in seconds. Then pick a plan; your data is never deleted.`)}</p>
+    <p class="muted">${L(lang, `تجربة مجانية من غير كارت ومن غير موافقة. بتتأكد من رقمك على تيليجرام في ثواني. بعدها تختار باقة، وبياناتك مش بتتمسح أبداً.`, `A free trial with no card and no approval. You confirm your number on Telegram in seconds. Then pick a plan; your data is never deleted.`)}</p>
     <p class="muted">${L(lang, "مكتب من ١٥ بروكر أو أكتر؟ احجز عرض مباشر بدل التجربة الذاتية.", "An office of 15+ brokers? Book a live demo instead of the self-serve trial.")} <a href="/?lang=${lang}#try">${L(lang, "احجز عرض مباشر", "Book a live demo")}</a></p>
   </div>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}${error === "trial_used" ? html` <a href="/?lang=${lang}#plans">${L(lang, "الباقات", "Plans")}</a> · <a href="/?lang=${lang}#try">${L(lang, "تواصل معنا", "Contact us")}</a>` : ""}</p>` : ""}
@@ -48,12 +48,11 @@ function signupForm(lang, { error, values = {} } = {}) {
   <label>${L(lang, "موبايلك (هو اللي هتدخل بيه)", "Your mobile (you'll sign in with it)")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="20" value="${values.phone || ""}"></label>
   <fieldset class="trial-choices stack">
     <legend>${L(lang, "اختار التجربة", "Choose your trial")}</legend>
-    ${[["solo", Plans.TRIAL.plan], ["team", "trial_team"]].map(([tier, id]) => {
-      const plan = Plans.planById(id);
+    ${Object.entries(tiers).filter(([, plan]) => plan.enabled).map(([tier, plan]) => {
       return html`<label class="trial-choice">
-        <input type="radio" name="tier" value="${tier}"${(values.tier || "solo") === tier ? html` checked` : ""}>
+        <input type="radio" name="tier" value="${tier}"${(tiers[values.tier]?.enabled ? values.tier : tiers.solo.enabled ? "solo" : "team") === tier ? html` checked` : ""}>
         <span><strong>${tier === "solo" ? L(lang, "شغال لوحدي (سولو)", "Solo Trial") : L(lang, "معايا فريق", "Team Trial")}</strong>
-          <small>${L(lang, `${plan.seats} مستخدم · ${plan.units} وحدة · ${plan.credits} رصيد ذكاء اصطناعي`, `${plan.seats} ${plan.seats === 1 ? "user" : "users"} · ${plan.units} units · ${plan.credits} AI credits`)}</small>
+          <small>${L(lang, `${plan.days} يوم · ${plan.seats} مستخدم · ${plan.units} وحدة · ${plan.credits} رصيد ذكاء اصطناعي`, `${plan.days} ${plan.days === 1 ? "day" : "days"} · ${plan.seats} ${plan.seats === 1 ? "user" : "users"} · ${plan.units} units · ${plan.credits} AI credits`)}</small>
         </span>
       </label>`;
     })}
@@ -81,16 +80,19 @@ function register(web, { pool, page }) {
 
   web.get("/signup", async (req, res) => {
     const lang = req.lang;
-    if (!(await Signup.isOpen(pool))) return page(req, res, { title: title(lang), langSwitch: true, body: closedPage(lang) });
-    return page(req, res, { title: title(lang), langSwitch: true, body: signupForm(lang, { values: { referral: Referrals.normalize(req.query.ref) } }) });
+    const { enabled, tiers } = await Signup.trialSettings(pool);
+    if (!enabled || !Object.values(tiers).some((tier) => tier.enabled)) return page(req, res, { title: title(lang), langSwitch: true, body: closedPage(lang) });
+    return page(req, res, { title: title(lang), langSwitch: true, body: signupForm(lang, { tiers, values: { referral: Referrals.normalize(req.query.ref), tier: req.query.tier === "team" ? "team" : "solo" } }) });
   });
 
   web.post("/signup", async (req, res) => {
     const lang = req.lang;
     const body = req.body || {};
+    const { enabled, tiers } = await Signup.trialSettings(pool);
     const values = { agency: String(body.agency || "").slice(0, 120), name: String(body.name || "").slice(0, 80), phone: String(body.phone || "").slice(0, 20), referral: Referrals.normalize(body.referral), tier: body.tier === "team" ? "team" : "solo" };
-    const again = (error, status) => page(req, res, { title: title(lang), langSwitch: true, body: signupForm(lang, { error, values }) }, status);
-    if (!(await Signup.isOpen(pool))) return page(req, res, { title: title(lang), langSwitch: true, body: closedPage(lang) }, 403);
+    const again = (error, status) => page(req, res, { title: title(lang), langSwitch: true, body: signupForm(lang, { error, values, tiers }) }, status);
+    if (!enabled || !Object.values(tiers).some((tier) => tier.enabled)) return page(req, res, { title: title(lang), langSwitch: true, body: closedPage(lang) }, 403);
+    if (!tiers[values.tier].enabled) return again("closed", 403);
     if (body.website) return res.redirect(303, "/app/signup");
     if (body.consent !== "1") return again("consent", 400);
     const ipGate = await RateLimit.hit(pool, `signup:ip:${req.ip}`, TrialSignup.LIMITS.ip);
@@ -101,7 +103,7 @@ function register(web, { pool, page }) {
       if (!phoneGate.allowed) return again("rate", 429);
     }
     const r = await TrialSignup.start(pool, { ...values, lang });
-    if (r.error) return again(r.error, r.error === "telegram_off" ? 503 : 400);
+    if (r.error) return again(r.error, r.error === "telegram_off" ? 503 : r.error === "closed" ? 403 : 400);
     return page(req, res, { title: title(lang), langSwitch: true, body: telegramStep(lang, r) });
   });
 }

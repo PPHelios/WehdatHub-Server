@@ -23,17 +23,18 @@ const TG_COPY = {
     `📱 عشان نتأكد إن الرقم رقمك، اضغط «📱 ابعت رقمي» تحت (لازم يكون ${phone}).
 📱 To verify it is your number, tap "📱 Share my number" below (it must be ${phone}).`,
   trialInvalid: "⚠️ رابط التسجيل ده مش صالح أو انتهى. ارجع للموقع وابدأ من جديد.\n⚠️ This sign-up link is invalid or expired. Go back to the website and start again.",
+  trialClosed: "⚠️ التجربة دي اتقفلت. شوف التجارب المتاحة على الموقع.\n⚠️ This trial is closed. Check the website for available trials.",
   trialMismatch: "⚠️ الرقم اللي بعتّه مش نفس الرقم اللي كتبته في الموقع. جرّب تاني بالرقم الصح.\n⚠️ The number you shared is not the one you typed on the website. Try again with the right number.",
   trialLocked: "⚠️ محاولات كتير غلط. ارجع للموقع وابدأ من جديد.\n⚠️ Too many wrong attempts. Go back to the website and start again.",
   trialUsed:
     "⚠️ الرقم ده أو حساب تيليجرام ده استخدم التجربة المجانية قبل كده (تجربة واحدة بس). شوف الباقات أو كلمنا من الموقع: ",
   trialUsedEn: "⚠️ This number or Telegram account has already used its free trial (one trial only). See the plans or contact us on the website: ",
   trialHasAccount: "⚠️ حساب تيليجرام ده مربوط بحساب في WehdatHub بالفعل. ابعت «دخول».\n⚠️ This Telegram account is already linked to a WehdatHub account. Send \"login\".",
-  trialDone: (b, url, minutes) =>
+  trialDone: (b, url, minutes, days) =>
     b.preferred_lang === "en"
-      ? `✅ Your agency is ready: 14-day free trial. Open the website (link valid ${minutes} minutes):
+      ? `✅ Your agency is ready: ${days}-day free trial. Open the website (link valid ${minutes} minutes):
 ${url}`
-      : `✅ شركتك جاهزة: تجربة مجانية 14 يوم. افتح الموقع (الرابط صالح ${minutes} دقيقة):
+      : `✅ شركتك جاهزة: تجربة مجانية ${days} يوم. افتح الموقع (الرابط صالح ${minutes} دقيقة):
 ${url}`,
   linked: (b) => (b.preferred_lang === "en" ? `✅ Linked. Welcome, ${b.name}!` : `✅ تم ربط حسابك. أهلاً يا ${b.name}!`)
 };
@@ -73,7 +74,7 @@ function createTelegramIngress({ pool, tapGuard, runTurn }) {
 
 ${TG_COPY.trialUsedEn}${Links.siteOrigin()}/#plans`;
     const failText = (error) =>
-      error === "not_own" ? TG_COPY.notOwn : error === "mismatch" ? TG_COPY.trialMismatch : error === "locked" ? TG_COPY.trialLocked : error === "trial_used" || error === "phone_taken" ? usedText() : error === "has_account" ? TG_COPY.trialHasAccount : TG_COPY.trialInvalid;
+      error === "not_own" ? TG_COPY.notOwn : error === "mismatch" ? TG_COPY.trialMismatch : error === "locked" ? TG_COPY.trialLocked : error === "trial_used" || error === "phone_taken" ? usedText() : error === "closed" ? TG_COPY.trialClosed : error === "has_account" ? TG_COPY.trialHasAccount : TG_COPY.trialInvalid;
     if (norm.start && TrialSignup.isSignupToken(norm.start)) {
       const r = await TrialSignup.begin(pool, norm.start, norm.ids);
       if (!r.ok) {
@@ -90,7 +91,7 @@ ${TG_COPY.trialUsedEn}${Links.siteOrigin()}/#plans`;
         return true;
       }
       const token = await WebAuth.issueLoginToken(pool, r.broker, { channel: "web" });
-      await say(TG_COPY.trialDone(r.broker, Links.loginLinkUrl(token), WebAuth.LOGIN_TOKEN_TTL_MINUTES), { remove_keyboard: true });
+      await say(TG_COPY.trialDone(r.broker, Links.loginLinkUrl(token), WebAuth.LOGIN_TOKEN_TTL_MINUTES, r.trialDays), { remove_keyboard: true });
       ErrorReports.alertOwner(`🆕 Self-serve trial: ${r.agency.name} (${r.broker.name}) +${r.broker.phone_number}`, { category: "new_trial", pool }).catch(() => {});
       return true;
     }

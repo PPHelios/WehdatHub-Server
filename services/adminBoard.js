@@ -181,14 +181,69 @@ async function dailySeries(pool, since, now) {
   return r;
 }
 
+/** Cohorts are grouped by the offer shown when the website accepted the registration. */
+async function computeTrials(pool, since, now) {
+  const args = [since, now.toISOString()];
+  const cohortSql = `WITH trials AS (
+    SELECT f.*, payment.first_paid_at,
+      LEAST($2::timestamptz, f.verified_at + f.granted_days * interval '24 hours', payment.first_paid_at) AS activity_until
+    FROM trial_funnel f
+    LEFT JOIN LATERAL (
+      SELECT min(p.confirmed_at) AS first_paid_at
+      FROM payments p WHERE p.agency_id = f.agency_id AND p.kind = 'plan' AND p.status = 'confirmed'
+        AND p.amount_egp > 0 AND p.confirmed_at >= f.verified_at AND p.confirmed_at <= $2
+    ) payment ON true
+    WHERE f.started_at >= $1 AND f.started_at <= $2
+  )`;
+  const cohorts = await rows(pool, `${cohortSql}
+  SELECT t.tier, t.offered_days, t.offered_credits,
+    count(*)::int AS started,
+    count(t.telegram_opened_at)::int AS opened,
+    count(t.verified_at)::int AS verified,
+    count(*) FILTER (WHERE a.first_action IS NOT NULL)::int AS activated,
+    count(*) FILTER (WHERE t.activity_until >= t.verified_at + interval '168 hours')::int AS day7_eligible,
+    count(*) FILTER (WHERE a.day7 AND t.activity_until >= t.verified_at + interval '168 hours')::int AS day7,
+    count(*) FILTER (WHERE t.tier = 'team' AND a.teammate)::int AS teammate,
+    count(t.first_paid_at)::int AS paid
+  FROM trials t
+  LEFT JOIN LATERAL (
+    SELECT min(events.at) AS first_action,
+      bool_or(events.at >= t.verified_at + interval '144 hours' AND events.at < t.verified_at + interval '168 hours') AS day7,
+      EXISTS (
+        SELECT 1 FROM brokers b
+        WHERE b.agency_id = t.agency_id AND b.role <> 'owner'
+          AND (b.telegram_linked_at >= t.verified_at AND b.telegram_linked_at < t.activity_until
+            OR EXISTS (
+              SELECT 1 FROM usage_events u WHERE u.agency_id = t.agency_id AND u.broker_id = b.id AND u.ok
+                AND u.event <> 'screen_slow' AND u.created_at >= t.verified_at AND u.created_at < t.activity_until
+            ))
+      ) AS teammate
+    FROM (
+      SELECT created_at AS at FROM listings WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM leads WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM search_log WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM usage_events WHERE agency_id = t.agency_id AND ok AND event <> 'screen_slow'
+        AND created_at >= t.verified_at AND created_at < t.activity_until
+    ) events
+  ) a ON true
+  GROUP BY t.tier, t.offered_days, t.offered_credits ORDER BY 1, 2, 3`, args);
+  const features = await rows(pool, `${cohortSql}
+    SELECT t.tier, u.event, count(DISTINCT t.agency_id)::int AS agencies,
+    count(*)::int AS uses, count(*) FILTER (WHERE NOT u.ok)::int AS failed
+    FROM trials t JOIN usage_events u ON u.agency_id = t.agency_id
+      AND u.created_at >= t.verified_at AND u.created_at < t.activity_until
+    GROUP BY t.tier, u.event ORDER BY 1, uses DESC, u.event`, args);
+  return { cohorts, features };
+}
+
 /** Health: adoption and errors over time, errors by source, and the WhatsApp import report (parser, AI, review, app). */
 async function computeHealth(pool, since, now) {
   const days = Math.max(1, Math.round((now.getTime() - new Date(since).getTime()) / DAY));
   const series = await dailySeries(pool, since, now);
   const bySource = await rows(pool, "SELECT source, count(*)::int AS n FROM error_events WHERE kind = 'error' AND created_at >= $1 GROUP BY 1 ORDER BY n DESC LIMIT 10", [since]);
-  const imp = await ChatImportReport.report(pool, { days });
+  const [imp, trials] = await Promise.all([ChatImportReport.report(pool, { days }), computeTrials(pool, since, now)]);
   return {
-    series, errorsBySource: bySource,
+    series, errorsBySource: bySource, trials,
     imports: {
       posts: imp.parser.posts, parserCompletePct: imp.parser.complete_pct, aiUsedPct: imp.parser.ai_used_pct, aiErrorPct: imp.parser.ai_error_pct,
       agreePct: imp.ai_vs_parser.agree_pct, editedPct: imp.review.edited_pct, applies: imp.review.applies, rows: imp.review.rows,

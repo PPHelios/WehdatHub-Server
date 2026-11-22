@@ -532,8 +532,8 @@
       "formInput": ["p"]
     },
     "domain/plans.js": {
-      "TRIAL_TEAM_SEATS": "Number",
       "isTrialPlan": ["id"],
+      "TRIAL_TEAM_SEATS": "Number",
       "TRIAL_PHOTO_CAP": "Number",
       "UNLIMITED": "Number",
       "unitLimitText": ["limit", "lang"],
@@ -1813,7 +1813,6 @@
       "parseBankSms": ["text"]
     },
     "services/billing.js": {
-      "paymentChannels": ["db"],
       "GRACE_EXTEND_DAYS": "Array",
       "LADDER": "Object",
       "LAPSED": "Array",
@@ -1843,6 +1842,7 @@
       "UNIT_HINT_LEVELS": "Array",
       "getSetting": ["db", "key", "fallback"],
       "setSetting": ["db", "key", "value"],
+      "paymentChannels": ["db"],
       "payTo": ["db"],
       "savePayTo": ["db", "params"],
       "priceOf": ["params"],
@@ -2661,6 +2661,8 @@
       "fetchCsv": ["sync", "params"]
     },
     "services/signup.js": {
+      "trialSettings": ["db"],
+      "saveTrialSettings": ["db", "body"],
       "isOpen": ["db"],
       "setOpen": ["db", "enabled"],
       "submit": ["pool", "input", "params"],

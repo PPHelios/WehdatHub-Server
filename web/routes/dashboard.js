@@ -248,8 +248,17 @@ function billingSections(b, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
   return html`${b.csrf !== undefined ? newAgencySection(lang, b.csrf) : ""}<section class="card" id="signups">
   <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
-  <form method="post" action="/app/owner/signup" class="stack" data-signup-form data-autosave>
-    ${switchField({ name: "open", value: "1", on: b.open, lang, id: "signup-switch", label: L(lang, "التجربة المجانية مفتوحة", "Free trial sign-up is open"), sentence: L(lang, "لما يكون شغّال، أي حد يقدر يبدأ تجربة مجانية من صفحة الموقع ومن تليجرام من غير موافقتك. لما يتقفل، زرار «ابدأ التجربة» بيختفي ومفيش تجارب جديدة بتبدأ.", "When on, anyone can start a free trial from the landing page and Telegram, no approval needed. When off, the Start trial buttons disappear and no new trials start.") })}
+  <p><a href="/app/owner/board?tab=health&days=30#trial-funnel">${L(lang, "متابعة التجارب واستخدام المميزات", "Trial funnel and feature use")}</a></p>
+  <form method="post" action="/app/owner/signup" class="stack" data-signup-form>
+    ${switchField({ name: "open", value: "1", on: b.signup.enabled, lang, id: "signup-switch", label: L(lang, "التسجيل في التجارب", "Trial sign-up"), sentence: L(lang, "قفل المفتاح ده بيوقف التسجيل الجديد في التجربتين.", "Turn this off to pause new Solo and Team sign-ups.") })}
+    <input type="hidden" name="trial_settings" value="1">
+    ${Object.entries(b.signup.tiers).map(([tier, options]) => html`<fieldset class="stack">
+      <legend>${tier === "solo" ? L(lang, "تجربة سولو", "Solo trial") : L(lang, "تجربة فريق", "Team trial")}</legend>
+      ${switchField({ name: tier + "_enabled", value: "1", on: options.enabled, lang, id: tier + "-trial-switch", label: L(lang, "التسجيل متاح", "Sign-up enabled") })}
+      <label>${L(lang, "مدة التجربة بالأيام", "Trial length in days")} <input name="${tier}_days" type="number" min="1" max="365" required value="${options.days}"></label>
+      <label>${L(lang, "رصيد الذكاء الاصطناعي للشركة", "Shared AI credits")} <input name="${tier}_credits" type="number" min="0" max="2147483647" required value="${options.credits}"></label>
+    </fieldset>`)}
+    <p class="muted">${L(lang, "الإعدادات دي بتتطبق على التجارب الجديدة عند تأكيد الرقم على تيليجرام.", "These settings apply to new trials when the phone number is verified on Telegram.")}</p>
     <button type="submit" class="secondary" data-signup-toggle="save">${L(lang, "حفظ", "Save")}</button>
   </form>
   ${b.signups.length
@@ -806,12 +815,12 @@ function register(web, { pool, page }) {
     const pf = await Dash.ownerPeriod(pool, req.session.broker, per);
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
     const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("بروكرز نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
-    const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits, lapsed] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.tracking(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool), Billing.lapsedAgencies(pool)]);
+    const [signup, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits, lapsed] = await Promise.all([Signup.trialSettings(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.tracking(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool), Billing.lapsedAgencies(pool)]);
     const [agencies, log, places, channels] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool), Billing.paymentChannels(pool)]);
     const anPick = /^[0-9a-f-]{36}$/i.test(String(req.query.an_agency || "")) ? String(req.query.an_agency) : null;
     if (anPick) tab = 6;
     const analytics = { data: await Analytics.forOwner(pool, req.session.broker, { agencyId: anPick }), status: await Analytics.status(pool) };
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, lapsed, channels, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, openTab: tab, stuck, agencies, log, places, analytics, csrf: req.session.csrf })}` }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { signup, signups, payments, payTo, trials, lapsed, channels, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, openTab: tab, stuck, agencies, log, places, analytics, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -886,6 +895,12 @@ function register(web, { pool, page }) {
   }));
 
   web.post("/owner/signup", ownerOnly(async (req, res, lang) => {
+    if (req.body.trial_settings === "1") {
+      const saved = await Signup.saveTrialSettings(pool, req.body);
+      return ownerView(req, res, saved
+        ? ok(L(lang, "إعدادات التجارب اتحفظت.", "Trial settings saved."))
+        : bad(L(lang, "راجع عدد الأيام والرصيد.", "Enter valid whole numbers for trial days and credits.")), saved ? 200 : 422);
+    }
     await Signup.setOpen(pool, req.body.open === "1");
     return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التجربة المجانية اتفتحت.", "Free trial sign-up is open.") : L(lang, "التسجيل اتقفل.", "Free trial sign-up is closed.")));
   }));

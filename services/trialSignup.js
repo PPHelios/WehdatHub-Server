@@ -13,6 +13,7 @@
 
 const crypto = require("crypto");
 const Phone = require("../domain/phone");
+const Signup = require("./signup");
 const Plans = require("../domain/plans");
 const TgLink = require("../lib/tgLink");
 const Referrals = require("./referrals");
@@ -45,6 +46,9 @@ async function start(pool, input = {}, { now = new Date(), username = getConfig(
   const name = String(input.name || "").trim().slice(0, 80);
   const digits = Phone.normalizePhone(input.phone);
   const lang = input.lang === "en" ? "en" : "ar";
+  const tier = input.tier === "team" ? "team" : "solo";
+  const settings = await Signup.trialSettings(pool);
+  if (!settings.enabled || !settings.tiers[tier].enabled) return { error: "closed" };
   if (!agencyName) return { error: "agency" };
   if (!name) return { error: "name" };
   if (!digits || !Phone.isEgyptMobile(digits)) return { error: "phone" };
@@ -57,8 +61,14 @@ async function start(pool, input = {}, { now = new Date(), username = getConfig(
   const token = TOKEN_PREFIX + crypto.randomBytes(24).toString("base64url");
   await pool.query("DELETE FROM trial_signups WHERE phone_e164 = $1 AND used_at IS NULL", [`+${digits}`]);
   await pool.query(
-    "INSERT INTO trial_signups (token_hash, phone_e164, agency_name, owner_name, lang, referred_by, expires_at, tier) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-    [sha256(token), `+${digits}`, agencyName, name, lang, referrer ? referrer.id : null, new Date(now.getTime() + TTL_MS).toISOString(), input.tier === "team" ? "team" : "solo"]
+    `WITH signup AS (
+       INSERT INTO trial_signups (token_hash, phone_e164, agency_name, owner_name, lang, referred_by, expires_at, tier)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
+     )
+     INSERT INTO trial_funnel (signup_id, tier, offered_days, offered_credits, started_at)
+     SELECT id, $8, $9, $10, $11 FROM signup`,
+    [sha256(token), `+${digits}`, agencyName, name, lang, referrer ? referrer.id : null, new Date(now.getTime() + TTL_MS).toISOString(), tier,
+      settings.tiers[tier].days, settings.tiers[tier].credits, now.toISOString()]
   );
   return { ok: true, token, url: TgLink.startLink(username, token), phone: `+${digits}` };
 }
@@ -73,7 +83,14 @@ async function begin(pool, token, ids, { now = new Date() } = {}) {
   if (s.attempts >= MAX_ATTEMPTS) return { error: "locked" };
   if (await claimed(pool, { telegramId: ids.userId })) return { error: "trial_used" };
   if (await TgLink.findBroker(pool, ids.userId)) return { error: "has_account" };
-  await pool.query("UPDATE trial_signups SET telegram_id = $2, chat_id = $3 WHERE id = $1", [s.id, ids.userId, ids.chatId]);
+  await pool.query(
+    `WITH signup AS (
+       UPDATE trial_signups SET telegram_id = $2, chat_id = $3 WHERE id = $1 AND used_at IS NULL RETURNING id
+     )
+     UPDATE trial_funnel SET telegram_opened_at = COALESCE(telegram_opened_at, $4)
+     WHERE signup_id = (SELECT id FROM signup)`,
+    [s.id, ids.userId, ids.chatId, now.toISOString()]
+  );
   return { ok: true, signup: s };
 }
 
@@ -101,16 +118,19 @@ async function verifyContact(pool, contact, ids, { now = new Date() } = {}) {
   if (!shared || `+${shared}` !== s.phone_e164) return fail("mismatch");
 
   const digits = s.phone_e164.slice(1);
-  const trialEnds = new Date(now.getTime() + Plans.TRIAL.days * DAY).toISOString();
   try {
     return await withTransaction(pool, async (client) => {
+      const settings = await Signup.trialSettings(client);
+      const tier = settings.tiers[s.tier || "solo"];
+      if (!settings.enabled || !tier.enabled) return { error: "closed" };
+      const trialEnds = new Date(now.getTime() + tier.days * DAY).toISOString();
       if (await claimed(client, { phone: digits, telegramId: ids.userId })) return { error: "trial_used" };
       const { rows: taken } = await client.query("SELECT 1 FROM brokers WHERE phone_normalized = $1 OR telegram_user_id = $2", [digits, ids.userId]);
       if (taken.length) return { error: "phone_taken" };
       const { rows: a } = await client.query(
-        `INSERT INTO agencies (name, plan, pilot, approval, trial_ends_at, signed_up_at, referred_by) VALUES ($1, $2, false, 'approved', $3, $4, $5)
+        `INSERT INTO agencies (name, plan, pilot, approval, trial_ends_at, signed_up_at, referred_by, trial_ai_credits) VALUES ($1, $2, false, 'approved', $3, $4, $5, $6)
          RETURNING id, name, slug, trial_ends_at`,
-        [s.agency_name, s.tier === "team" ? "trial_team" : Plans.TRIAL.plan, trialEnds, now.toISOString(), s.referred_by]
+        [s.agency_name, s.tier === "team" ? "trial_team" : Plans.TRIAL.plan, trialEnds, now.toISOString(), s.referred_by, tier.credits]
       );
       const { rows: b } = await client.query(
         `INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active, telegram_user_id, telegram_chat_id, telegram_linked_at)
@@ -120,7 +140,11 @@ async function verifyContact(pool, contact, ids, { now = new Date() } = {}) {
       );
       await client.query("INSERT INTO trial_claims (phone_e164, telegram_id, agency_id) VALUES ($1, $2, $3)", [s.phone_e164, ids.userId, a[0].id]);
       await client.query("UPDATE trial_signups SET used_at = NOW() WHERE id = $1", [s.id]);
-      return { ok: true, agency: a[0], broker: b[0] };
+      await client.query(
+        "UPDATE trial_funnel SET verified_at = $2, agency_id = $3, granted_days = $4, granted_credits = $5 WHERE signup_id = $1",
+        [s.id, now.toISOString(), a[0].id, tier.days, tier.credits]
+      );
+      return { ok: true, agency: a[0], broker: b[0], trialDays: tier.days };
     });
   } catch (e) {
     if (e && e.code === "23505") return { error: "trial_used" }; // a concurrent claim won the unique index
