@@ -1,12 +1,11 @@
 // services/failures.js — Failed and refused actions for the CRM owner: a filtered list (agency, day, person) and a daily
-// Telegram summary. Sources: operation_logs rows of the failure types below. Rows are kept KEEP_DAYS days.
+// Telegram summary. Sources: operation_logs rows of the failure types below.
 "use strict";
 
 const { alertOwner } = require("../lib/errorReports");
 const { SEVERITIES, SEVERITY_SQL } = require("../lib/failureInfo");
 
 const TYPES = ["web_failed", "app_failed", "unit_write_refused", "swallowed_error"];
-const KEEP_DAYS = 30;
 const PAGE = 50;
 const DAY = 24 * 3600 * 1000;
 
@@ -61,7 +60,7 @@ async function summaryText(pool, now = new Date()) {
   return [`📋 WehdatHub failures, last 24 h: ${total} (${sev.high} high, ${sev.medium} medium, ${sev.low} low)`,...lines, "Details: /app/failures"].join("\n");
 }
 
-/** Daily: the summary to the owner on Telegram, and rows older than KEEP_DAYS removed. */
+/** Daily failure summary to the owner on Telegram. */
 function summaryJob() {
   return {
     name: "failures_daily",
@@ -70,10 +69,9 @@ function summaryJob() {
       const at = now ? new Date(now) : new Date();
       const text = await summaryText(pool, at);
       const sent = text ? await alertOwner(text, { category: "failures_digest", pool }) : false;
-      const del = await pool.query("DELETE FROM operation_logs WHERE operation_type = ANY($1) AND created_at < $2", [TYPES, new Date(at.getTime() - KEEP_DAYS * DAY)]);
-      return { counts: { sent: sent ? 1 : 0, purged: del.rowCount || 0 } };
+      return { counts: { sent: sent ? 1 : 0 } };
     }
   };
 }
 
-module.exports = { TYPES, KEEP_DAYS, PAGE, list, filters, summaryText, summaryJob };
+module.exports = { TYPES, PAGE, list, filters, summaryText, summaryJob };

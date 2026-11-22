@@ -13,15 +13,16 @@ test("a swallowed error is logged with its place, masked, and the fallback is re
   expect(logOperation).toHaveBeenCalledWith({}, expect.objectContaining({ operation_type: "swallowed_error", status: "error", error_code: "unitForm.areas: boom •••" }));
 });
 
-test("daily summary: nothing to say sends nothing; rows are purged either way", async () => {
-  const pool = { query: jest.fn().mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rowCount: 3 }) };
+test("daily summary: nothing to say sends nothing and leaves operation records intact", async () => {
+  const pool = { query: jest.fn().mockResolvedValueOnce({ rows: [] }) };
   const out = await Failures.summaryJob().run({ pool, now: Date.now() });
   expect(alertOwner).not.toHaveBeenCalled();
-  expect(out.counts).toEqual({ sent: 0, purged: 3 });
+  expect(out.counts).toEqual({ sent: 0 });
+  expect(pool.query).toHaveBeenCalledTimes(1);
 });
 
 test("daily summary lists counts by reason and agency", async () => {
-  const pool = { query: jest.fn().mockResolvedValueOnce({ rows: [{ agency: "NCH", reason: "http_404", n: 4 }, { agency: "NCH", reason: "writes_off", n: 1 }] }).mockResolvedValueOnce({ rows: [{ sev: "low", n: 4 }, { sev: "medium", n: 1 }] }).mockResolvedValueOnce({ rowCount: 0 }) };
+  const pool = { query: jest.fn().mockResolvedValueOnce({ rows: [{ agency: "NCH", reason: "http_404", n: 4 }, { agency: "NCH", reason: "writes_off", n: 1 }] }).mockResolvedValueOnce({ rows: [{ sev: "low", n: 4 }, { sev: "medium", n: 1 }] }) };
   const out = await Failures.summaryJob().run({ pool, now: Date.now() });
   expect(alertOwner.mock.calls[0][0]).toMatch(/failures, last 24 h: 5 \(0 high, 1 medium, 4 low\)[\s\S]*4 × http_404 \(NCH\)/);
   expect(out.counts.sent).toBe(1);

@@ -67,6 +67,33 @@ describe("AI credit pool (053)", () => {
     expect(await Credits.creditsFor(h.pool, "search_grounded")).toBe(0);
   });
 
+  test("a slow request-driven refresh stays single even past the TTL", async () => {
+    await Credits.refresh(h.pool);
+    const now = jest.spyOn(Date, "now").mockReturnValue(Date.now() + 61000);
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const db = { query: jest.fn(async (...args) => {
+      await gate;
+      return h.pool.query(...args);
+    }) };
+    const first = Credits.ensureFresh(db);
+    try {
+      const reads = db.query.mock.calls.length;
+      await Promise.resolve();
+      const started = db.query.mock.calls.length - reads;
+      expect(started).toBeGreaterThan(0);
+
+      now.mockReturnValue(Date.now() + 61000);
+      void Credits.ensureFresh(db);
+      await Promise.resolve();
+      expect(db.query).toHaveBeenCalledTimes(started);
+    } finally {
+      now.mockRestore();
+      release();
+      await first;
+    }
+  });
+
   test("the planning rate defaults to 60 EGP per dollar and follows the app setting", async () => {
     expect(await Credits.planningRate(h.pool)).toBe(60);
     await h.pool.query("INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [Credits.FX_KEY, JSON.stringify(62)]);
@@ -100,20 +127,26 @@ describe("owner page: plans and credits", () => {
     expect(byId.solo.price_egp).toBe(249);
     expect(byId.boutique).toMatchObject({ price_egp: 1200, seats: 8, credits: 3200 });
     expect(require("../../domain/plans").planById("boutique")).toBeTruthy();
-    // A bad number is refused and nothing else changes.
-    const bad = await agent.post("/app/owner/credit-plans").type("form").send({ ...form, p_solo_price: "abc" });
+    // A later validation error rolls back an earlier plan change.
+    const bad = await agent.post("/app/owner/credit-plans").type("form").send({ ...form, p_solo_price: "299" });
     expect(bad.status).toBe(400);
+    expect((await Credits.plans(h.pool)).find((p) => p.id === "solo").price_egp).toBe(249);
 
     const bundles = { _csrf: csrf, new_bundle_id: "b2000", new_bundle_name_ar: "٢٠٠٠", new_bundle_name_en: "2,000", new_bundle_price: "650", new_bundle_credits: "2000" };
     for (const b of await Credits.bundles(h.pool)) Object.assign(bundles, { [`b_${b.id}_name_ar`]: b.name_ar, [`b_${b.id}_name_en`]: b.name_en, [`b_${b.id}_price`]: b.price_egp, [`b_${b.id}_credits`]: b.credits, [`b_${b.id}_active`]: "on" });
     expect((await agent.post("/app/owner/credit-bundles").type("form").send(bundles)).status).toBe(200);
     expect((await Credits.bundles(h.pool)).map((b) => b.credits)).toContain(2000);
+    const beforeBundles = await Credits.bundles(h.pool);
+    expect(await Credits.saveBundles(h.pool, { ...bundles, b_small_price: 101 })).toMatchObject({ error: "bundle" });
+    expect(await Credits.bundles(h.pool)).toEqual(beforeBundles);
 
     const acts = { _csrf: csrf, fx: "55", cost_usd: "0.003" };
     for (const a of await Credits.actions(h.pool)) acts[`a_${a.action}`] = a.action === "flyer" ? 5 : a.credits;
     expect((await agent.post("/app/owner/credit-actions").type("form").send(acts)).status).toBe(200);
     expect(await Credits.creditsFor(h.pool, "flyer")).toBe(5);
     expect(await Credits.planningRate(h.pool)).toBe(55);
+    expect(await Credits.saveActionsAndRates(h.pool, { ...acts, a_flyer: 8, fx: "0" })).toEqual({ error: "rates" });
+    expect(await Credits.creditsFor(h.pool, "flyer")).toBe(5);
   });
 
   test("a manager's request reaches the owner page; approving grants the credits; owner can grant directly", async () => {
@@ -124,9 +157,14 @@ describe("owner page: plans and credits", () => {
     expect(page.text).toContain("data-credit-request=");
     const [req] = await Credits.pendingRequests(h.pool);
     const before = (await Credits.poolFor(h.pool, admin.agency_id, "free")).total;
+    const when = new Date();
+    jest.spyOn(when, "toISOString").mockReturnValue("invalid timestamp");
+    await expect(Credits.decideRequest(h.pool, req.id, { approve: true, now: when })).rejects.toThrow(/timestamp/);
+    expect((await Credits.poolFor(h.pool, admin.agency_id, "free")).total).toBe(before);
     expect((await agent.post(`/app/owner/credit-requests/${req.id}`).type("form").send({ _csrf: csrf, decision: "approve", credits: "250" })).status).toBe(200);
     expect((await Credits.poolFor(h.pool, admin.agency_id, "free")).total).toBe(before + 250);
     expect(await Credits.pendingRequests(h.pool)).toEqual([]);
+    expect(await Credits.decideRequest(h.pool, req.id, { approve: true })).toEqual({ error: "not_pending" });
     expect((await agent.post("/app/owner/credit-grant").type("form").send({ _csrf: csrf, agency: admin.agency_id, credits: "100", note: "gift" })).status).toBe(200);
     expect((await Credits.poolFor(h.pool, admin.agency_id, "free")).total).toBe(before + 350);
     expect((await agent.post("/app/owner/credit-grant").type("form").send({ _csrf: csrf, agency: admin.agency_id, credits: "0" })).status).toBe(400);

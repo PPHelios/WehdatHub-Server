@@ -48,7 +48,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, theme = false, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, theme = false, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null, analyticsId = null }) {
   const en = lang === "en";
   const crm = Boolean(broker) && require("../lib/authz").isCrmOwner(broker);
   const tab = broker ? (crm ? crmTabOf(path) : tabOf(path, nav)) : null;
@@ -58,6 +58,7 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="${robots}">
+${analyticsId && broker && scripts ? html`<meta name="web-analytics" content="${analyticsId}" data-screen="${tab}">` : ""}
 <meta name="theme-color" content="${BRAND.colors.brand}">
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}

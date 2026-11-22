@@ -22,7 +22,7 @@ async function buildReference() {
   try {
     const ddl = await exportSchema(pool);
     // Drop the export header (it carries a timestamp and names db/schema.sql).
-    const body = ddl.split("\n").slice(3).join("\n");
+    const body = ddl.replaceAll("\r\n", "\n").split("\n").slice(3).join("\n");
     return `${HEADER}\n${body}`;
   } finally {
     await pool.end();

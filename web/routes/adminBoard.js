@@ -68,7 +68,19 @@ ${table([L(lang, "الحدث", "Event"), L(lang, "مرات", "Times"), L(lang, "
     ], lang);
   }
   if (tab === "overview") {
-    return kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م تقريبًا)", "AI cost (EGP, est.)"), data.aiEgp], [L(lang, "مكالمات الذكاء", "AI calls"), data.aiCalls], [L(lang, "شركات نشطة", "Active agencies"), data.agencies], [L(lang, "بروكرز نشطين", "Active brokers"), data.brokers], [L(lang, "وحدات جديدة", "New units"), data.units], [L(lang, "عملاء جدد", "New leads"), data.leads], [L(lang, "أخطاء", "Errors"), data.errors]], lang);
+    const adoption = data.adoption;
+    const featureNames = {
+      search: L(lang, "البحث", "Search"),
+      unit_saved: L(lang, "حفظ وحدة", "Unit saved (web or app)"),
+      app_import: L(lang, "استيراد من واتساب", "Unit saved from WhatsApp import (app)"),
+      web_import: L(lang, "الاستيراد", "Import applied (web)"),
+      lead_created: L(lang, "تسجيل عميل", "Lead created")
+    };
+    return html`${kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م تقريبًا)", "AI cost (EGP, est.)"), data.aiEgp], [L(lang, "مكالمات الذكاء", "AI calls"), data.aiCalls], [L(lang, "شركات نشطة", "Active agencies"), data.agencies], [L(lang, "بروكرز نشطين", "Active brokers"), data.brokers], [L(lang, "وحدات جديدة", "New units"), data.units], [L(lang, "عملاء جدد", "New leads"), data.leads], [L(lang, "أخطاء", "Errors"), data.errors]], lang)}
+${adoption ? html`<h3>${L(lang, "استخدام المميزات", "Feature adoption")}</h3>
+<p class="muted small">${L(lang, "الحسابات المفعّلة", "Enabled broker accounts")} ${num(adoption.enabled)}. ${L(lang, "الاستخدام المتكرر يغطي الفترة دي واللي قبلها.", "Repeat use means use in this period and the preceding period of the same length.")}</p>
+${table([L(lang, "المميزة", "Feature"), L(lang, "بروكرز", "Brokers"), L(lang, "شركات", "Agencies"), L(lang, "استخدام متكرر", "Repeat brokers")],
+  adoption.features.map((r) => [featureNames[r.feature], num(r.brokers), num(r.agencies), num(r.returned)]), lang)}` : ""}`;
   }
   if (tab === "money") {
     return html`${kv([[L(lang, "المدفوع (ج.م)", "Paid in (EGP)"), data.paidInEgp], [L(lang, "تكلفة الذكاء (ج.م)", "AI cost (EGP)"), data.aiEgp], [L(lang, "تكاليف ثابتة (ج.م)", "Fixed costs (EGP)"), data.fixedEgp], [L(lang, "الصافي (ج.م)", "Net (EGP)"), data.netEgp], [L(lang, "مدفوعات مستنية", "Payments waiting"), data.pendingPayments]], lang)}
@@ -87,7 +99,7 @@ ${table([L(lang, "الإجراء", "Action"), L(lang, "مكالمات", "Calls")
     return html`<h3>${L(lang, "متوسط الوقت لكل مرحلة (ms)", "Average time per stage (ms)")}</h3>
 ${kv(Object.entries(data.avgMs || {}).map(([k, v]) => [k, v]), lang)}
 <h3>${L(lang, "الإجراءات", "Actions")}</h3>
-${table([L(lang, "الإجراء", "Action"), L(lang, "مكالمات", "Calls"), L(lang, "فشل %", "Error %"), "p50 ms", "p95 ms"], data.byAction.map((x) => [x.action, num(x.calls), `${x.errorPct}%`, num(x.p50Ms), num(x.p95Ms)]), lang)}`;
+${table([L(lang, "الإجراء", "Action"), L(lang, "مكالمات", "Calls"), L(lang, "فشل %", "Error %"), L(lang, "أخطاء", "Errors"), L(lang, "مرفوض", "Refusals"), "p50 ms", "p95 ms"], data.byAction.map((x) => [x.action, num(x.calls), x.errorPct == null ? "—" : `${x.errorPct}%`, num(x.failed), num(x.refused ?? 0), num(x.p50Ms), num(x.p95Ms)]), lang)}`;
   }
   if (tab === "search") {
     return html`${kv([[L(lang, "بحثات", "Searches"), data.total], [L(lang, "من غير نتيجة", "No result"), data.noResult], [L(lang, "القارئ والذكاء اختلفوا", "Quick reader and AI disagreed"), data.disagreed], [L(lang, "سألها البوت عن كلمة", "Bot asked about a word"), data.asked], [L(lang, "تهجئة قريبة اتقبلت", "Close spellings accepted"), data.guessed], [L(lang, "فشل قراءة الذكاء", "AI read failed"), data.aiErrors], [L(lang, "بلاغات", "Reports"), data.reports]], lang)}

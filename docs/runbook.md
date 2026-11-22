@@ -68,6 +68,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `MAP_TILES_URL` | no | empty | Public address of the `.pmtiles` map file (Cloudflare R2, `https://….pmtiles`). Empty = the Map page says it is not set up. The bucket needs a CORS rule that allows `GET` and the `Range` header from the app's address, or the map stays blank. |
 | `FIREBASE_SERVICE_ACCOUNT` | no | empty | The Firebase service account key (the whole JSON, one line) for alerts to the mobile app. Empty = app alerts are off; web push and Telegram are unaffected. Keep it only in Render. |
 | `FIREBASE_CLIENT_CONFIG` | no | empty | The phone apps' public Firebase identifiers, one line: `{"android":{"apiKey":"…","appId":"…","projectId":"…","messagingSenderId":"…"},"ios":{…}}`. The app reads them from `/api/v1/config` and switches alerts and crash reports on; empty = both stay off. Not secret, but keep it in Render with the key above. |
+| `WEB_ANALYTICS_ID` | no | empty | GA4 web stream measurement ID (`G-…`). Enables explicit product events on signed-in web screens. Disable Enhanced Measurement on the stream and leave advertising integrations off. |
 | `GOOGLE_MAPS_API_KEY` | no | empty | Google key (Geocoding API only, restricted, daily quota capped) used by the owner's "Find missing pins" page as a fallback and check next to OpenStreetMap. Empty = OpenStreetMap only. |
 | `GOOGLE_MAPS_BROWSER_KEY` | no | empty | A second, public Google key for the owner's pin review pages: it shows a satellite picture of the pins (Static Maps API only, limited to this website, with a quota cap). Empty = no satellite picture. Never reuse the server key above. |
 | `SEARCH_SHADOW_AI` | no | off | `true` makes the AI read every search the quick reader answered alone, quietly after the answer, for the nightly check and word learning (POC). It uses no agency credits. |
@@ -142,6 +143,13 @@ Web sign-in has no shared secret to rotate: tokens and sessions are random and s
 * Kill a client share link: `UPDATE share_links SET revoked_at = NOW() WHERE listing_id = '<listing id>';` (all links of that unit).
 
 ## 6. Reading `operation_logs`
+
+`operation_logs` is append-only. The privacy job rolls up usage and search details after 90 days. The failure digest reads the previous 24 hours without changing audit records.
+
+The owner board Overview shows unique enabled brokers and agencies using Search, web/mobile unit saves, web import apply, mobile WhatsApp import saves, and lead creation. Repeat brokers used the same feature in the selected period and the preceding period of the same length. These counts use first-party records.
+
+Mobile product analytics uses the existing Firebase SDK when enabled for the app's Firebase project. Selected share/contact events go directly to Google Analytics with a server fallback when the SDK is unavailable. The in-product import report still uses server events. Verify Android and iOS in Firebase DebugView, and verify crash delivery from signed release builds separately. The optional web stream sends a fixed page location and screen labels. Confirm the outgoing parameters in DebugView before enabling it in production. Product events use fixed event names, codes and counts. Keep client details and free text out of Analytics.
+
 
 Every operation writes one row (success or failure): `agency_id`, `broker_id`, `listing_code`, `operation_type`, `status`, `error_code`, timings (`total_duration_ms`, `gemini_ms`, `db_ms`, …), tokens, `model_used`, `estimated_cost_usd`, `metadata` (JSON), `created_at`. **Never delete or truncate it**; it is the audit trail and the AI quota reads it.
 

@@ -110,8 +110,8 @@ const PRIVACY = {
     },
     {
       h: ["٦. مزودو الخدمة", "6. Service Providers"],
-      ar: ["نشارك البيانات فقط مع مزودين يشغّلون الخدمة:", "الاستضافة: Render.", "قاعدة البيانات والتخزين: Supabase (PostgreSQL مع صلاحيات على مستوى الصف وتخزين مشفّر).", "الخرائط وتخزين الملفات: Cloudflare R2.", "الرسائل: Telegram Bot API وMeta WhatsApp Cloud API.", "الإشعارات وتقارير الأعطال: Google Firebase (Cloud Messaging وCrashlytics).", "الأتمتة (اختياري): Make.com، فقط إذا فعّلته الشركة.", "الذكاء الاصطناعي: Google Gemini (انظر القسم ٥)."],
-      en: ["We share data only with providers that run the service:", "Hosting: Render.", "Database and storage: Supabase (PostgreSQL with row-level security and encrypted storage).", "Map tiles and file storage: Cloudflare R2.", "Messaging: Telegram Bot API and Meta WhatsApp Cloud API.", "Notifications and crash reports: Google Firebase (Cloud Messaging and Crashlytics).", "Automation (optional): Make.com, only if the Agency turns it on.", "AI: Google Gemini (see section 5)."]
+      ar: ["نشارك البيانات فقط مع مزودين يشغّلون الخدمة:", "الاستضافة: Render.", "قاعدة البيانات والتخزين: Supabase (PostgreSQL مع صلاحيات على مستوى الصف وتخزين مشفّر).", "الخرائط وتخزين الملفات: Cloudflare R2.", "الرسائل: Telegram Bot API وMeta WhatsApp Cloud API.", "الإشعارات وتقارير الأعطال واستخدام المميزات: Google Firebase وGoogle Analytics (عند التفعيل).", "الأتمتة (اختياري): Make.com، فقط إذا فعّلته الشركة.", "الذكاء الاصطناعي: Google Gemini (انظر القسم ٥)."],
+      en: ["We share data only with providers that run the service:", "Hosting: Render.", "Database and storage: Supabase (PostgreSQL with row-level security and encrypted storage).", "Map tiles and file storage: Cloudflare R2.", "Messaging: Telegram Bot API and Meta WhatsApp Cloud API.", "Notifications, crash reports and feature usage: Google Firebase and Google Analytics (where enabled).", "Automation (optional): Make.com, only if the Agency turns it on.", "AI: Google Gemini (see section 5)."]
     },
     {
       h: ["٧. الأمان ونقل البيانات", "7. Security and Data Location"],

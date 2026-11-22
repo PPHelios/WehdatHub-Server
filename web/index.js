@@ -9,7 +9,7 @@ const TestRole = require("../lib/testRole");
 const ViewGuard = require("../lib/viewGuard");
 const express = require("express");
 const { loadAssets } = require("./assets");
-const { securityHeaders, sameOrigin } = require("./security");
+const { securityHeaders, sameOrigin, allowWebAnalytics } = require("./security");
 const Session = require("./session");
 const Audit = require("../services/audit");
 const RequestIds = require("../lib/requestIds");
@@ -45,11 +45,13 @@ function mountWeb(app, { pool, config }) {
   const solo = (s, lang, htmlText) => (s?.solo && lang === "ar" ? require("../lib/copy").soloPage(htmlText) : htmlText);
   const page = (req, res, opts, status = 200) => {
     const s = req.session;
+    const analyticsId = s?.broker && !s.broker.view_of && opts.scripts !== false ? config.webAnalyticsId : null;
+    if (analyticsId) allowWebAnalytics(res);
     const lang = opts.lang || (s ? (s.broker.preferred_lang === "en" ? "en" : "ar") : req.lang === "en" ? "en" : "ar");
     return res
       .status(status)
       .type("html")
-      .send(solo(s, lang, withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, aiOff: s?.aiOff || [], planBanner: s?.planBanner || null, path: String(req.originalUrl || ""), ...opts, lang }), s?.csrf)));
+      .send(solo(s, lang, withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, aiOff: s?.aiOff || [], planBanner: s?.planBanner || null, path: String(req.originalUrl || ""), ...opts, lang, analyticsId }), s?.csrf)));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);
@@ -122,12 +124,12 @@ function mountWeb(app, { pool, config }) {
   // Sign-in pages are open; everything after them needs a session and a CSRF token on writes.
   for (const p of pages.PUBLIC) p.register(web, ctx);
   const priv = express.Router();
-  priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
+  priv.use(Session.noStore, Session.requireBroker);
+  priv.use(require("../lib/failureLog").middleware(pool));
+  priv.use(Session.verifyCsrf);
   // A repeated one-time request ID (double tap, retry, re-sent form) is answered without running the action again.
   priv.use(RequestIds.middleware);
   priv.use(require("../lib/slowRequests").middleware(pool));
-  // Every refused or failed request (4xx/5xx) is written to operation_logs with its status and route.
-  priv.use(require("../lib/failureLog").middleware(pool));
   // The test number viewing another agency: its data only, read-only; switching back and signing out stay open.
   priv.use((req, res, next) => {
     if (!(TestRole.canView(req.session.broker) && TestRole.isViewing(req.sid))) return next();

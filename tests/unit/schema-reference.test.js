@@ -8,7 +8,7 @@ jest.setTimeout(60000);
 
 test("SCHEMA_REFERENCE.sql is current (run `npm run schema:reference` after adding a migration)", async () => {
   const expected = await buildReference();
-  expect(fs.readFileSync(OUT, "utf8")).toBe(expected);
+  expect(fs.readFileSync(OUT, "utf8").replaceAll("\r\n", "\n")).toBe(expected);
 });
 
 test("the reference carries the migrated objects and the outbound counter view", () => {

@@ -45,6 +45,22 @@ test("pages carry a strict CSP (no inline script), framing only by Telegram Web,
   expect(r.text).not.toMatch(/<script>(?!<\/script>)/); // no inline scripts
 });
 
+test("web analytics is opt-in and only enabled on signed-in pages", async () => {
+  const { createApp } = require("../../server");
+  const { getConfig, loadConfig } = require("../../config");
+  expect(loadConfig({ WEB_ANALYTICS_ID: "invalid" }).webAnalyticsId).toBeNull();
+  const enabled = { ...h, app: createApp({ pool: h.pool, config: { ...getConfig(), webAnalyticsId: "G-TEST1234" } }) };
+  const anonymous = await request(enabled.app.app).get("/app/login");
+  expect(anonymous.headers["content-security-policy"]).not.toContain("googletagmanager.com");
+  expect(anonymous.text).not.toContain('name="web-analytics"');
+  const { agent } = await signIn(enabled, "broker");
+  const page = await agent.get("/app/search?q=private");
+  expect(page.text).toContain('<meta name="web-analytics" content="G-TEST1234" data-screen="search">');
+  expect(page.headers["content-security-policy"]).toContain("https://www.googletagmanager.com");
+  const defaultPage = await (await signIn(h, "broker")).agent.get("/app/");
+  expect(defaultPage.text).not.toContain('name="web-analytics"');
+});
+
 test("the manifest is scoped to /app/ and every icon it lists is served", async () => {
   const r = await request(web).get("/app/manifest.webmanifest");
   expect(r.headers["content-type"]).toMatch(/application\/manifest\+json/);

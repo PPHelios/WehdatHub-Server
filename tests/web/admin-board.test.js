@@ -80,6 +80,29 @@ test("fixed costs are added and deleted from the Money tab, and the cash-flow fi
   expect(await AdminBoard.listFixedCosts(h.pool)).toHaveLength(0);
 });
 
+test("performance counts error and failed statuses separately from HTTP refusals", async () => {
+  await h.query(`INSERT INTO operation_logs (operation_type, status, error_code) VALUES
+    ('app_failed', 'error', 'http_500'), ('app_failed', 'failed', 'upstream'),
+    ('app_failed', 'error', 'http_402')`);
+  await AdminBoard.computeTab(h.pool, "performance");
+  const snapshot = await AdminBoard.readTab(h.pool, "performance", 7);
+  expect(snapshot.data.byAction.find((x) => x.action === "app_failed")).toMatchObject({ calls: 3, failed: 2, refused: 1 });
+});
+
+test("adoption counts a broker once and recognizes use in the preceding period", async () => {
+  const b = await h.seedBroker("broker");
+  const now = new Date();
+  const day = 86400000;
+  for (const age of [2, 3, 9]) {
+    await h.query(`INSERT INTO operation_logs (agency_id, broker_id, operation_type, status, created_at)
+      VALUES ($1, $2, 'app_unit_create', 'success', $3)`, [b.agency_id, b.id, new Date(now.getTime() - age * day)]);
+  }
+  await AdminBoard.computeTab(h.pool, "overview", now);
+  const snapshot = await AdminBoard.readTab(h.pool, "overview", 7);
+  expect(snapshot.data.adoption.features.find((r) => r.feature === "unit_saved"))
+    .toMatchObject({ brokers: 1, agencies: 1, returned: 1 });
+});
+
 test("the nightly job computes every tab for every period", async () => {
   const job = AdminBoard.adminBoardJob();
   expect(job.name).toBe("admin_board_nightly");
