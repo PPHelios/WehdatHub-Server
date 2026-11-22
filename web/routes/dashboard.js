@@ -461,9 +461,9 @@ function creditsSection(o, lang) {
     (p) => html`<tr data-credit-plan="${p.id}"><td dir="ltr">${p.id}</td>
     <td><input name="p_${p.id}_name_ar" value="${p.name_ar}" maxlength="40" required></td><td><input name="p_${p.id}_name_en" value="${p.name_en}" maxlength="40" required></td>
     <td>${num(`p_${p.id}_price`, p.price_egp)}</td><td>${num(`p_${p.id}_seats`, p.seats)}</td><td>${num(`p_${p.id}_units`, p.units)}</td><td>${num(`p_${p.id}_credits`, p.credits)}</td>
-    <td>${p.id === "free" || p.id === "trial" ? "—" : html`<input name="p_${p.id}_prices" value="${Credits.pricesText(p.prices)}" size="22" dir="ltr" placeholder="1:199, 6:1075, 12:1990" data-plan-prices="${p.id}">`}</td>
+    <td>${p.id === "free" || Plans.isTrialPlan(p.id) ? "—" : html`<input name="p_${p.id}_prices" value="${Credits.pricesText(p.prices)}" size="22" dir="ltr" placeholder="1:199, 6:1075, 12:1990" data-plan-prices="${p.id}">`}</td>
     <td>${p.cost_egp}</td><td>${p.price_egp ? pct(p.margin) : "—"}</td>
-    <td>${p.id === "free" ? "✔" : p.id === "trial" ? "—" : html`<input type="checkbox" name="p_${p.id}_active" value="on"${p.active ? html` checked` : ""}>`}</td></tr>`
+    <td>${p.id === "free" ? "✔" : Plans.isTrialPlan(p.id) ? "—" : html`<input type="checkbox" name="p_${p.id}_active" value="on"${p.active ? html` checked` : ""}>`}</td></tr>`
   )}</tbody></table></div>
   <details><summary>➕ ${L(lang, "باقة جديدة", "Add a plan")}</summary><div class="row">
     <label>ID <input name="new_id" maxlength="20" pattern="[a-z0-9_]+" placeholder="team"></label>

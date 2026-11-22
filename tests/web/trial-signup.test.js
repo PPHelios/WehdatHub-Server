@@ -13,6 +13,7 @@ const { createHarness, closeHarness } = require("../harness/app");
 const { signIn } = require("../harness/web");
 const { resetConfig } = require("../../config");
 const WebAuth = require("../../lib/webAuth");
+const Credits = require("../../services/credits");
 const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
@@ -91,6 +92,42 @@ test("happy path: form -> Telegram link -> own contact -> approved trial agency,
   expect((await me.get(`/app/login/confirm?t=${url[1]}`)).status).toBe(200);
 });
 
+test("Team trial keeps its plan after hydration and offers four teammate seats", async () => {
+  await Credits.refresh(h.pool);
+  expect(Plans.PLANS.map((plan) => plan.id)).not.toContain("trial_team");
+  const invalid = await submit({ tier: "team", consent: "" });
+  expect(invalid.res.text).toContain('value="team" checked');
+  const { token } = await submit({ tier: "team" });
+  await botStart(8812, token);
+  await h.tg(8812, contact("+201055556666", 8812));
+  const [agency] = await h.query("SELECT id, plan, trial_ends_at FROM agencies WHERE name = 'Delta Homes'");
+  expect(agency.plan).toBe("trial_team");
+  expect(await Billing.allowance(h.pool, agency.id)).toMatchObject({
+    source: "trial", seats: { limit: 5 }, units: { limit: 50 }, credits: { limit: 200 }
+  });
+  const [owner] = await h.query("SELECT id, agency_id FROM brokers WHERE agency_id = $1", [agency.id]);
+  const { agent, csrf } = await signIn(h, owner);
+  const invite = (i) => agent.post("/app/team/invite").type("form").send({
+    _csrf: csrf, name: 'Colleague', phone: '0109988776' + i, role: "broker"
+  });
+  for (let i = 0; i < 3; i++) expect((await invite(i)).status).toBe(200);
+  const lastSeat = await Promise.all([invite(3), invite(4)]);
+  expect(lastSeat.map((res) => res.status).sort()).toEqual([200, 402]);
+
+  const end = new Date(agency.trial_ends_at);
+  const pending = { ...agency, pending_plan_at: new Date(end.getTime() - DAY) };
+  expect(Billing.effectivePlan(pending, new Date(end.getTime() + DAY))).toMatchObject({
+    source: "readonly", plan: { id: "trial_team" }, paused: true
+  });
+  expect(Billing.effectivePlan(agency, new Date(end.getTime() + 8 * DAY))).toMatchObject({
+    source: "blocked", plan: { id: "trial_team" }
+  });
+  expect(Billing.effectivePlan({ ...agency, plan: "team" })).toMatchObject({ source: "trial", plan: { id: "trial" } });
+  expect(Billing.effectivePlan({ ...agency, plan: "team", paid_until: new Date(end.getTime() + 30 * DAY) })).toMatchObject({
+    source: "paid", plan: { id: "team" }
+  });
+});
+
 test("a wrong number is refused and counts an attempt; the right one still works", async () => {
   const { token } = await submit();
   await botStart(8803, token);
@@ -118,7 +155,7 @@ test("one trial per phone ever: reuse is refused with a plans/contact message, a
   await botStart(8805, token);
   await h.tg(8805, contact("+201055556666", 8805));
   const [a] = await h.query("SELECT id FROM agencies WHERE name = 'Delta Homes'");
-  const again = await submit({ agency: "Second Try", name: "Omar" });
+  const again = await submit({ agency: "Second Try", name: "Omar", tier: "team" });
   expect(again.res.status).toBe(400);
   expect(again.res.text).toMatch(/already used its free trial/);
   expect(again.res.text).toContain("#plans");
@@ -142,7 +179,7 @@ test("one trial per Telegram account ever: the same Telegram id with another num
   await h.tg(8806, contact("+201055556666", 8806));
   const [a] = await h.query("SELECT id FROM agencies WHERE name = 'Delta Homes'");
   await h.query("UPDATE brokers SET is_active = false, telegram_user_id = NULL WHERE agency_id = $1", [a.id]); // deactivated and unlinked
-  const second = await submit({ agency: "Other Co", phone: "01166667777" });
+  const second = await submit({ agency: "Other Co", phone: "01166667777", tier: "team" });
   expect(second.res.status).toBe(200); // the phone itself is new
   const out = await botStart(8806, second.token);
   expect(texts(out)).toMatch(/already used its free trial/);

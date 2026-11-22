@@ -57,8 +57,8 @@ async function start(pool, input = {}, { now = new Date(), username = getConfig(
   const token = TOKEN_PREFIX + crypto.randomBytes(24).toString("base64url");
   await pool.query("DELETE FROM trial_signups WHERE phone_e164 = $1 AND used_at IS NULL", [`+${digits}`]);
   await pool.query(
-    "INSERT INTO trial_signups (token_hash, phone_e164, agency_name, owner_name, lang, referred_by, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    [sha256(token), `+${digits}`, agencyName, name, lang, referrer ? referrer.id : null, new Date(now.getTime() + TTL_MS).toISOString()]
+    "INSERT INTO trial_signups (token_hash, phone_e164, agency_name, owner_name, lang, referred_by, expires_at, tier) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+    [sha256(token), `+${digits}`, agencyName, name, lang, referrer ? referrer.id : null, new Date(now.getTime() + TTL_MS).toISOString(), input.tier === "team" ? "team" : "solo"]
   );
   return { ok: true, token, url: TgLink.startLink(username, token), phone: `+${digits}` };
 }
@@ -110,7 +110,7 @@ async function verifyContact(pool, contact, ids, { now = new Date() } = {}) {
       const { rows: a } = await client.query(
         `INSERT INTO agencies (name, plan, pilot, approval, trial_ends_at, signed_up_at, referred_by) VALUES ($1, $2, false, 'approved', $3, $4, $5)
          RETURNING id, name, slug, trial_ends_at`,
-        [s.agency_name, Plans.TRIAL.plan, trialEnds, now.toISOString(), s.referred_by]
+        [s.agency_name, s.tier === "team" ? "trial_team" : Plans.TRIAL.plan, trialEnds, now.toISOString(), s.referred_by]
       );
       const { rows: b } = await client.query(
         `INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active, telegram_user_id, telegram_chat_id, telegram_linked_at)

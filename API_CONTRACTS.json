@@ -533,6 +533,7 @@
     },
     "domain/plans.js": {
       "TRIAL_TEAM_SEATS": "Number",
+      "isTrialPlan": ["id"],
       "TRIAL_PHOTO_CAP": "Number",
       "UNLIMITED": "Number",
       "unitLimitText": ["limit", "lang"],

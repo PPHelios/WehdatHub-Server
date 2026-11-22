@@ -174,8 +174,8 @@ function landingBody(lang, { telegramUrl, form, signupOpen, actions = [] }) {
   </div></div>
   <p class="muted small lp-plan-note">${T(
     lang,
-    `أول ${num(Plans.TRIAL.days, lang)} يوم تجربة مجانية (مستخدم واحد، ${num(Plans.TRIAL.units, lang)} وحدة، ${num(Plans.TRIAL.credits, lang)} رصيد ذكاء اصطناعي)، من غير كارت. رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. سولو وفريق: ابدأ بنفسك. المكاتب (١٥ مستخدم فأكتر) والإنتربرايز (٥٠+): احجز عرض مباشر. بياناتك مش بتتمسح أبداً.`,
-    `The first ${Plans.TRIAL.days} days are a free trial (1 user, ${Plans.TRIAL.units} units, ${Plans.TRIAL.credits} AI credits), no card. Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Solo and Team: start on your own. Offices (15+ seats) and Enterprise (50+): book a live demo. Your data is never deleted.`
+    `أول ${num(Plans.TRIAL.days, lang)} يوم تجربة مجانية لسولو أو فريق، من غير كارت. رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. سولو وفريق: ابدأ بنفسك. المكاتب (١٥ مستخدم فأكتر) والإنتربرايز (٥٠+): احجز عرض مباشر. بياناتك مش بتتمسح أبداً.`,
+    `The first ${Plans.TRIAL.days} days are a free trial for Solo or Team, no card. Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Solo and Team: start on your own. Offices (15+ seats) and Enterprise (50+): book a live demo. Your data is never deleted.`
   )}</p>
 </section>
 ${creditTable(actions, lang)}

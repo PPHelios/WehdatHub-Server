@@ -1916,7 +1916,8 @@ CREATE TABLE IF NOT EXISTS public.trial_signups (
   attempts smallint DEFAULT 0 NOT NULL,
   expires_at timestamp with time zone NOT NULL,
   used_at timestamp with time zone,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  tier text DEFAULT 'solo'::text NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.chat_import_decisions (
@@ -2379,6 +2380,7 @@ ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_agency_name_check CHECK (
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_owner_name_check CHECK (((length(owner_name) >= 1) AND (length(owner_name) <= 80)));
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_phone_e164_check CHECK ((length(phone_e164) <= 20));
+ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_tier_check CHECK ((tier = ANY (ARRAY['solo'::text, 'team'::text])));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text, 'rename_requested'::text, 'rename_approved'::text, 'rename_rejected'::text])));
 ALTER TABLE unit_photo_uploads ADD CONSTRAINT unit_photo_uploads_key_check CHECK (((length(key) >= 8) AND (length(key) <= 64)));

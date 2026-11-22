@@ -87,11 +87,12 @@ function effectivePlan(agency, now = new Date()) {
     return { plan: own && own.seats >= office.seats ? own : office, source: "pilot", until: null };
   }
   if (agency.paid_until && new Date(agency.paid_until) > now) return { plan: Plans.planById(agency.plan) || Plans.FREE, source: "paid", until: new Date(agency.paid_until) };
-  if (agency.trial_ends_at && new Date(agency.trial_ends_at) > now) return { plan: Plans.planById(Plans.TRIAL.plan), source: "trial", until: new Date(agency.trial_ends_at) };
+  const trialPlan = Plans.planById(Plans.isTrialPlan(agency.plan) ? agency.plan : Plans.TRIAL.plan);
+  if (agency.trial_ends_at && new Date(agency.trial_ends_at) > now) return { plan: trialPlan, source: "trial", until: new Date(agency.trial_ends_at) };
   // The Free plan is retired for an agency that ever had a trial or paid period; one with neither keeps it.
   const l = ladderOf(agency, now);
   if (!l) return { plan: Plans.FREE, source: "free", until: null };
-  const plan = (l.kind === "trial" ? Plans.planById(Plans.TRIAL.plan) : Plans.planById(agency.plan)) || Plans.FREE;
+  const plan = (l.kind === "trial" ? trialPlan : Plans.planById(agency.plan)) || Plans.FREE;
   const info = { kind: l.kind, end: l.end, readonlyStarts: l.graceEnd, blockedStarts: l.readonlyEnd, paused: l.paused };
   if (l.phase === "trial") return { plan, source: "trial", until: l.end, ...info };
   return { plan, source: l.phase, until: l.phase === "grace" ? l.graceEnd : l.phase === "readonly" ? l.readonlyEnd : null, ...info };

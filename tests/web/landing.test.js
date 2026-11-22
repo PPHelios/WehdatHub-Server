@@ -50,7 +50,7 @@ test("Arabic by default, English with ?lang=en and no Arabic left; plans, Telegr
   expect(en.text).toContain("https://t.me/Wehdat_Hub_bot");
   // Each card shows its cheapest period (Agency has no monthly price); the trial is described, not a plan card.
   for (const p of Plans.PLANS) expect(en.text).toMatch(new RegExp(`data-plan="${p.id}"[\\s\\S]*?${Plans.priceFor(p, Plans.periodsOf(p)[0]).toLocaleString("en-US")} EGP`));
-  expect(en.text).toContain("The first 14 days are a free trial (1 user, 50 units, 80 AI credits)");
+  expect(en.text).toContain("The first 14 days are a free trial for Solo or Team");
   expect(en.text).not.toContain("on the Office plan");
   expect(ar.text).not.toContain("على باقة المكتب");
   expect(en.text).toContain("2500 for 899 EGP");

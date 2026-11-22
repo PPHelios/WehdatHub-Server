@@ -39,13 +39,25 @@ function signupForm(lang, { error, values = {} } = {}) {
   <div class="auth-head">
     <span class="auth-mark" aria-hidden="true">${MARK}</span>
     <h1>${L(lang, "سجّل شركتك", "Sign up your agency")}</h1>
-    <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية من غير كارت ومن غير موافقة: مستخدم واحد، ${Plans.TRIAL.units} وحدة، و${Plans.TRIAL.credits} رصيد ذكاء اصطناعي. بتتأكد من رقمك على تيليجرام في ثواني. بعدها تختار باقة، وبياناتك مش بتتمسح أبداً.`, `A ${Plans.TRIAL.days}-day free trial with no card and no approval: 1 user, ${Plans.TRIAL.units} units and ${Plans.TRIAL.credits} AI credits. You confirm your number on Telegram in seconds. Then pick a plan; your data is never deleted.`)}</p>
+    <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية من غير كارت ومن غير موافقة. بتتأكد من رقمك على تيليجرام في ثواني. بعدها تختار باقة، وبياناتك مش بتتمسح أبداً.`, `A ${Plans.TRIAL.days}-day free trial with no card and no approval. You confirm your number on Telegram in seconds. Then pick a plan; your data is never deleted.`)}</p>
     <p class="muted">${L(lang, "مكتب من ١٥ بروكر أو أكتر؟ احجز عرض مباشر بدل التجربة الذاتية.", "An office of 15+ brokers? Book a live demo instead of the self-serve trial.")} <a href="/?lang=${lang}#try">${L(lang, "احجز عرض مباشر", "Book a live demo")}</a></p>
   </div>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}${error === "trial_used" ? html` <a href="/?lang=${lang}#plans">${L(lang, "الباقات", "Plans")}</a> · <a href="/?lang=${lang}#try">${L(lang, "تواصل معنا", "Contact us")}</a>` : ""}</p>` : ""}
   <label>${L(lang, "اسم الشركة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
   <label>${L(lang, "اسمك", "Your name")} <input name="name" required maxlength="80" autocomplete="name" value="${values.name || ""}"></label>
   <label>${L(lang, "موبايلك (هو اللي هتدخل بيه)", "Your mobile (you'll sign in with it)")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="20" value="${values.phone || ""}"></label>
+  <fieldset class="trial-choices stack">
+    <legend>${L(lang, "اختار التجربة", "Choose your trial")}</legend>
+    ${[["solo", Plans.TRIAL.plan], ["team", "trial_team"]].map(([tier, id]) => {
+      const plan = Plans.planById(id);
+      return html`<label class="trial-choice">
+        <input type="radio" name="tier" value="${tier}"${(values.tier || "solo") === tier ? html` checked` : ""}>
+        <span><strong>${tier === "solo" ? L(lang, "شغال لوحدي (سولو)", "Solo Trial") : L(lang, "معايا فريق", "Team Trial")}</strong>
+          <small>${L(lang, `${plan.seats} مستخدم · ${plan.units} وحدة · ${plan.credits} رصيد ذكاء اصطناعي`, `${plan.seats} ${plan.seats === 1 ? "user" : "users"} · ${plan.units} units · ${plan.credits} AI credits`)}</small>
+        </span>
+      </label>`;
+    })}
+  </fieldset>
   <label>${L(lang, "كود دعوة من شركة تانية (اختياري)", "Invite code from another agency (optional)")} <input name="referral" maxlength="12" dir="ltr" autocapitalize="characters" autocomplete="off" value="${values.referral || ""}"></label>
   ${values.referral ? html`<p class="muted">🎁 ${L(lang, "لما تدفع أول باقة، إنت والشركة اللي دعتك تاخدوا شهر مجاني.", "When you pay for your first plan, you and the agency that invited you each get a free month.")}</p>` : ""}
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
@@ -76,7 +88,7 @@ function register(web, { pool, page }) {
   web.post("/signup", async (req, res) => {
     const lang = req.lang;
     const body = req.body || {};
-    const values = { agency: String(body.agency || "").slice(0, 120), name: String(body.name || "").slice(0, 80), phone: String(body.phone || "").slice(0, 20), referral: Referrals.normalize(body.referral) };
+    const values = { agency: String(body.agency || "").slice(0, 120), name: String(body.name || "").slice(0, 80), phone: String(body.phone || "").slice(0, 20), referral: Referrals.normalize(body.referral), tier: body.tier === "team" ? "team" : "solo" };
     const again = (error, status) => page(req, res, { title: title(lang), langSwitch: true, body: signupForm(lang, { error, values }) }, status);
     if (!(await Signup.isOpen(pool))) return page(req, res, { title: title(lang), langSwitch: true, body: closedPage(lang) }, 403);
     if (body.website) return res.redirect(303, "/app/signup");

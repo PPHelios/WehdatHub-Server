@@ -239,11 +239,11 @@ async function savePlans(db, body = {}) {
     const name_ar = text(k("name_ar"));
     const name_en = text(k("name_en"));
     // The period prices: a form without the field keeps the table; the field present (even empty) replaces it. Free and trial are never sold.
-    const prices = k("prices") === undefined ? undefined : p.id === "free" || p.id === "trial" ? {} : parsePrices(k("prices"));
+    const prices = k("prices") === undefined ? undefined : p.id === "free" || Plans.isTrialPlan(p.id) ? {} : parsePrices(k("prices"));
     if ([price, seats, units, credits].includes(null) || !name_ar || !name_en || prices === null) return { error: "plan", id: p.id };
     await db.query(
       "UPDATE credit_plans SET name_ar = $2, name_en = $3, price_egp = $4, seats = $5, units = $6, credits = $7, active = $8, prices = COALESCE($9::jsonb, prices), updated_at = NOW() WHERE id = $1",
-      [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : p.id === "trial" ? false : k("active") === "on", prices === undefined ? null : JSON.stringify(prices)]
+      [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : Plans.isTrialPlan(p.id) ? false : k("active") === "on", prices === undefined ? null : JSON.stringify(prices)]
     );
   }
   if (text(body.new_id)) {

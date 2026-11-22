@@ -32,6 +32,34 @@ afterAll(async () => {
   await closeHarness();
 });
 
+test.each([["en", "ltr"], ["ar", "rtl"]])("trial picker fits and keeps the selection on mobile in %s", async (lang, dir) => {
+  const Signup = require("../../services/signup");
+  await Signup.setOpen(h.pool, true);
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 } });
+  try {
+    const pg = await ctx.newPage();
+    await pg.goto(`${BASE}/app/signup?lang=${lang}`);
+    const form = pg.locator("#signup");
+    const solo = form.locator('input[name=tier][value=solo]');
+    const team = form.locator('input[name=tier][value=team]');
+    expect(await form.evaluate((el) => getComputedStyle(el).direction)).toBe(dir);
+    expect(await solo.isChecked()).toBe(true);
+    await team.check();
+    expect(await solo.isChecked()).toBe(false);
+    expect(await team.evaluate((el) => el.closest("label").scrollWidth <= el.closest("label").clientWidth)).toBe(true);
+    await form.locator('[name=agency]').fill("Delta Homes");
+    await form.locator('[name=name]').fill("Omar");
+    await form.locator('[name=phone]').fill("12345");
+    await form.locator('[name=consent]').check();
+    await Promise.all([pg.waitForNavigation(), form.locator('button[type=submit]').click()]);
+    expect(await form.getByRole("alert").isVisible()).toBe(true);
+    expect(await team.isChecked()).toBe(true);
+  } finally {
+    await ctx.close();
+    await Signup.setOpen(h.pool, false);
+  }
+});
+
 const unit = async (code) => (await h.query("SELECT * FROM listings WHERE code = $1", [code]))[0];
 const countLike = async (prefix) => (await h.query("SELECT count(*)::int AS n FROM listings WHERE code LIKE $1", [`${prefix}%`]))[0].n;
 

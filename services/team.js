@@ -7,6 +7,7 @@
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const Phone = require("../domain/phone");
+const { withTransaction } = require("../lib/db");
 const TgLink = require("../lib/tgLink");
 const Brokers = require("./brokers");
 const Leads = require("./leads");
@@ -91,6 +92,14 @@ async function startLinkFor(pool, manager, brokerId, { username = getConfig().te
   return { url: TgLink.startLink(username, await TgLink.issueLinkToken(pool, broker)), broker };
 }
 
+// Keep the seat check and the write in the same transaction as other seat changes.
+function withSeatLock(pool, agencyId, work) {
+  return withTransaction(pool, async (client) => {
+    await client.query("SELECT 1 FROM agencies WHERE id = $1 FOR UPDATE", [agencyId]);
+    return work(client);
+  });
+}
+
 /**
  * Adds a broker to the manager's agency (or reactivates one of theirs with that mobile) and returns their start link.
  * @param {Object} input - { name, phone, role, lang }
@@ -109,28 +118,28 @@ async function invite(pool, manager, input = {}, opts = {}) {
   // Only the agency owner adds managers; managers add brokers.
   if (role === "manager" && !isAgencyOwner(manager)) return { error: "forbidden" };
   const lang = input.lang === "en" ? "en" : "ar";
-  const { rows: found } = await pool.query("SELECT id, agency_id, role, is_active FROM brokers WHERE phone_normalized = $1", [digits]);
-  let brokerId;
-  let created = false;
-  if (found[0] && found[0].agency_id !== manager.agency_id) return { error: "phone_taken" };
-  if (found[0] && !mayActOn(manager, found[0].role)) return { error: "rank" };
-  // Someone already active on the team is never renamed or re-roled by an invite (it only brings back a deactivated member).
-  if (found[0] && found[0].is_active) return { error: "already_member" };
-  // A new or returning broker takes a seat; the plan's seats are the ceiling (existing ones are never removed).
-  if (!found[0]?.is_active && !(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
-  if (found[0]) {
-    // One of ours: bring them back; an admin or owner keeps their role.
-    const keep = !ADD_ROLES.includes(String(found[0].role || "").toLowerCase());
-    await pool.query("UPDATE brokers SET name = $2, role = CASE WHEN $4 THEN role ELSE $3 END, is_active = true, deactivated_at = NULL WHERE id = $1", [found[0].id, name, role, keep]);
-    brokerId = found[0].id;
-  } else {
-    const { rows } = await pool.query(
+  const result = await withSeatLock(pool, manager.agency_id, async (client) => {
+    const { rows: found } = await client.query("SELECT id, agency_id, role, is_active FROM brokers WHERE phone_normalized = $1", [digits]);
+    if (found[0] && found[0].agency_id !== manager.agency_id) return { error: "phone_taken" };
+    if (found[0] && !mayActOn(manager, found[0].role)) return { error: "rank" };
+    // Someone already active on the team is never renamed or re-roled by an invite (it only brings back a deactivated member).
+    if (found[0] && found[0].is_active) return { error: "already_member" };
+    // A new or returning broker takes a seat; the plan's seats are the ceiling (existing ones are never removed).
+    if (!(await Billing.seatAvailable(client, manager.agency_id))) return { error: "seats" };
+    if (found[0]) {
+      // One of ours: bring them back; an admin or owner keeps their role.
+      const keep = !ADD_ROLES.includes(String(found[0].role || "").toLowerCase());
+      await client.query("UPDATE brokers SET name = $2, role = CASE WHEN $4 THEN role ELSE $3 END, is_active = true, deactivated_at = NULL WHERE id = $1", [found[0].id, name, role, keep]);
+      return { brokerId: found[0].id, created: false };
+    }
+    const { rows } = await client.query(
       `INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active) VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
       [manager.agency_id, digits, name, role, lang]
     );
-    brokerId = rows[0].id;
-    created = true;
-  }
+    return { brokerId: rows[0].id, created: true };
+  });
+  if (result.error) return result;
+  const { brokerId, created } = result;
   forgetWorkspace(manager.agency_id);
   const link = await startLinkFor(pool, manager, brokerId, opts);
   const { rows: b } = await pool.query("SELECT id, name, role, phone_number, preferred_lang FROM brokers WHERE id = $1", [brokerId]);
@@ -155,33 +164,28 @@ async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
  * (services/leads.js restoreBrokerLeads: not the ones a manager reassigned since). Returns { ok, broker, restored } | { error }.
  */
 async function undoDeactivate(pool, manager, brokerId, { now = new Date() } = {}) {
-  if (!isManager(manager)) return { error: "forbidden" };
-  if (!UUID_RE.test(String(brokerId || ""))) return { error: "not_found" };
-  const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
-  const b = rows[0];
-  if (!b) return { error: "not_found" };
-  if (!mayActOn(manager, b.role)) return { error: "rank" };
-  if (!b.is_active) {
-    if (!(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
-    await pool.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
-  }
+  const result = await reactivate(pool, manager, brokerId);
+  if (result.error) return result;
   const { count } = await Leads.restoreBrokerLeads(pool, manager.agency_id, brokerId, { actorId: manager.id, now });
-  return { ok: true, broker: b, restored: count };
+  return { ...result, restored: count };
 }
 
 /** Brings a deactivated broker back with the same role (a seat must be free). Their old leads stay with the managers. */
 async function reactivate(pool, manager, brokerId) {
   if (!isManager(manager)) return { error: "forbidden" };
   if (!UUID_RE.test(String(brokerId || ""))) return { error: "not_found" };
-  const { rows } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
-  const b = rows[0];
-  if (!b) return { error: "not_found" };
-  if (!mayActOn(manager, b.role)) return { error: "rank" };
-  if (b.is_active) return { ok: true, broker: b };
-  if (!(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
-  await pool.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
-  forgetWorkspace(manager.agency_id);
-  return { ok: true, broker: b };
+  const result = await withSeatLock(pool, manager.agency_id, async (client) => {
+    const { rows } = await client.query("SELECT id, name, role, is_active FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+    const b = rows[0];
+    if (!b) return { error: "not_found" };
+    if (!mayActOn(manager, b.role)) return { error: "rank" };
+    if (b.is_active) return { ok: true, broker: b };
+    if (!(await Billing.seatAvailable(client, manager.agency_id))) return { error: "seats" };
+    await client.query("UPDATE brokers SET is_active = true, deactivated_at = NULL WHERE id = $1", [brokerId]);
+    return { ok: true, broker: b };
+  });
+  if (result.ok) forgetWorkspace(manager.agency_id);
+  return result;
 }
 
 /**
