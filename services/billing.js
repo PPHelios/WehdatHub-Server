@@ -87,7 +87,8 @@ function effectivePlan(agency, now = new Date()) {
     return { plan: own && own.seats >= office.seats ? own : office, source: "pilot", until: null };
   }
   if (agency.paid_until && new Date(agency.paid_until) > now) return { plan: Plans.planById(agency.plan) || Plans.FREE, source: "paid", until: new Date(agency.paid_until) };
-  const trialPlan = Plans.planById(Plans.isTrialPlan(agency.plan) ? agency.plan : Plans.TRIAL.plan);
+  const baseTrial = Plans.planById(Plans.isTrialPlan(agency.plan) ? agency.plan : Plans.TRIAL.plan);
+  const trialPlan = agency.trial_ai_credits == null ? baseTrial : { ...baseTrial, credits: agency.trial_ai_credits };
   if (agency.trial_ends_at && new Date(agency.trial_ends_at) > now) return { plan: trialPlan, source: "trial", until: new Date(agency.trial_ends_at) };
   // The Free plan is retired for an agency that ever had a trial or paid period; one with neither keeps it.
   const l = ladderOf(agency, now);
@@ -105,7 +106,7 @@ async function agencyRow(db, agencyId) {
   const { rows } = await db.query(
     `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.grace_extra_until, a.signed_up_at, a.created_at,
             a.extra_seats, a.locked_prices, a.lock_until, a.founding_partner,
-            a.manager_can_renew_plan, a.manager_can_buy_credits,
+            a.manager_can_renew_plan, a.manager_can_buy_credits, a.trial_ai_credits,
             (SELECT p.months FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'confirmed'
               ORDER BY p.confirmed_at DESC NULLS LAST LIMIT 1) AS last_months,
             (SELECT min(p.created_at) FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'pending') AS pending_plan_at
@@ -144,7 +145,7 @@ async function creditState(db, agency, eff, { now = new Date() } = {}) {
   if (source === "readonly" || source === "blocked") return { used: 0, total: 0, plan: 0, bundles: 0, grants: 0 };
   const [used, pool] = await Promise.all([
     source === "trial" ? Credits.usedThisMonth(db, agency.id, { now, since: trialStart(agency) }) : Credits.usedThisMonth(db, agency.id, { now }),
-    Credits.poolFor(db, agency.id, plan.id, { now })
+    Credits.poolFor(db, agency.id, plan.id, { now, baseCredits: source === "trial" ? agency.trial_ai_credits : undefined })
   ]);
   return { used, total: pool.total, plan: pool.plan, bundles: pool.bundles, grants: pool.grants };
 }

@@ -449,7 +449,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   team_style text DEFAULT 'shared'::text NOT NULL,
   segment_hint text,
   manager_can_renew_plan boolean DEFAULT false NOT NULL,
-  manager_can_buy_credits boolean DEFAULT false NOT NULL
+  manager_can_buy_credits boolean DEFAULT false NOT NULL,
+  trial_ai_credits integer
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -2155,6 +2156,7 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK 
 ALTER TABLE agencies ADD CONSTRAINT agencies_segment_hint_check CHECK (((segment_hint IS NULL) OR (segment_hint = ANY (ARRAY['solo'::text, 'team'::text, 'agency'::text]))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_team_style_check CHECK ((team_style = ANY (ARRAY['shared'::text, 'structured'::text])));
+ALTER TABLE agencies ADD CONSTRAINT agencies_trial_ai_credits_check CHECK ((trial_ai_credits >= 0));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((wa_credits_monthly IS NULL) OR (wa_credits_monthly >= 0)));

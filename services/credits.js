@@ -92,11 +92,11 @@ async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null, 
  * 30 days, and owner grants. A bundle lasts 30 days from its confirmation, so one bought late in a month carries into the
  * next, less what the agency used above its plan's credits in the month it was bought.
  */
-async function poolFor(db, agencyId, planId, { now = new Date() } = {}) {
+async function poolFor(db, agencyId, planId, { now = new Date(), baseCredits } = {}) {
   const plan = (await planById(db, planId)) || (await planById(db, "free"));
   // Each extra seat the platform owner added (agencies.extra_seats) brings its own credits to the monthly pool.
   const { rows: ex } = await db.query("SELECT extra_seats FROM agencies WHERE id = $1", [agencyId]);
-  const base = (plan ? plan.credits : 0) + Plans.EXTRA_SEAT.credits * Number(ex[0]?.extra_seats || 0);
+  const base = (baseCredits ?? plan?.credits ?? 0) + Plans.EXTRA_SEAT.credits * Number(ex[0]?.extra_seats || 0);
   const since = new Date(now.getTime() - 30 * 86400000).toISOString();
   const { rows } = await db.query(
     `SELECT COALESCE(sum(b.credits), 0)::int AS credits, min(p.confirmed_at) AS first

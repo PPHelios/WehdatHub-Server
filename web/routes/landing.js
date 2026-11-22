@@ -46,7 +46,7 @@ const ERRORS = {
   rate: ["طلبات كتير؛ جرب بعد شوية.", "Too many requests; try again later."]
 };
 
-function tryForm(lang, { error, values = {}, sent }) {
+function tryForm(lang, { error, values = {}, sent }, signupOpen) {
   if (sent) {
     return html`<section class="card notice ok lp-try-sent" id="try" role="status">
   <span class="lp-sent-ico" aria-hidden="true">${icon("check", 26)}</span>
@@ -58,9 +58,9 @@ function tryForm(lang, { error, values = {}, sent }) {
     <span class="lp-eyebrow">${icon("spark", 15)} ${T(lang, "للمكاتب الكبيرة", "For larger offices")}</span>
     <h2>${T(lang, "احجز عرض مباشر / كلّم المبيعات", "Book a Live Demo / Contact Sales")}</h2>
     <p class="muted">${T(lang, "للمكاتب (١٥ بروكر أو أكتر): سيب بياناتك وهنعمل لك عرض مباشر لفريقك، وبعده تجربة موجّهة ١٤ يوم لكل الفريق.", "For offices (15+ seats): leave your details and we'll run a live demo for your team, then a guided 14-day pilot for everyone.")}</p>
-    <p class="muted">${T(lang, `فرد أو فريق صغير؟ ابدأ تجربتك المجانية بنفسك: ${num(Plans.TRIAL.days, lang)} يوم، من غير كارت.`, `A solo broker or a small team? Start your own free trial: ${Plans.TRIAL.days} days, no card.`)} <a href="/app/signup?lang=${lang}">${T(lang, "ابدأ التجربة", "Start the trial")}</a></p>
+    ${signupOpen ? html`<p class="muted"><a href="/app/signup?lang=${lang}">${T(lang, "شوف التجارب المتاحة", "See available trials")}</a></p>` : ""}
     <ul class="lp-try-points">
-      <li>${icon("check", 16)} ${T(lang, `${num(Plans.TRIAL.days, lang)} يوم مجاناً، من غير كارت`, `${Plans.TRIAL.days} days free, no card`)}</li>
+      <li>${icon("check", 16)} ${T(lang, `عرض مباشر وتجربة للفريق، من غير كارت`, `Guided demo and team pilot, no card`)}</li>
       <li>${icon("shield", 16)} ${T(lang, "بياناتك محمية ومش بتتمسح أبداً", "Your data stays private and is never deleted")}</li>
       <li>${icon("phone", 16)} ${T(lang, "بنستخدم الرقم بس عشان نكلمك بخصوص العرض.", "We use the number only to call you about the demo.")}</li>
     </ul>
@@ -113,8 +113,7 @@ function landingPrice(p, lang) {
   return html`<div class="price">${num(price, lang)} ${T(lang, "ج.م", "EGP")} <small>/ ${per}</small></div>`;
 }
 
-function landingBody(lang, { telegramUrl, form, signupOpen, actions = [] }) {
-  const trial = Plans.TRIAL.plan || "office";
+function landingBody(lang, { telegramUrl, form, signupOpen, tiers, actions = [] }) {
   return html`<section class="hero lp-hero">
   <div class="lp-hero-grid">
     <div class="lp-hero-copy">
@@ -127,7 +126,7 @@ function landingBody(lang, { telegramUrl, form, signupOpen, actions = [] }) {
         <a class="btn large${telegramUrl || signupOpen ? " secondary" : ""}" href="#try">${T(lang, "احجز عرض مباشر", "Book a live demo")}</a>
       </div>
       <ul class="lp-trust">
-        <li>${icon("check", 15)} ${T(lang, `${num(Plans.TRIAL.days, lang)} يوم ببلاش`, `${Plans.TRIAL.days} days free`)}</li>
+        ${signupOpen ? html`<li>${icon("check", 15)} ${T(lang, "تجربة مجانية من غير كارت", "Free trial with no card")}</li>` : ""}
         <li>${icon("check", 15)} ${T(lang, "من غير كارت", "No card needed")}</li>
         <li>${icon("shield", 15)} ${T(lang, "بياناتك مش بتتمسح", "Data never deleted")}</li>
       </ul>
@@ -152,11 +151,13 @@ function landingBody(lang, { telegramUrl, form, signupOpen, actions = [] }) {
 <section id="plans" class="lp-plans">
   <div class="lp-sec-head">
     <h2>${T(lang, "الباقات (شهري)", "Plans (monthly)")}</h2>
-    <p class="muted">${T(lang, "ابدأ ببلاش واختار الباقة اللي تناسب حجم فريقك.", "Start free and pick the plan that fits your team size.")}</p>
+    <p class="muted">${T(lang, "اختار الباقة اللي تناسب حجم فريقك.", "Pick the plan that fits your team size.")}</p>
   </div>
   <div class="lp-plan-row">${Plans.PLANS.map(
-    (p) => html`<div class="lp-plan${p.id === trial ? " on" : ""}" data-plan="${p.id}">
-    <div class="lp-plan-top"><strong>${Plans.planName(p, lang)}</strong>${p.id === trial ? html`<span class="chip new">${T(lang, "التجربة عليها", "Trial plan")}</span>` : ""}</div>
+    (p) => {
+      const trial = signupOpen && tiers[p.id]?.enabled ? tiers[p.id] : null;
+      return html`<div class="lp-plan" data-plan="${p.id}">
+    <div class="lp-plan-top"><strong>${Plans.planName(p, lang)}</strong></div>
     ${landingPrice(p, lang)}
     <ul>
       <li>${icon("check", 16)} ${p.seats === 1 ? T(lang, "مستخدم واحد", "1 user") : T(lang, `${num(p.seats, lang)} مستخدمين`, `${p.seats} users`)}</li>
@@ -164,8 +165,10 @@ function landingBody(lang, { telegramUrl, form, signupOpen, actions = [] }) {
     </ul>
     ${p.seats >= 15
       ? html`<a class="btn secondary small lp-plan-btn" href="#try" data-plan-cta="demo">${T(lang, "احجز عرض مباشر", "Book a live demo")}</a>`
-      : html`<a class="btn ${p.id === trial ? "" : "secondary "}small lp-plan-btn" href="${signupOpen ? `/app/signup?lang=${lang}` : "#try"}" data-plan-cta="trial">${T(lang, "ابدأ التجربة", "Start trial")}</a>`}
-  </div>`
+      : trial ? html`<p class="muted">${T(lang, `تجربة مجانية ${num(trial.days, lang)} يوم · ${num(trial.credits, lang)} رصيد ذكاء اصطناعي`, `${trial.days}-day free trial · ${num(trial.credits, lang)} AI credits`)}</p>
+      <a class="btn secondary small lp-plan-btn" href="/app/signup?lang=${lang}&tier=${p.id}" data-plan-cta="trial">${T(lang, "ابدأ التجربة", "Start trial")}</a>` : ""}
+  </div>`;
+    }
   )}<div class="lp-plan" data-plan="enterprise">
     <div class="lp-plan-top"><strong>${T(lang, "إنتربرايز", "Enterprise")}</strong></div>
     <div class="price">${T(lang, "٥٠+ مستخدم", "50+ seats")}</div>
@@ -174,8 +177,8 @@ function landingBody(lang, { telegramUrl, form, signupOpen, actions = [] }) {
   </div></div>
   <p class="muted small lp-plan-note">${T(
     lang,
-    `أول ${num(Plans.TRIAL.days, lang)} يوم تجربة مجانية لسولو أو فريق، من غير كارت. رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. سولو وفريق: ابدأ بنفسك. المكاتب (١٥ مستخدم فأكتر) والإنتربرايز (٥٠+): احجز عرض مباشر. بياناتك مش بتتمسح أبداً.`,
-    `The first ${Plans.TRIAL.days} days are a free trial for Solo or Team, no card. Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Solo and Team: start on your own. Offices (15+ seats) and Enterprise (50+): book a live demo. Your data is never deleted.`
+    `رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. المكاتب (١٥ مستخدم فأكتر) والإنتربرايز (٥٠+): احجز عرض مباشر. بياناتك مش بتتمسح أبداً.`,
+    `Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Offices (15+ seats) and Enterprise (50+): book a live demo. Your data is never deleted.`
   )}</p>
 </section>
 ${creditTable(actions, lang)}
@@ -193,7 +196,8 @@ ${form}
 
 function mountLanding(app, { pool, assets }) {
   const render = async (req, res, lang, form = {}, status = 200) => {
-    const signupOpen = await Signup.isOpen(pool);
+    const { enabled, tiers } = await Signup.trialSettings(pool);
+    const signupOpen = enabled && Object.values(tiers).some((tier) => tier.enabled);
     const actions = await Credits.actions(pool);
     const username = getConfig().telegram.botUsername;
     const telegramUrl = /^[A-Za-z0-9_]{5,32}$/.test(username || "") ? `https://t.me/${username}` : null;
@@ -225,7 +229,7 @@ function mountLanding(app, { pool, assets }) {
   <a class="lp-lang" href="/?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a>
   <a class="btn small" href="/app/">${T(lang, "دخول", "Sign in")}</a>
 </nav>
-${landingBody(lang, { telegramUrl, form: tryForm(lang, form), signupOpen, actions })}`
+${landingBody(lang, { telegramUrl, form: tryForm(lang, form, signupOpen), signupOpen, tiers, actions })}`
           })
         )
       );

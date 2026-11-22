@@ -14,12 +14,43 @@ const { getConfig } = require("../config");
 
 const DAY = 24 * 3600 * 1000;
 
+async function trialSettings(db) {
+  const settings = await Billing.getSetting(db, "signup", { enabled: false });
+  const tiers = Object.fromEntries([["solo", "trial"], ["team", "trial_team"]].map(([tier, id]) => {
+    const plan = Plans.planById(id);
+    const saved = settings.tiers?.[tier];
+    return [tier, {
+      enabled: saved?.enabled ?? true,
+      days: saved?.days ?? Plans.TRIAL.days,
+      credits: saved?.credits ?? plan.credits,
+      seats: plan.seats,
+      units: plan.units
+    }];
+  }));
+  return { enabled: Boolean(settings.enabled), tiers };
+}
+
 async function isOpen(db) {
-  return Boolean((await Billing.getSetting(db, "signup", { enabled: false })).enabled);
+  const { enabled, tiers } = await trialSettings(db);
+  return enabled && (tiers.solo.enabled || tiers.team.enabled);
+}
+
+async function saveTrialSettings(db, body) {
+  const tiers = {};
+  for (const tier of ["solo", "team"]) {
+    const days = body[tier + "_days"];
+    const credits = body[tier + "_credits"];
+    if (typeof days !== "string" || !/^\d+$/.test(days) || Number(days) < 1 || Number(days) > 365
+      || typeof credits !== "string" || !/^\d+$/.test(credits) || Number(credits) > 2147483647) return false;
+    tiers[tier] = { enabled: body[tier + "_enabled"] === "1", days: Number(days), credits: Number(credits) };
+  }
+  await Billing.setSetting(db, "signup", { enabled: body.open === "1", tiers });
+  return true;
 }
 
 async function setOpen(db, enabled) {
-  await Billing.setSetting(db, "signup", { enabled: Boolean(enabled) });
+  const settings = await Billing.getSetting(db, "signup", {});
+  await Billing.setSetting(db, "signup", { ...settings, enabled: Boolean(enabled) });
 }
 
 /**
@@ -95,4 +126,4 @@ async function reject(db, agencyId) {
   return rows[0] ? { ok: true, agency: rows[0] } : { error: "not_pending" };
 }
 
-module.exports = { isOpen, setOpen, submit, pending, approve, reject };
+module.exports = { trialSettings, saveTrialSettings, isOpen, setOpen, submit, pending, approve, reject };
