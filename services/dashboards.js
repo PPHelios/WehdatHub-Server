@@ -106,6 +106,14 @@ async function brokerActivity(pool, agencyId, { since, until = new Date() }) {
  */
 async function agencyDashboard(pool, manager, { days = 30, now = new Date(), brokerId = null, teamLeadId = null } = {}) {
   if (!isManager(manager)) return null;
+  const workspace = manager.workspace;
+  const mode = workspace?.mode || "agency";
+  const { allows } = require("../domain/segments");
+  const reports = { sources: !workspace || allows(workspace, "sources"), winLoss: !workspace || allows(workspace, "winLoss") };
+  if (mode === "solo") {
+    brokerId = null;
+    teamLeadId = null;
+  }
   const period = periodOf(days);
   const since = new Date(now.getTime() - period * DAY);
   const agencyId = manager.agency_id;
@@ -168,12 +176,14 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     sa
   );
   return {
+    mode,
+    reports,
     days: period,
     weekly,
-    sources,
-    team: team.rows,
+    sources: reports.sources ? sources : [],
+    team: mode === "solo" ? [] : team.rows,
     brokerId: who,
-    teamLeads: teamLeads,
+    teamLeads: mode === "solo" ? [] : teamLeads,
     teamLeadId: lead ? lead.id : null,
     teamName: lead ? lead.name : null,
     pipeline,
@@ -181,7 +191,7 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     units: units[0],
     deals: { n: dealRows[0].n, commission: Number(dealRows[0].commission), value: Number(dealRows[0].value) },
     leads,
-    board
+    board: mode === "solo" ? [] : board
   };
 }
 

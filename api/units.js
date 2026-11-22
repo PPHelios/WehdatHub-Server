@@ -181,11 +181,15 @@ function register(api, { pool }) {
       pool.query(`SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2${docsToo ? "" : " AND (role IS NULL OR role NOT IN ('document', 'unrelated'))"} ORDER BY position`, [found.id, broker.agency_id]),
       Authz.canEdit(broker, found) && Rights.mayWrite(pool, broker)
     ]);
+    const canEditColleague = Authz.canEditSharedUnit(broker, found) && await Rights.mayWrite(pool, broker);
     return res.json({
       ...unitView(found),
       ...(await phaseOf(pool, found.subzone_id)),
       mine: found.broker_id === broker.id,
       canEdit: Boolean(mayWrite),
+      canDelete: Authz.canDeleteUnit(broker, found),
+      canEditColleague,
+      ...(canEditColleague ? { colleagueEdit: { version: found.version, description: found.description || "" } } : {}),
       features: found.feature_keys || [],
       images: images.map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), position: i.position }))
     });

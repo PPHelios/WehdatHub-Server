@@ -288,9 +288,27 @@ async function setTeam(pool, manager, brokerId, teamLeadId) {
 async function setTeamStyle(pool, owner, style) {
   if (!isAgencyOwner(owner)) return { error: "forbidden" };
   if (!require("../domain/segments").TEAM_STYLES.includes(String(style))) return { error: "style" };
-  await pool.query("UPDATE agencies SET team_style = $2 WHERE id = $1", [owner.agency_id, String(style)]);
+  const ws = await require("../lib/workspace").stateOf(pool, owner.agency_id);
+  if (ws.tier !== "team") return { error: "plan_feature" };
+  const shared = style === "shared";
+  const settings = { team_workflow_configured: true, brokers_see_all_leads: shared, brokers_work_shared_leads: shared };
+  await pool.query("UPDATE agencies SET team_style = $2, crm_settings = crm_settings || $3::jsonb WHERE id = $1", [owner.agency_id, String(style), JSON.stringify(settings)]);
   forgetWorkspace(owner.agency_id);
   return { ok: true, style: String(style) };
 }
 
-module.exports = { setTeamStyle, INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, undoDeactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };
+async function setCollaboration(pool, owner, changes) {
+  if (!isAgencyOwner(owner)) return { error: "forbidden" };
+  const ws = await require("../lib/workspace").stateOf(pool, owner.agency_id);
+  if (ws.tier !== "team") return { error: "plan_feature" };
+  const settings = {};
+  if (typeof changes.brokersWorkSharedLeads === "boolean") settings.brokers_work_shared_leads = changes.brokersWorkSharedLeads;
+  if (typeof changes.brokersEditColleagueUnits === "boolean") settings.brokers_edit_colleague_units = changes.brokersEditColleagueUnits;
+  if (!Object.keys(settings).length) return { ok: true };
+  await require("./audit").recordStrict(pool, { agencyId: owner.agency_id, brokerId: owner.id, action: "team_collaboration", targetType: "agency", targetId: owner.agency_id, payload: settings });
+  await pool.query("UPDATE agencies SET crm_settings = crm_settings || $2::jsonb WHERE id = $1", [owner.agency_id, JSON.stringify(settings)]);
+  forgetWorkspace(owner.agency_id);
+  return { ok: true };
+}
+
+module.exports = { setTeamStyle, setCollaboration, INVITE_ROLES, ADD_ROLES, listTeam, teamBoard, startLinkFor, invite, deactivate, undoDeactivate, reactivate, remove, inviteText, changeRole, setTeamLeadRole, setTeam };

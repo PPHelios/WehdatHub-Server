@@ -239,6 +239,17 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   }
   web.get("/units", (req, res) => unitsList(req, res));
 
+  web.post("/units/:code/colleague", async (req, res) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing) return res.status(404).send("Not found");
+    const out = await Store.editColleagueUnit(pool, broker, listing, req.body);
+    if (out.forbidden) return res.status(403).send("Not allowed");
+    if (out.conflict) return res.status(409).send("This unit changed. Reload it and try again.");
+    if (out.error) return res.status(422).send(out.error);
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}`);
+  });
+
   // Soft delete from the unit page (keeps 10 days); restore for managers and the owner.
   web.post("/units/:code/delete", async (req, res) => {
     const { broker } = req.session;
@@ -583,6 +594,15 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
   ${listing.details?.owner_lead && Authz.canEdit(broker, listing) && !Authz.isDataEntry(broker) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
   ${!view.hidden && (!Authz.isDataEntry(broker) || (await Owners.dataEntryOwnersOn(pool, broker.agency_id))) ? await unitOwnerBlock(pool, broker, listing, lang, req.session.csrf) : ""}
+  ${Authz.canEditSharedUnit(broker, listing) && await require("../../services/unitRights").mayWrite(pool, broker) ? html`<details class="card"><summary>${L(lang, "عدّل الوحدة", "Edit shared unit")}</summary>
+  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/colleague" class="stack">
+    <input type="hidden" name="_csrf" value="${req.session.csrf}">
+    <input type="hidden" name="version" value="${listing.version}">
+    <label>${L(lang, "السعر", "Price")} <input name="price" type="number" min="0" step="any" value="${listing.price_value ?? ""}"></label>
+    <label>${L(lang, "الوصف", "Description")} <textarea name="description" maxlength="4000">${listing.description || ""}</textarea></label>
+    <label>${L(lang, "الحالة", "Status")} <select name="status">${[["active", "متاحة", "Available"], ["sold", "اتباعت أو اتأجرت", "Sold or rented"], ["archived", "أرشيف", "Archived"]].map(([status, ar, en]) => html`<option value="${status}"${listing.status === status ? html` selected` : ""}>${L(lang, ar, en)}</option>`)}</select></label>
+    <button>${L(lang, "احفظ", "Save")}</button>
+  </form></details>` : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
   <div class="row" id="unit-actions">
@@ -595,7 +615,7 @@ ${pages > 1 ? html`<p class="row between">${pageNo > 0 ? html`<a class="btn seco
       ${listing.status === "active" && !Authz.isDataEntry(broker) ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/flyer">🖼 ${L(lang, "الفلاير", "Flyer")}</a>` : ""}
       ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
       ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "⭐ شيل الـ VIP", "Remove VIP") : L(lang, "⭐ خليها VIP", "Make VIP")}</button></form>` : ""}
-      ${Authz.canEdit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة 10 أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
+      ${Authz.canDeleteUnit(broker, listing) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/delete" class="inline" data-confirm="${L(lang, "تحذف الوحدة؟ المدير يقدر يرجعها لمدة 10 أيام.", "Delete this unit? A manager can restore it for 10 days.")}"><button type="submit" class="secondary">🗑️ ${L(lang, "احذف", "Delete")}</button></form>` : ""}
   </div>
 </article>
 <div class="unit-sections">

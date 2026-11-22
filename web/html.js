@@ -244,7 +244,7 @@ function viewAgencyForm(broker, lang) {
 function brandLink(href, lang, { label = false } = {}) {
   const en = lang === "en";
   const { MARK } = require("./icons");
-  return html`<a class="brand" translate="no" href="${href}"${label ? html` aria-label="${en ? "Wehdat Hub" : "وحدات هب"}"` : ""}>${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>`;
+  return html`<a class="brand" translate="no" href="${href}"${label ? html` aria-label="${en ? "WehdatHub" : "وحدات هب"}"` : ""}>${MARK}${en ? html`<span dir="ltr">Wehdat<b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>`;
 }
 
 /** The light/dark switch of the top bar (web/static/theme.js drives it). */

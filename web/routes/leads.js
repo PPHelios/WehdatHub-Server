@@ -408,6 +408,7 @@ ${tab === "portal" ? portalHtml : rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
+${require("../../lib/authz").canClaimLead(broker, lead) ? html`<form method="post" action="${path}/claim">${hidden}<button>${L(lang, "استلم العميل", "Take lead")}</button></form>` : ""}
 ${flagBox(lead, broker, await Leads.openRequestsOn(pool, broker, lead.id), lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
 <details class="card lead-extra"><summary>⚙️ ${L(lang, "خيارات تانية", "More options")}</summary>
@@ -719,6 +720,7 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
   write("contacted", (req, lead, version) => Leads.markContacted(pool, actor(req), lead.id, { version }), "contacted");
   write("assign", (req, lead, version) => Leads.assignLead(pool, actor(req), lead.id, req.body.broker || null, { version }), "assigned");
+  write("claim", (req, lead, version) => Leads.claimLead(pool, actor(req), lead.id, { version }), "assigned");
   // PDPL (Q9): managers export a client's data (zip, 10 an hour) and erase a client (the last 4 digits).
   web.get("/leads/:ref/export", async (req, res, next) => {
     const { broker } = req.session;

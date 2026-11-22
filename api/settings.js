@@ -5,6 +5,8 @@
 const Authz = require("../lib/authz");
 const Rights = require("../services/unitRights");
 const UnitOwners = require("../services/unitOwners");
+const LeadScope = require("../services/leadScope");
+const Team = require("../services/team");
 const AgencyLogo = require("../services/agencyLogo");
 const { uploads } = require("../web/uploads");
 
@@ -15,7 +17,15 @@ function register(api, { pool }) {
     const owner = Authz.isAgencyOwner(b);
     res.json({
       quietLine: rows[0]?.quiet_line !== false,
-      switches: owner ? { brokersMayWrite: await Rights.brokersMayWrite(pool, b.agency_id), dataEntryOwners: await UnitOwners.dataEntryOwnersOn(pool, b.agency_id) } : null
+      switches: owner ? {
+        brokersMayWrite: await Rights.brokersMayWrite(pool, b.agency_id),
+        dataEntryOwners: await UnitOwners.dataEntryOwnersOn(pool, b.agency_id),
+        brokersSeeAllLeads: await LeadScope.brokersSeeAll(pool, b.agency_id),
+        ...(b.workspace?.tier === "team" && b.workspace.members > 1 ? {
+          brokersWorkSharedLeads: Boolean(b.workspace.brokersWorkSharedLeads),
+          brokersEditColleagueUnits: Boolean(b.workspace.brokersEditColleagueUnits)
+        } : {})
+      } : null
     });
   });
   api.post("/settings", async (req, res) => {
@@ -24,6 +34,12 @@ function register(api, { pool }) {
     if (typeof body.quietLine === "boolean") await pool.query("UPDATE brokers SET quiet_line = $3 WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id, body.quietLine]);
     if (body.switches) {
       if (!Authz.isAgencyOwner(b)) return res.status(403).json({ error: "forbidden" });
+      const { brokersSeeAllLeads, brokersWorkSharedLeads, brokersEditColleagueUnits } = body.switches;
+      if (typeof brokersWorkSharedLeads === "boolean" || typeof brokersEditColleagueUnits === "boolean") {
+        const result = await Team.setCollaboration(pool, b, { brokersWorkSharedLeads, brokersEditColleagueUnits });
+        if (result.error) return res.status(403).json({ error: result.error });
+      }
+      if (typeof brokersSeeAllLeads === "boolean") await LeadScope.setBrokersSeeAll(pool, b, brokersSeeAllLeads);
       if (typeof body.switches.brokersMayWrite === "boolean") await Rights.setBrokersMayWrite(pool, b, body.switches.brokersMayWrite);
       if (typeof body.switches.dataEntryOwners === "boolean") await UnitOwners.setDataEntryOwners(pool, b, body.switches.dataEntryOwners);
     }

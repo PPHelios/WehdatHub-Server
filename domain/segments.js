@@ -44,7 +44,7 @@ const FEATURES = Object.freeze({
   dataEntry: { minTier: "agency", needsPeers: false, ...ALL_SURFACES },
   sources: { minTier: "agency", needsPeers: false, ...ALL_SURFACES },
   winLoss: { minTier: "agency", needsPeers: false, ...ALL_SURFACES },
-  privateUnits: { minTier: "agency", needsPeers: false, ...ALL_SURFACES } // never at team level and below
+  privateUnits: { minTier: "team", needsPeers: false, ...ALL_SURFACES }
 });
 
 /** Does this workspace ({ tier, members }) get the feature? An unknown feature is never allowed. */

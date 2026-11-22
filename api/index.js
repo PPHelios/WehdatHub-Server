@@ -97,6 +97,7 @@ function mountApi(app, { pool }) {
   api.use(withMessages());
   api.use(loadBearer(pool));
   require("./auth").register(api, { pool });
+  require("./bankSmsWebhook").register(api, { pool });
 
   const priv = express.Router();
   priv.use(requireAuth);

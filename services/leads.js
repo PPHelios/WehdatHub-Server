@@ -166,7 +166,9 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
   const lostReason = stage === "lost" ? cleanText(input.lostReason, 200) || "—" : null;
   if (Stages.stageError(stage, lostReason)) return { outcome: "invalid", error: "stage", notified: [] };
   const manager = Authz.isManager(actor);
-  let assignee = manager ? input.assignTo || null : actor.id;
+  const workspace = await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role });
+  const personal = Authz.isAgencyOwner(actor) && workspace.mode === "solo";
+  const assignee = manager ? input.assignTo || (personal ? actor.id : null) : actor.id;
   if (assignee && assignee !== actor.id) {
     const b = await brokerById(pool, actor.agency_id, assignee);
     if (!b || !b.is_active) return { outcome: "invalid", error: "assignee", notified: [] };
@@ -192,7 +194,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
     const existing = found.rows[0];
 
     if (existing) {
-      const claim = !existing.assigned_broker_id && !manager;
+      const claim = !existing.assigned_broker_id && !manager && (!workspace.teamWorkflowConfigured || workspace.teamStyle === "shared");
       if (!claim && !Authz.canViewLead(actor, existing)) {
         await addEvent(client, existing, actor.id, "inquiry", { colleague: true }, now);
         return { outcome: "colleague", lead: existing };
@@ -326,11 +328,18 @@ async function mutate(pool, actor, key, { kind, version = null, manage = false, 
   return out;
 }
 
+const COLLABORATIVE_EVENTS = new Set(["contacted", "stage", "note", "follow_up_set", "follow_up_done"]);
+
 async function mutateInTransaction(pool, actor, key, { kind, version = null, manage = false, now = new Date() }, change) {
+  const sharedWork = !manage && COLLABORATIVE_EVENTS.has(kind);
+  if (sharedWork && !Authz.isManager(actor)) {
+    actor = { ...actor, workspace: await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role }) };
+  }
   return withTransaction(pool, async (client) => {
     const lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
-    if (manage ? !Authz.canManageLeads(actor) : !Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    const allowed = manage ? Authz.canManageLeads(actor) : Authz.canEditLead(actor, lead) || (sharedWork && Authz.canCollaborateLead(actor, lead));
+    if (!allowed) return { error: "forbidden" };
     if (version !== null && version !== undefined && Number(version) !== lead.version) return { conflict: true, lead };
     const c = change(lead);
     if (c.error || c.unchanged) return { ...c, lead };
@@ -370,10 +379,13 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
       if (!x.rows.length) return { error: "unit_not_found" };
     }
   }
+  if (!Authz.isManager(actor)) {
+    actor = { ...actor, workspace: await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role }) };
+  }
   const out = await withTransaction(pool, async (client) => {
     let lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
-    if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    if (!Authz.canEditLead(actor, lead) && !Authz.canCollaborateLead(actor, lead)) return { error: "forbidden" };
     const eventIds = [];
     const kinds = [];
     const step = async (kind, c) => {
@@ -459,6 +471,22 @@ async function assignLead(pool, actor, key, toBrokerId, { version = null, now = 
 }
 
 /** Q4: any stage to any other; lost needs a reason. */
+async function claimLead(pool, actor, key, { version = null, now = new Date() } = {}) {
+  const workspace = await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role });
+  const broker = { ...actor, workspace };
+  return withTransaction(pool, async (client) => {
+    const lead = await loadLead(client, broker.agency_id, key, { forUpdate: true });
+    if (!lead) return { error: "not_found" };
+    if (!Authz.canClaimLead(broker, { ...lead, assigned_broker_id: null })) return { error: "forbidden" };
+    if (lead.assigned_broker_id || (version !== null && Number(version) !== lead.version)) return { conflict: true, lead };
+    const change = {
+      fields: { assigned_broker_id: broker.id, assigned_at: now.toISOString(), response_due_at: null, response_jumps: 0 },
+      data: { from: null, to: broker.id, to_name: broker.name || null }
+    };
+    return { ok: true, ...(await applyChange(client, broker, lead, "assigned", change, now)) };
+  });
+}
+
 async function setStage(pool, actor, key, { stage, lostReason = null, version = null, now = new Date() } = {}) {
   const err = Stages.stageError(stage, lostReason);
   if (err) return { error: err };
@@ -1040,6 +1068,7 @@ module.exports = {
   normalizePhones,
   captureLead,
   assignLead,
+  claimLead,
   setStage,
   addNote,
   flagForManager,

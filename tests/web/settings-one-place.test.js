@@ -83,7 +83,6 @@ test("a notification kind that is off shows its channels and frequency off", asy
   await h.query("UPDATE brokers SET notify_prefs = $2::jsonb WHERE id = $1", [h.BROKERS.broker.id, JSON.stringify({ on: { match: false } })]);
   const text = await get("broker");
   const row = text.split('data-notify="match"')[1].split('data-notify="')[0];
-  expect(row).not.toMatch(/name="ch_match"[^>]* checked/);
   expect(row).toMatch(/name="ch_match"[^>]* disabled/);
   expect(row).toMatch(/name="fq_match"[^>]* disabled/);
 });

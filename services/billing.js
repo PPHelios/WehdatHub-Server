@@ -104,6 +104,7 @@ async function agencyRow(db, agencyId) {
   const { rows } = await db.query(
     `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.grace_extra_until, a.signed_up_at, a.created_at,
             a.extra_seats, a.locked_prices, a.lock_until, a.founding_partner,
+            a.manager_can_renew_plan, a.manager_can_buy_credits,
             (SELECT p.months FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'confirmed'
               ORDER BY p.confirmed_at DESC NULLS LAST LIMIT 1) AS last_months,
             (SELECT min(p.created_at) FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'pending') AS pending_plan_at
@@ -438,7 +439,9 @@ function upgradeQuotes(agency, now = new Date()) {
  * upgrade_pending, amount (see planChangeError and quoteUpgrade).
  */
 async function requestPayment(db, manager, input = {}, { now = new Date() } = {}) {
-  if (!isAgencyOwner(manager)) return { error: "forbidden" };
+  const isOwner = isAgencyOwner(manager);
+  const isMgr = isManager(manager);
+  if (!isOwner && !isMgr) return { error: "forbidden" };
   const kind = input.kind === "credit_bundle" ? "credit_bundle" : input.kind === "upgrade" ? "upgrade" : "plan";
   const months = kind === "plan" ? Number(input.months) : 1;
   const plan = kind === "plan" || kind === "upgrade" ? String(input.plan || "") : null;
@@ -446,6 +449,14 @@ async function requestPayment(db, manager, input = {}, { now = new Date() } = {}
   if (kind !== "upgrade" && !priceOf({ kind, plan, months, bundle })) return { error: "plan" };
   const agency = await agencyRow(db, manager.agency_id);
   if (!agency || agency.approval !== "approved") return { error: "forbidden" };
+  if (!isOwner) {
+    if ((kind === "plan" || kind === "upgrade") && !agency.manager_can_renew_plan) {
+      return { error: "owner_only" };
+    }
+    if (kind === "credit_bundle" && !agency.manager_can_buy_credits) {
+      return { error: "owner_only" };
+    }
+  }
   const eff = effectivePlan(agency, now);
   // Top-ups (and extra seats) need an active plan: not in grace, read-only or blocked. A plan payment is always allowed.
   if (kind === "credit_bundle" && LAPSED.includes(eff.source)) return { error: "lapsed" };
@@ -483,6 +494,34 @@ async function requestPayment(db, manager, input = {}, { now = new Date() } = {}
     }
   }
   throw new Error("Could not allocate a payment reference");
+}
+
+/** The agency owner toggles whether managers can renew the plan or purchase credits. */
+async function updateBillingPermissions(db, owner, agencyId, { managerCanRenewPlan, managerCanBuyCredits }) {
+  if (!isAgencyOwner(owner) || owner.agency_id !== agencyId) return { error: "forbidden" };
+  const sets = [];
+  const args = [agencyId];
+  if (typeof managerCanRenewPlan === "boolean") {
+    args.push(managerCanRenewPlan);
+    sets.push(`manager_can_renew_plan = $${args.length}`);
+  }
+  if (typeof managerCanBuyCredits === "boolean") {
+    args.push(managerCanBuyCredits);
+    sets.push(`manager_can_buy_credits = $${args.length}`);
+  }
+  if (!sets.length) return { ok: true };
+  const { rows } = await db.query(
+    `UPDATE agencies SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1 RETURNING manager_can_renew_plan, manager_can_buy_credits`,
+    args
+  );
+  forgetPlanState(agencyId);
+  return {
+    ok: true,
+    permissions: {
+      managerCanRenewPlan: Boolean(rows[0]?.manager_can_renew_plan),
+      managerCanBuyCredits: Boolean(rows[0]?.manager_can_buy_credits)
+    }
+  };
 }
 
 /**
@@ -792,6 +831,7 @@ module.exports = {
   upgradeQuotes,
   addExtraSeats,
   requestPayment,
+  updateBillingPermissions,
   paymentsOf,
   publicAllowance,
   publicPayment,

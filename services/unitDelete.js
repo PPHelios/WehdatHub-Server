@@ -1,6 +1,6 @@
 // services/unitDelete.js — Soft delete of a unit (migration 075): delete keeps it 10 days, managers and the owner restore it
 // from "Recently deleted", and after 10 days the purge job removes its photos and row, leaving the reference facts in
-// unit_reference. Whoever may edit a unit may delete it (Authz.canEdit); only managers and the owner see and restore.
+// unit_reference. Permission to delete is checked separately from permission to edit.
 "use strict";
 
 const Authz = require("../lib/authz");
@@ -26,13 +26,14 @@ const inTx = (pool, client, fn) => (client ? fn(client) : withTransaction(pool, 
  * `client` that already holds the unit's advisory lock (routes/interactive.js does).
  */
 async function softDelete(pool, actor, listingId, { now = new Date(), client = null } = {}) {
+  const workspace = actor.workspace || await require("../lib/workspace").stateOf(client || pool, actor.agency_id, { role: actor.role });
   return inTx(pool, client, async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))", [String(actor.agency_id), String(listingId)]);
     const r = await lockUnit(c, actor, listingId);
     if (r.error) return r;
     const l = r.listing;
     if (l.status === "deleted") return { error: "already_deleted" };
-    if (!Authz.canEdit(actor, l)) return { error: "forbidden" };
+    if (!Authz.canDeleteUnit({ ...actor, workspace }, l)) return { error: "forbidden" };
     await c.query(
       "UPDATE listings SET status = 'deleted', deleted_at = $2, deleted_by = $3, version = version + 1, updated_at = $2 WHERE id = $1",
       [l.id, now.toISOString(), actor.id]

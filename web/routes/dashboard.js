@@ -78,7 +78,31 @@ function leaseEnds(rows, lang) {
 </section>`;
 }
 
-function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0, unitWarning = "" } = {}) {
+function dashboardTitle(d, lang) {
+  if (d.mode === "solo") return L(lang, "ملخص شغلي", "My summary");
+  if (d.mode === "team") return L(lang, "لوحة الفريق", "Team dashboard");
+  return L(lang, "لوحة الشركة", "Agency dashboard");
+}
+
+function preEndBanner(allowance, lang) {
+  if (!allowance || (allowance.source !== "paid" && allowance.source !== "trial")) return "";
+  const end = allowance.until ? new Date(allowance.until) : null;
+  if (!end) return "";
+  const remainingMs = end.getTime() - Date.now();
+  if (remainingMs <= 0) return "";
+  const daysLeft = Math.ceil(remainingMs / (24 * 3600 * 1000));
+  const isTrial = allowance.source === "trial";
+  const threshold = isTrial ? 3 : 7;
+  if (daysLeft > threshold) return "";
+  const dStr = end.toISOString().slice(0, 10);
+  const daysText = daysLeft === 1 ? L(lang, "فاضل يوم", "1 day left") : daysLeft === 2 ? L(lang, "فاضل يومين", "2 days left") : daysLeft <= 10 ? L(lang, `فاضل ${daysLeft} أيام`, `${daysLeft} days left`) : L(lang, `فاضل ${daysLeft} يوم`, `${daysLeft} days left`);
+  const title = isTrial
+    ? L(lang, `⏳ التجربة المجانية بتخلص ${dStr} (${daysText}). اختار باقة عشان تكمّل.`, `⏳ Your free trial ends on ${dStr} (${daysText}). Pick a plan to carry on.`)
+    : L(lang, `⏳ باقتك بتخلص ${dStr} (${daysText}). جدّدها من صفحة الباقة.`, `⏳ Your plan ends on ${dStr} (${daysText}). Renew it on the Plan page.`);
+  return html`<p class="card notice warn" role="status" data-plan-pre-end><strong>${title}</strong> <a class="button small" href="/app/usage#plan">${L(lang, "صفحة الباقة", "Plan page")}</a></p>`;
+}
+
+function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0, unitWarning = "", planWarning = "" } = {}) {
   const kpi = (label, value, attr) => html`<div class="kpi" data-kpi="${attr}"><span class="muted small">${label}</span><strong>${value}</strong></div>`;
   const q = d.brokerId ? `&broker=${d.brokerId}` : d.teamLeadId ? `&team=${d.teamLeadId}` : "";
   const todo = [
@@ -86,49 +110,58 @@ function agencyPage(d, lang, { team = "", ai = "", settings = "", open = 0, unit
     ["overdue", d.overdue, L(lang, "متابعات متأخرة", "Overdue follow-ups"), "/app/leads?tab=overdue"],
     ["unassigned", d.unassigned, L(lang, "عملاء من غير بروكر", "Leads with no broker"), "/app/leads?broker=none"],
     ["stale", d.units.stale, L(lang, "وحدات محتاجة تأكيد (21 يوم)", "Units to confirm (21 days)"), "/app/units"]
-  ];
+  ].filter(([key]) => key !== "unassigned" || d.mode !== "solo" || d.unassigned > 0);
+  const reportLinks = html`${d.reports.sources ? html`<a class="btn secondary small" href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a>` : ""}${d.reports.winLoss ? html`<a class="btn secondary small" href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a>` : ""}`;
   const maxStage = Math.max(1, ...Object.values(d.pipeline));
   const maxWeek = Math.max(1, ...(d.weekly || []));
-  return html`<h1>${L(lang, "لوحة الشركة", "Agency dashboard")}</h1>
-${unitWarning}
+  return html`<div class="agency-dashboard">
+<header class="agency-dashboard-head">
+<h1>${dashboardTitle(d, lang)}</h1>
 <form method="get" action="/app/dashboard" class="stack" data-dash-filters>
   <nav class="seg" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
     (p) => html`<a href="/app/dashboard?days=${p}${q}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
   )}</nav>
   <input type="hidden" name="days" value="${d.days}">
-  <select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select>
+  ${d.team.length ? html`<select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select>` : ""}
   ${d.teamLeads.length ? html`<select name="team" data-autosubmit aria-label="${L(lang, "فريق تيم ليد", "Team lead's team")}"><option value="">${L(lang, "كل الشركة", "Whole agency")}</option>${d.teamLeads.map((t) => html`<option value="${t.id}"${t.id === d.teamLeadId ? html` selected` : ""}>${L(lang, `فريق ${t.name}`, `${t.name}'s team`)}</option>`)}</select>` : ""}
   <noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript>
 </form>
-<div class="kpis">
+</header>
+${planWarning}
+${unitWarning}
+<div class="kpis agency-dashboard-metrics">
   ${kpi(L(lang, "عملاء جداد", "New leads"), d.leads, "leads")}
   ${kpi(L(lang, "صفقات", "Deals"), d.deals.n, "deals")}
   ${kpi(L(lang, "العمولة", "Commission"), money(d.deals.commission, lang), "commission")}
   ${kpi(L(lang, "وحدات متاحة", "Active units"), d.units.active, "units")}
 </div>
 ${tabs("dash_tab", [
-  [L(lang, "العملاء", "Leads"), html`${todo.some(([, n]) => n)
-  ? html`<section class="card list" id="needs-action"><h2>${L(lang, "محتاج تتصرف", "Needs action")}</h2><ul class="rows">${todo.filter(([, n]) => n).map(
+  [L(lang, "العملاء", "Leads"), html`<div class="agency-dashboard-overview">
+<section class="card list" id="needs-action"><h2>${L(lang, "محتاج تتصرف", "Needs action")}</h2>
+${todo.some(([, n]) => n)
+  ? html`<ul class="rows">${todo.filter(([, n]) => n).map(
       ([k, n, label, href]) => html`<li data-kpi="${k}"><a class="listrow" href="${href}">${label}<b class="chip late">${n}</b></a></li>`
-    )}</ul></section>`
-  : html`<p class="card notice ok" id="needs-action">${L(lang, "مفيش حاجة متأخرة. شغل نضيف.", "Nothing late. Clean work.")}</p>`}
+    )}</ul>`
+  : html`<p class="muted agency-dashboard-clear">${L(lang, "مفيش حاجة محتاجة متابعة دلوقتي.", "Nothing needs your attention right now.")}</p>`}
+</section>
+<section class="card" id="funnel">
+  <h2>${L(lang, "المراحل دلوقتي", "Pipeline now")}</h2>
+  <ul class="funnel">${Stages.STAGES.map((s) => html`<li data-stage="${s}"><a href="/app/leads?tab=${s}">${Stages.stageLabel(s, lang)}</a><progress aria-label="${Stages.stageLabel(s, lang)}" max="${maxStage}" value="${d.pipeline[s]}"></progress><b>${d.pipeline[s]}</b></li>`)}</ul>
+</section>
 ${d.weekly && d.weekly.some(Boolean)
   ? html`<section class="card" id="weekly"><h2>${L(lang, "عملاء جداد كل أسبوع", "New leads per week")}</h2>
   <ol class="bars" aria-label="${L(lang, "آخر 8 أسابيع", "Last 8 weeks")}">${d.weekly.map((n, i) => html`<li title="${n}"><span class="bar" data-h="${Math.round((n * 10) / maxWeek)}"></span><span class="small">${n}</span><span class="muted small">${i === 7 ? L(lang, "ده", "now") : `-${7 - i}`}</span></li>`)}</ol>
 </section>`
   : ""}
-<section class="card" id="funnel">
-  <h2>${L(lang, "المراحل دلوقتي", "Pipeline now")}</h2>
-  <ul class="funnel">${Stages.STAGES.map((s) => html`<li data-stage="${s}"><a href="/app/leads?tab=${s}">${Stages.stageLabel(s, lang)}</a><progress max="${maxStage}" value="${d.pipeline[s]}"></progress><b>${d.pipeline[s]}</b></li>`)}</ul>
-</section>
 ${d.sources && d.sources.length
   ? html`<section class="card" id="top-sources"><h2>${L(lang, "أكتر مصادر العملاء", "Top lead sources")}</h2>
   <ul class="rows">${d.sources.map((x) => html`<li class="listrow">${x.source === "-" ? L(lang, "من غير مصدر", "No source") : Stages.sourceLabel(x.source, lang)}<b>${x.n}</b></li>`)}</ul>
-  <p class="row"><a class="btn secondary small" href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> <a class="btn secondary small" href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>
+  <p class="row">${reportLinks}</p>
 </section>`
-  : html`<p class="row"><a class="btn secondary small" href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> <a class="btn secondary small" href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>`}
+  : d.reports.sources || d.reports.winLoss ? html`<p class="row agency-dashboard-report-links">${reportLinks}</p>` : ""}
+</div>
 `],
-  [L(lang, "الفريق", "Team"), html`<section class="card" id="leaderboard">
+  ...(d.mode === "solo" ? [[L(lang, "شغلي", "My work"), team]] : [[L(lang, "الفريق", "Team"), html`<section class="card" id="leaderboard">
   <h2>${L(lang, `ترتيب البروكرز (آخر ${d.days} يوم)`, `Leaderboard (last ${d.days} days)`)}</h2>
   ${d.board.length
     ? html`<ol class="board">${d.board.map(
@@ -145,10 +178,11 @@ ${d.sources && d.sources.length
       )}</ol>
   <p class="muted small">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = البروكر من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
     : html`<p class="muted">${L(lang, "مفيش نشاط في الفترة دي.", "No activity in this period.")}</p>`}
-</section>${team}`],
+</section>${team}`]]),
   [L(lang, "الذكاء الاصطناعي", "AI use"), html`${ai}`],
   [L(lang, "الإعدادات", "Settings"), html`${settings}`]
-], { open })}`;
+], { open })}
+</div>`;
 }
 
 /** Data security for managers: who sees private unit details, and the Excel export of every unit. */
@@ -703,14 +737,15 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null, teamLeadId: String(req.query.team || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
+    const [leases, targets, quotas, scope, allowance] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id), Billing.allowance(pool, req.session.broker.agency_id)]);
     const brokersWrite = await Rights.brokersMayWrite(pool, req.session.broker.agency_id);
     const [aiPeople, importReport] = await Promise.all([AiUserLimits.people(pool, req.session.broker.agency_id), ChatImportReport.report(pool, { days: Number(d.days) || 30, agencyId: req.session.broker.agency_id })]);
-    return page(req, res, { title: L(lang, "لوحة الشركة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang, {
+    return page(req, res, { title: dashboardTitle(d, lang), nav: "dashboard", body: html`${agencyPage(d, lang, {
       team: html`${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}`,
       ai: html`${aiPeopleSection(aiPeople, lang) || html`<p class="muted">${L(lang, "مفيش استخدام.", "No AI use yet.")}</p>`}${importSection(importReport, lang)}`,
       settings: html`${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${brokerEditSection(brokersWrite, lang, req.session.csrf, isAgencyOwner(req.session.broker))}${leadScopeSection(await require("../../services/leadScope").brokersSeeAll(pool, req.session.broker.agency_id), lang, req.session.csrf, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}`,
       open: req.query.privacy ? 3 : 0,
+      planWarning: preEndBanner(allowance, lang),
       unitWarning: require("./plan").unitBanner(await Billing.unitStatus(pool, req.session.broker.agency_id), lang)
     })}` });
   });

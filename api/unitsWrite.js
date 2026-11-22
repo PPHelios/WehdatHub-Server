@@ -91,6 +91,15 @@ function register(api, { pool }) {
     }
     return listing;
   };
+  api.patch("/units/:code/colleague", async (req, res) => {
+    const listing = await unitFor(req, res);
+    if (!listing) return;
+    const out = await Store.editColleagueUnit(pool, req.session.broker, listing, req.body || {});
+    if (out.forbidden) return res.status(403).json({ error: "forbidden" });
+    if (out.conflict) return res.status(409).json({ error: "conflict" });
+    if (out.error) return res.status(422).json({ error: out.error });
+    return res.json({ ok: true });
+  });
   api.post("/units/:code/status", async (req, res) => {
     const b = req.session.broker;
     const listing = await unitFor(req, res);

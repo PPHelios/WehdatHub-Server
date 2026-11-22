@@ -39,6 +39,7 @@ const ERRORS = {
   plan: ["اختار باقة ومدة.", "Pick a plan and a period."],
   too_many: ["عندك ٣ مدفوعات مستنية؛ استنى تأكيدها أو كلّمنا.", "You have 3 payments waiting; wait for them to be confirmed or contact us."],
   forbidden: ["للمديرين بس.", "Managers only."],
+  owner_only: ["لصاحب الشركة فقط.", "Agency owner only."],
   lapsed: ["الرصيد الزيادة محتاج باقة شغالة. جدّد الباقة الأول.", "Extra credits need an active plan. Renew the plan first."],
   // While a paid period runs only the same plan for the same length (renewal, queued after the end) or a higher plan (a pro-rated upgrade) is allowed.
   downgrade: ["مينفعش تنزل لباقة أقل وانت لسه في فترة مدفوعة. جدّد باقتك الحالية، أو اختار أعلى منها، ولو عايز أقل اختارها بعد ما الفترة تخلص.", "You can't move to a lower plan while a paid period is running. Renew your current plan or upgrade; a lower plan can be chosen after the period ends."],
@@ -213,7 +214,7 @@ function register(web, { pool, page }) {
   web.post("/plan/pay", async (req, res) => {
     const lang = langOf(req);
     const broker = req.session.broker;
-    if (!isAgencyOwner(broker)) return res.status(403).type("text/plain").send(ERRORS.forbidden[lang === "en" ? 1 : 0]);
+    if (!isManager(broker)) return res.status(403).type("text/plain").send(ERRORS.forbidden[lang === "en" ? 1 : 0]);
     // The plan cards post one choice "plan:months"; plan and months fields still work.
     // The upgrade buttons post "upgrade:plan".
     const [cPlan, cMonths] = String(req.body.choice || "").split(":");

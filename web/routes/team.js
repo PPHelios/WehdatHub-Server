@@ -94,7 +94,7 @@ const DAYS = [
 ];
 const hourOptions = (from, to, selected) => Array.from({ length: to - from + 1 }, (_, i) => from + i).map((h) => html`<option value="${h}"${h === selected ? html` selected` : ""}>${String(h).padStart(2, "0")}:00</option>`);
 
-function rulesCard(rules, lang) {
+function rulesCard(rules, lang, ws = null) {
   return html`<form method="post" action="/app/team/rules" class="card stack" data-lead-rules>
   <h2>⏱️ ${L(lang, "قاعدة الرد على العملاء", "Lead response rule")}</h2>
   <p class="muted">${L(lang, "لو البروكر مكلّمش عميل جديد اتسلمله في خلال الدقايق دي (بتتحسب في ساعات الشغل بس)، العميل بيتحول للبروكر اللي بعده والمديرين بيعرفوا.", "If a broker doesn't contact a new lead given to them within these minutes (counted in working hours only), the lead moves to the next broker and the managers are told.")}</p>
@@ -110,7 +110,14 @@ function rulesCard(rules, lang) {
   <label>${L(lang, "أقصى عدد تحويلات للعميل", "Most moves per lead")} <input name="max_jumps" type="number" min="1" max="${Rules.MAX_JUMPS}" value="${rules.max_jumps}"></label>
   <p class="muted">${L(lang, "العميل اللي بتسجله لنفسك مش بيتحول. البروكر اللي في إجازة مش بياخد عملاء جداد.", "A lead you add for yourself never moves. A broker who is away gets no new leads.")}</p>
   <button type="submit">${L(lang, "احفظ", "Save")}</button>
-</form>`;
+</form>
+${ws && ws.tier === "team" && ws.members > 1 ? html`<form method="post" action="/app/team/collaboration" class="card stack">
+  <h2>${L(lang, "صلاحيات التعاون", "Collaboration permissions")}</h2>
+  <label><input type="checkbox" name="brokersWorkSharedLeads" value="1"${ws.brokersWorkSharedLeads ? html` checked` : ""}> ${L(lang, "البروكرز يقدروا يتابعوا العملاء المشتركين", "Brokers can work shared leads")}</label>
+  <label><input type="checkbox" name="brokersEditColleagueUnits" value="1"${ws.brokersEditColleagueUnits ? html` checked` : ""}> ${L(lang, "البروكرز يقدروا يعدّلوا وحدات زملائهم", "Brokers can edit colleagues’ units")}</label>
+  <input type="hidden" name="complete" value="1">
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
+</form>` : ""}`;
 }
 
 function routingCard({ routing, brokers }, lang) {
@@ -197,7 +204,7 @@ function memberCard(b, lang, speed, today, now, viewer = null, teamLeads = []) {
 function policyCard({ policy, viewer, lang, notice = null }) {
   const Policy = require("../../lib/notificationPolicy");
   const owner = isAgencyOwner(viewer);
-  const chOpts = [["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تليجرام والموقع", "Telegram and website")], ["telegram", L(lang, "تليجرام بس", "Telegram only")], ["web", L(lang, "الموقع", "Website")]];
+  const chOpts = [["", L(lang, "هو يختار", "They choose")], ["both", L(lang, "تيليجرام وإشعارات الموقع والتطبيق", "Telegram, website and app push")], ["telegram", L(lang, "تيليجرام بس", "Telegram only")], ["web", L(lang, "إشعارات الموقع والتطبيق", "Website and app push")]];
   const freqOpts = [["", L(lang, "هو يختار", "They choose")], ["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة", "Hourly")], ["daily", L(lang, "يومياً ٩ الصبح", "Daily at 9")]];
   return html`<form method="post" action="/app/team/policy" class="card stack" data-notify-policy>
   <h2>🔔 ${L(lang, "الإشعارات للفريق كله", "Notifications for the whole team")}</h2>
@@ -211,7 +218,7 @@ function policyCard({ policy, viewer, lang, notice = null }) {
     const dis = lockedByOwner ? html` disabled` : "";
     return html`<tr data-policy-row="${k}"><td>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${urgent ? html` <span class="muted small">(${L(lang, "دايماً فوري", "always immediate")})</span>` : ""}${lockedByOwner ? html` <span class="muted small">🔒 ${L(lang, "المالك قفله", "locked by the owner")}</span>` : ""}</td>
     <td>${urgent ? html`<span class="muted small">${L(lang, "دايماً", "Always")}</span>` : html`<select name="on_${k}"${dis}><option value="">${L(lang, "هو يختار", "They choose")}</option><option value="1"${e.on === true ? html` selected` : ""}>${L(lang, "شغّال", "On")}</option><option value="0"${e.on === false ? html` selected` : ""}>${L(lang, "مقفول", "Off")}</option></select>`}</td>
-    <td><select name="ch_${k}"${dis}${e.on === false ? html` disabled` : ""}>${chOpts.map(([v, t]) => html`<option value="${v}"${(e.channel || "") === v ? html` selected` : ""}>${t}</option>`)}</select></td>
+    <td><select name="ch_${k}"${dis}${e.on === false ? html` disabled` : ""}>${chOpts.map(([v, t]) => html`<option value="${v}"${(e.channel === "app" ? "web" : e.channel || "") === v ? html` selected` : ""}>${t}</option>`)}</select></td>
     <td>${urgent ? html`<span class="muted small">${L(lang, "فوري", "Immediately")}</span>` : html`<select name="fq_${k}"${dis}${e.on === false ? html` disabled` : ""}>${freqOpts.map(([v, t]) => html`<option value="${v}"${(e.frequency || "") === v ? html` selected` : ""}>${t}</option>`)}</select>`}</td>
     <td><input type="checkbox" name="lock_${k}" value="1"${e.lock && !lockedByOwner ? html` checked` : ""}${dis}${!owner && e.lock === "owner" ? html` disabled` : ""}></td></tr>`;
   })}
@@ -255,7 +262,7 @@ ${tabs("team_tab", [
 <ul class="members">${team.filter((b) => b.is_active).map((b) => memberCard(b, lang, speed, today, now, viewer, team.filter((t) => t.role === "team_lead" && t.is_active)))}</ul>
 <p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الموقوفين في تاب «الموقوفين»: تقدر ترجّعهم أو تمسحهم نهائي.", "Deactivating signs them out at once and returns their leads to the managers. Deactivated members are in the Deactivated tab, where you can bring them back or delete them for good.")}</p>
 <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>`],
-  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${can(viewer, "leadRules") ? html`${routingCard(routing, lang)}${rulesCard(rules, lang)}` : ""}${policyCard({ policy, viewer, lang })}`],
+  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${can(viewer, "leadRules") ? html`${routingCard(routing, lang)}${rulesCard(rules, lang, viewer?.workspace)}` : ""}${policyCard({ policy, viewer, lang })}`],
   [L(lang, `الموقوفين (${team.length - active})`, `Deactivated (${team.length - active})`), html`<ul class="members">${team.filter((b) => !b.is_active).map((b) => memberCard(b, lang, speed, today, now, viewer, []))}</ul>${team.length === active ? html`<p class="muted">${L(lang, "مفيش حد موقوف.", "Nobody is deactivated.")}</p>` : ""}`]
 ], { open: tab })}`;
 }
@@ -321,6 +328,16 @@ function register(web, { pool, page }) {
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
     req.session.broker.workspace = await require("../../lib/workspace").stateOf(pool, req.session.broker.agency_id, { role: req.session.broker.role }).catch(() => req.session.broker.workspace);
     return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظ.", "Saved.")}</p>` });
+  });
+  web.post("/team/collaboration", async (req, res) => {
+    const { body } = req;
+    const switches = {};
+    for (const key of ["brokersWorkSharedLeads", "brokersEditColleagueUnits"]) {
+      if (body.complete === "1" || body[key] !== undefined) switches[key] = body[key] === "1";
+    }
+    const result = await Team.setCollaboration(pool, req.session.broker, switches);
+    if (result.error) return res.status(403).send(result.error);
+    return res.redirect(303, "/app/team");
   });
 
   // Owner only: move a broker to manager, or a manager back to broker. Logged for the agency.

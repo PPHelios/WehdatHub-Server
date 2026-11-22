@@ -131,6 +131,35 @@ ${TG_COPY.trialUsedEn}${Links.siteOrigin()}/#plans`;
     } else if (norm.callbackId) {
       const id = await TgLink.decodeCallback(pool, norm.data);
       if (!id) return;
+      if (id.startsWith("pay_ok:") || id.startsWith("pay_cancel:")) {
+        const conf = require("../config").getConfig();
+        const alertChat = conf.alerts?.telegramChatId ? String(conf.alerts.telegramChatId) : null;
+        const isAlertChat = alertChat && String(norm.ids.chatId) === alertChat;
+        const isOwner = isAlertChat || (broker && require("../lib/authz").isCrmOwner(broker));
+        if (!isOwner) return answer("غير مسموح / Not authorized");
+        const paymentId = id.split(":")[1];
+        const Billing = require("../services/billing");
+        if (id.startsWith("pay_ok:")) {
+          const res = await Billing.confirmPayment(pool, paymentId);
+          if (res.ok) {
+            answer("✅ تم تأكيد الدفع وتفعيل الباقة");
+            if (norm.messageId) {
+              TG.call("editMessageReplyMarkup", { chat_id: norm.ids.chatId, message_id: norm.messageId, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+              TG.sendMessage(norm.ids.chatId, `✅ <b>تم تأكيد الدفع بنجاح!</b>\nالمرجع: <code>${res.payment.reference}</code>\nالباقة اتفعلت لحد: ${res.agency.paid_until ? new Date(res.agency.paid_until).toISOString().slice(0, 10) : ""}`).catch(() => {});
+            }
+            return;
+          } else {
+            return answer(`خطأ: ${res.error}`);
+          }
+        } else {
+          const res = await Billing.cancelPayment(pool, paymentId);
+          answer(res.ok ? "تم الإلغاء" : `خطأ: ${res.error}`);
+          if (norm.messageId) {
+            TG.call("editMessageReplyMarkup", { chat_id: norm.ids.chatId, message_id: norm.messageId, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+          }
+          return;
+        }
+      }
       const tap = tapGuard.claim(broker.id, id);
       if (!tap.ok) return answer(TapGuard.toast(tap.reason, broker.preferred_lang));
       holdTap(tap);

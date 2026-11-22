@@ -87,10 +87,15 @@ function register(api, { pool }) {
   });
 
   api.get("/leads/:ref", async (req, res) => {
-    const t = await Leads.timeline(pool, req.session.broker, req.params.ref, { limit: 20 });
+    const { broker } = req.session;
+    const t = await Leads.timeline(pool, broker, req.params.ref, { limit: 20 });
     if (!t) return res.status(404).json({ error: "not_found" });
     res.json({
       lead: leadView(t.lead),
+      canClaim: Authz.canClaimLead(broker, t.lead),
+      canCollaborate: !Authz.canEditLead(broker, t.lead) && Authz.canCollaborateLead(broker, t.lead),
+      canWork: Authz.canEditLead(broker, t.lead),
+      canAssign: (!broker.workspace || require("../domain/segments").allows(broker.workspace, "assignLeads")) && (Authz.isManager(broker) || (Authz.isTeamLead(broker) && Authz.canEditLead(broker, t.lead))),
       timeline: t.rows.filter((e) => !e.undone_at).map((e) => ({ id: String(e.id), kind: e.kind, at: new Date(e.created_at).toISOString(), by: e.broker_name || null, text: e.data?.text || e.data?.note || null, stage: e.data?.stage || null }))
     });
   });
@@ -134,6 +139,13 @@ function register(api, { pool }) {
     if (r.outcome === "colleague") return res.status(409).json({ error: "colleague" });
     if (r.outcome === "erased_before") return res.status(409).json({ error: "erased_before" });
     return res.status(ERRORS[r.error] || 422).json({ error: r.error || "invalid" });
+  });
+
+  api.post("/leads/:ref/claim", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    return answer(req, res, lead, await Leads.claimLead(pool, req.session.broker, lead.id, { version: versionOf(req.body || {}) }));
   });
 
   // Reassign: managers anywhere, a team lead inside their team (or back to the managers with brokerId null).

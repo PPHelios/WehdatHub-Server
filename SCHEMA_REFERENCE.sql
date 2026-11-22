@@ -447,7 +447,9 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   extra_seats smallint DEFAULT 0 NOT NULL,
   analytics_enabled boolean DEFAULT false NOT NULL,
   team_style text DEFAULT 'shared'::text NOT NULL,
-  segment_hint text
+  segment_hint text,
+  manager_can_renew_plan boolean DEFAULT false NOT NULL,
+  manager_can_buy_credits boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
