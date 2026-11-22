@@ -142,6 +142,27 @@ function register(api, { pool }) {
     const manager = isManager(b);
     const [payments, requests, referral] = manager ? await Promise.all([Billing.paymentsOf(pool, b.agency_id), Credits.requestsOf(pool, b.agency_id), Referrals.summary(pool, b.agency_id)]) : [[], [], null];
     const isOwner = isAgencyOwner(b);
+    const Plans = require("../domain/plans");
+    const canPay = isOwner || Boolean(agency?.manager_can_renew_plan);
+    const canBuyCredits = isOwner || Boolean(agency?.manager_can_buy_credits);
+    const running = allowance.source === "paid";
+    const currentTier = Plans.tierOf(allowance.plan.id);
+    const upgrades = Billing.upgradeQuotes(agency);
+    const paymentChoices = [];
+    if (canPay) for (const plan of Plans.PLANS) {
+      const tier = Plans.tierOf(plan.id);
+      if (running && currentTier >= 0 && tier !== currentTier) {
+        if (upgrades[plan.id]) paymentChoices.push({ kind: "upgrade", plan: plan.id, name: plan.name, amount: upgrades[plan.id].amount });
+        continue;
+      }
+      for (const months of Plans.periodsOf(plan)) {
+        if (running && agency.last_months && months !== Number(agency.last_months)) continue;
+        paymentChoices.push({ kind: "plan", plan: plan.id, months, name: plan.name, amount: Billing.priceAt(agency, plan.id, months)?.amount ?? Plans.priceFor(plan, months) });
+      }
+    }
+    if (canBuyCredits && !allowance.ladder) for (const bundle of Plans.BUNDLES) {
+      paymentChoices.push({ kind: "credit_bundle", bundle: bundle.id, name: bundle.name, amount: bundle.priceEgp });
+    }
     res.json({
       allowance: Billing.publicAllowance(allowance),
       payTo,
@@ -149,8 +170,9 @@ function register(api, { pool }) {
       payments: payments.map(Billing.publicPayment),
       requests,
       referral,
-      canPay: isOwner || Boolean(agency?.manager_can_renew_plan),
-      canBuyCredits: isOwner || Boolean(agency?.manager_can_buy_credits),
+      canPay,
+      canBuyCredits,
+      paymentChoices,
       managerCanRenewPlan: Boolean(agency?.manager_can_renew_plan),
       managerCanBuyCredits: Boolean(agency?.manager_can_buy_credits)
     });
@@ -199,7 +221,14 @@ function register(api, { pool }) {
       Signup.isOpen(pool),
       Billing.pendingPayments(pool)
     ]);
-    res.json({ dashboard, period, agencies, signupOpen, pendingPayments });
+    res.json({ dashboard, period, agencies, signupOpen, pendingPayments, paymentChannels: await Billing.paymentChannels(pool) });
+  });
+
+  api.post("/platform/payment-channels", platform, async (req, res) => {
+    const { sms, telegram } = req.body || {};
+    if (typeof sms !== "boolean" || typeof telegram !== "boolean") return res.status(422).json({ error: "invalid_channels" });
+    await Billing.setSetting(pool, "payment_channels", { sms, telegram });
+    return res.json({ ok: true });
   });
 
   api.post("/platform/payments/:id/confirm", platform, async (req, res) => {

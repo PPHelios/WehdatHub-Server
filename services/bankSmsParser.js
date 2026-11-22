@@ -11,12 +11,13 @@ const AMOUNT_RE = /(?:EGP|جم|جنيه|مبلغ)\s*([\d,]+(?:\.\d{1,2})?)|([\d,
  */
 function parseBankSms(text) {
   const str = String(text || "").trim();
-  if (!str) return { reference: null, amount: null, isBankSms: false };
+  if (!str) return { reference: null, amount: null, isBankSms: false, incoming: false };
 
   const refMatch = REF_RE.exec(str);
   const reference = refMatch ? `WH-${refMatch[1].toUpperCase()}` : null;
 
-  const amtMatch = AMOUNT_RE.exec(str);
+  const depositText = str.split(/\b(?:available\s+|current\s+|remaining\s+)?balance\b|الرصيد/i, 1)[0];
+  const amtMatch = AMOUNT_RE.exec(depositText);
   let amount = null;
   if (amtMatch) {
     const rawNum = (amtMatch[1] || amtMatch[2] || "").replace(/,/g, "");
@@ -26,7 +27,9 @@ function parseBankSms(text) {
 
   const isBankSms = /إنستاباي|instapay|ipn|تحويل|transfer|credited|حسابك/i.test(str);
 
-  return { reference, amount, isBankSms };
+  const incoming = /\bcredited\b|\binward\s+(?:ipn\s+)?transfer\b|إيداع|ايداع|تم إضافة|تم اضافة|تم استلام تحويل/i.test(depositText) &&
+    !/\bdebited\b|\bsent\b|\bfailed\b|خصم|فشل|مرفوض/i.test(str);
+  return { reference, amount, isBankSms, incoming };
 }
 
 module.exports = { parseBankSms };

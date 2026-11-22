@@ -1510,7 +1510,8 @@
       "setViewing": ["sid", "on"],
       "isViewing": ["sid"],
       "config": ["env"],
-      "homeAgencyOf": ["broker"]
+      "homeAgencyOf": ["broker"],
+      "isDemoBroker": ["env", "broker"]
     },
     "lib/text.js": {
       "normalizeDigits": ["str"],
@@ -1807,7 +1808,11 @@
       "cleanup": ["pool"],
       "cleanupJob": []
     },
+    "services/bankSmsParser.js": {
+      "parseBankSms": ["text"]
+    },
     "services/billing.js": {
+      "paymentChannels": ["db"],
       "GRACE_EXTEND_DAYS": "Array",
       "LADDER": "Object",
       "LAPSED": "Array",

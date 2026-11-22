@@ -55,6 +55,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `BOT_PHONE` | no | — | The bot's WhatsApp number with country code. Only `npm run onboard` reads it, to print each broker's start link (a `bot_phone` in the agency file wins). |
 | `TELEGRAM_BOT_TOKEN` | no | — | The Telegram bot's token (@BotFather). Error alerts and bug reports are sent to the owner through it. Keep it only in Render. |
 | `ALERT_TELEGRAM_CHAT_ID` | no | — | The owner's Telegram chat id: where error alerts and bug reports go. Unset = no alerts (errors are still stored in `error_events`). See §6b for how to find it. |
+| `BANK_WEBHOOK_SECRET` | for SMS verification | — | Dedicated secret for the trusted bank SMS relay. Send it in `X-Bank-Webhook-Secret` to `POST /api/v1/webhooks/bank-sms`. Enable Bank SMS verification in the platform owner Payments section. Incoming messages go to the owner’s Telegram chat. Enable Manual Telegram approval separately and use a linked platform-owner Telegram account for the buttons. |
 | `ALERT_EVERY_MIN` | no | `60` | At most one alert per distinct error (fingerprint) in this many minutes. Bug reports always alert. |
 | `STORAGE_CLEANUP_DELETE` | no | off | The weekly storage check only reports unused photo files (the owner gets a system alert). Set to `true` to let it delete them (files older than a week, 200 per run). |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |

@@ -133,15 +133,15 @@ ${TG_COPY.trialUsedEn}${Links.siteOrigin()}/#plans`;
       if (!id) return;
       if (id.startsWith("pay_ok:") || id.startsWith("pay_cancel:")) {
         const conf = require("../config").getConfig();
-        const alertChat = conf.alerts?.telegramChatId ? String(conf.alerts.telegramChatId) : null;
-        const isAlertChat = alertChat && String(norm.ids.chatId) === alertChat;
-        const isOwner = isAlertChat || (broker && require("../lib/authz").isCrmOwner(broker));
-        if (!isOwner) return answer("غير مسموح / Not authorized");
-        const paymentId = id.split(":")[1];
         const Billing = require("../services/billing");
+        if (!require("../lib/authz").isCrmOwner(broker, conf) || !(await Billing.paymentChannels(pool)).telegram) {
+          return answer("غير مسموح / Not authorized");
+        }
+        const paymentId = id.split(":")[1];
         if (id.startsWith("pay_ok:")) {
           const res = await Billing.confirmPayment(pool, paymentId);
           if (res.ok) {
+            await require("../services/billingNotices").paymentConfirmed(pool, res).catch(() => {});
             answer("✅ تم تأكيد الدفع وتفعيل الباقة");
             if (norm.messageId) {
               TG.call("editMessageReplyMarkup", { chat_id: norm.ids.chatId, message_id: norm.messageId, reply_markup: { inline_keyboard: [] } }).catch(() => {});

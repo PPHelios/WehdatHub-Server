@@ -279,6 +279,11 @@ function billingSections(b, lang) {
     : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
 </section>
 <section class="card" id="payments">
+  <form method="post" action="/app/owner/payment-channels" class="stack">
+    <label><input type="checkbox" name="sms" value="1"${b.channels?.sms ? html` checked` : ""}> ${L(lang, "تفعيل التحقق برسائل البنك", "Enable bank SMS verification")}</label>
+    <label><input type="checkbox" name="telegram" value="1"${b.channels?.telegram ? html` checked` : ""}> ${L(lang, "تفعيل الموافقة اليدوية في تليجرام", "Enable manual Telegram approval")}</label>
+    <button type="submit">${L(lang, "حفظ", "Save")}</button>
+  </form>
   <h2>💳 ${L(lang, "مدفوعات مستنية التأكيد", "Payments to confirm")}</h2>
   ${b.payments.length
     ? html`<div class="scroll"><table><tbody>${b.payments.map(
@@ -802,11 +807,11 @@ function register(web, { pool, page }) {
     const cell = (ar, en, k) => html`<div class="card" data-figure><span class="muted">${L(langOf(req), ar, en)}</span><strong>${pf.now[k]}</strong> <span class="muted small">${Period.change(pf.now[k], pf.before[k])}</span></div>`;
     const strip = html`<section data-owner-period>${Period.tabs("/app/owner", { period: per.key }, per.key, langOf(req))}<div class="grid">${cell("شركات نشطة", "Active agencies", "agencies")}${cell("بروكرز نشطين", "Active brokers", "brokers")}${cell("وحدات جديدة", "New units", "units")}${cell("عملاء جداد", "New leads", "leads")}${cell("صفقات", "Deals", "deals")}${cell("أخطاء", "Errors", "errors")}${cell("بلاغات", "Reports", "reports")}</div></section>`;
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits, lapsed] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.tracking(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool), Billing.lapsedAgencies(pool)]);
-    const [agencies, log, places] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool)]);
+    const [agencies, log, places, channels] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceReview.queue(pool), Billing.paymentChannels(pool)]);
     const anPick = /^[0-9a-f-]{36}$/i.test(String(req.query.an_agency || "")) ? String(req.query.an_agency) : null;
     if (anPick) tab = 6;
     const analytics = { data: await Analytics.forOwner(pool, req.session.broker, { agencyId: anPick }), status: await Analytics.status(pool) };
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, lapsed, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, openTab: tab, stuck, agencies, log, places, analytics, csrf: req.session.csrf })}` }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: html`${strip}<p class="card"><a class="btn secondary small" href="/app/owner/board" data-admin-board-link>📊 ${L(langOf(req), "لوحة المالك (أرقام وتكاليف)", "Owner board (numbers and costs)")}</a></p><p class="card"><a class="btn secondary small" href="/app/owner/searches" data-search-review-link>🔎 ${L(langOf(req), "مراجعة البحث (كلمات جديدة وبلاغات وفحص الليل)", "Search review (new words, reports, nightly check)")}</a></p>${ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, lapsed, channels, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, openTab: tab, stuck, agencies, log, places, analytics, csrf: req.session.csrf })}` }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -975,6 +980,11 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     if (r.error) return ownerView(req, res, bad(L(lang, "الدفع ده مش مستني.", "That payment isn't waiting.")), 400);
     await BillingNotices.paymentConfirmed(pool, r).catch((e) => console.warn("Payment notice failed:", e.message));
     return ownerView(req, res, ok(L(lang, `${r.payment.reference} اتأكد.`, `${r.payment.reference} confirmed.`)));
+  }));
+
+  web.post("/owner/payment-channels", ownerOnly(async (req, res) => {
+    await Billing.setSetting(pool, "payment_channels", { sms: req.body.sms === "1", telegram: req.body.telegram === "1" });
+    return res.redirect(303, "/app/owner#payments");
   }));
 
   web.post("/owner/payments/:id/cancel", ownerOnly(async (req, res, lang) => {

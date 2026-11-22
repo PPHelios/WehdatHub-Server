@@ -106,7 +106,7 @@ function referralSection(r, lang) {
 }
 
 /** The plan part of the Usage page (managers and the owner): plan in force, seats and units, payment, bundles, credit requests, invite code, payments. */
-function planSections({ a, requests = [], limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null, quotes = {}, now = new Date() }) {
+function planSections({ a, requests = [], limits = {}, payments, payTo, lang, manager, canRenew = manager, canBuyCredits = manager, referral = null, notice = null, created = null, quotes = {}, now = new Date() }) {
   const p = a.plan;
   // While a paid period runs: the same plan for the same length (renewal) or a higher plan (upgrade, pro-rated); nothing else.
   const running = a.source === "paid";
@@ -128,7 +128,7 @@ ${created ? paymentCard(created, payTo, lang) : ""}
   <p class="muted" data-credit-split>${L(lang, `الرصيد: ${num(a.credits.plan)} من الباقة` + (a.credits.bundles ? ` + ${num(a.credits.bundles)} باقات زيادة` : "") + (a.credits.grants ? ` + ${num(a.credits.grants)} هدية من صاحب التطبيق` : ""), `Credits: ${num(a.credits.plan)} from the plan` + (a.credits.bundles ? ` + ${num(a.credits.bundles)} from bundles` : "") + (a.credits.grants ? ` + ${num(a.credits.grants)} granted by the app owner` : ""))}</p>
   <p class="muted">${L(lang, "لو الرصيد خلص، البحث والعملاء والوحدات بيفضلوا شغالين يدوي؛ اللي بيقف هو قراءة الفويس والوصف بالذكاء الاصطناعي لحد أول الشهر. بياناتك مش بتتمسح أبداً.", "When an allowance runs out, search, clients and units keep working by hand; only AI reading of voice notes and descriptions stops until the month turns. Your data is never deleted.")}</p>
 </section>
-${manager
+${canRenew
   ? html`<form method="post" action="/app/plan/pay" class="card stack">
   <h2>${L(lang, "اختار باقة", "Choose a plan")}</h2>
   ${running ? html`<p class="muted" data-plan-rules>${L(lang, "طول ما باقتك شغالة تقدر تجدد نفس الباقة بنفس المدة (بتبدأ بعد ما الحالية تخلص)، أو ترقّي لباقة أعلى بسعر متناسب مع الأيام اللي فاضلة. النزول لباقة أقل أو تغيير المدة بيكون بعد ما الفترة تخلص، ومفيش استرداد جزئي.", "While your plan runs you can renew the same plan for the same length (it starts after the current one ends) or upgrade to a higher plan, priced for the days left. A lower plan or another length can be chosen after the period ends; there are no partial refunds.")}</p>` : ""}
@@ -154,8 +154,8 @@ ${manager
   })}</div>
   <input type="hidden" name="kind" value="plan">
   <button type="submit">${L(lang, "هدفع", "I'll pay")}</button>
-</form>
-${a.ladder ? "" : html`<section class="card stack" data-bundles>
+</form>` : ""}
+${a.ladder || !canBuyCredits ? "" : html`<section class="card stack" data-bundles>
   <h2>${L(lang, "رصيد زيادة (صالح ٣٠ يوم)", "Extra credits (valid 30 days)")}</h2>
   ${Plans.BUNDLES.map(
     (x) => html`<form method="post" action="/app/plan/pay" class="row" data-bundle="${x.id}">
@@ -165,15 +165,15 @@ ${a.ladder ? "" : html`<section class="card stack" data-bundles>
   </form>`
   )}
 </section>`}
-${a.ladder ? "" : html`<form method="post" action="/app/plan/credit-request" class="card stack" data-credit-request>
+${a.ladder || !manager ? "" : html`<form method="post" action="/app/plan/credit-request" class="card stack" data-credit-request>
   <h2>${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</h2>
   <p class="muted">${L(lang, "بتوصل لصاحب التطبيق على تليجرام، وبيرد عليك هنا.", "The app owner gets it on Telegram and answers here.")}</p>
   <label>${L(lang, "كام رصيد؟", "How many credits?")} <input name="credits" type="number" min="1" max="100000" required></label>
   <label>${L(lang, "ملاحظة (اختياري)", "Note (optional)")} <input name="note" maxlength="300"></label>
   <button type="submit" class="secondary">${L(lang, "ابعت الطلب", "Send request")}</button>
   ${requests.length ? html`<table data-credit-requests><tbody>${requests.map((x) => html`<tr data-request="${x.id}"><td>${num(x.credits)}</td><td>${(REQUEST_STATUS[x.status] || REQUEST_STATUS.pending)[lang === "en" ? 1 : 0]}</td><td dir="ltr">${day(x.created_at)}</td></tr>`)}</tbody></table>` : ""}
-</form>`}`
-  : html`<p class="muted">${L(lang, "صاحب الشركة بس يقدر يغيّر الباقة.", "Only the agency owner can change the plan.")}</p>`}
+</form>`}
+${!canRenew && !canBuyCredits ? html`<p class="muted">${L(lang, "صاحب الشركة بس يقدر يغيّر الباقة.", "Only the agency owner can change the plan.")}</p>` : ""}
 ${referral ? referralSection(referral, lang) : ""}
 ${payments.length
   ? html`<section class="card"><h2>${L(lang, "المدفوعات", "Payments")}</h2><div class="scroll"><table><tbody>${payments.map(
@@ -193,7 +193,7 @@ async function sectionsFor(pool, req, extra = {}) {
     Billing.paymentsOf(pool, broker.agency_id), Credits.requestsOf(pool, broker.agency_id), Referrals.summary(pool, broker.agency_id)
   ]);
   // The platform owner's extra-seats records are not shown to agencies: only the seats and credits totals reflect them.
-  return planSections({ a, requests, limits, payments: payments.filter((x) => x.kind !== "extra_seats"), payTo, lang, manager: isAgencyOwner(broker), referral, quotes: Billing.upgradeQuotes(a.agency), ...extra });
+  return planSections({ a, requests, limits, payments: payments.filter((x) => x.kind !== "extra_seats"), payTo, lang, manager: isAgencyOwner(broker), canRenew: isAgencyOwner(broker) || Boolean(a.agency.manager_can_renew_plan), canBuyCredits: isAgencyOwner(broker) || Boolean(a.agency.manager_can_buy_credits), referral, quotes: Billing.upgradeQuotes(a.agency), ...extra });
 }
 
 function register(web, { pool, page }) {

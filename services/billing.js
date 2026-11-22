@@ -332,6 +332,11 @@ async function payTo(db) {
   return { instapay: String(v.instapay || ""), bank: String(v.bank || "") };
 }
 
+async function paymentChannels(db) {
+  const value = await getSetting(db, "payment_channels", {});
+  return { sms: value?.sms === true, telegram: value?.telegram === true };
+}
+
 async function savePayTo(db, { instapay, bank }) {
   await setSetting(db, "pay_to", { instapay: String(instapay || "").trim().slice(0, 120), bank: String(bank || "").trim().slice(0, 300) });
 }
@@ -822,6 +827,7 @@ module.exports = {
   UNIT_HINT_LEVELS,
   getSetting,
   setSetting,
+  paymentChannels,
   payTo,
   savePayTo,
   priceOf,
