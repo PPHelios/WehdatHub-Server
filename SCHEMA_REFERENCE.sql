@@ -2019,6 +2019,19 @@ CREATE TABLE IF NOT EXISTS public.map_places_location_backup_141 (
   subzone_id uuid
 );
 
+CREATE TABLE IF NOT EXISTS public.trial_funnel (
+  signup_id bigint NOT NULL,
+  tier text NOT NULL,
+  offered_days integer NOT NULL,
+  offered_credits integer NOT NULL,
+  started_at timestamp with time zone NOT NULL,
+  telegram_opened_at timestamp with time zone,
+  verified_at timestamp with time zone,
+  agency_id uuid,
+  granted_days integer,
+  granted_credits integer
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
@@ -2103,6 +2116,7 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash)
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMARY KEY (token_hash);
 ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_pkey PRIMARY KEY (id);
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_pkey PRIMARY KEY (signup_id);
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_pkey PRIMARY KEY (id);
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
 ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
@@ -2378,6 +2392,11 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY
 ALTER TABLE share_links ADD CONSTRAINT share_links_note_length CHECK (((note IS NULL) OR (char_length(note) <= 200)));
 ALTER TABLE share_links ADD CONSTRAINT share_links_source_check CHECK (((source IS NULL) OR (source = ANY (ARRAY['bot'::text, 'web'::text, 'lead'::text]))));
 ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_phone_e164_check CHECK ((length(phone_e164) <= 20));
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_granted_credits_check CHECK ((granted_credits >= 0));
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_granted_days_check CHECK ((granted_days > 0));
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_offered_credits_check CHECK ((offered_credits >= 0));
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_offered_days_check CHECK ((offered_days > 0));
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_tier_check CHECK ((tier = ANY (ARRAY['solo'::text, 'team'::text])));
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_agency_name_check CHECK (((length(agency_name) >= 1) AND (length(agency_name) <= 120)));
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_owner_name_check CHECK (((length(owner_name) >= 1) AND (length(owner_name) <= 80)));
@@ -2563,6 +2582,7 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_listing_id_fkey FOREIGN KEY (
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE trial_claims ADD CONSTRAINT trial_claims_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
+ALTER TABLE trial_funnel ADD CONSTRAINT trial_funnel_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE trial_signups ADD CONSTRAINT trial_signups_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
@@ -2745,6 +2765,8 @@ CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WH
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);
 CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USING btree (broker_id);
+CREATE INDEX trial_funnel_agency ON public.trial_funnel USING btree (agency_id);
+CREATE INDEX trial_funnel_started ON public.trial_funnel USING btree (started_at);
 CREATE INDEX trial_signups_telegram_idx ON public.trial_signups USING btree (telegram_id) WHERE (used_at IS NULL);
 CREATE INDEX unit_access_requests_listing ON public.unit_access_requests USING btree (agency_id, listing_id, broker_id, created_at DESC);
 CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (owner_id, created_at DESC, id DESC);

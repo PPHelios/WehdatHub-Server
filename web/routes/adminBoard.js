@@ -34,11 +34,36 @@ const table = (heads, rows, lang) => (rows.length
   ? html`<div class="table-wrap"><table><thead><tr>${heads.map((h) => html`<th>${h}</th>`)}</tr></thead><tbody>${rows.map((r) => html`<tr>${r.map((c) => html`<td>${c}</td>`)}</tr>`)}</tbody></table></div>`
   : html`<p class="muted">${L(lang, "مفيش بيانات في الفترة دي.", "No data in this period.")}</p>`);
 
+function trialFunnel(trials, lang) {
+  const tierName = (tier) => tier === "team" ? L(lang, "فريق", "Team") : L(lang, "سولو", "Solo");
+  const withRate = (n, denominator) => denominator ? `${num(n)} / ${num(denominator)} (${num(100 * n / denominator)}%)` : "—";
+  return html`<section class="card" id="trial-funnel">
+    <h3>${L(lang, "متابعة التجارب", "Trial funnel")}</h3>
+    <p class="muted">${L(lang, "الأرقام حسب تاريخ قبول كل محاولة تسجيل على الموقع. أول استخدام يعني بحث أو إضافة وحدة أو عميل أو استخدام ميزة مسجّلة. نشاط اليوم السابع بيتحسب للتجارب اللي عدى عليها ٧ أيام قبل ما تخلص أو تتحول لاشتراك مدفوع.", "Grouped by the date of each accepted website sign-up attempt. First use means a search, a unit or lead created, or a successful tracked feature action. Day 7 includes agencies that stayed on trial for seven full days.")}</p>
+    ${table([
+      L(lang, "التجربة", "Trial"), L(lang, "الأيام", "Days offered"), L(lang, "الرصيد", "Credits offered"),
+      L(lang, "التسجيلات", "Sign-ups"), L(lang, "بدأوا على تيليجرام", "Started on Telegram"), L(lang, "أكدوا الرقم", "Verified"),
+      L(lang, "أول استخدام", "First use"), L(lang, "نشاط اليوم السابع", "Day 7 active"),
+      L(lang, "زميل بدأ يستخدم", "Teammate joined"), L(lang, "دفعوا لباقـة", "Paid subscription")
+    ], trials.cohorts.map((r) => [
+      tierName(r.tier), num(r.offered_days), num(r.offered_credits), num(r.started), withRate(r.opened, r.started),
+      withRate(r.verified, r.opened), withRate(r.activated, r.verified), withRate(r.day7, r.day7_eligible),
+      r.tier === "team" ? withRate(r.teammate, r.verified) : "—", withRate(r.paid, r.verified)
+    ]), lang)}
+    <p class="muted small">${L(lang, "الزميل بيتحسب لما يربط تيليجرام أو يستخدم ميزة مسجّلة خلال التجربة. الاشتراك المدفوع بيتحسب لحد وقت تحديث التقرير.", "A teammate counts after linking Telegram or using a tracked feature during the trial. Confirmed subscription payments count through the report refresh time.")}</p>
+    <h4>${L(lang, "استخدام المميزات أثناء التجربة", "Feature use during the trial")}</h4>
+    ${table([
+      L(lang, "التجربة", "Trial"), L(lang, "الحدث", "Event"), L(lang, "الشركات", "Agencies"),
+      L(lang, "المحاولات", "Events"), L(lang, "المحاولات اللي فشلت", "Failed")
+    ], trials.features.map((r) => [tierName(r.tier), r.event, num(r.agencies), num(r.uses), num(r.failed)]), lang)}
+  </section>`;
+}
+
 function tabBody(tab, data, lang, { agency = "", days = 7 } = {}) {
   if (tab === "health") {
     const i = data.imports;
     const pc = (v) => (v === null || v === undefined ? "—" : `${v}%`);
-    return html`<div class="charts">${Charts.bars(data.series, "active_brokers", { title: L(lang, "بروكرز نشطين كل يوم", "Active brokers per day"), lang })}
+    return html`${data.trials ? trialFunnel(data.trials, lang) : ""}<div class="charts">${Charts.bars(data.series, "active_brokers", { title: L(lang, "بروكرز نشطين كل يوم", "Active brokers per day"), lang })}
 ${Charts.bars(data.series, "units", { title: L(lang, "وحدات جديدة", "New units"), lang })}
 ${Charts.bars(data.series, "leads", { title: L(lang, "عملاء جدد", "New leads"), lang })}
 ${Charts.bars(data.series, "ai_calls", { title: L(lang, "مكالمات الذكاء", "AI calls"), lang })}

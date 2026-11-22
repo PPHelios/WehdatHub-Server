@@ -129,6 +129,7 @@
   | `142_agency_billing_switches.sql` | Agency owner delegation switches: `agencies.manager_can_renew_plan` (default false), `agencies.manager_can_buy_credits` (default false); enforced in `services/billing.js` requestPayment |
   | `143_trial_team_plan.sql` | Self-serve team trial: 5 seats, 50 units and 200 shared AI credits. Existing signups default to Solo. |
   | `144_trial_credit_allowance.sql` | Preserve the configured AI allowance on each newly verified self-serve trial. |
+  | `145_trial_funnel.sql` | Persist anonymous trial offer and verification milestones for the CRM Owner Board. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

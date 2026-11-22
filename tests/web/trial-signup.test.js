@@ -84,6 +84,11 @@ test("happy path: form -> Telegram link -> own contact -> approved trial agency,
   expect(Number(b.telegram_chat_id)).toBe(8801);
   expect(await h.query("SELECT phone_e164, telegram_id::int AS tg FROM trial_claims")).toEqual([{ phone_e164: "+201055556666", tg: 8801 }]);
   expect(await Billing.allowance(h.pool, a.id)).toMatchObject({ source: "trial", seats: { limit: 1 }, units: { limit: 50 }, credits: { limit: 80 } });
+  await TrialSignup.purge(h.pool);
+  expect(await h.query("SELECT id FROM trial_signups")).toEqual([]);
+  expect(await h.query("SELECT tier, offered_days, offered_credits, granted_days, granted_credits, telegram_opened_at, verified_at, agency_id FROM trial_funnel"))
+    .toEqual([{ tier: "solo", offered_days: 14, offered_credits: 80, granted_days: 14, granted_credits: 80,
+      telegram_opened_at: expect.any(Date), verified_at: expect.any(Date), agency_id: a.id }]);
   // the start link works once
   expect(texts(await botStart(8802, token))).toMatch(/invalid or expired/);
   // a web login link from the Telegram message signs the new owner in

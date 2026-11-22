@@ -248,6 +248,7 @@ function billingSections(b, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
   return html`${b.csrf !== undefined ? newAgencySection(lang, b.csrf) : ""}<section class="card" id="signups">
   <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
+  <p><a href="/app/owner/board?tab=health&days=30#trial-funnel">${L(lang, "متابعة التجارب واستخدام المميزات", "Trial funnel and feature use")}</a></p>
   <form method="post" action="/app/owner/signup" class="stack" data-signup-form>
     ${switchField({ name: "open", value: "1", on: b.signup.enabled, lang, id: "signup-switch", label: L(lang, "التسجيل في التجارب", "Trial sign-up"), sentence: L(lang, "قفل المفتاح ده بيوقف التسجيل الجديد في التجربتين.", "Turn this off to pause new Solo and Team sign-ups.") })}
     <input type="hidden" name="trial_settings" value="1">
