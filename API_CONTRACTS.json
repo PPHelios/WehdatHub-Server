@@ -2177,7 +2177,7 @@
       "currentMatches": ["pool", "agencyId", "filters", "params"],
       "saveRequest": ["pool", "actor", "leadKey", "rawFilters", "params"],
       "removeRequest": ["pool", "actor", "leadKey", "requestId"],
-      "whoWants": ["pool", "actor", "listing"],
+      "whoWants": ["pool", "actor", "listing", "params"],
       "sendToClient": ["pool", "actor", "leadKey", "listing", "params"]
     },
     "services/leadRules.js": {
@@ -2713,6 +2713,8 @@
       "build": ["pool", "viewer", "now"],
       "tasksOf": ["d"],
       "oldUnitsFor": ["pool", "viewer", "now"],
+      "home": ["pool", "viewer", "now"],
+      "overduePage": ["pool", "viewer", "offset"],
       "OLD_AFTER_DAYS": "Number"
     },
     "services/trialSignup.js": {
