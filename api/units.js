@@ -82,6 +82,9 @@ function register(api, { pool }) {
     // Filters: one reader for the website and the app (domain/unitFilters.js).
     const f = UnitFilters.read(q, { isOwner: Authz.isAgencyOwner(broker), status });
     UnitFilters.appendTo(where, args, UnitFilters.conditions(f, { brokerId: broker.id, alias: "listings", compound: q.compound ? String(q.compound).slice(0, 120) : "" }));
+    if (q.missingPhotos === "true" || q.missingPhotos === "1") {
+      where.push("NOT EXISTS (SELECT 1 FROM listing_images i WHERE i.listing_id = listings.id AND i.agency_id = listings.agency_id AND (i.role IS NULL OR i.role NOT IN ('document', 'unrelated')))");
+    }
     // The three status counts use every filter except the status itself, so the tabs show their numbers from the start.
     const byStatus = (await pool.query(`SELECT listings.status AS s, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${where.join(" AND ")} AND listings.status IN ('active', 'sold', 'archived') GROUP BY listings.status`, args)).rows;
     const counts = { active: 0, sold: 0, archived: 0 };
@@ -170,6 +173,18 @@ function register(api, { pool }) {
     return res.json({ codes: out, max_photos: 15, ai_cost: Credits.costOf("chat_post") });
   });
 
+  api.get("/units/:code/matching-leads", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await RateLimit.apiGate(pool, res, `reverse-match:broker:${broker.id}`, { limit: 5, windowSec: 60 }))) return;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found) return res.status(404).json({ error: "not_found" });
+    const { whoWants } = require("../services/leadRequests");
+    const { refLabel } = require("../domain/leadCard");
+    const result = await whoWants(pool, broker, found, { cap: 50, lang: broker.preferred_lang === "en" ? "en" : "ar" });
+    return res.json({ partial: Boolean(result.partial), items: result.leads.map((lead) => ({
+      ref: refLabel(lead.ref), name: lead.name, reason: lead.reason
+    })) });
+  });
   api.get("/units/:code", async (req, res) => {
     const { broker } = req.session;
     // findByCode carries the visibility rule: a private unit is a 404 for everyone but the agency owner.

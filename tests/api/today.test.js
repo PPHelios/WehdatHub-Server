@@ -89,3 +89,33 @@ test("the units list can show just the old units the card points to", async () =
   expect(res.status).toBe(200);
   expect(res.body.items.map((u) => u.code)).toEqual(["O-1"]);
 });
+
+test("data entry home previews the oldest three, counts the full visible queue and refreshes after confirmation", async () => {
+  await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  for (const [code, days] of [["NEW", 1], ["O-1", 25], ["O-2", 50], ["O-3", 30], ["O-4", 35]]) {
+    await h.insertListing({ code, confirmed_at: old(days) });
+  }
+  await h.insertListing({ code: "PRIVATE", confirmed_at: old(65), is_private: true });
+  const auth = { Authorization: `Bearer ${await token("colleague")}` };
+  const load = (suffix) => request(h.app.app).get(`/api/v1/today/${suffix}`).set(auth);
+  const brief = await load("home");
+  expect(brief.status).toBe(200);
+  expect(brief.body.units.total).toBe(4);
+  expect(brief.body.units.items.map((u) => u.code)).toEqual(["O-2", "O-4", "O-3"]);
+  const queue = await load("overdue-units?offset=1");
+  expect(queue.status).toBe(200);
+  expect(queue.body.items.map((u) => u.code)).toEqual(["O-4", "O-3", "O-1"]);
+  await h.query("UPDATE listings SET confirmed_at = now() WHERE agency_id = $1 AND code = 'O-2'", [h.AGENCY_A]);
+  const updated = await load("home");
+  expect(updated.body.units.total).toBe(3);
+  expect(updated.body.units.items.map((u) => u.code)).toEqual(["O-4", "O-3", "O-1"]);
+});
+
+test("the evening brief shows recorded agency deals, and personal counts for a broker", async () => {
+  const Today = require("../../services/today");
+  const evening = new Date("2026-11-23T18:30:00Z");
+  const broker = await Today.home(h.pool, await row("broker"), evening);
+  expect(broker).toMatchObject({ hour: 20, completed: 0, tomorrowViewings: 0, ops: null });
+  const manager = await Today.home(h.pool, await row("admin"), evening);
+  expect(manager).toMatchObject({ hour: 20, completed: 0, tomorrowViewings: 0 });
+});

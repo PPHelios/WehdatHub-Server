@@ -34,6 +34,8 @@ function conditions(viewer, f, now) {
     if (f.team && UUID.test(f.team)) put("(sb.team_lead_id = ? OR s.broker_id = ?)", [f.team, f.team]);
   }
 
+  if (f.leadId) put("s.lead_id = ?", [f.leadId]);
+  if (f.mine) put("s.broker_id = ?", [viewer.id]);
   if (f.channel === "whatsapp" || f.channel === "web") put("s.channel = ?", [f.channel]);
   if (f.source === "bot" || f.source === "web" || f.source === "lead") put("s.source = ?", [f.source]);
   if (f.status === "never") where.push("s.open_count = 0");

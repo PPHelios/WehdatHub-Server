@@ -48,7 +48,7 @@ function leadView(l) {
 const ERRORS = {
   phone_required: 422, phone_invalid: 422, name_too_long: 422, notes_too_long: 422, too_many_phones: 422, lawful_basis: 422, kind: 422, assignee: 422, assignee_away: 422,
   lost_reason_required: 422, follow_up_time: 422, past: 422, note_empty: 422, note_too_long: 422, unknown_stage: 422, unit_not_found: 422,
-  forbidden: 403, not_found: 404
+  invalid_update: 422, forbidden: 403, not_found: 404
 };
 
 function register(api, { pool }) {
@@ -65,6 +65,12 @@ function register(api, { pool }) {
     return res.json({ lead: leadView(r.lead || lead), undoEventId: r.eventId || null });
   };
   const tabFilter = (tab) => ({ stage: Stages.STAGES.includes(tab) ? tab : null, dueToday: tab === "due_today", overdue: tab === "overdue", noNextStep: tab === "no_next_step" });
+  const readFilters = (query) => ({
+    q: String(query.q || "").slice(0, 80),
+    brokerId: String(query.broker || ""),
+    assignedLastMonth: query.assigned === "last",
+    queue: query.queue
+  });
   const versionOf = (b) => (b.version === undefined || b.version === null || b.version === "" ? null : Number(b.version));
 
   api.get("/leads", async (req, res) => {
@@ -72,7 +78,7 @@ function register(api, { pool }) {
     const tab = TABS.includes(req.query.tab) ? req.query.tab : "all";
     const offset = Math.max(0, Math.min(parseInt(req.query.offset, 10) || 0, 10000));
     if (offset > ReadCaps.maxOffset(broker, 10000)) return res.status(403).json({ error: "too_deep" });
-    const { rows, more, total } = await Leads.listLeads(pool, broker, { ...tabFilter(tab), q: String(req.query.q || "").slice(0, 80), limit: PAGE, offset, brokerId: String(req.query.broker || "") });
+    const { rows, more, total } = await Leads.listLeads(pool, broker, { ...tabFilter(tab), ...readFilters(req.query), limit: PAGE, offset });
     const cap = await ReadCaps.takeListRows(pool, broker, "leads", rows.length);
     if (!cap.allowed) return res.set("Retry-After", String(cap.retryAfterSec)).status(429).json({ error: "daily_cap" });
     res.json({ items: rows.map(leadView), more, total, offset, limit: PAGE });
@@ -81,9 +87,45 @@ function register(api, { pool }) {
   // The number on every tab, from the start (same filters as the list, with the search text).
   api.get("/leads/counts", async (req, res) => {
     const { broker } = req.session;
-    const q = String(req.query.q || "").slice(0, 80);
-    const counts = await Leads.countTabs(pool, broker, { q, brokerId: String(req.query.broker || "") }, Object.fromEntries(TABS.map((t) => [t, tabFilter(t)])));
+    const counts = await Leads.countTabs(pool, broker, readFilters(req.query), Object.fromEntries(TABS.map((t) => [t, tabFilter(t)])));
     res.json({ counts });
+  });
+
+  api.get("/leads/:ref/matches", async (req, res) => {
+    const lead = await load(req, res);
+    if (!lead) return;
+    const broker = req.session.broker;
+    const lang = broker.preferred_lang === "en" ? "en" : "ar";
+    const requests = await LeadRequests.listRequests(pool, broker, lead);
+    const keys = ["price_min", "price_max", "area_min", "area_max", "bedrooms_min"];
+    const overrides = {};
+    for (const key of keys) {
+      const raw = req.query[key];
+      if (raw === undefined) continue;
+      if (typeof raw !== "string" || (raw !== "clear" && (!/^\d+(?:\.\d+)?$/.test(raw) || Number(raw) > 1e12))) {
+        return res.status(422).json({ error: "invalid_filters" });
+      }
+      overrides[key] = raw === "clear" ? null : Number(raw);
+    }
+    const selected = req.query.requestId;
+    if (selected && !requests.some((request) => request.id === selected)) return res.status(404).json({ error: "not_found" });
+    if (Object.keys(overrides).length && !selected) return res.status(422).json({ error: "invalid_filters" });
+    const filtersFor = (request) => request.id === selected ? { ...request.filters, ...overrides } : request.filters;
+    if (selected && !require("../domain/searchQuery").hasAnyFilter({ filters: filtersFor(requests.find((request) => request.id === selected)) })) {
+      return res.status(422).json({ error: "invalid_filters" });
+    }
+    if ([["price_min", "price_max"], ["area_min", "area_max"]].some(([min, max]) => requests.some((request) => {
+      if (request.id !== selected) return false;
+      const filters = filtersFor(request);
+      return filters[min] != null && filters[max] != null && filters[min] > filters[max];
+    }))) return res.status(422).json({ error: "invalid_filters" });
+    return res.json({ requests: await Promise.all(requests.map(async (request) => {
+      const filters = filtersFor(request);
+      const matches = await LeadRequests.currentMatches(pool, broker.agency_id, filters, { limit: 5 });
+      const criteria = Object.fromEntries(keys.map((key) => [key, filters[key] ?? null]));
+      return { id: request.id, summary: Card.requestSummary(filters, lang), criteria, total: matches.total,
+        items: matches.rows.map((unit) => ({ code: unit.code, title: unit.title })) };
+    })) });
   });
 
   api.get("/leads/:ref", async (req, res) => {
@@ -253,6 +295,34 @@ function register(api, { pool }) {
     if (!lead) return;
     const b = req.body || {};
     return answer(req, res, lead, await Leads.setStage(pool, req.session.broker, lead.id, { stage: b.stage, lostReason: b.lostReason, version: versionOf(b) }));
+  });
+
+  api.post("/leads/:ref/update", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const { stage, note, lostReason, version } = req.body || {};
+    if (!Number.isSafeInteger(version) || version < 0 ||
+        (note !== undefined && (typeof note !== "string" || !note.trim() || note.length > 1000)) ||
+        (stage !== undefined && !Stages.STAGES.includes(stage)) || (!stage && !note)) {
+      return res.status(422).json({ error: "invalid_update" });
+    }
+    if (stage === "lost") {
+      const error = Stages.stageError(stage, typeof lostReason === "string" ? lostReason.trim() : null);
+      if (error) return res.status(422).json({ error });
+    }
+    return answer(req, res, lead, await Leads.applyUpdate(pool, req.session.broker, lead.id, {
+      stage, note, lostReason, version, via: "app_search"
+    }));
+  });
+
+  api.post("/leads/:ref/follow-up/complete", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await load(req, res);
+    if (!lead) return;
+    const version = req.body?.version;
+    if (!Number.isSafeInteger(version) || version < 0) return res.status(422).json({ error: "invalid_update" });
+    return answer(req, res, lead, await Leads.completeFollowUp(pool, req.session.broker, lead.id, { version }));
   });
 
   api.post("/leads/:ref/follow-up", async (req, res) => {

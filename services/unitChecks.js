@@ -79,6 +79,8 @@ async function askStale(pool, { now = new Date(), limit = BATCH } = {}) {
     const { rows } = await client.query(
       `SELECT id FROM listings
         WHERE ${Vis.units("listings")} AND status = 'active' AND inventory_type IS DISTINCT FROM 'developer_model' AND broker_id IS NOT NULL
+          AND EXISTS (SELECT 1 FROM agencies a WHERE a.id = listings.agency_id
+            AND a.notify_policy->'unit_check'->'on' IS DISTINCT FROM 'false'::jsonb)
           AND ${VOUCHED} < $1 AND (stale_asked_at IS NULL OR stale_asked_at < ${VOUCHED})
         ORDER BY ${VOUCHED}, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
       [new Date(now.getTime() - ASK_AFTER_DAYS * DAY).toISOString(), limit]

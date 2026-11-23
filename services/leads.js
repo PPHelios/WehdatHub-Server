@@ -386,6 +386,7 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
     let lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
     if (!Authz.canEditLead(actor, lead) && !Authz.canCollaborateLead(actor, lead)) return { error: "forbidden" };
+    if (u.version != null && u.version !== lead.version) return { conflict: true, lead };
     const eventIds = [];
     const kinds = [];
     const step = async (kind, c) => {
@@ -811,7 +812,23 @@ function tabWhere(f, now, where, add) {
 }
 
 /** The search-text part of a lead filter (L- ref, phone digits or name), added to `where`. */
-function searchWhere(f, where, add) {
+function searchWhere(f, where, add, now) {
+  if (f.queue === "unassigned") where.push("l.assigned_broker_id IS NULL AND l.stage NOT IN ('won', 'lost')");
+  if (f.queue === "uncontacted") where.push("l.stage = 'new' AND l.last_contact_at IS NULL");
+  if (f.queue === "delayed-first-contact") {
+    add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at < ?", new Date(now.getTime() - 86_400_000).toISOString());
+  }
+  if (f.queue === "late-response") add("l.stage = 'new' AND l.last_contact_at IS NULL AND l.response_due_at <= ?", now.toISOString());
+  if (f.queue === "viewings-tomorrow") {
+    add("l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing' AND l.next_follow_up_at >= ?", Stages.cairoDayAt(now, 1, 0).toISOString());
+    add("l.next_follow_up_at < ?", Stages.cairoDayAt(now, 2, 0).toISOString());
+  }
+  if (f.queue === "overdue") tabWhere({ overdue: true }, now, where, add);
+  if (f.assignedLastMonth) {
+    const thisMonth = "date_trunc('month', NOW() AT TIME ZONE 'Africa/Cairo')";
+    where.push(`l.assigned_at >= ((${thisMonth} - interval '1 month') AT TIME ZONE 'Africa/Cairo')`,
+      `l.assigned_at < (${thisMonth} AT TIME ZONE 'Africa/Cairo')`);
+  }
   const q = String(f.q || "").trim();
   if (!q) return;
   const ref = Card.parseRef(q);
@@ -829,7 +846,7 @@ function searchWhere(f, where, add) {
  */
 async function countTabs(pool, actor, f, tabs, { now = new Date() } = {}) {
   const { where, args, add } = scopeWhere(actor, await LeadScope.open(pool, actor), f);
-  searchWhere(f, where, add);
+  searchWhere(f, where, add, now);
   const names = Object.keys(tabs);
   const cols = names.map((t, i) => {
     const tw = [];
@@ -850,7 +867,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   if (f.source) add("l.source = ?", String(f.source));
   if (f.private && Authz.isAgencyOwner(actor)) where.push("l.is_private");
   tabWhere(f, now, where, add);
-  searchWhere(f, where, add);
+  searchWhere(f, where, add, now);
   // Counts only (the app's tab numbers): the same filters, no rows.
   if (f.countOnly) {
     const { rows } = await pool.query(`SELECT count(*)::int AS n ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args);

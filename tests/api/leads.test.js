@@ -103,3 +103,100 @@ test("lead counts can be limited to one broker (managers)", async () => {
   const other = await call("manager", "get", `/leads/counts?broker=${h.BROKERS.colleague.id}`);
   expect(other.body.counts.all).toBe(0);
 });
+test("latest assignment filters counts and list to the same Cairo calendar month", async () => {
+  const older = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Prior assignment" })).body.lead;
+  await call("broker", "post", "/leads", { phone1: "01112345678", name: "Current assignment" });
+  await h.pool.query(
+    "UPDATE leads SET assigned_at = ((date_trunc('month', now() AT TIME ZONE 'Africa/Cairo') - interval '1 day') AT TIME ZONE 'Africa/Cairo') WHERE agency_id = $1 AND ref = $2",
+    [h.BROKERS.broker.agency_id, Number(older.ref.slice(2))]
+  );
+  const listing = await call("broker", "get", "/leads?assigned=last");
+  const counts = await call("broker", "get", "/leads/counts?assigned=last");
+  expect(listing.body.items.map((lead) => lead.ref)).toEqual([older.ref]);
+  expect(counts.body.counts.all).toBe(listing.body.total);
+  expect(counts.body.counts.new).toBe(1);
+  expect((await call("colleague", "get", "/leads?assigned=last")).body.total).toBe(0);
+});
+
+test("confirmed stage and note update atomically and a retry cannot append the note twice", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01112345678", name: "Previewed lead" })).body.lead;
+  const url = `/leads/${lead.ref}/update`;
+  const change = { version: lead.version, stage: "viewing", note: "Confirmed note" };
+  expect((await call("colleague", "post", url, change)).status).toBe(404);
+  expect((await call("broker", "post", url, { ...change, stage: "lost" })).status).toBe(422);
+  expect((await call("broker", "get", `/leads/${lead.ref}`)).body.lead.stage).toBe("new");
+  expect((await call("broker", "post", url, change)).body.lead.stage).toBe("viewing");
+  expect((await call("broker", "post", url, change)).status).toBe(409);
+  const details = (await call("broker", "get", `/leads/${lead.ref}`)).body;
+  expect(details.timeline.filter((event) => event.text === change.note)).toHaveLength(1);
+});
+
+test("uncontacted, pending late first response, and overdue follow-up remain distinct queues", async () => {
+  const created = await call("broker", "post", "/leads", { phone1: "01012345678", name: "Queue fixture" });
+  const ref = created.body.lead.ref;
+  expect((await call("broker", "get", "/leads?queue=uncontacted")).body.total).toBe(1);
+  expect((await call("broker", "get", "/leads?queue=late-response")).body.total).toBe(0);
+  await h.pool.query("UPDATE leads SET response_due_at = now() - interval '1 minute' WHERE agency_id = $1", [h.BROKERS.broker.agency_id]);
+  expect((await call("broker", "get", "/leads/counts?queue=late-response")).body.counts.all).toBe(1);
+  expect((await call("broker", "get", "/leads?queue=late-response")).body.items[0].ref).toBe(ref);
+  expect((await call("broker", "get", "/leads?queue=overdue")).body.total).toBe(0);
+  expect((await call("colleague", "get", "/leads?queue=late-response")).body.total).toBe(0);
+});
+
+test("matching uses a visible lead's saved requests and does not expose another broker's lead", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Matching fixture" })).body.lead;
+  const actor = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  await h.insertListing({ code: "MATCH-01", property_type: "apartment" });
+  const service = require("../../services/leadRequests");
+  expect((await service.saveRequest(h.pool, actor, lead.ref, { property_types: ["apartment"] })).ok).toBe(true);
+  const matches = await call("broker", "get", `/leads/${lead.ref}/matches`);
+  expect(matches.status).toBe(200);
+  expect(matches.body.requests[0].items).toEqual([expect.objectContaining({ code: "MATCH-01" })]);
+  const requestId = matches.body.requests[0].id;
+  const adjusted = await call("broker", "get", `/leads/${lead.ref}/matches?requestId=${requestId}&price_max=1000`);
+  expect(adjusted.status).toBe(200);
+  expect(adjusted.body.requests[0].criteria.price_max).toBe(1000);
+  expect(adjusted.body.requests[0].items).toEqual([]);
+  expect((await call("broker", "get", `/leads/${lead.ref}/matches`)).body.requests[0].criteria.price_max).toBeNull();
+  expect((await call("colleague", "get", `/leads/${lead.ref}/matches`)).status).toBe(404);
+  const reverse = await call("broker", "get", "/units/MATCH-01/matching-leads");
+  expect(reverse.status).toBe(200);
+  expect(reverse.body.items).toEqual([expect.objectContaining({ ref: lead.ref })]);
+  const another = await call("colleague", "get", "/units/MATCH-01/matching-leads");
+  expect(another.body.items).toEqual([]);
+  expect((await call("rival", "get", "/units/MATCH-01/matching-leads")).status).toBe(404);
+});
+
+test("follow-up completion is versioned and removes the lead from its follow-up queue", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01112345678", name: "Follow-up fixture" })).body.lead;
+  const path = `/leads/${lead.ref}/follow-up`;
+  const scheduled = await call("broker", "post", path, { at: new Date(Date.now() + 3600000).toISOString(), kind: "call" });
+  expect(scheduled.status).toBe(200);
+  expect((await call("broker", "post", path + "/complete", { version: lead.version })).status).toBe(409);
+  const completed = await call("broker", "post", path + "/complete", { version: scheduled.body.lead.version });
+  expect(completed.status).toBe(200);
+  expect(completed.body.lead.followUpKind).toBeNull();
+});
+
+test("the missing-photo unit list uses the same filter for rows and status counts", async () => {
+  const withImage = await h.insertListing({ code: "QA-WITH" });
+  await h.insertListing({ code: "QA-WITHOUT" });
+  await h.pool.query("INSERT INTO listing_images (agency_id, listing_id, url, position) VALUES ($1, $2, $3, 0)",
+    [withImage.agency_id, withImage.id, "fixture/photo.jpg"]);
+  const result = await call("broker", "get", "/units?missingPhotos=true");
+  expect(result.status).toBe(200);
+  expect(result.body.items.map((unit) => unit.code)).toEqual(["QA-WITHOUT"]);
+  expect(result.body.counts.active).toBe(1);
+});
+
+test("sent offers filter on the selected lead, even when two leads share a name", async () => {
+  await h.insertListing({ code: "OFFER-A" });
+  await h.insertListing({ code: "OFFER-B" });
+  const a = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Sara" })).body.lead;
+  const b = (await call("broker", "post", "/leads", { phone1: "01112345678", name: "Sara" })).body.lead;
+  expect((await call("broker", "post", `/leads/${a.ref}/send`, { code: "OFFER-A" })).status).toBe(200);
+  expect((await call("broker", "post", `/leads/${b.ref}/send`, { code: "OFFER-B" })).status).toBe(200);
+  const selected = await call("broker", "get", `/opened-links?leadRef=${b.ref}`);
+  expect(selected.body.rows.map((row) => row.unit_code)).toEqual(["OFFER-B"]);
+  expect((await call("colleague", "get", `/opened-links?leadRef=${b.ref}`)).status).toBe(404);
+});

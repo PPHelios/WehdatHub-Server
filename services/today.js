@@ -9,6 +9,7 @@ const Leases = require("./leases");
 const Owners = require("./unitOwners");
 const Describe = require("../domain/describe");
 const Vis = require("../lib/visibility");
+const Stages = require("../domain/leadStages");
 const Authz = require("../lib/authz");
 const { refLabel } = require("../domain/leadCard");
 
@@ -46,14 +47,15 @@ async function scopeIds(pool, v) {
 }
 
 /** Units nobody has confirmed for 21 days (asked or auto-hidden by the check), oldest first. */
-async function oldUnits(pool, v, ids, now) {
-  const args = [v.agency_id, new Date(now.getTime() - OLD_AFTER_DAYS * DAY).toISOString(), CARD_ITEMS];
+async function oldUnits(pool, v, ids, now, limit = CARD_ITEMS, offset = 0) {
+  const args = [v.agency_id, new Date(now.getTime() - OLD_AFTER_DAYS * DAY).toISOString(), limit];
   if (ids) args.push(ids);
+  const page = args.push(offset);
   const { rows } = await pool.query(
     `SELECT l.*, ${VOUCHED} AS vouched, count(*) OVER()::int AS total FROM listings l
       WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.inventory_type IS DISTINCT FROM 'developer_model'
         AND ((l.status = 'active' AND ${VOUCHED} < $2) OR (l.status = 'archived' AND l.stale_hidden_at IS NOT NULL AND l.stale_asked_at >= ${VOUCHED}))${ids ? " AND l.broker_id = ANY($4::uuid[])" : ""}
-      ORDER BY ${VOUCHED}, l.code LIMIT $3`,
+      ORDER BY ${VOUCHED}, l.code LIMIT $3 OFFSET $${page}`,
     args
   );
   if (!rows.length) return null;
@@ -118,4 +120,60 @@ async function oldUnitsFor(pool, viewer, now = new Date()) {
   return oldUnits(pool, viewer, await scopeIds(pool, viewer), now);
 }
 
-module.exports = { build, tasksOf, oldUnitsFor, OLD_AFTER_DAYS };
+/** Search home, scoped independently of the displayed mobile role. */
+async function home(pool, viewer, now = new Date()) {
+  const { hour } = Digest.cairoDay(now);
+  const evening = hour >= 17;
+  const since = Stages.cairoDayAt(now, 0, 0).toISOString();
+  const tomorrow = Stages.cairoDayAt(now, 1, 0).toISOString();
+  const ids = await scopeIds(pool, viewer);
+  if (Authz.isDataEntry(viewer)) {
+    const [units, recent] = await Promise.all([
+      oldUnits(pool, viewer, ids, now, 3),
+      evening ? pool.query(
+        `SELECT count(DISTINCT listing_code)::int AS n FROM operation_logs
+          WHERE agency_id = $1 AND broker_id = $2 AND created_at >= $3 AND created_at < $4
+            AND status = 'success' AND operation_type IN ('app_unit_edit', 'listing_confirmed', 'listing_status_active', 'listing_status_sold', 'listing_status_archived')`,
+        [viewer.agency_id, viewer.id, since, tomorrow]
+      ) : null
+    ]);
+    return { hour, units, completed: recent?.rows[0].n };
+  }
+
+  const [personal, ops, progress, nextDay] = await Promise.all([
+    Digest.briefData(pool, viewer, now),
+    opsCard(pool, viewer, now),
+    evening ? (
+      Authz.isManager(viewer)
+        ? pool.query(
+          `SELECT count(*)::int AS n FROM deals WHERE agency_id = $1 AND status <> 'cancelled' AND closed_at >= $2 AND closed_at < $3`,
+          [viewer.agency_id, since, tomorrow]
+        )
+        : pool.query(
+          `SELECT count(*)::int AS n FROM lead_events e JOIN leads l ON l.id = e.lead_id AND l.agency_id = e.agency_id
+            WHERE ${Vis.leads("l")} AND e.agency_id = $1 AND e.broker_id = ANY($2::uuid[])
+              AND e.created_at >= $3 AND e.created_at < $4 AND e.kind = 'follow_up_done' AND e.undone_at IS NULL`,
+          [viewer.agency_id, ids, since, tomorrow]
+        )
+    ) : null,
+    evening ? pool.query(
+      `SELECT count(*)::int AS n FROM leads l
+        WHERE ${Vis.leads("l")} AND l.agency_id = $1
+          AND ($2::uuid[] IS NULL OR l.assigned_broker_id = ANY($2::uuid[]))
+          AND l.stage NOT IN ('won', 'lost') AND l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing'
+          AND l.next_follow_up_at >= $3 AND l.next_follow_up_at < $4`,
+      [viewer.agency_id, ids, tomorrow, Stages.cairoDayAt(now, 2, 0).toISOString()]
+    ) : null
+  ]);
+  return {
+    hour, ops, tomorrowViewings: nextDay?.rows[0].n, completed: progress?.rows[0].n,
+    overdue: personal.overdue.length, calls: personal.calls.length, newLeads: personal.uncontacted,
+    nextViewing: tasksOf({ ...personal, overdue: [] }).find((task) => task.kind === "viewing" && task.at && new Date(task.at) >= now) || null
+  };
+}
+
+async function overduePage(pool, viewer, offset) {
+  return await oldUnits(pool, viewer, await scopeIds(pool, viewer), new Date(), 20, offset) || { total: 0, items: [] };
+}
+
+module.exports = { build, tasksOf, oldUnitsFor, home, overduePage, OLD_AFTER_DAYS };

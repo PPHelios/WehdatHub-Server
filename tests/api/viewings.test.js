@@ -37,6 +37,11 @@ test("a viewing is set with its message and link, shows in the calendar, and a c
   const cal = await api().get("/api/v1/viewings").set(auth);
   expect(cal.body.items.map((v) => v.leadRef)).toEqual([lead.ref]);
   expect(cal.body.items[0].unitCode).toBe("A-1");
+  const tomorrow = () => api().get("/api/v1/viewings?tomorrow=1").set(auth);
+  expect((await tomorrow()).body.items).toEqual([]);
+  const cairoNoon = require("../../domain/leadStages").cairoDayAt(new Date(), 1, 12);
+  await h.pool.query("UPDATE viewings SET starts_at = $1 WHERE id = $2", [cairoNoon.toISOString(), cal.body.items[0].id]);
+  expect((await tomorrow()).body.items.map((viewing) => viewing.leadRef)).toEqual([lead.ref]);
   expect((await api().post(`/api/v1/leads/${lead.ref}/viewing`).set(await login("colleague")).send({ at })).status).toBe(404);
   expect((await api().post(`/api/v1/leads/${lead.ref}/viewing`).set(auth).send({ at: "nope" })).status).toBe(422);
 });

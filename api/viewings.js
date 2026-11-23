@@ -4,6 +4,7 @@
 "use strict";
 
 const Leads = require("../services/leads");
+const Stages = require("../domain/leadStages");
 const Viewings = require("../services/viewings");
 const Store = require("../lib/listingStore");
 const RateLimit = require("../lib/rateLimit");
@@ -43,8 +44,10 @@ function register(api, { pool }) {
   // The broker's viewings between two dates (default: today and the next 60 days), for the calendar.
   api.get("/viewings", async (req, res) => {
     const { broker } = req.session;
-    const from = new Date(req.query.from || Date.now() - 12 * 3600 * 1000);
-    const to = new Date(req.query.to || Date.now() + 60 * 86400 * 1000);
+    const tomorrow = req.query.tomorrow === "1";
+    const now = new Date();
+    const from = tomorrow ? Stages.cairoDayAt(now, 1, 0) : new Date(req.query.from || now.getTime() - 12 * 3600 * 1000);
+    const to = tomorrow ? Stages.cairoDayAt(now, 2, 0) : new Date(req.query.to || now.getTime() + 60 * 86400 * 1000);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return res.status(400).json({ error: "bad_dates" });
     const { rows } = await pool.query(
       `SELECT v.id, v.starts_at, v.place, v.status, v.client_proposed_at, v.client_note, ld.ref, ld.name, l.code

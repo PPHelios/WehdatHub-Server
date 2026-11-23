@@ -63,6 +63,11 @@ test("owners list answers, and only the agency owner marks private", async () =>
 test("dashboard and win-loss are for managers; prices and reports for everyone", async () => {
   expect((await api().get("/api/v1/dashboard").set(await as("broker"))).status).toBe(403);
   expect((await api().get("/api/v1/dashboard").set(await as("manager"))).status).toBe(200);
+  const scope = "?strictScope=1&broker=";
+  const allowed = await api().get("/api/v1/dashboard" + scope + h.BROKERS.broker.id).set(await as("manager"));
+  expect(allowed.status).toBe(200);
+  expect(allowed.body.brokerId).toBe(h.BROKERS.broker.id);
+  expect((await api().get("/api/v1/dashboard" + scope + h.BROKERS.rival.id).set(await as("manager"))).status).toBe(422);
   expect((await api().get("/api/v1/insights/winloss").set(await as("broker"))).status).toBe(403);
   expect((await api().get("/api/v1/insights/prices").set(await as("broker"))).status).toBe(200);
   expect((await api().post("/api/v1/report").set(await as("broker")).send({ text: "ab" })).status).toBe(422);
@@ -92,4 +97,19 @@ test("catalogue, plan and platform follow the role", async () => {
   expect((await api().post("/api/v1/plan/pay").set(br).send({})).status).toBe(403);
   expect((await api().get("/api/v1/platform").set(ow)).status).toBe(404);
   expect((await api().post("/api/v1/platform/signup").set(br).send({ open: true })).status).toBe(404);
+});
+
+test("Search returns agency credit balance only to owners and managers", async () => {
+  await h.query("UPDATE agencies SET ai_usage_mode = 'per_user', ai_user_default_credits = 25 WHERE id = $1", [h.AGENCY_A]);
+  const balance = (who) => as(who).then((headers) => api().get("/api/v1/search/credits").set(headers));
+  const broker = await balance("broker");
+  expect(broker.status).toBe(200);
+  expect(broker.body).toEqual({ personal: { used: 0, limit: 25, remaining: 25 } });
+  const manager = await balance("manager");
+  expect(manager.body.personal).toEqual(broker.body.personal);
+  expect(manager.body.agency).toEqual(expect.objectContaining({ remaining: expect.any(Number) }));
+  const owner = await balance("owner");
+  expect(owner.body.agency).toEqual(manager.body.agency);
+  await h.query("UPDATE agencies SET ai_usage_mode = 'pool' WHERE id = $1", [h.AGENCY_A]);
+  expect((await balance("broker")).body).toEqual({ personal: { used: 0, limit: null, remaining: null } });
 });

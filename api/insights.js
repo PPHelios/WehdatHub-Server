@@ -8,8 +8,15 @@ const ErrorReports = require("../lib/errorReports");
 
 function register(api, { pool }) {
   api.get("/dashboard", async (req, res) => {
-    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null, teamLeadId: String(req.query.team || "") || null });
-    return d ? res.json(d) : res.status(403).json({ error: "forbidden" });
+    const brokerId = String(req.query.broker || "") || null;
+    const teamLeadId = String(req.query.team || "") || null;
+    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId, teamLeadId });
+    if (!d) return res.status(403).json({ error: "forbidden" });
+    if (req.query.strictScope === "1" &&
+        ((brokerId && d.brokerId !== brokerId) || (teamLeadId && d.teamLeadId !== teamLeadId))) {
+      return res.status(422).json({ error: "invalid_scope" });
+    }
+    return res.json(d);
   });
 
   api.get("/insights/prices", async (req, res) => res.json({ minUnits: Insights.MIN_UNITS, items: await Insights.byPlace(pool, req.session.broker.agency_id) }));

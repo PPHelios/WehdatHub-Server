@@ -28,7 +28,7 @@ function monthRange(month) {
  * The source report for a month: { month, rows: [{ source, leads, deals, commission, spend, perLead, perDeal }], totals }
  * or null for a broker who isn't a manager.
  */
-async function report(pool, actor, { month: monthText = null, now = new Date() } = {}) {
+async function report(pool, actor, { month: monthText = null, now = new Date(), signedOnly = false } = {}) {
   if (!isManager(actor)) return null;
   const month = monthOf(monthText, now);
   const { since, until } = monthRange(month);
@@ -38,7 +38,7 @@ async function report(pool, actor, { month: monthText = null, now = new Date() }
     pool.query(
       `SELECT COALESCE(NULLIF(l.source, ''), '${NONE}') AS source, count(*)::int AS n, COALESCE(sum(d.commission_total - d.external_share), 0)::bigint AS commission
          FROM deals d LEFT JOIN leads l ON l.id = d.lead_id
-        WHERE ${Vis.leads("l")} AND d.agency_id = $1 AND d.closed_at >= $2 AND d.closed_at < $3 AND d.status <> 'cancelled' GROUP BY 1`,
+        WHERE ${Vis.leads("l")} AND d.agency_id = $1 AND d.closed_at >= $2 AND d.closed_at < $3 AND ${signedOnly ? "d.status IN ('signed', 'paid')" : "d.status <> 'cancelled'"} GROUP BY 1`,
       args
     ),
     pool.query("SELECT source, amount_egp FROM ad_spend WHERE agency_id = $1 AND month = $2", [actor.agency_id, month])

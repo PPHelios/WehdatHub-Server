@@ -27,9 +27,14 @@ function register(api, { pool }) {
   api.get("/deals", async (req, res) => {
     const n = Math.max(0, parseInt(req.query.page, 10) || 0);
     const b = req.session.broker;
-    const [list, totals] = await Promise.all([Deals.listDeals(pool, b, { status: req.query.status, offset: n * PAGE }), Deals.monthlyTotals(pool, b)]);
+    const report = ["recent", "last"].includes(req.query.report) ? req.query.report : null;
+    const week = /^[0-4]$/.test(String(req.query.week ?? "")) ? Number(req.query.week) : null;
+    const [list, totals] = await Promise.all([
+      Deals.listDeals(pool, b, { status: report ? null : req.query.status, offset: n * PAGE, report, week }),
+      report ? [] : Deals.monthlyTotals(pool, b)
+    ]);
     // `allowed`: the statuses this person may choose for each deal now (forward, or cancel before paid; managers may reopen with a confirmation).
-    res.json({ items: list.rows.map((r) => ({ ...r, allowed: Deals.allowedStatuses(b, r.status) })), more: list.more, totals, statuses: Deals.STATUSES });
+    res.json({ items: list.rows.map((r) => ({ ...r, allowed: Deals.allowedStatuses(b, r.status) })), more: list.more, totals, summary: list.summary, statuses: Deals.STATUSES });
   });
 
   api.get("/deals/:ref", async (req, res) => {
@@ -97,7 +102,7 @@ function register(api, { pool }) {
   });
 
   api.get("/sources", managers, async (req, res) => {
-    const r = await Sources.report(pool, req.session.broker, { month: req.query.month });
+    const r = await Sources.report(pool, req.session.broker, { month: req.query.month, signedOnly: req.query.signed === "1" });
     return r ? res.json(r) : res.status(403).json({ error: "forbidden" });
   });
 
@@ -161,6 +166,12 @@ function register(api, { pool }) {
       days: req.query.days,
       page: req.query.page
     };
+    if (req.query.leadRef !== undefined) {
+      const lead = await require("../services/leads").getLead(pool, b, String(req.query.leadRef));
+      if (!lead) return res.status(404).json({ error: "not_found" });
+      f.leadId = lead.id;
+      f.mine = true;
+    }
     res.json(await OpenedLinks.list(pool, b, f));
   });
 }

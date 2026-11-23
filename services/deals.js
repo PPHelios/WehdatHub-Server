@@ -224,25 +224,53 @@ async function getDeal(pool, actor, key) {
 }
 
 /** Role-scoped list, newest first, with the viewer's own share. */
-async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0 } = {}) {
+async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null } = {}) {
   const params = [actor.agency_id, actor.id];
   const where = ["d.agency_id = $1"];
   if (!Authz.isManager(actor)) where.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
+  else if (report) where.push("$2::uuid IS NOT NULL");
   if (STATUSES.includes(status)) {
     params.push(status);
     where.push(`d.status = $${params.length}`);
+  }
+  const fromWhere = () => `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
+       LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
+       WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`;
+  const cairo = "d.closed_at AT TIME ZONE 'Africa/Cairo'";
+  const bucket = `(extract(day FROM (${cairo}))::int - 1) / 7`;
+  let summary;
+  if (report) {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en", { timeZone: "Africa/Cairo", year: "numeric", month: "numeric" }).formatToParts(now);
+    const year = Number(parts.find((p) => p.type === "year").value);
+    const month = Number(parts.find((p) => p.type === "month").value);
+    const start = new Date(Date.UTC(year, month - (report === "last" ? 2 : 1), 1));
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+    const date = (d) => d.toISOString().slice(0, 10);
+    params.push(date(start), date(end));
+    where.push("d.status <> 'cancelled'",
+      `d.closed_at >= ($${params.length - 1}::date::timestamp AT TIME ZONE 'Africa/Cairo')`,
+      `d.closed_at < ($${params.length}::date::timestamp AT TIME ZONE 'Africa/Cairo')`);
+    const { rows } = await pool.query(
+      `SELECT ${bucket} AS week, count(*)::int AS count ${fromWhere()} GROUP BY 1`,
+      params
+    );
+    const days = new Date(end.getTime() - 86400000).getUTCDate();
+    summary = { from: date(start), to: date(end), weeks: Array.from({ length: Math.ceil(days / 7) }, (_, i) => rows.find((r) => r.week === i)?.count || 0) };
+    if (week !== null) {
+      params.push(week);
+      where.push(`${bucket} = $${params.length}`);
+    }
   }
   params.push(limit + 1, offset);
   const { rows } = await pool.query(
     `SELECT d.id, d.ref, d.unit_code, d.deal_type, d.price, d.commission_total, d.external_share, d.status, d.closed_at, d.client_name,
             d.closing_broker_id, b.name AS closing_broker_name, l.ref AS lead_ref,
             (SELECT amount FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2) AS my_share
-       FROM deals d LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
-       LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
-      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")} ORDER BY d.closed_at DESC, d.ref DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+       ${fromWhere()} ORDER BY d.closed_at DESC, d.ref DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
-  return { rows: rows.slice(0, limit).map((r) => ({ ...r, my_share: r.my_share == null ? null : Number(r.my_share) })), more: rows.length > limit };
+  return { rows: rows.slice(0, limit).map((r) => ({ ...r, my_share: r.my_share == null ? null : Number(r.my_share) })), more: rows.length > limit, summary };
 }
 
 /**

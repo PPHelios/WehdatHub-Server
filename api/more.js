@@ -204,6 +204,20 @@ function register(api, { pool }) {
     return r.error ? fail(res, r) : res.json(r);
   });
 
+  api.get("/search/credits", async (req, res) => {
+    const broker = req.session.broker;
+    const canSeeAgency = isManager(broker);
+    const [standing, allowance] = await Promise.all([
+      require("../services/aiUserLimits").standing(pool, broker.agency_id, broker.id),
+      canSeeAgency ? Billing.allowance(pool, broker.agency_id) : null
+    ]);
+    const credits = allowance?.credits;
+    return res.json({
+      personal: { used: standing.used, limit: standing.allowance, remaining: standing.remaining },
+      ...(credits ? { agency: { used: credits.used, limit: credits.limit, remaining: Math.max(0, credits.limit - credits.used) } } : {})
+    });
+  });
+
   api.get("/usage", async (req, res) => {
     const b = req.session.broker;
     const [allowance, ai] = await Promise.all([Billing.allowance(pool, b.agency_id), require("../services/aiUserLimits").overview(pool, b)]);
