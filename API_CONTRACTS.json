@@ -93,8 +93,12 @@
     "domain/assistantRouter.js": {
       "MODES": "Array",
       "DAY_MS": "Number",
+      "MAX_RANGE_DAYS": "Number",
       "normalize": ["raw"],
+      "addCairoDaysYmd": ["ymd", "deltaDays"],
+      "cairoMidnight": ["ymd"],
       "extractTimeWindow": ["raw", "now"],
+      "resolveInterval": ["params"],
       "extractSourceFilter": ["q"],
       "classifyAssistantQuery": ["params"]
     },
@@ -2082,6 +2086,7 @@
       "createDeal": ["pool", "actor", "input", "params"],
       "getDeal": ["pool", "actor", "key"],
       "listDeals": ["pool", "actor", "params"],
+      "dealsSummary": ["pool", "actor", "opts"],
       "resaleCommissions": ["pool", "actor", "params"],
       "monthlyTotals": ["pool", "actor", "params"],
       "updateDeal": ["pool", "actor", "key", "change", "params"]

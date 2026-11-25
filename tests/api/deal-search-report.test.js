@@ -65,3 +65,66 @@ test("Deals.createDeal snapshots market and canonical area on deals so later uni
   const [stored] = await h.query("SELECT market, area_key, area_label FROM deals WHERE id = $1", [r.deal.id]);
   expect(stored).toEqual({ market: "primary", area_key: "new cairo", area_label: "New Cairo" });
 });
+
+test("dealsSummary & GET /api/v1/deals separate closer vs participant without double counting, enforce [from, to) & personal team_lead scope, and track unknownMarketCount separately from unknownAreaCount", async () => {
+  const h = await createHarness();
+  const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+  const b1 = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  const b2 = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.colleague.id]))[0];
+  await h.query("UPDATE brokers SET name = 'Sara', preferred_lang = 'en' WHERE id = $1", [b1.id]);
+  await h.query("UPDATE brokers SET name = 'Omar', preferred_lang = 'en' WHERE id = $1", [b2.id]);
+
+  await h.insertListing({ code: "RS-A", broker_id: b2.id, market: "resale", compound: "Hyde Park", district: "New Cairo", area_id: "a0000000-0000-0000-0000-0000000000c1", price_value: 4000000 });
+  await h.insertListing({ code: "RS-B", broker_id: b1.id, market: "resale", compound: "Hyde Park", district: "New Cairo", area_id: "a0000000-0000-0000-0000-0000000000c1", price_value: 5000000 });
+
+  const lead1 = (await Leads.captureLead(h.pool, b2, { phones: "01077770001", name: "C1" })).lead;
+  const lead2 = (await Leads.captureLead(h.pool, b1, { phones: "01077770002", name: "C2" })).lead;
+  const lead3 = (await Leads.captureLead(h.pool, admin, { phones: "01077770003", name: "C3" })).lead;
+
+  // Deal 1: Omar closes (resale, New Cairo), Sara has a 30% split -> closer=Omar, participant includes Sara.
+  const d1 = await Deals.createDeal(h.pool, admin, {
+    leadKey: lead1.ref, unitCode: "RS-A", price: 4000000, mode: "amount", amount: 100000,
+    closingBrokerId: b2.id, splits: [{ brokerId: b1.id, pct: 30 }, { brokerId: b2.id, pct: 70 }], status: "signed"
+  });
+  // Deal 2: Sara closes alone (resale, New Cairo).
+  const d2 = await Deals.createDeal(h.pool, admin, {
+    leadKey: lead2.ref, unitCode: "RS-B", price: 5000000, mode: "amount", amount: 150000,
+    closingBrokerId: b1.id, splits: [{ brokerId: b1.id, pct: 100 }], status: "paid"
+  });
+  // Deal 3: No unit linked (unknown market + unknown area) inside the window.
+  const d3 = await Deals.createDeal(h.pool, admin, {
+    leadKey: lead3.ref, price: 2000000, mode: "amount", amount: 50000,
+    closingBrokerId: b2.id, status: "signed"
+  });
+  expect(d1.ok && d2.ok && d3.ok).toBe(true);
+
+  const summaryCloserSara = await Deals.dealsSummary(h.pool, admin, { brokerId: b1.id, brokerRole: "closer" });
+  expect(summaryCloserSara.deals).toBe(1);
+  expect(summaryCloserSara.commissionTotal).toBe(150000);
+  expect(summaryCloserSara.brokerShareTotal).toBe(150000);
+
+  const summaryPartSara = await Deals.dealsSummary(h.pool, admin, { brokerId: b1.id, brokerRole: "participant" });
+  expect(summaryPartSara.deals).toBe(2);
+  expect(summaryPartSara.commissionTotal).toBe(250000);
+  expect(summaryPartSara.brokerShareTotal).toBe(180000); // 30% of 100k + 150k, zero double-count
+
+  const summaryAll = await Deals.dealsSummary(h.pool, admin, { market: "resale", area: "new cairo" });
+  expect(summaryAll.deals).toBe(2);
+  expect(summaryAll.unknownMarketCount).toBe(1);
+  expect(summaryAll.unknownAreaCount).toBe(1);
+
+  const code = await WebAuth.issueLoginCode(h.pool, admin);
+  const api = request(h.app.app);
+  const token = (await api.post("/api/v1/auth/code/verify").send({ phone: h.BROKERS.admin.phone, code })).body.token;
+  const badRange = await api.get("/api/v1/deals?from=2023-01-01&to=2026-11-20").set("Authorization", `Bearer ${token}`);
+  expect(badRange.status).toBe(422);
+  expect(badRange.body.error).toBe("range_too_large");
+
+  // Team lead remains strictly personal on Deals even when passing brokerId for someone else.
+  await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [b1.id]);
+  const tlCode = await WebAuth.issueLoginCode(h.pool, b1);
+  const tlTok = (await api.post("/api/v1/auth/code/verify").send({ phone: h.BROKERS.broker.phone, code: tlCode })).body.token;
+  const tlDeals = await api.get(`/api/v1/deals?broker=${b2.id}&brokerRole=closer`).set("Authorization", `Bearer ${tlTok}`);
+  expect(tlDeals.status).toBe(200);
+  expect(tlDeals.body.items.every((x) => x.closing_broker_id === b1.id || x.my_share != null)).toBe(true);
+});

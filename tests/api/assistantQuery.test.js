@@ -257,3 +257,38 @@ test("Solo owner scopes personal reports cleanly (my stats, today activity) and 
   expect(queueQ.body.cards[0].canAssign).toBe(false);
   expect(queueQ.body.cards[0].canNudge).toBe(false);
 });
+
+test("Wave 2 assistant executes crm_deals with closer/participant labels, inventory_count, overdue commissions drill-through, clarifies market/mode, and reports appliedFilters", async () => {
+  await h.query("UPDATE brokers SET name = 'Sara', preferred_lang = 'en' WHERE id = $1", [h.BROKERS.broker.id]);
+  await h.insertListing({ code: "INV-1", market: "resale", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", price_value: 3500000 });
+  await h.insertListing({ code: "INV-2", market: "resale", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", price_value: 3800000 });
+  const lead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01099990001", name: "Buyer D" })).lead;
+  const Deals = require("../../services/deals");
+  const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+  await Deals.createDeal(h.pool, admin, { leadKey: lead.ref, unitCode: "INV-1", price: 3500000, mode: "amount", amount: 70000, closingBrokerId: h.BROKERS.broker.id, status: "signed" });
+
+  const hdr = await auth("admin");
+
+  const dealsRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "resale deals closed by Sara this month", mode: "auto" });
+  expect(dealsRes.status).toBe(200);
+  expect(dealsRes.body.intent).toBe("crm_deals");
+  expect(dealsRes.body.headline).toMatch(/Closed by Sara/i);
+  expect(dealsRes.body.understood.appliedFilters.length).toBeGreaterThan(0);
+  expect(dealsRes.body.links[0]).toMatchObject({ screen: "Deals", params: expect.objectContaining({ market: "resale", brokerRole: "closer" }) });
+
+  const countRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "how many apartments do we have in Hyde Park?", mode: "auto" });
+  expect(countRes.status).toBe(200);
+  expect(countRes.body.intent).toBe("inventory_count");
+  expect(countRes.body.headline).toMatch(/1/);
+
+  const commRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "overdue developer commissions", mode: "auto" });
+  expect(commRes.status).toBe(200);
+  expect(commRes.body.intent).toBe("crm_commissions");
+  expect(commRes.body.links[0]).toMatchObject({ screen: "Commissions", params: { kind: "developers", overdue: true } });
+
+  const clarFin = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "شقق في زايد بمقدم مليون", mode: "auto" });
+  expect(clarFin.status).toBe(200);
+  expect(clarFin.body.intent).toBe("clarify");
+  expect(clarFin.body.actions.some((a) => a.kind === "pivot_mode" && a.mode === "resale")).toBe(true);
+  expect(clarFin.body.actions.some((a) => a.kind === "pivot_mode" && a.mode === "primary")).toBe(true);
+});

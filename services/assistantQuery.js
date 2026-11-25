@@ -7,6 +7,7 @@ const Authz = require("../lib/authz");
 const Segments = require("../domain/segments");
 const Vis = require("../lib/visibility");
 const Dash = require("./dashboards");
+const Deals = require("./deals");
 const Leads = require("./leads");
 const LeadRules = require("./leadRules");
 const Commissions = require("./commissions");
@@ -104,22 +105,49 @@ async function runCrmLeads(pool, actor, queueHint, en) {
 const DAY_MS = 24 * 3600 * 1000;
 
 function resolveRange(windowInfo, now, defaultDays = 30) {
-  if (windowInfo && windowInfo.since && windowInfo.until) {
+  const start = windowInfo?.from || windowInfo?.since;
+  const end = windowInfo?.to || windowInfo?.until;
+  if (start && end) {
+    const s = new Date(start);
+    const e = new Date(end);
     return {
-      since: new Date(windowInfo.since),
-      until: new Date(windowInfo.until),
+      since: s,
+      until: e,
+      from: s,
+      to: e,
       labelEn: windowInfo.labelEn,
       labelAr: windowInfo.labelAr,
-      daysSpan: Math.max(1, Math.round((new Date(windowInfo.until).getTime() - new Date(windowInfo.since).getTime()) / DAY_MS))
+      daysSpan: Math.max(1, Math.round((e.getTime() - s.getTime()) / DAY_MS))
     };
   }
+  const interval = Router.resolveInterval({ days: defaultDays, now });
   return {
-    since: new Date(now.getTime() - defaultDays * DAY_MS),
-    until: now,
+    since: interval.from,
+    until: interval.to,
+    from: interval.from,
+    to: interval.to,
     labelEn: `Last ${defaultDays} days`,
     labelAr: `آخر ${defaultDays} يوم`,
     daysSpan: defaultDays
   };
+}
+
+function buildUnitAppliedFilters(filters, marketLock, en) {
+  const out = [];
+  const f = filters || {};
+  const mkt = f.market || marketLock;
+  if (mkt === "resale") out.push(en ? "Market: Resale" : "السوق: ريسيل");
+  else if (mkt === "primary") out.push(en ? "Market: Primary" : "السوق: برايمري");
+  if (f.listing_type === "sale") out.push(en ? "Type: Sale" : "الغرض: بيع");
+  else if (f.listing_type === "rent") out.push(en ? "Type: Rent" : "الغرض: إيجار");
+  if (Array.isArray(f.property_types) && f.property_types.length) out.push(f.property_types.join("/"));
+  if (Array.isArray(f.places) && f.places.length) out.push(f.places.map((p) => p.key).join(", "));
+  else if (Array.isArray(f.place_terms) && f.place_terms.length) out.push(f.place_terms.join(", "));
+  if (f.price_max != null) out.push(en ? `Price <= ${f.price_max}` : `السعر <= ${f.price_max}`);
+  if (f.price_min != null) out.push(en ? `Price >= ${f.price_min}` : `السعر >= ${f.price_min}`);
+  if (f.bedrooms_min != null) out.push(en ? `${f.bedrooms_min}+ beds` : `${f.bedrooms_min}+ غرف`);
+  if (f.sort) out.push(en ? `Sort: ${f.sort}` : `الترتيب: ${f.sort}`);
+  return out;
 }
 
 async function runDisciplineOrBroker(pool, actor, routeInfo, now, en) {
@@ -292,8 +320,140 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en) {
   };
 }
 
-async function runExecutiveReport(pool, actor, routeInfo, now, en) {
+async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "") {
   const { route, windowInfo, sourceFilter } = routeInfo;
+  if (route === "crm_deals") {
+    const range = resolveRange(windowInfo, now, 30);
+    const personalOnly = !isManagerOrOwner(actor) || !hasMultiBrokerScope(actor);
+    let brokerId = null;
+    let brokerName = null;
+    let brokerRole = routeInfo.brokerRole === "participant" ? "participant" : "closer";
+    if (routeInfo.brokerQuery) {
+      const nq = Router.normalize(routeInfo.brokerQuery);
+      if (personalOnly && !Router.normalize(actor.name || "").includes(nq)) {
+        return {
+          intent: "clarify",
+          headline: en ? "Deals are personal-only for your role." : "الصفقات شخصية بس لصلاحياتك الحالية.",
+          windowLabel: en ? "Access scope" : "الصلاحيات",
+          cards: [],
+          actions: [],
+          links: [{ label: en ? "My Deals" : "صفقاتي", screen: "Deals", params: {} }],
+          aiUsed: false
+        };
+      }
+      const { rows: brokers } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY is_active DESC, name", [actor.agency_id]);
+      const match = brokers.find((b) => Router.normalize(b.name).includes(nq));
+      if (!match) {
+        return {
+          intent: "clarify",
+          headline: en ? `Could not find a team member matching "${routeInfo.brokerQuery}".` : `ملقيناش حد بالاسم "${routeInfo.brokerQuery}".`,
+          windowLabel: en ? range.labelEn : range.labelAr,
+          cards: [],
+          actions: [],
+          links: [{ label: en ? "Open Deals" : "افتح الصفقات", screen: "Deals", params: {} }],
+          aiUsed: false
+        };
+      }
+      brokerId = match.id;
+      brokerName = match.name;
+    } else if (personalOnly) {
+      brokerId = actor.id;
+      brokerName = actor.name || null;
+      brokerRole = "participant";
+    }
+
+    let areaKey = null;
+    let areaLabel = routeInfo.areaQuery || null;
+    if (routeInfo.areaQuery) {
+      const aq = Router.normalize(routeInfo.areaQuery);
+      const { rows: arRows } = await pool.query(
+        "SELECT name_key, name_en FROM areas WHERE lower(name_key) = $1 OR lower(name_en) LIKE $2 LIMIT 1",
+        [aq, `%${aq}%`]
+      );
+      if (arRows[0]) {
+        areaKey = arRows[0].name_key;
+        areaLabel = arRows[0].name_en || areaLabel;
+      } else {
+        const { rows: synRows } = await pool.query(
+          "SELECT key FROM compound_synonyms WHERE kind = 'area' AND synonym_norm LIKE $1 LIMIT 1",
+          [`%${aq}%`]
+        );
+        areaKey = synRows[0]?.key || aq;
+      }
+    }
+
+    const marketFilter = routeInfo.market || null;
+    const summary = await Deals.dealsSummary(pool, actor, {
+      from: range.since,
+      to: range.until,
+      brokerId,
+      brokerRole,
+      market: marketFilter,
+      area: areaKey
+    });
+
+    const appliedFilters = [
+      en ? `Window: ${range.labelEn}` : `الفترة: ${range.labelAr}`,
+      ...(marketFilter ? [en ? `Market: ${marketFilter}` : `السوق: ${marketFilter === "resale" ? "ريسيل" : "برايمري"}`] : []),
+      ...(areaLabel ? [en ? `Area: ${areaLabel}` : `المنطقة: ${areaLabel}`] : []),
+      ...(brokerName ? [brokerRole === "participant" ? (en ? `Involved in: ${brokerName}` : `بمشاركة: ${brokerName}`) : (en ? `Closed by: ${brokerName}` : `قفلها: ${brokerName}`)] : [])
+    ];
+    const rolePrefix = brokerName
+      ? (brokerRole === "participant" ? (en ? `Involved in by ${brokerName}` : `بمشاركة ${brokerName}`) : (en ? `Closed by ${brokerName}` : `قفلها ${brokerName}`))
+      : (en ? "Deals" : "الصفقات");
+    const mktPrefix = marketFilter ? (en ? `${marketFilter} · ` : `${marketFilter === "resale" ? "ريسيل" : "برايمري"} · `) : "";
+    const headline = en
+      ? `${summary.deals} deal(s) · ${mktPrefix}${rolePrefix}`
+      : `${summary.deals} صفقة · ${mktPrefix}${rolePrefix}`;
+    const noteParts = [];
+    if (summary.unknownMarketCount > 0) noteParts.push(en ? `${summary.unknownMarketCount} with unknown market` : `${summary.unknownMarketCount} بدون تحديد السوق`);
+    if (summary.unknownAreaCount > 0) noteParts.push(en ? `${summary.unknownAreaCount} with unknown area` : `${summary.unknownAreaCount} بدون تحديد المنطقة`);
+
+    return {
+      intent: "crm_deals",
+      headline,
+      windowLabel: [en ? range.labelEn : range.labelAr, noteParts.join(" · ")].filter(Boolean).join(" · "),
+      understood: {
+        job: "deals_report",
+        market: marketFilter,
+        brokerRole,
+        appliedFilters,
+        exclusions: routeInfo.exclusions || [],
+        unsupportedFilters: []
+      },
+      cards: [
+        {
+          kind: "metric_row",
+          items: [
+            { label: en ? "Deals" : "الصفقات", value: summary.deals, tone: summary.deals ? "ok" : "neutral" },
+            { label: en ? "Recorded commission" : "عمولة الصفقة المسجلة", value: summary.commissionTotal, tone: "ok", unit: "EGP" },
+            ...(summary.brokerShareTotal != null ? [{ label: en ? "Broker share" : "نصيب البروكر", value: summary.brokerShareTotal, tone: "neutral", unit: "EGP" }] : []),
+            { label: en ? "Deal volume" : "حجم المبيعات", value: summary.volume, tone: "neutral", unit: "EGP" }
+          ]
+        },
+        ...(summary.byMarket.length > 1
+          ? [{
+              kind: "bar_breakdown",
+              title: en ? "By market" : "حسب السوق",
+              rows: summary.byMarket.map((m) => ({ key: m.market, label: m.market, count: m.deals, valueLabel: `${m.deals} · ${Number(m.commissionTotal || 0).toLocaleString("en-US")}` }))
+            }]
+          : [])
+      ],
+      actions: [],
+      links: [{
+        label: en ? "Open Deals" : "افتح الصفقات",
+        screen: "Deals",
+        params: {
+          from: range.since.toISOString(),
+          to: range.until.toISOString(),
+          ...(brokerId ? { brokerId, brokerRole } : {}),
+          ...(marketFilter ? { market: marketFilter } : {}),
+          ...(areaKey ? { area: areaKey } : {})
+        }
+      }],
+      aiUsed: false
+    };
+  }
   if (route === "crm_viewings") {
     const range = resolveRange(windowInfo, now, 1);
     const params = [actor.agency_id, range.since.toISOString(), range.until.toISOString()];
@@ -443,24 +603,35 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
     };
   }
   if (route === "crm_commissions") {
-    const page = await Commissions.pageCommissions(pool, actor, { limit: 5, now });
-    const t = page?.totals || { count: 0, expected: 0, claimed: 0, paid: 0, outstanding: 0, overdue: 0 };
+    const overdueOnly = /\boverdue\b|متاخر/i.test(cleanText || "");
+    const page = await Commissions.pageCommissions(pool, actor, { ...(overdueOnly ? { overdue: true } : {}), limit: 5, now });
+    const t = page?.totals || { count: 0, expected: 0, claimed: 0, paid: 0, outstanding: 0, overdue: 0, overdueAmount: 0 };
     return {
       intent: "crm_commissions",
-      headline: en ? `Developer commissions · ${Number(t.outstanding || 0).toLocaleString("en-US")} EGP outstanding` : `عمولات المطورين · ${Number(t.outstanding || 0).toLocaleString("en-US")} ج.م مستحق`,
-      windowLabel: en ? "All active commissions" : "كل العمولات القائمة",
+      headline: overdueOnly
+        ? (en ? `Overdue developer commissions · ${Number(t.overdue || 0)} (${Number(t.overdueAmount || t.outstanding || 0).toLocaleString("en-US")} EGP)` : `عمولات مطورين متأخرة · ${Number(t.overdue || 0)} (${Number(t.overdueAmount || t.outstanding || 0).toLocaleString("en-US")} ج.م)`)
+        : (en ? `Developer commissions · ${Number(t.outstanding || 0).toLocaleString("en-US")} EGP outstanding` : `عمولات المطورين · ${Number(t.outstanding || 0).toLocaleString("en-US")} ج.م مستحق`),
+      windowLabel: overdueOnly ? (en ? "Overdue developer claims" : "مطالبات متأخرة") : (en ? "All active commissions" : "كل العمولات القائمة"),
+      understood: {
+        job: "commissions_report",
+        market: "primary",
+        appliedFilters: [en ? "Kind: Developer commissions" : "النوع: عمولات مطورين", ...(overdueOnly ? [en ? "Status: Overdue" : "الحالة: متأخرة"] : [])],
+        exclusions: [],
+        unsupportedFilters: []
+      },
       cards: [
         {
           kind: "metric_row",
           items: [
+            ...(overdueOnly ? [{ label: en ? "Overdue" : "متأخرة", value: Number(t.overdue || 0), tone: t.overdue ? "critical" : "ok" }] : []),
             { label: en ? "Outstanding" : "الباقي", value: Number(t.outstanding || 0), tone: t.overdue ? "critical" : "warn", unit: "EGP" },
             { label: en ? "Paid" : "المدفوع", value: Number(t.paid || 0), tone: "ok", unit: "EGP" },
-            { label: en ? "Overdue" : "متأخرة", value: Number(t.overdue || 0), tone: t.overdue ? "critical" : "neutral" }
+            ...(!overdueOnly ? [{ label: en ? "Overdue" : "متأخرة", value: Number(t.overdue || 0), tone: t.overdue ? "critical" : "neutral" }] : [])
           ]
         }
       ],
       actions: [],
-      links: [{ label: en ? "Open Commissions" : "افتح العمولات", screen: "Commissions", params: {} }],
+      links: [{ label: overdueOnly ? (en ? "Overdue commissions" : "العمولات المتأخرة") : (en ? "Open Commissions" : "افتح العمولات"), screen: "Commissions", params: { kind: "developers", ...(overdueOnly ? { overdue: true } : {}) } }],
       aiUsed: false
     };
   }
@@ -698,6 +869,39 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
     };
   }
 
+  if (routeInfo.route === "clarify") {
+    if (routeInfo.clarifyKind === "switch_mode_reports") {
+      return {
+        intent: "clarify",
+        modeUsed: safeMode,
+        headline: en ? "This looks like a CRM / team question — switch to Reports or Auto." : "ده سؤال تقارير / عملاء — حوّل لوضع التقارير أو التلقائي.",
+        windowLabel: en ? "Mode mismatch" : "تغيير الوضع",
+        understood: { job: "clarify_mode", market: "primary", appliedFilters: [], exclusions: [], unsupportedFilters: [] },
+        cards: [],
+        actions: [
+          { kind: "pivot_mode", mode: "reports", label: en ? "Switch to Reports" : "حوّل للتقارير" },
+          { kind: "pivot_mode", mode: "auto", label: en ? "Ask in Auto" : "اسأل في التلقائي" }
+        ],
+        links: [],
+        aiUsed: false
+      };
+    }
+    return {
+      intent: "clarify",
+      modeUsed: safeMode,
+      headline: en ? "Which market would you like to search?" : "تحب تدور في أي سوق؟",
+      windowLabel: en ? "Choose market" : "اختر السوق",
+      understood: { job: "clarify_market", market: null, appliedFilters: [], exclusions: routeInfo.exclusions || [], unsupportedFilters: [] },
+      cards: [],
+      actions: [
+        { kind: "pivot_mode", mode: "resale", label: en ? "Search Resale units" : "دور في الريسيل" },
+        { kind: "pivot_mode", mode: "primary", label: en ? "Search Primary developer projects" : "دور في مشاريع المطورين (برايمري)" }
+      ],
+      links: [],
+      aiUsed: false
+    };
+  }
+
   if (routeInfo.route === "crm_leads") {
     const r = await runCrmLeads(pool, actor, routeInfo.queueHint, en);
     return { modeUsed: safeMode, ...r };
@@ -707,8 +911,55 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
     return { modeUsed: safeMode, ...r };
   }
   if (routeInfo.route.startsWith("crm_")) {
-    const r = await runExecutiveReport(pool, actor, routeInfo, now, en);
+    const r = await runExecutiveReport(pool, actor, routeInfo, now, en, cleanText);
     return { modeUsed: safeMode, ...r };
+  }
+
+  if (routeInfo.route === "inventory_count") {
+    const marketLock = routeInfo.market || "resale";
+    const searchCtx = ViewGuard.active() ? { lang } : { pool, AI, broker: actor, agency, lang };
+    const unitText = Router.normalize(cleanText)
+      .replace(/^(?:how many|count|total)\s+/i, "")
+      .replace(/\b(?:available|do we have|we have|are there|in stock|in inventory)\b/gi, " ")
+      .replace(/^(?:كام|كم|عدد)\s+/, "")
+      .replace(/\b(?:متاحه|متاح|عندنا|موجوده|موجود|في المخزون)\b/g, " ")
+      .replace(/[؟?!.,]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || cleanText;
+    const found = await Search.search({ pool, AI, agencyId: actor.agency_id, text: unitText, ctx: searchCtx, pageSize: 20, market: marketLock, allowDrop: true });
+    const rows = Array.isArray(found.rows) ? found.rows : [];
+    const total = Math.min(found.total || 0, Search.SNAPSHOT_MAX);
+    const appliedFilters = buildUnitAppliedFilters(found.parsed?.filters, marketLock, en);
+    const unapplied = found.parsed?.meta?.unapplied || [];
+    const reading = found.parsed?.filters ? String(formatInterpretation(found.parsed, lang) || "").replace(/\*/g, "") : "";
+    const f = found.parsed?.filters ? SearchLink.encodeFilters(found.parsed.filters) : null;
+    const photos = rows.length
+      ? (await pool.query("SELECT DISTINCT ON (listing_id) listing_id, url FROM listing_images WHERE listing_id = ANY($1::uuid[]) AND agency_id = $2 ORDER BY listing_id, position", [rows.map((r) => r.id), actor.agency_id])).rows
+      : [];
+    const photoOf = new Map(photos.map((p) => [p.listing_id, Storage.photoUrl(p.url)]));
+    const thumbOf = new Map(photos.map((p) => [p.listing_id, Storage.thumbUrl(p.url)]));
+    const items = rows.map((r) => unitDto(r, actor.id, photoOf, thumbOf));
+    return {
+      intent: "inventory_count",
+      modeUsed: safeMode,
+      headline: en ? `${total} matching available unit(s)` : `عندنا ${total} وحدة متاحة مطابقة`,
+      windowLabel: reading,
+      understood: {
+        job: "inventory_count",
+        market: found.parsed?.filters?.market || marketLock,
+        appliedFilters,
+        exclusions: routeInfo.exclusions || [],
+        unsupportedFilters: unapplied
+      },
+      cards: [{
+        kind: "metric_row",
+        items: [{ label: en ? "Available units" : "وحدات متاحة", value: total, tone: total ? "ok" : "neutral" }]
+      }],
+      units: { status: items.length ? "results" : "none", total, marketLock, reading, f, items },
+      actions: total === 0 && marketLock === "resale" ? [{ kind: "pivot_mode", mode: "primary", label: en ? "Search Primary projects instead?" : "تدور في مشاريع المطورين (برايمري)؟" }] : [],
+      links: [{ label: en ? "Open all units" : "كل الوحدات", screen: "UnitsList", params: {} }],
+      aiUsed: found.source === "ai"
+    };
   }
 
   if (routeInfo.route === "primary") {
@@ -722,6 +973,13 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
       modeUsed: safeMode,
       headline: en ? "Primary & Developer Projects" : "مشاريع المطورين (برايمري)",
       windowLabel: data?.total_projects ? (en ? `${data.total_projects} matching project(s)` : `${data.total_projects} مشروع مطابق`) : "",
+      understood: {
+        job: "project_info",
+        market: "primary",
+        appliedFilters: [en ? "Market: Primary projects" : "السوق: مشاريع المطورين"],
+        exclusions: routeInfo.exclusions || [],
+        unsupportedFilters: []
+      },
       cards: [{
         kind: "text_answer",
         answer: answerText,
@@ -739,7 +997,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
 
   // Default & `resale` lock: strictly unit search without mixing Primary project Q&A.
   const explicitResale = /\bresale\b|ريسيل|اعاده البيع/.test(Router.normalize(cleanText));
-  const marketLock = safeMode === "resale" || explicitResale ? "resale" : null;
+  const marketLock = safeMode === "resale" || explicitResale || routeInfo.market === "resale" ? "resale" : null;
   const searchCtx = ViewGuard.active() ? { lang } : { pool, AI, broker: actor, agency, lang };
   const found = await Search.search({
     pool,
@@ -761,11 +1019,19 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
   const f = found.parsed?.filters ? SearchLink.encodeFilters(found.parsed.filters) : null;
   const aiUsed = found.source === "ai";
   const effectiveMarketLock = found.parsed?.filters?.market || marketLock || null;
+  const appliedFilters = buildUnitAppliedFilters(found.parsed?.filters, effectiveMarketLock, en);
   const guesses = (found.parsed?.meta?.guesses || []).map((g) => ({ typed: g.typed, as: g.as }));
   const unapplied = found.parsed?.meta?.unapplied || [];
   const ignoredTerms = found.ignoredTerms || [];
   const sort = found.parsed?.filters?.sort || null;
   const total = Math.min(found.total || 0, Search.SNAPSHOT_MAX);
+  const understood = {
+    job: "find_units",
+    market: effectiveMarketLock,
+    appliedFilters,
+    exclusions: routeInfo.exclusions || [],
+    unsupportedFilters: unapplied
+  };
 
   let counts;
   if (found.status === "results" || found.status === "none") {
@@ -780,10 +1046,14 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
       modeUsed: safeMode,
       headline: en ? "No matching Resale units found" : "مفيش وحدات ريسيل مطابقة دلوقتي",
       windowLabel: reading,
+      understood,
       units: { status: "none", total: 0, counts, marketLock: effectiveMarketLock, sort, relaxed: Boolean(found.relaxed), reading, f, guesses, unapplied, ignoredTerms, items: [] },
       cards: [],
       suggestPrimary: true,
-      actions: [{ kind: "pivot_mode", mode: "primary", label: en ? "Search Primary projects instead?" : "تدور في مشاريع المطورين (برايمري)؟" }],
+      actions: [
+        ...(effectiveMarketLock === "resale" ? [{ kind: "view_all_markets", label: en ? "View all markets" : "عرض كل الأسواق" }] : []),
+        { kind: "pivot_mode", mode: "primary", label: en ? "Search Primary projects instead?" : "تدور في مشاريع المطورين (برايمري)؟" }
+      ],
       links: [{ label: en ? "Unit filters" : "فلاتر الوحدات", screen: "UnitsList", params: {} }],
       aiUsed
     };
@@ -794,6 +1064,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
     modeUsed: safeMode,
     headline: en ? `${total || items.length} unit(s) found` : `لقينا ${total || items.length} وحدة`,
     windowLabel: reading,
+    understood,
     units: {
       status: found.status === "ask" ? "ask" : "results",
       total,

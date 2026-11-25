@@ -252,23 +252,66 @@ async function getDeal(pool, actor, key) {
   return deal;
 }
 
-/** Role-scoped list, newest first, with the viewer's own share. */
-async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null } = {}) {
+function buildDealWhere(actor, { status = null, from = null, to = null, brokerId = null, brokerRole = "closer", market = null, area = null, excludeCancelled = false } = {}) {
+  const manager = Authz.isManager(actor);
   const params = [actor.agency_id, actor.id];
-  const where = ["d.agency_id = $1"];
-  if (!Authz.isManager(actor)) where.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
-  else if (report) where.push("$2::uuid IS NOT NULL");
+  const baseWhere = ["d.agency_id = $1", "$2::uuid IS NOT NULL"];
+  if (excludeCancelled) baseWhere.push("d.status <> 'cancelled'");
+  if (!manager) {
+    baseWhere.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
+  } else if (brokerId && UUID.test(String(brokerId))) {
+    params.push(brokerId);
+    const colIdx = params.length;
+    if (brokerRole === "participant") {
+      baseWhere.push(`(d.closing_broker_id = $${colIdx} OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $${colIdx}))`);
+    } else {
+      baseWhere.push(`d.closing_broker_id = $${colIdx}`);
+    }
+  }
   if (STATUSES.includes(status)) {
     params.push(status);
-    where.push(`d.status = $${params.length}`);
+    baseWhere.push(`d.status = $${params.length}`);
   }
+  if (from && to) {
+    params.push(new Date(from).toISOString(), new Date(to).toISOString());
+    baseWhere.push(`d.closed_at >= $${params.length - 1} AND d.closed_at < $${params.length}`);
+  }
+  const baseParams = [...params];
+  const where = [...baseWhere];
+  if (market === "unknown") {
+    where.push("d.market IS NULL");
+  } else if (market === "primary" || market === "resale") {
+    params.push(market);
+    where.push(`d.market = $${params.length}`);
+  }
+  if (area === "unknown") {
+    where.push("d.area_key IS NULL");
+  } else if (area && String(area).trim()) {
+    params.push(String(area).trim().toLowerCase());
+    where.push(`lower(d.area_key) = $${params.length}`);
+  }
+  return { params, baseParams, baseWhere, where, scopeBrokerId: manager ? (UUID.test(String(brokerId)) ? brokerId : null) : actor.id };
+}
+
+/** Role-scoped list, newest first, with the viewer's own share. */
+async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null, from = null, to = null, brokerId = null, brokerRole = "closer", market = null, area = null } = {}) {
+  const { params, where } = buildDealWhere(actor, {
+    status: report && !(from && to) ? null : status,
+    from,
+    to,
+    brokerId,
+    brokerRole,
+    market,
+    area
+  });
+  if (report && !(from && to)) where.push("$2::uuid IS NOT NULL");
   const fromWhere = () => `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
        LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
        WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`;
   const cairo = "d.closed_at AT TIME ZONE 'Africa/Cairo'";
   const bucket = `(extract(day FROM (${cairo}))::int - 1) / 7`;
   let summary;
-  if (report) {
+  if (report && !(from && to)) {
     const now = new Date();
     const parts = new Intl.DateTimeFormat("en", { timeZone: "Africa/Cairo", year: "numeric", month: "numeric" }).formatToParts(now);
     const year = Number(parts.find((p) => p.type === "year").value);
@@ -293,13 +336,66 @@ async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0,
   }
   params.push(limit + 1, offset);
   const { rows } = await pool.query(
-    `SELECT d.id, d.ref, d.unit_code, d.deal_type, d.price, d.commission_total, d.external_share, d.status, d.closed_at, d.client_name,
+    `SELECT d.id, d.ref, d.unit_code, d.market, d.area_key, d.area_label, d.deal_type, d.price, d.commission_total, d.external_share, d.status, d.closed_at, d.client_name,
             d.closing_broker_id, b.name AS closing_broker_name, l.ref AS lead_ref,
             (SELECT amount FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2) AS my_share
        ${fromWhere()} ORDER BY d.closed_at DESC, d.ref DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   return { rows: rows.slice(0, limit).map((r) => ({ ...r, my_share: r.my_share == null ? null : Number(r.my_share) })), more: rows.length > limit, summary };
+}
+
+/**
+ * Aggregated deal summary using the exact same SQL classification, closer/participant split, and snapshot columns as listDeals.
+ * Separates unknownMarketCount from unknownAreaCount and never double-counts split deals.
+ */
+async function dealsSummary(pool, actor, opts = {}) {
+  const { params, baseParams, baseWhere, where, scopeBrokerId } = buildDealWhere(actor, { ...opts, excludeCancelled: opts.status !== "cancelled" });
+  const join = `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id WHERE ${Vis.leads("l")}`;
+  const filteredSql = `${join} AND ${where.join(" AND ")}`;
+  const baseSql = `${join} AND ${baseWhere.join(" AND ")}`;
+
+  let shareSelect = "NULL::bigint AS broker_share_total";
+  const aggParams = [...params];
+  if (scopeBrokerId) {
+    aggParams.push(scopeBrokerId);
+    const spIdx = aggParams.length;
+    shareSelect = `COALESCE(SUM(COALESCE((SELECT SUM(s.amount) FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $${spIdx}), 0)), 0)::bigint AS broker_share_total`;
+  }
+
+  const [{ rows: head }, { rows: unkRows }, { rows: byMkt }, { rows: byAr }] = await Promise.all([
+    pool.query(
+      `SELECT count(*)::int AS deals, COALESCE(SUM(d.price), 0)::bigint AS volume, COALESCE(SUM(d.commission_total), 0)::bigint AS commission_total, ${shareSelect} ${filteredSql}`,
+      aggParams
+    ),
+    pool.query(
+      `SELECT count(*) FILTER (WHERE d.market IS NULL)::int AS unknown_market_count, count(*) FILTER (WHERE d.area_key IS NULL)::int AS unknown_area_count ${baseSql}`,
+      baseParams
+    ),
+    pool.query(
+      `SELECT coalesce(d.market, 'unknown') AS market, count(*)::int AS deals, COALESCE(SUM(d.commission_total), 0)::bigint AS commission_total, COALESCE(SUM(d.price), 0)::bigint AS volume ${filteredSql} GROUP BY 1 ORDER BY 2 DESC`,
+      params
+    ),
+    pool.query(
+      `SELECT coalesce(d.area_key, 'unknown') AS area_key, coalesce(d.area_label, 'Unknown') AS area_label, count(*)::int AS deals, COALESCE(SUM(d.commission_total), 0)::bigint AS commission_total, COALESCE(SUM(d.price), 0)::bigint AS volume ${filteredSql} GROUP BY 1, 2 ORDER BY 3 DESC, 2`,
+      params
+    )
+  ]);
+
+  const h = head[0] || {};
+  const u = unkRows[0] || {};
+  return {
+    deals: Number(h.deals || 0),
+    volume: Number(h.volume || 0),
+    commissionTotal: Number(h.commission_total || 0),
+    brokerShareTotal: h.broker_share_total == null ? null : Number(h.broker_share_total),
+    commissionBasis: scopeBrokerId && !Authz.isManager(actor) ? "broker_share" : "deal_commission",
+    brokerRole: opts.brokerRole === "participant" ? "participant" : "closer",
+    unknownMarketCount: Number(u.unknown_market_count || 0),
+    unknownAreaCount: Number(u.unknown_area_count || 0),
+    byMarket: byMkt.map((r) => ({ market: r.market, deals: Number(r.deals || 0), commissionTotal: Number(r.commission_total || 0), volume: Number(r.volume || 0) })),
+    byArea: byAr.map((r) => ({ areaKey: r.area_key, areaLabel: r.area_label, deals: Number(r.deals || 0), commissionTotal: Number(r.commission_total || 0), volume: Number(r.volume || 0) }))
+  };
 }
 
 /**
@@ -431,4 +527,4 @@ async function updateDeal(pool, actor, key, change = {}, { version = null, now =
   });
 }
 
-module.exports = { STATUSES, statusMoveError, allowedStatuses, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, resaleCommissions, monthlyTotals, updateDeal };
+module.exports = { STATUSES, statusMoveError, allowedStatuses, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, dealsSummary, resaleCommissions, monthlyTotals, updateDeal };
