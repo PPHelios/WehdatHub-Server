@@ -6,6 +6,63 @@ const Stages = require("./leadStages");
 
 const MODES = Object.freeze(["auto", "resale", "primary", "reports"]);
 const DAY_MS = 24 * 3600 * 1000;
+const MAX_RANGE_DAYS = 730;
+
+const MONTHS = new Map([
+  ["jan", 1], ["january", 1], ["يناير", 1],
+  ["feb", 2], ["february", 2], ["فبراير", 2],
+  ["mar", 3], ["march", 3], ["مارس", 3],
+  ["apr", 4], ["april", 4], ["ابريل", 4],
+  ["may", 5], ["مايو", 5],
+  ["jun", 6], ["june", 6], ["يونيو", 6], ["يونيه", 6],
+  ["jul", 7], ["july", 7], ["يوليو", 7], ["يوليه", 7],
+  ["aug", 8], ["august", 8], ["اغسطس", 8],
+  ["sep", 9], ["sept", 9], ["september", 9], ["سبتمبر", 9],
+  ["oct", 10], ["october", 10], ["اكتوبر", 10],
+  ["nov", 11], ["november", 11], ["نوفمبر", 11],
+  ["dec", 12], ["december", 12], ["ديسمبر", 12]
+]);
+const MONTH_PATTERN = [...MONTHS.keys()].sort((a, b) => b.length - a.length).join("|");
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function addCairoDaysYmd(ymd, deltaDays) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + deltaDays)).toISOString().slice(0, 10);
+}
+
+function cairoMidnight(ymd) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const check = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(check.getTime()) || check.toISOString().slice(0, 10) !== ymd) return null;
+  let at = Stages.fromCairoLocal(`${ymd}T00:00`);
+  if (!at) return null;
+  // On Egypt's spring-forward midnight (00:00 -> 01:00), step forward to the first instant of Cairo day `ymd`.
+  while (Stages.toCairoLocal(at).slice(0, 10) < ymd) {
+    at = new Date(at.getTime() + 30 * 60 * 1000);
+  }
+  // On autumn fall-back, step back if an earlier UTC instant is already on Cairo day `ymd`.
+  while (Stages.toCairoLocal(new Date(at.getTime() - 30 * 60 * 1000)).slice(0, 10) === ymd) {
+    at = new Date(at.getTime() - 30 * 60 * 1000);
+  }
+  return Stages.toCairoLocal(at).slice(0, 10) === ymd ? at : null;
+}
+
+function cairoWeekdayMon0(ymd) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+}
+
+function makeWindow({ key, from, to, kind = "calendar", inclusiveEndCairoDate = null, labelEn, labelAr }) {
+  return { key, from, to, since: from, until: to, kind, inclusiveEndCairoDate, labelEn, labelAr };
+}
+
+function resolveRangeFromYmds(key, startYmd, endInclusiveYmd, labelEn, labelAr, kind = "range") {
+  const from = cairoMidnight(startYmd);
+  const to = cairoMidnight(addCairoDaysYmd(endInclusiveYmd, 1));
+  if (!from || !to || from >= to || (to.getTime() - from.getTime()) / DAY_MS > MAX_RANGE_DAYS) return null;
+  return makeWindow({ key, from, to, kind, inclusiveEndCairoDate: endInclusiveYmd, labelEn, labelAr });
+}
 
 function normalize(raw) {
   return String(raw || "")
@@ -21,52 +78,153 @@ function normalize(raw) {
 }
 
 /**
- * Extracts a Cairo calendar window from natural EN/AR text, or null when unstated.
+ * Extracts a strict Cairo [from, to) calendar interval from natural EN/AR text, or null when unstated.
  */
 function extractTimeWindow(raw, now = new Date()) {
   const q = normalize(raw);
-  const cairoNow = Stages.toCairoLocal(now); // YYYY-MM-DDTHH:MM
-  const dayStart = Stages.cairoDayAt(now, 0, 0);
-  const tomorrowStart = Stages.cairoDayAt(now, 1, 0);
-  const dayAfterStart = Stages.cairoDayAt(now, 2, 0);
+  const todayYmd = Stages.cairoDay(now);
+  const todayStart = cairoMidnight(todayYmd);
+  const tomorrowYmd = addCairoDaysYmd(todayYmd, 1);
+  const tomorrowStart = cairoMidnight(tomorrowYmd);
+  const [curY, curM] = todayYmd.split("-").map(Number);
 
+  // 1. Explicit ISO range: 2026-11-01 to 2026-11-15 / من 2026-11-01 لـ 2026-11-15
+  const isoRange = q.match(/\b(\d{4}-\d{2}-\d{2})\s*(?:-|–|—|to|through|لـ|ل|الي|حتي)\s*(\d{4}-\d{2}-\d{2})\b/);
+  if (isoRange) {
+    return resolveRangeFromYmds("custom_range", isoRange[1], isoRange[2], `${isoRange[1]} – ${isoRange[2]}`, `${isoRange[1]} – ${isoRange[2]}`);
+  }
+
+  // 2. Inclusive named-month day range: "1-15 Nov [2026]" / "من ١ لـ ١٥ نوفمبر" / "Nov 1-15"
+  const dayFirst = q.match(new RegExp(`(?:^|\\s)(?:من\\s+)?(\\d{1,2})\\s*(?:-|–|—|to|through|لـ|ل|الي|حتي)\\s*(\\d{1,2})\\s+(${MONTH_PATTERN})(?:\\s+(\\d{4}))?(?=\\s|$|[؟?!.,])`));
+  if (dayFirst) {
+    const d1 = Number(dayFirst[1]);
+    const d2 = Number(dayFirst[2]);
+    const mNum = MONTHS.get(dayFirst[3]);
+    let year = dayFirst[4] ? Number(dayFirst[4]) : curY;
+    if (!dayFirst[4] && mNum > curM) year = curY - 1;
+    const sYmd = `${year}-${pad2(mNum)}-${pad2(d1)}`;
+    const eYmd = `${year}-${pad2(mNum)}-${pad2(d2)}`;
+    return resolveRangeFromYmds("custom_range", sYmd, eYmd, `${sYmd} – ${eYmd}`, `${sYmd} – ${eYmd}`);
+  }
+
+  const monFirst = q.match(new RegExp(`\\b(${MONTH_PATTERN})\\s+(\\d{1,2})\\s*(?:-|–|—|to|through)\\s*(?:(${MONTH_PATTERN})\\s+)?(\\d{1,2})(?:\\s*,?\\s*(\\d{4}))?\\b`));
+  if (monFirst) {
+    const m1 = MONTHS.get(monFirst[1]);
+    const d1 = Number(monFirst[2]);
+    const m2 = monFirst[3] ? MONTHS.get(monFirst[3]) : m1;
+    const d2 = Number(monFirst[4]);
+    let endYear = monFirst[5] ? Number(monFirst[5]) : curY;
+    if (!monFirst[5] && m2 > curM) endYear = curY - 1;
+    const startYear = m1 > m2 ? endYear - 1 : endYear;
+    const sYmd = `${startYear}-${pad2(m1)}-${pad2(d1)}`;
+    const eYmd = `${endYear}-${pad2(m2)}-${pad2(d2)}`;
+    return resolveRangeFromYmds("custom_range", sYmd, eYmd, `${sYmd} – ${eYmd}`, `${sYmd} – ${eYmd}`);
+  }
+
+  // 3. Open-anchor windows: "since yesterday", "من امبارح", "since today", "since 2026-11-10"
+  if (/\b(?:since|from)\s+yesterday\b|من\s+(?:امبارح|امس)/.test(q)) {
+    const yestYmd = addCairoDaysYmd(todayYmd, -1);
+    return makeWindow({ key: "since_yesterday", from: cairoMidnight(yestYmd), to: now, kind: "open_end", inclusiveEndCairoDate: todayYmd, labelEn: "Since yesterday", labelAr: "من امبارح" });
+  }
+  if (/\b(?:since|from)\s+today\b|من\s+(?:النهارده|اليوم)/.test(q)) {
+    return makeWindow({ key: "since_today", from: todayStart, to: now, kind: "open_end", inclusiveEndCairoDate: todayYmd, labelEn: "Since today", labelAr: "من النهارده" });
+  }
+  const sinceIso = q.match(/(?:\b(?:since|from)\s+|من\s+)(\d{4}-\d{2}-\d{2})\b/);
+  if (sinceIso) {
+    const start = cairoMidnight(sinceIso[1]);
+    if (start && start < now && (now.getTime() - start.getTime()) / DAY_MS <= MAX_RANGE_DAYS) {
+      return makeWindow({ key: "since_date", from: start, to: now, kind: "open_end", inclusiveEndCairoDate: todayYmd, labelEn: `Since ${sinceIso[1]}`, labelAr: `من ${sinceIso[1]}` });
+    }
+  }
+
+  // 4. Rolling N hours / weeks / days
+  const hrsMatch = q.match(/(?:\b(?:last|past)\s+(\d+)\s*h(?:ours?|rs?)?\b|(?:اخر|خلال)\s+(\d+)\s*(?:ساعه|ساعات))/);
+  if (hrsMatch) {
+    const n = Math.min(24 * MAX_RANGE_DAYS, Math.max(1, Number(hrsMatch[1] || hrsMatch[2])));
+    return makeWindow({ key: `last_${n}h`, from: new Date(now.getTime() - n * 3600 * 1000), to: now, kind: "rolling", labelEn: `Last ${n} hours`, labelAr: `آخر ${n} ساعة` });
+  }
+
+  if (/\b(?:last|past)\s+2\s+weeks?\b|(?:اخر\s+اسبوعين|اسبوعين)/.test(q)) {
+    const startYmd = addCairoDaysYmd(todayYmd, -13);
+    return resolveRangeFromYmds("last_14d", startYmd, todayYmd, "Last 14 days", "آخر ١٤ يوم", "rolling");
+  }
+  const weeksMatch = q.match(/(?:\b(?:last|past)\s+(\d+)\s+weeks?\b|(?:اخر)\s+(\d+)\s*(?:اسبوع|اسابيع))/);
+  if (weeksMatch) {
+    const w = Math.min(104, Math.max(1, Number(weeksMatch[1] || weeksMatch[2])));
+    const startYmd = addCairoDaysYmd(todayYmd, -(w * 7 - 1));
+    return resolveRangeFromYmds(`last_${w * 7}d`, startYmd, todayYmd, `Last ${w} weeks`, `آخر ${w} أسابيع`, "rolling");
+  }
+
+  const daysMatch = q.match(/(?:\b(?:last|past)\s+(\d+)\s+days?\b|(?:اخر)\s+(\d+)\s*(?:يوم|ايام))/);
+  if (daysMatch) {
+    const d = Math.min(MAX_RANGE_DAYS, Math.max(1, Number(daysMatch[1] || daysMatch[2])));
+    const startYmd = addCairoDaysYmd(todayYmd, -(d - 1));
+    return resolveRangeFromYmds(`last_${d}d`, startYmd, todayYmd, d === 7 ? "Last 7 days" : `Last ${d} days`, `آخر ${d} أيام`, "rolling");
+  }
+
+  // 5. Calendar named presets
   if (/\b(tomorrow)\b|بكره|غدا/.test(q)) {
-    return { key: "tomorrow", since: tomorrowStart, until: dayAfterStart, labelEn: "Tomorrow", labelAr: "بكرة" };
+    return makeWindow({ key: "tomorrow", from: tomorrowStart, to: cairoMidnight(addCairoDaysYmd(todayYmd, 2)), inclusiveEndCairoDate: tomorrowYmd, labelEn: "Tomorrow", labelAr: "بكرة" });
   }
   if (/\b(today|this morning|so far)\b|النهارده|اليوم/.test(q)) {
-    return { key: "today", since: dayStart, until: tomorrowStart, labelEn: "Today", labelAr: "النهارده" };
+    return makeWindow({ key: "today", from: todayStart, to: tomorrowStart, inclusiveEndCairoDate: todayYmd, labelEn: "Today", labelAr: "النهارده" });
   }
   if (/\b(yesterday)\b|امبارح|امس/.test(q)) {
-    return { key: "yesterday", since: Stages.cairoDayAt(now, -1, 0), until: dayStart, labelEn: "Yesterday", labelAr: "امبارح" };
+    const yestYmd = addCairoDaysYmd(todayYmd, -1);
+    return makeWindow({ key: "yesterday", from: cairoMidnight(yestYmd), to: todayStart, inclusiveEndCairoDate: yestYmd, labelEn: "Yesterday", labelAr: "امبارح" });
   }
-  if (/\b(this week|past 7|last 7|weekly)\b|الاسبوع ده|هذا الاسبوع|اخر 7 ايام|اسبوعيا/.test(q)) {
-    return { key: "this_week", since: Stages.cairoDayAt(now, -6, 0), until: tomorrowStart, labelEn: "Last 7 days", labelAr: "آخر ٧ أيام" };
+  if (/\b(this week|weekly)\b|الاسبوع ده|هذا الاسبوع|اسبوعيا/.test(q)) {
+    const thisMonYmd = addCairoDaysYmd(todayYmd, -cairoWeekdayMon0(todayYmd));
+    return resolveRangeFromYmds("this_week", thisMonYmd, todayYmd, "This week", "الأسبوع ده", "calendar");
   }
   if (/\b(last week)\b|الاسبوع اللي فات|الاسبوع الماضي/.test(q)) {
-    return { key: "last_week", since: Stages.cairoDayAt(now, -13, 0), until: Stages.cairoDayAt(now, -6, 0), labelEn: "Previous 7 days", labelAr: "الأسبوع اللي فات" };
+    const thisMonYmd = addCairoDaysYmd(todayYmd, -cairoWeekdayMon0(todayYmd));
+    const prevMonYmd = addCairoDaysYmd(thisMonYmd, -7);
+    const prevSunYmd = addCairoDaysYmd(thisMonYmd, -1);
+    return resolveRangeFromYmds("last_week", prevMonYmd, prevSunYmd, "Last week", "الأسبوع اللي فات", "calendar");
   }
   if (/\b(last month)\b|الشهر اللي فات|الشهر الماضي/.test(q)) {
-    const [y, m] = cairoNow.slice(0, 7).split("-").map(Number);
-    const py = m === 1 ? y - 1 : y;
-    const pm = m === 1 ? 12 : m - 1;
-    const since = Stages.fromCairoLocal(`${py}-${String(pm).padStart(2, "0")}-01T00:00`);
-    const until = Stages.fromCairoLocal(`${y}-${String(m).padStart(2, "0")}-01T00:00`);
-    return { key: "last_month", since, until, labelEn: "Last month", labelAr: "الشهر اللي فات" };
+    const py = curM === 1 ? curY - 1 : curY;
+    const pm = curM === 1 ? 12 : curM - 1;
+    const thisMonth01 = `${curY}-${pad2(curM)}-01`;
+    const prevMonth01 = `${py}-${pad2(pm)}-01`;
+    return resolveRangeFromYmds("last_month", prevMonth01, addCairoDaysYmd(thisMonth01, -1), "Last month", "الشهر اللي فات", "calendar");
   }
   if (/\b(this month)\b|الشهر ده|هذا الشهر/.test(q)) {
-    const ym = cairoNow.slice(0, 7);
-    const [y, m] = ym.split("-").map(Number);
-    const ny = m === 12 ? y + 1 : y;
-    const nm = m === 12 ? 1 : m + 1;
-    return {
-      key: "this_month",
-      since: Stages.fromCairoLocal(`${ym}-01T00:00`),
-      until: Stages.fromCairoLocal(`${ny}-${String(nm).padStart(2, "0")}-01T00:00`),
-      labelEn: "This month",
-      labelAr: "الشهر ده"
-    };
+    const ny = curM === 12 ? curY + 1 : curY;
+    const nm = curM === 12 ? 1 : curM + 1;
+    const thisMonth01 = `${curY}-${pad2(curM)}-01`;
+    const nextMonth01 = `${ny}-${pad2(nm)}-01`;
+    return resolveRangeFromYmds("this_month", thisMonth01, addCairoDaysYmd(nextMonth01, -1), "This month", "الشهر ده", "calendar");
   }
   return null;
+}
+
+/**
+ * Validates explicit API [from, to) bounds or resolves fallback N Cairo calendar days.
+ * Explicit `from` / `to` always take precedence over legacy `days` / `period`. Date-only `to` is inclusive.
+ */
+function resolveInterval({ from = null, to = null, days = 30, now = new Date(), maxDays = MAX_RANGE_DAYS } = {}) {
+  const todayYmd = Stages.cairoDay(now);
+  if (from || to) {
+    const parseBound = (v, isEnd) => {
+      const s = String(v || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return cairoMidnight(isEnd ? addCairoDaysYmd(s, 1) : s);
+      }
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const fromDt = from ? parseBound(from, false) : cairoMidnight(addCairoDaysYmd(todayYmd, -Math.max(1, Number(days) || 30) + 1));
+    const toDt = to ? parseBound(to, true) : cairoMidnight(addCairoDaysYmd(todayYmd, 1));
+    if (!fromDt || !toDt || fromDt >= toDt) return { error: "invalid_range" };
+    if ((toDt.getTime() - fromDt.getTime()) / DAY_MS > maxDays) return { error: "range_too_large" };
+    return { from: fromDt, to: toDt, since: fromDt, until: toDt, kind: "explicit" };
+  }
+  const n = Math.min(maxDays, Math.max(1, Number(days) || 30));
+  const fromDt = cairoMidnight(addCairoDaysYmd(todayYmd, -(n - 1)));
+  const toDt = cairoMidnight(addCairoDaysYmd(todayYmd, 1));
+  return { from: fromDt, to: toDt, since: fromDt, until: toDt, kind: "days" };
 }
 
 const SOURCE_ALIASES = [
@@ -93,8 +251,13 @@ function extractSourceFilter(q) {
 
 function stripWindowWords(raw) {
   return String(raw || "")
-    .replace(/\b(today|tomorrow|yesterday|this week|last week|this month|last month|this morning|so far|past 7 days|last 7 days|weekly)\b/gi, "")
-    .replace(/النهارده|اليوم|بكره|غدا|امبارح|امس|الاسبوع ده|هذا الاسبوع|الاسبوع اللي فات|الاسبوع الماضي|الشهر ده|هذا الشهر|الشهر اللي فات|الشهر الماضي|اخر 7 ايام|اسبوعيا/g, "")
+    .replace(new RegExp(`(?:من\\s+)?\\d{1,2}\\s*(?:-|–|—|to|through|لـ|ل|الي|حتي)\\s*\\d{1,2}\\s+(?:${MONTH_PATTERN})(?:\\s+\\d{4})?`, "gi"), "")
+    .replace(new RegExp(`\\b(?:${MONTH_PATTERN})\\s+\\d{1,2}\\s*(?:-|–|—|to|through)\\s*(?:(?:${MONTH_PATTERN})\\s+)?\\d{1,2}(?:\\s*,?\\s*\\d{4})?\\b`, "gi"), "")
+    .replace(/\b\d{4}-\d{2}-\d{2}\s*(?:-|–|—|to|through|لـ|ل|الي|حتي)\s*\d{4}-\d{2}-\d{2}\b/gi, "")
+    .replace(/\b(?:since|from)\s+(?:yesterday|today|\d{4}-\d{2}-\d{2})\b|من\s+(?:امبارح|امس|النهارده|اليوم|\d{4}-\d{2}-\d{2})/gi, "")
+    .replace(/\b(?:last|past)\s+\d+\s+(?:h(?:ours?|rs?)?|days?|weeks?)\b|(?:اخر|خلال)\s+\d+\s*(?:ساعه|ساعات|يوم|ايام|اسبوع|اسابيع|اسبوعين)/gi, "")
+    .replace(/\b(today|tomorrow|yesterday|this week|last week|last 2 weeks|this month|last month|this morning|so far|past 7 days|last 7 days|weekly)\b/gi, "")
+    .replace(/النهارده|اليوم|بكره|غدا|امبارح|امس|الاسبوع ده|هذا الاسبوع|الاسبوع اللي فات|الاسبوع الماضي|اخر اسبوعين|اسبوعين|الشهر ده|هذا الشهر|الشهر اللي فات|الشهر الماضي|اخر 7 ايام|اسبوعيا/g, "")
     .replace(/\b(in|on|during|for|في|خلال)\s*$/i, "")
     .replace(/[؟?!.,]+$/g, "")
     .replace(/\s+/g, " ")
@@ -212,4 +375,4 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date() } =
   return { route: "unit_search" };
 }
 
-module.exports = { MODES, DAY_MS, normalize, extractTimeWindow, extractSourceFilter, classifyAssistantQuery };
+module.exports = { MODES, DAY_MS, MAX_RANGE_DAYS, normalize, addCairoDaysYmd, cairoMidnight, extractTimeWindow, resolveInterval, extractSourceFilter, classifyAssistantQuery };
