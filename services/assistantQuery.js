@@ -150,7 +150,32 @@ function buildUnitAppliedFilters(filters, marketLock, en) {
   return out;
 }
 
-async function runDisciplineOrBroker(pool, actor, routeInfo, now, en) {
+function buildDisambiguateResponse({ queryText, rawBroker, matches, en }) {
+  const escaped = String(rawBroker || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = escaped ? new RegExp(escaped, "i") : null;
+  const replaceBroker = (fullName) => (re && re.test(queryText) ? queryText.replace(re, fullName) : `${queryText} ${fullName}`.trim());
+  return {
+    intent: "disambiguate",
+    headline: en ? `Which "${rawBroker}" did you mean?` : `تقصد أنهي "${rawBroker}"؟`,
+    windowLabel: en ? "Choose team member" : "اختر البروكر",
+    cards: [
+      {
+        kind: "disambiguate",
+        prompt: rawBroker,
+        options: matches.slice(0, 6).map((b) => ({
+          id: b.id,
+          label: b.name,
+          query: replaceBroker(b.name)
+        }))
+      }
+    ],
+    actions: [],
+    links: [],
+    aiUsed: false
+  };
+}
+
+async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText = "") {
   if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
     return {
       intent: "clarify",
@@ -268,6 +293,9 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en) {
 
   if (route === "crm_broker") {
     const matches = Router.findMatchingBrokers(board, brokerQuery);
+    if (matches.length > 1) {
+      return buildDisambiguateResponse({ queryText: cleanText || brokerQuery, rawBroker: brokerQuery, matches, en });
+    }
     const match = matches[0] || null;
     if (!match) {
       return {
@@ -343,6 +371,9 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       }
       const { rows: brokers } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY is_active DESC, name", [actor.agency_id]);
       const matches = Router.findMatchingBrokers(brokers, routeInfo.brokerQuery);
+      if (matches.length > 1) {
+        return buildDisambiguateResponse({ queryText: cleanText || routeInfo.brokerQuery, rawBroker: routeInfo.brokerQuery, matches, en });
+      }
       const match = matches[0] || null;
       if (!match) {
         return {
@@ -937,7 +968,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
     return { modeUsed: safeMode, ...r };
   }
   if (routeInfo.route === "crm_discipline" || routeInfo.route === "crm_broker" || routeInfo.route === "crm_team") {
-    const r = await runDisciplineOrBroker(pool, actor, routeInfo, now, en);
+    const r = await runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText);
     return { modeUsed: safeMode, ...r };
   }
   if (routeInfo.route.startsWith("crm_")) {

@@ -325,3 +325,24 @@ test("Wave 3 Task 1: stateful previousContext follow-ups (broker filter & budget
   expect(bump.body.units.total).toBe(1);
   expect(bump.body.units.items[0].code).toBe("BUMP-47B");
 });
+
+test("Wave 3 Task 2: two matching brokers return disambiguate card without guessing", async () => {
+  await h.query("UPDATE brokers SET name = 'Sara Ahmed', preferred_lang = 'en' WHERE id = $1", [h.BROKERS.broker.id]);
+  await h.query("UPDATE brokers SET name = 'Sara Hassan', preferred_lang = 'en' WHERE id = $1", [h.BROKERS.colleague.id]);
+  const hdr = await auth("admin");
+
+  const dealsRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "deals closed by Sara this month", mode: "reports" });
+  expect(dealsRes.status).toBe(200);
+  expect(dealsRes.body.intent).toBe("disambiguate");
+  expect(dealsRes.body.cards[0]).toMatchObject({
+    kind: "disambiguate",
+    options: expect.arrayContaining([
+      expect.objectContaining({ id: h.BROKERS.broker.id, label: "Sara Ahmed", query: expect.stringMatching(/Sara Ahmed/i) }),
+      expect.objectContaining({ id: h.BROKERS.colleague.id, label: "Sara Hassan", query: expect.stringMatching(/Sara Hassan/i) })
+    ])
+  });
+
+  const actRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "what did Sara do today", mode: "reports" });
+  expect(actRes.status).toBe(200);
+  expect(actRes.body.intent).toBe("disambiguate");
+});
