@@ -789,6 +789,10 @@ function scopeWhere(actor, seeAll, f) {
     if (f.mine) add("l.assigned_broker_id = ?", actor.id);
     else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
     else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
+    else if (f.teamLeadId && UUID.test(f.teamLeadId)) {
+      args.push(f.teamLeadId);
+      where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);
+    }
   } else if (Authz.isTeamLead(actor)) {
     // A team lead's list: their own leads and the leads of brokers in their team.
     args.push(actor.id);
@@ -797,6 +801,10 @@ function scopeWhere(actor, seeAll, f) {
   } else if (!Authz.isManager(actor)) add("l.assigned_broker_id = ?", actor.id);
   else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
   else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
+  else if (f.teamLeadId && UUID.test(f.teamLeadId)) {
+    args.push(f.teamLeadId);
+    where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);
+  }
   return { where, args, add };
 }
 
@@ -817,6 +825,9 @@ function searchWhere(f, where, add, now) {
   if (f.queue === "uncontacted") where.push("l.stage = 'new' AND l.last_contact_at IS NULL");
   if (f.queue === "delayed-first-contact") {
     add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at < ?", new Date(now.getTime() - 86_400_000).toISOString());
+  }
+  if (f.queue === "waiting-over-1h") {
+    add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at < ?", new Date(now.getTime() - 3_600_000).toISOString());
   }
   if (f.queue === "late-response") add("l.stage = 'new' AND l.last_contact_at IS NULL AND l.response_due_at <= ?", now.toISOString());
   if (f.queue === "viewings-tomorrow") {
@@ -1074,7 +1085,55 @@ async function restoreBrokerLeads(pool, agencyId, brokerId, { actorId = null, no
   return { count };
 }
 
+/** Sends a manual manager/team-lead coaching nudge to a lead's current active holder (1 per lead per 2h). */
+async function nudgeLead(pool, actor, refOrId, { now = new Date() } = {}) {
+  if (!Authz.isManager(actor) && !Authz.isTeamLead(actor)) return { error: "forbidden" };
+  const lead = await getLead(pool, actor, refOrId);
+  if (!lead) return { error: "not_found" };
+  if (!Authz.isManager(actor) && lead.assigned_broker_id !== actor.id && lead.assignee_team_lead_id !== actor.id) {
+    return { error: "not_found" };
+  }
+  if (!lead.assigned_broker_id || Stages.CLOSED.includes(lead.stage)) return { error: "invalid_update" };
+  const { rows: holderRows } = await pool.query(
+    `SELECT ${BROKER_COLS} FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active`,
+    [lead.assigned_broker_id, actor.agency_id]
+  );
+  const holder = holderRows[0];
+  if (!holder) return { error: "not_found" };
+  const RateLimit = require("../lib/rateLimit");
+  const gate = await RateLimit.hit(pool, `lead_nudge:${lead.id}`, { limit: 1, windowSec: 7200 });
+  if (!gate.allowed) return { error: "too_many", retryAfterSec: gate.retryAfterSec };
+  const ref = Card.refLabel(lead.ref);
+  const en = holder.preferred_lang === "en";
+  const who = `${Card.displayName(lead, en ? "en" : "ar")} (${ref})`;
+  const actorName = actor.name || (en ? "Your manager" : "مديرك");
+  const outcome = await Notifications.notifyBroker(pool, holder, {
+    kind: "follow_up",
+    dedupeKey: `lead_nudge:${lead.id}:${Math.floor(now.getTime() / 60000)}`,
+    title: en ? `🔔 Update requested on ${who}` : `🔔 مطلوب تحديث بخصوص ${who}`,
+    body: en ? `${actorName} asked for a quick status update.` : `${actorName} بيسألك على آخر تحديث للعميل.`,
+    url: `/app/leads/${ref}`,
+    leadId: lead.id,
+    buttons: [
+      { id: `ld:called:${ref}`, title: en ? "📞 Called" : "📞 كلمته" },
+      { id: `ld:fu:${ref}`, title: en ? "📅 Follow-up" : "📅 متابعة" },
+      { id: `ld:note:${ref}`, title: en ? "📝 Add update" : "📝 أضف تحديث" }
+    ],
+    now,
+    urgent: true
+  });
+  logOperation(pool, {
+    agency_id: actor.agency_id,
+    broker_id: actor.id,
+    operation_type: "lead_nudge",
+    status: "success",
+    metadata: { lead_ref: ref, target_broker_id: holder.id }
+  });
+  return { ok: true, delivered: Boolean(outcome) };
+}
+
 module.exports = {
+  nudgeLead,
   restoreBrokerLeads,
   historyFor,
   historyPeople,
