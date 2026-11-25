@@ -31,6 +31,10 @@ function allowsFeature(actor, feature) {
   return !actor?.workspace || Segments.allows(actor.workspace, feature);
 }
 
+function hasMultiBrokerScope(actor) {
+  return allowsFeature(actor, "seeAll");
+}
+
 function unitDto(r, brokerId, photoOf, thumbOf) {
   const { unitView } = require("../api/units");
   return {
@@ -59,7 +63,7 @@ async function runCrmLeads(pool, actor, queueHint, en) {
   const queue = queueHint || "waiting-over-1h";
   const { rows, total } = await Leads.listLeads(pool, actor, { queue, limit: 5, offset: 0 });
   const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
-  const canNudge = isManagerOrOwner(actor) || isTeamLead(actor);
+  const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
   const stuckHolders = new Set(rows.map((r) => r.assigned_broker_id).filter(Boolean));
   const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, stuckHolders) : [];
   const labelMap = {
@@ -131,6 +135,24 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en) {
     };
   }
   const { route, brokerQuery, teamQuery, windowInfo } = routeInfo;
+  if (!hasMultiBrokerScope(actor)) {
+    const q = Router.normalize(brokerQuery || "");
+    const selfMatch = route === "crm_broker" && q && Router.normalize(actor.name || "").includes(q);
+    if (!selfMatch) {
+      return {
+        intent: "clarify",
+        headline: en ? "Team performance reports require adding teammates to your workspace." : "تقارير أداء الفريق متاحة لما تضيف أعضاء للفريق.",
+        windowLabel: en ? "Personal workspace" : "مساحة عمل فردية",
+        cards: [],
+        actions: [],
+        links: [
+          { label: en ? "My Stats" : "إحصائياتي", screen: "Dashboard", params: {} },
+          { label: en ? "Plan" : "الباقة", screen: "Plan", params: {} }
+        ],
+        aiUsed: false
+      };
+    }
+  }
   const range = resolveRange(windowInfo, now, 30);
   let targetTeamLeadId = isTeamLead(actor) ? actor.id : null;
   let teamLabel = null;
@@ -302,6 +324,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
       const k = r.broker_name || (en ? "Unassigned" : "بدون وسيط");
       byBroker.set(k, (byBroker.get(k) || 0) + 1);
     }
+    const showBrokers = hasMultiBrokerScope(actor);
     return {
       intent: "crm_viewings",
       headline: en ? `${rows.length} viewing(s) scheduled · ${range.labelEn}` : `${rows.length} معاينة مجدولة · ${range.labelAr}`,
@@ -311,10 +334,10 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
           kind: "metric_row",
           items: [
             { label: en ? "Viewings" : "المعاينات", value: rows.length, tone: rows.length ? "ok" : "neutral" },
-            { label: en ? "Brokers active" : "وسطاء عندهم معاينات", value: byBroker.size, tone: "neutral" }
+            ...(showBrokers ? [{ label: en ? "Brokers active" : "وسطاء عندهم معاينات", value: byBroker.size, tone: "neutral" }] : [])
           ]
         },
-        ...(byBroker.size
+        ...(showBrokers && byBroker.size
           ? [{
               kind: "bar_breakdown",
               title: en ? "By broker" : "حسب البروكر",
@@ -378,6 +401,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
     const totalResp = Number(overallRow?.responded || 0);
     const weightedAvg = overallRow?.avg_min == null ? null : Number(overallRow.avg_min);
     const overallMed = overallRow?.med_min == null ? null : Number(overallRow.med_min);
+    const showPerBroker = hasMultiBrokerScope(actor);
     return {
       intent: "crm_response_time",
       headline: weightedAvg != null
@@ -393,7 +417,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
             { label: en ? "Contacted" : "اتكلموا", value: totalResp, tone: "neutral" }
           ]
         },
-        ...(rows.length
+        ...(showPerBroker && rows.length
           ? [{
               kind: "bar_breakdown",
               title: en ? "Per person (average min)" : "لكل بروكر (متوسط الدقايق)",
@@ -402,7 +426,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
           : [])
       ],
       actions: [],
-      links: isManagerOrOwner(actor) ? [{ label: en ? "Broker rankings" : "ترتيب الوسطاء", screen: "Dashboard", params: {} }] : [],
+      links: isManagerOrOwner(actor) ? [{ label: showPerBroker ? (en ? "Broker rankings" : "ترتيب الوسطاء") : (en ? "My Stats" : "إحصائياتي"), screen: "Dashboard", params: {} }] : [],
       aiUsed: false
     };
   }
@@ -587,11 +611,13 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
     };
   }
 
-  // crm_brief: executive snapshot (windowed when user asks today / week / month)
+  // crm_brief: executive snapshot (windowed when user asks today / week / month); personal scope for Solo.
+  const personal = !hasMultiBrokerScope(actor);
   const range = resolveRange(windowInfo, now, 30);
   if (windowInfo) {
     const rows = await Dash.brokerActivity(pool, actor.agency_id, { since: range.since, until: range.until });
-    const agg = rows.filter((b) => b.active !== false).reduce(
+    const scoped = rows.filter((b) => b.active !== false && (!personal || b.id === actor.id));
+    const agg = scoped.reduce(
       (s, b) => ({
         calls: s.calls + Number(b.calls || 0),
         viewings: s.viewings + Number(b.viewings || 0),
@@ -603,9 +629,9 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
     );
     return {
       intent: "crm_brief",
-      headline: en
-        ? `Agency activity · ${agg.calls} calls · ${agg.viewings} viewings · ${agg.deals} deals`
-        : `نشاط الشركة · ${agg.calls} مكالمة · ${agg.viewings} معاينة · ${agg.deals} صفقة`,
+      headline: personal
+        ? (en ? `Your activity · ${agg.calls} calls · ${agg.viewings} viewings · ${agg.deals} deals` : `نشاطك · ${agg.calls} مكالمة · ${agg.viewings} معاينة · ${agg.deals} صفقة`)
+        : (en ? `Agency activity · ${agg.calls} calls · ${agg.viewings} viewings · ${agg.deals} deals` : `نشاط الشركة · ${agg.calls} مكالمة · ${agg.viewings} معاينة · ${agg.deals} صفقة`),
       windowLabel: en ? range.labelEn : range.labelAr,
       cards: [
         {
@@ -620,30 +646,30 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en) {
         }
       ],
       actions: [],
-      links: [{ label: en ? "Open Dashboard" : "افتح لوحة الأداء", screen: "Dashboard", params: {} }],
+      links: [{ label: personal ? (en ? "Open My Stats" : "افتح إحصائياتي") : (en ? "Open Dashboard" : "افتح لوحة الأداء"), screen: "Dashboard", params: {} }],
       aiUsed: false
     };
   }
   const d = await Dash.agencyDashboard(pool, actor, { days: 30, now });
   return {
     intent: "crm_brief",
-    headline: en
-      ? `Agency brief · ${d.deals.n} deals · ${d.waitingOver1h || 0} waiting > 1h`
-      : `ملخص الشركة · ${d.deals.n} صفقة · ${d.waitingOver1h || 0} مستني > ساعة`,
+    headline: personal
+      ? (en ? `Your stats · ${d.deals.n} deals · ${d.overdue || 0} overdue` : `ملخصك · ${d.deals.n} صفقة · ${d.overdue || 0} متأخرة`)
+      : (en ? `Agency brief · ${d.deals.n} deals · ${d.waitingOver1h || 0} waiting > 1h` : `ملخص الشركة · ${d.deals.n} صفقة · ${d.waitingOver1h || 0} مستني > ساعة`),
     windowLabel: en ? "Last 30 days" : "آخر ٣٠ يوم",
     cards: [
       {
         kind: "metric_row",
         items: [
           { label: en ? "New leads" : "عملاء جدد", value: Number(d.leads || 0), tone: "neutral" },
-          { label: en ? "Waiting > 1h" : "مستني > ساعة", value: Number(d.waitingOver1h || 0), tone: d.waitingOver1h ? "critical" : "ok" },
+          ...(personal ? [] : [{ label: en ? "Waiting > 1h" : "مستني > ساعة", value: Number(d.waitingOver1h || 0), tone: d.waitingOver1h ? "critical" : "ok" }]),
           { label: en ? "Overdue" : "متأخرة", value: Number(d.overdue || 0), tone: d.overdue ? "critical" : "ok" },
           { label: en ? "Deals" : "صفقات", value: Number(d.deals?.n || 0), tone: d.deals?.n ? "ok" : "neutral" }
         ]
       }
     ],
     actions: [],
-    links: [{ label: en ? "Open Dashboard" : "افتح لوحة الأداء", screen: "Dashboard", params: {} }],
+    links: [{ label: personal ? (en ? "Open My Stats" : "افتح إحصائياتي") : (en ? "Open Dashboard" : "افتح لوحة الأداء"), screen: "Dashboard", params: {} }],
     aiUsed: false
   };
 }

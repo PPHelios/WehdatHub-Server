@@ -11,6 +11,8 @@ const { createHarness, closeHarness } = require("../harness/app");
 const WebAuth = require("../../lib/webAuth");
 const Leads = require("../../services/leads");
 const AI = require("../../lib/ai");
+const PlanGuard = require("../../lib/planGuard");
+const Workspace = require("../../lib/workspace");
 
 jest.setTimeout(90000);
 
@@ -18,6 +20,8 @@ let h;
 beforeEach(async () => {
   h = await createHarness();
   AI.reset();
+  PlanGuard.forget(h.AGENCY_A);
+  Workspace.forgetAll();
 });
 afterAll(() => closeHarness());
 
@@ -217,4 +221,39 @@ test("resale assistant unit_search returns >20 continuation token f, marketLock,
   expect(res.body.units.counts).toMatchObject({ active: 23, sold: 0, archived: 0 });
   expect(typeof res.body.units.f).toBe("string");
   expect(res.body.units.items.every((u) => u.code.startsWith("RES-"))).toBe(true);
+});
+
+test("Solo owner scopes personal reports cleanly (my stats, today activity) and declines team-only reports with My Stats / Plan link", async () => {
+  await h.seedBroker("owner");
+  await h.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [h.BROKERS.owner.id]);
+  await h.query("UPDATE brokers SET is_active = false WHERE agency_id = $1 AND id <> $2", [h.AGENCY_A, h.BROKERS.owner.id]);
+  await h.query("UPDATE agencies SET pilot = false, plan = 'solo', paid_until = now() + interval '30 days' WHERE id = $1", [h.AGENCY_A]);
+  PlanGuard.forget(h.AGENCY_A);
+  Workspace.forgetAll();
+
+  const ownerRow = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.owner.id]))[0];
+  const lead = (await Leads.captureLead(h.pool, ownerRow, { name: "Solo Lead", phones: "01055551234", source: "Facebook" })).lead;
+  await h.query("UPDATE leads SET assigned_broker_id = $1, created_at = now() - interval '2 hours', last_contact_at = NULL WHERE id = $2", [h.BROKERS.owner.id, lead.id]);
+
+  const hdr = await auth("owner");
+  const stats = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "my stats", mode: "auto" });
+  expect(stats.status).toBe(200);
+  expect(stats.body.intent).toBe("crm_brief");
+  expect(stats.body.headline).toMatch(/My stats|Your stats/i);
+
+  const act = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "today activity", mode: "reports" });
+  expect(act.status).toBe(200);
+  expect(act.body.intent).toBe("crm_brief");
+  expect(act.body.headline).toMatch(/Your activity/i);
+
+  const teamQ = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "who is not updating leads?", mode: "reports" });
+  expect(teamQ.status).toBe(200);
+  expect(teamQ.body.intent).toBe("clarify");
+  expect(teamQ.body.links.some((l) => l.screen === "Dashboard" || l.screen === "Plan")).toBe(true);
+
+  const queueQ = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "waiting over 1h", mode: "auto" });
+  expect(queueQ.status).toBe(200);
+  expect(queueQ.body.intent).toBe("crm_leads");
+  expect(queueQ.body.cards[0].canAssign).toBe(false);
+  expect(queueQ.body.cards[0].canNudge).toBe(false);
 });
