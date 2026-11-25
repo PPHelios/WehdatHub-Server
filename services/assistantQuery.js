@@ -571,22 +571,26 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       };
     }
     const range = resolveRange(windowInfo, now, 30);
+    const activityMode = /\bwho\s+(?:replied|responded)\b|مين\s+رد/i.test(Router.normalize(cleanText || ""));
     const params = [actor.agency_id, range.since.toISOString(), range.until.toISOString()];
     let teamSql = "";
     if (isTeamLead(actor) && !isManagerOrOwner(actor)) {
       params.push(actor.id);
       teamSql = ` AND (l.assigned_broker_id = $${params.length} OR l.assigned_broker_id IN (SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $${params.length}))`;
     }
+    const windowPred = activityMode
+      ? `coalesce(fc.at, l.last_contact_at) >= $2 AND coalesce(fc.at, l.last_contact_at) < $3`
+      : `l.created_at >= $2 AND l.created_at < $3 AND coalesce(fc.at, l.last_contact_at) >= l.created_at`;
     const { rows: rawRows } = await pool.query(
       `WITH base AS (
          SELECT l.assigned_broker_id AS broker_id, coalesce(b.name, '—') AS broker_name,
-                extract(epoch FROM (coalesce(fc.at, l.last_contact_at) - l.created_at)) / 60 AS mins
+                GREATEST(0, extract(epoch FROM (coalesce(fc.at, l.last_contact_at) - l.created_at)) / 60) AS mins
            FROM leads l
            JOIN LATERAL (SELECT min(e.created_at) AS at FROM lead_events e
                           WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND e.kind = 'contacted' AND e.undone_at IS NULL) fc ON true
            LEFT JOIN brokers b ON b.id = l.assigned_broker_id
           WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id IS NOT NULL
-            AND l.created_at >= $2 AND l.created_at < $3 AND coalesce(fc.at, l.last_contact_at) >= l.created_at${teamSql}
+            AND ${windowPred}${teamSql}
        )
        SELECT 0 AS sort_grp, NULL::uuid AS broker_id, '__overall__' AS broker_name,
               count(*)::int AS responded,
@@ -895,6 +899,172 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
 /**
  * Executes a single assistant query across Resale units, Primary projects, or CRM/Executive reports.
  */
+async function runOpenedNoFollowup(pool, actor, en) {
+  if (Authz.isDataEntry(actor)) {
+    return { intent: "clarify", headline: en ? "Try unit filters instead." : "جرّب فلاتر الوحدات.", cards: [], actions: [], links: [], aiUsed: false };
+  }
+  const args = [actor.agency_id];
+  const scope = [];
+  if (isTeamLead(actor) && !isManagerOrOwner(actor)) {
+    args.push(actor.id);
+    scope.push(`(l.assigned_broker_id = $${args.length} OR b.team_lead_id = $${args.length})`);
+  } else if (!isManagerOrOwner(actor)) {
+    args.push(actor.id);
+    scope.push(`l.assigned_broker_id = $${args.length}`);
+  }
+  const { rows } = await pool.query(
+    `SELECT l.id, l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name,
+            MAX(s.last_opened_at) AS last_opened_at, SUM(s.open_count)::int AS total_opens
+       FROM share_links s
+       JOIN listings u ON u.id = s.listing_id AND u.agency_id = s.agency_id
+       JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
+       LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
+      WHERE ${Vis.units("u")} AND ${Vis.leads("l")}
+        AND s.agency_id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+        AND s.open_count > 0 AND l.stage NOT IN ('won', 'lost')
+        AND l.follow_up_status IS DISTINCT FROM 'open'
+        ${scope.length ? `AND ${scope.join(" AND ")}` : ""}
+      GROUP BY l.id, l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name
+      ORDER BY MAX(s.last_opened_at) DESC NULLS LAST
+      LIMIT 10`,
+    args
+  );
+  const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
+  const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
+  const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, new Set()) : [];
+  return {
+    intent: "crm_opened_no_followup",
+    headline: en ? `Offer link opened · ${rows.length} without follow-up` : `اتفتح رابط العرض · ${rows.length} بدون متابعة`,
+    windowLabel: en ? "Offer link opened (grouped by client)" : "فتح رابط العرض (مجمّع حسب العميل)",
+    cards: [
+      {
+        kind: "stuck_leads",
+        queue: "no_next_step",
+        total: rows.length,
+        recommendedBrokers,
+        canAssign,
+        canNudge,
+        items: rows.map((l) => ({
+          ref: `L-${String(l.ref).padStart(4, "0")}`,
+          name: l.name || null,
+          stage: l.stage,
+          version: Number(l.version || 1),
+          assignee: l.assignee_name || null,
+          assigneeId: l.assigned_broker_id || null,
+          createdAt: l.last_opened_at ? new Date(l.last_opened_at).toISOString() : null
+        }))
+      }
+    ],
+    actions: [],
+    links: [{ label: en ? "Sent offers" : "الروابط المرسلة", screen: "Links", params: { opened: true } }],
+    aiUsed: false
+  };
+}
+
+async function runApproachingSla(pool, actor, now, en) {
+  const rules = await LeadRules.getRules(pool, actor.agency_id);
+  const args = [actor.agency_id];
+  let scopeSql = "";
+  if (isTeamLead(actor) && !isManagerOrOwner(actor)) {
+    args.push(actor.id);
+    scopeSql = ` AND (l.assigned_broker_id = $${args.length} OR b.team_lead_id = $${args.length})`;
+  } else if (!isManagerOrOwner(actor)) {
+    args.push(actor.id);
+    scopeSql = ` AND l.assigned_broker_id = $${args.length}`;
+  }
+  let rows;
+  if (rules.enabled) {
+    args.push(now.toISOString(), new Date(now.getTime() + 30 * 60 * 1000).toISOString());
+    rows = (await pool.query(
+      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.response_due_at AS ts
+         FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
+        WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage = 'new' AND l.last_contact_at IS NULL
+          AND l.response_due_at IS NOT NULL AND l.response_due_at > $${args.length - 1} AND l.response_due_at <= $${args.length}${scopeSql}
+        ORDER BY l.response_due_at ASC LIMIT 10`,
+      args
+    )).rows;
+  } else {
+    const min40 = new Date(now.getTime() - 40 * 60 * 1000).toISOString();
+    const min60 = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    args.push(min60, min40);
+    rows = (await pool.query(
+      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.created_at AS ts
+         FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
+        WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL
+          AND l.created_at > $${args.length - 1} AND l.created_at <= $${args.length}${scopeSql}
+        ORDER BY l.created_at ASC LIMIT 10`,
+      args
+    )).rows;
+  }
+  const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
+  const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
+  const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, new Set()) : [];
+  return {
+    intent: "crm_approaching_sla",
+    headline: rules.enabled
+      ? (en ? `${rows.length} lead(s) approaching SLA deadline` : `${rows.length} عميل قربوا على حد الـSLA`)
+      : (en ? `${rows.length} lead(s) waiting 40–59 min (agency SLA off)` : `${rows.length} عميل مستنيين ٤٠–٥٩ دقيقة (SLA مقفول)`),
+    windowLabel: rules.enabled ? (en ? "Agency SLA deadline" : "حسب قاعدة SLA") : (en ? "Waiting 40–59 min" : "انتظار ٤٠–٥٩ دقيقة"),
+    cards: [
+      {
+        kind: "stuck_leads",
+        queue: "waiting-over-1h",
+        total: rows.length,
+        recommendedBrokers,
+        canAssign,
+        canNudge,
+        items: rows.map((l) => ({
+          ref: `L-${String(l.ref).padStart(4, "0")}`,
+          name: l.name || null,
+          stage: l.stage,
+          version: Number(l.version || 1),
+          assignee: l.assignee_name || null,
+          assigneeId: l.assigned_broker_id || null,
+          createdAt: l.ts ? new Date(l.ts).toISOString() : null
+        }))
+      }
+    ],
+    actions: [],
+    links: [{ label: en ? "Open Leads" : "صفحة العملاء", screen: "LeadsList", params: { queue: "waiting-over-1h" } }],
+    aiUsed: false
+  };
+}
+
+async function runStuckBrokers(pool, actor, routeInfo, now, en) {
+  if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
+    return {
+      intent: "clarify",
+      headline: en ? "Team next-step rankings are limited to managers and team leads." : "ترتيب الوسطاء متاح للمديرين وقادة الفرق بس.",
+      windowLabel: en ? "Access scope" : "الصلاحيات",
+      cards: [],
+      actions: [],
+      links: [{ label: en ? "My leads" : "عملائي", screen: "LeadsList", params: {} }],
+      aiUsed: false
+    };
+  }
+  const range = resolveRange(routeInfo.windowInfo, now, 30);
+  const allRows = await Dash.brokerActivity(pool, actor.agency_id, { since: range.since, until: range.until });
+  let scopedIds = null;
+  if (isTeamLead(actor) && !isManagerOrOwner(actor)) {
+    const { rows: mem } = await pool.query("SELECT id FROM brokers WHERE agency_id = $1 AND (id = $2 OR team_lead_id = $2)", [actor.agency_id, actor.id]);
+    scopedIds = new Set(mem.map((r) => r.id));
+  }
+  const active = allRows
+    .filter((b) => b.active !== false && (!scopedIds || scopedIds.has(b.id)))
+    .sort((a, b) => Number(b.noNextStep || 0) - Number(a.noNextStep || 0) || Number(b.open || 0) - Number(a.open || 0) || a.name.localeCompare(b.name));
+  const Discipline = require("../domain/discipline");
+  const summary = Discipline.summarizeBoard(active);
+  return {
+    intent: "crm_stuck_brokers",
+    headline: en ? `${summary.totalNoNextStep} open lead(s) without next step` : `${summary.totalNoNextStep} عميل مفتوح بدون خطوة جاية`,
+    windowLabel: en ? "Ranked by no-next-step count" : "مرتب حسب بدون خطوة جاية",
+    cards: [{ kind: "broker_discipline", summary, rows: active.slice(0, 8) }],
+    actions: [],
+    links: isManagerOrOwner(actor) ? [{ label: en ? "Open Dashboard" : "لوحة الأداء", screen: "Dashboard", params: {} }] : [],
+    aiUsed: false
+  };
+}
+
 async function query(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
   const en = langOf(actor) === "en";
   const lang = en ? "en" : "ar";
@@ -965,6 +1135,18 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
 
   if (routeInfo.route === "crm_leads") {
     const r = await runCrmLeads(pool, actor, routeInfo.queueHint, en);
+    return { modeUsed: safeMode, ...r };
+  }
+  if (routeInfo.route === "crm_opened_no_followup") {
+    const r = await runOpenedNoFollowup(pool, actor, en);
+    return { modeUsed: safeMode, ...r };
+  }
+  if (routeInfo.route === "crm_approaching_sla") {
+    const r = await runApproachingSla(pool, actor, now, en);
+    return { modeUsed: safeMode, ...r };
+  }
+  if (routeInfo.route === "crm_stuck_brokers") {
+    const r = await runStuckBrokers(pool, actor, routeInfo, now, en);
     return { modeUsed: safeMode, ...r };
   }
   if (routeInfo.route === "crm_discipline" || routeInfo.route === "crm_broker" || routeInfo.route === "crm_team") {

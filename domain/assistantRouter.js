@@ -268,11 +268,14 @@ function stripWindowWords(raw) {
 
 const DISCIPLINE_RE = /\b(silent|discipline|updating|not updating|update rate|no updates|ghost)\b|مش بيحدث|تحديث التطبيق|الالتزام بالتحديث|مين مش شغال|مفيش تحديث/;
 const COMMISSIONS_RE = /\b(commissions?|claimable|developer commission|collected)\b|عمولات|العموله|عموله المطور|مستحقه/;
-const WAITING_RE = /waiting.*(?:1\s*h|hour)|over (?:an |1 )?hour|delayed first|مستن(?:ي|يين).*ساعه|اكتر من ساعه|تاخر اول تواصل/;
+const WAITING_RE = /waiting.*(?:1\s*h|hour)|over (?:an |1 )?hour|delayed first|waiting\s*(?:for\s*)?(?:a\s*)?reply|مستن(?:ي|يين).*ساعه|مستن(?:ي|يين)\s*رد|اكتر من ساعه|تاخر اول تواصل/;
 const UNASSIGNED_RE = /\bunassigned\b|without (?:a )?(?:broker|agent)|من غير وسيط|مش متوزع/;
 const OVERDUE_RE = /\boverdue\b|(?:عملاء|العملاء|متابعات|المتابعات)\s*(?:ال)?متاخر(?:ين|ه)|متابعات متاخره|المتابعات اللي اتاخرت/;
 const UNCONTACTED_RE = /\buncontacted\b|not contacted|محدش كلم/;
-const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest)\b|وقت الرد|متوسط الرد|اول رد|اسرع رد/;
+const OPENED_NO_FU_RE = /(?:offer\s*links?|links?).*(?:opened).*(?:without|no)\s*follow|opened\s*(?:offer\s*)?links?.*no\s*follow|فتح(?:وا)?\s*(?:ال)?(?:لينك|العرض).*(?:مفيش|بدون)\s*متابع/;
+const APPROACHING_SLA_RE = /\bapproaching\s*sla\b|close\s*to\s*sla|near\s*sla|قربوا\s*(?:علي|يكسروا)\s*(?:sla|وقت\s*الرد)/;
+const STUCK_BROKERS_RE = /\b(?:brokers?|agents?)\b.*no\s*next\s*step|ranked\s*by\s*no\s*next\s*step|بدون\s*خطوه\s*جايه/;
+const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest|who replied|who responded)\b|وقت الرد|متوسط الرد|اول رد|اسرع رد|مين رد/;
 const WIN_LOSS_RE = /\b(win ?loss|win rate|lost reasons?|why.*los(?:ing|t))\b|اسباب الخسار|معدل القفل|الخساير/;
 const SOURCES_RE = /\b(sources?|facebook|fb|meta|instagram|tiktok|bayut|dubizzle|olx|property finder|nawy|marketing|ad spend|cpl|cpd|campaigns?)\b|مصادر|فيسبوك|فيس بوك|انستجرام|تسويق|اعلانات/;
 const LEASES_RE = /\b(leases?|expiring|rent ending)\b|عقود الايجار|ايجارات قربت تخلص|ايجارات/;
@@ -361,6 +364,9 @@ function crmRoute(q, raw, now = new Date()) {
   const windowInfo = extractTimeWindow(q, now);
 
   if (DISCIPLINE_RE.test(q)) return { route: "crm_discipline", windowInfo };
+  if (OPENED_NO_FU_RE.test(q)) return { route: "crm_opened_no_followup", windowInfo };
+  if (APPROACHING_SLA_RE.test(q)) return { route: "crm_approaching_sla", windowInfo };
+  if (STUCK_BROKERS_RE.test(q)) return { route: "crm_stuck_brokers", windowInfo };
   if (COMMISSIONS_RE.test(q)) return { route: "crm_commissions", windowInfo };
   if (WAITING_RE.test(q)) return { route: "crm_leads", queueHint: "waiting-over-1h", windowInfo };
   if (UNASSIGNED_RE.test(q)) return { route: "crm_leads", queueHint: "unassigned", windowInfo };

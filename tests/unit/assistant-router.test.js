@@ -186,4 +186,13 @@ describe("domain/assistantRouter.classifyAssistantQuery", () => {
     });
     expect(Router.classifyAssistantQuery({ text: "قارن شقق ريسيل وبرايمري في التجمع", mode: "auto" }).route).not.toBe("compare_markets");
   });
+
+  test("routes Wave 3 operational sales Q&A queries (opened links no follow-up, approaching SLA, brokers by noNextStep)", () => {
+    expect(Router.classifyAssistantQuery({ text: "offer links opened without follow-up", mode: "auto" })).toMatchObject({ route: "crm_opened_no_followup" });
+    expect(Router.classifyAssistantQuery({ text: "مين فتح العرض ومفيش متابعة", mode: "auto" })).toMatchObject({ route: "crm_opened_no_followup" });
+    expect(Router.classifyAssistantQuery({ text: "leads approaching SLA", mode: "auto" })).toMatchObject({ route: "crm_approaching_sla" });
+    expect(Router.classifyAssistantQuery({ text: "العملاء اللي قربوا على وقت الرد", mode: "auto" })).toMatchObject({ route: "crm_approaching_sla" });
+    expect(Router.classifyAssistantQuery({ text: "brokers ranked by no next step", mode: "auto" })).toMatchObject({ route: "crm_stuck_brokers" });
+    expect(Router.classifyAssistantQuery({ text: "مين البروكرز اللي عندهم عملاء بدون خطوة جاية", mode: "auto" })).toMatchObject({ route: "crm_stuck_brokers" });
+  });
 });

@@ -346,3 +346,90 @@ test("Wave 3 Task 2: two matching brokers return disambiguate card without guess
   expect(actRes.status).toBe(200);
   expect(actRes.body.intent).toBe("disambiguate");
 });
+
+test("Wave 3 Task 4: opened links without follow-up, strict approaching SLA vs disabled fallback, and brokers ranked by noNextStep", async () => {
+  await h.query("UPDATE brokers SET name = 'Sara', preferred_lang = 'en' WHERE id = $1", [h.BROKERS.broker.id]);
+  await h.query("UPDATE brokers SET name = 'Omar', preferred_lang = 'en' WHERE id = $1", [h.BROKERS.colleague.id]);
+  await h.insertListing({ code: "OP-1", market: "resale", price_value: 2000000 });
+  const unitRow = (await h.query("SELECT id FROM listings WHERE agency_id = $1 AND code = 'OP-1'", [h.AGENCY_A]))[0];
+
+  const openedLead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01066661111", name: "Opened No FU" })).lead;
+  const scheduledLead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01066662222", name: "Opened Has FU" })).lead;
+  const slaDueLead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01066663333", name: "Near SLA" })).lead;
+  const offHoursLead = (await Leads.captureLead(h.pool, h.BROKERS.colleague, { phones: "01066664444", name: "Off Hours" })).lead;
+
+  const ol = await Leads.getLead(h.pool, h.BROKERS.broker, openedLead.ref);
+  const sl = await Leads.getLead(h.pool, h.BROKERS.broker, scheduledLead.ref);
+  await h.query("UPDATE leads SET follow_up_status = 'open', follow_up_kind = 'call', next_follow_up_at = now() + interval '1 hour' WHERE id = $1", [sl.id]);
+
+  // Seed repeated opens on openedLead -> grouped into 1 row; scheduledLead excluded
+  await h.query(
+    `INSERT INTO share_links (token_hash, agency_id, listing_id, broker_id, lead_id, channel, source, expires_at, open_count, last_opened_at)
+     VALUES ('tok-1', $1, $2, $3, $4, 'whatsapp', 'lead', now() + interval '7 days', 3, now() - interval '10 minutes'),
+            ('tok-2', $1, $2, $3, $4, 'whatsapp', 'lead', now() + interval '7 days', 2, now() - interval '2 minutes'),
+            ('tok-3', $1, $2, $3, $5, 'whatsapp', 'lead', now() + interval '7 days', 1, now() - interval '1 minute')`,
+    [h.AGENCY_A, unitRow.id, h.BROKERS.broker.id, ol.id, sl.id]
+  );
+
+  const Card = require("../../domain/leadCard");
+  // SLA enabled: only slaDueLead (response_due_at within 30m) shows, NEVER offHoursLead (response_due_at NULL even if older than 40m)
+  await h.query(`UPDATE agencies SET lead_rules = '{"enabled":true,"waitMinutes":30}'::jsonb WHERE id = $1`, [h.AGENCY_A]);
+  await h.query("UPDATE leads SET response_due_at = now() + interval '10 minutes', last_contact_at = NULL WHERE id = $1", [slaDueLead.id]);
+  await h.query("UPDATE leads SET created_at = now() - interval '50 minutes', response_due_at = NULL, last_contact_at = NULL WHERE id = $1", [offHoursLead.id]);
+
+  // Seed noNextStep open lead (contacted stage without open follow-up) for Sara
+  await h.query("UPDATE leads SET stage = 'contacted', follow_up_status = NULL WHERE id = $1", [openedLead.id]);
+
+  const hdr = await auth("admin");
+
+  const openedRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "offer links opened without follow-up", mode: "reports" });
+  expect(openedRes.status).toBe(200);
+  expect(openedRes.body.intent).toBe("crm_opened_no_followup");
+  expect(openedRes.body.headline).toMatch(/Offer link opened/i);
+  expect(openedRes.body.cards[0].items.map((x) => x.ref)).toEqual([Card.refLabel(openedLead.ref)]);
+
+  const slaOnRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "leads approaching SLA", mode: "reports" });
+  expect(slaOnRes.status).toBe(200);
+  expect(slaOnRes.body.intent).toBe("crm_approaching_sla");
+  expect(slaOnRes.body.cards[0].items.map((x) => x.ref)).toEqual([Card.refLabel(slaDueLead.ref)]);
+
+  // Disable agency SLA -> explicit 40-59 min queue activates
+  await h.query(`UPDATE agencies SET lead_rules = '{"enabled":false,"waitMinutes":30}'::jsonb WHERE id = $1`, [h.AGENCY_A]);
+  const slaOffRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "leads approaching SLA", mode: "reports" });
+  expect(slaOffRes.status).toBe(200);
+  expect(slaOffRes.body.headline).toMatch(/40.*59 min/i);
+  expect(slaOffRes.body.cards[0].items.map((x) => x.ref)).toEqual([Card.refLabel(offHoursLead.ref)]);
+
+  const stuckRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "brokers ranked by no next step", mode: "reports" });
+  expect(stuckRes.status).toBe(200);
+  expect(stuckRes.body.intent).toBe("crm_stuck_brokers");
+  expect(stuckRes.body.cards[0].rows[0].name).toBe("Sara");
+});
+
+test("Wave 3 Task 5: historical response activity vs waiting queue from yesterday", async () => {
+  await h.query("UPDATE brokers SET name = 'Sara', preferred_lang = 'ar' WHERE id = $1", [h.BROKERS.broker.id]);
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 3600 * 1000);
+  const Router = require("../../domain/assistantRouter");
+  const yestWin = Router.extractTimeWindow("yesterday", new Date());
+  const yestMid = new Date((yestWin.from.getTime() + yestWin.to.getTime()) / 2);
+
+  // Lead created 2 days ago, Sara logged contacted event yesterday
+  const repliedLead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01077778888", name: "Replied Yest" })).lead;
+  await h.query("UPDATE leads SET created_at = $2, last_contact_at = $3 WHERE id = $1", [repliedLead.id, twoDaysAgo.toISOString(), yestMid.toISOString()]);
+  await h.query("INSERT INTO lead_events (agency_id, lead_id, broker_id, kind, created_at) VALUES ($1, $2, $3, 'contacted', $4)", [h.AGENCY_A, repliedLead.id, h.BROKERS.broker.id, yestMid.toISOString()]);
+
+  // Uncontacted lead waiting since yesterday
+  const waitLead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01077779999", name: "Still Waiting" })).lead;
+  await h.query("UPDATE leads SET created_at = $2, last_contact_at = NULL WHERE id = $1", [waitLead.id, yestMid.toISOString()]);
+
+  const hdr = await auth("admin");
+  const repliedRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "مين رد على العملاء امبارح؟", mode: "auto" });
+  expect(repliedRes.status).toBe(200);
+  expect(repliedRes.body.intent).toBe("crm_response_time");
+  expect(repliedRes.body.cards.some((c) => c.kind === "bar_breakdown" && c.rows.some((r) => r.label === "Sara"))).toBe(true);
+
+  const waitRes = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "مين مستني رد من امبارح؟", mode: "auto" });
+  expect(waitRes.status).toBe(200);
+  expect(waitRes.body.intent).toBe("crm_leads");
+  expect(waitRes.body.cards[0].items.some((x) => x.ref.includes("000"))).toBe(true);
+});
