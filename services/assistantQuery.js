@@ -267,8 +267,8 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en) {
   }
 
   if (route === "crm_broker") {
-    const q = Router.normalize(brokerQuery || "");
-    const match = q ? board.find((b) => Router.normalize(b.name).includes(q)) : null;
+    const matches = Router.findMatchingBrokers(board, brokerQuery);
+    const match = matches[0] || null;
     if (!match) {
       return {
         intent: "clarify",
@@ -342,7 +342,8 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         };
       }
       const { rows: brokers } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY is_active DESC, name", [actor.agency_id]);
-      const match = brokers.find((b) => Router.normalize(b.name).includes(nq));
+      const matches = Router.findMatchingBrokers(brokers, routeInfo.brokerQuery);
+      const match = matches[0] || null;
       if (!match) {
         return {
           intent: "clarify",
@@ -451,6 +452,21 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
           ...(areaKey ? { area: areaKey } : {})
         }
       }],
+      nextContext: {
+        job: "deals_report",
+        market: marketFilter,
+        brokerRole,
+        areaQuery: areaKey || routeInfo.areaQuery || null,
+        window: windowInfo
+          ? {
+              key: windowInfo.key || "explicit",
+              from: range.since.toISOString(),
+              to: range.until.toISOString(),
+              labelEn: range.labelEn,
+              labelAr: range.labelAr
+            }
+          : null
+      },
       aiUsed: false
     };
   }
@@ -848,14 +864,14 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
 /**
  * Executes a single assistant query across Resale units, Primary projects, or CRM/Executive reports.
  */
-async function query(pool, { AI, actor, agency = null, text, mode = "auto", now = new Date() }) {
+async function query(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
   const en = langOf(actor) === "en";
   const lang = en ? "en" : "ar";
   const safeMode = Router.MODES.includes(mode) ? mode : "auto";
   const cleanText = String(text || "").trim().slice(0, 500);
   if (!cleanText) return { error: "empty" };
 
-  const routeInfo = Router.classifyAssistantQuery({ text: cleanText, mode: safeMode, now });
+  const routeInfo = Router.classifyAssistantQuery({ text: cleanText, mode: safeMode, now, previousContext });
   if (Authz.isDataEntry(actor) && routeInfo.route !== "unit_search") {
     return {
       intent: "clarify",
@@ -870,6 +886,20 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
   }
 
   if (routeInfo.route === "clarify") {
+    if (routeInfo.clarifyKind === "missing_context") {
+      return {
+        intent: "clarify",
+        modeUsed: safeMode,
+        headline: en ? "Write the full search or report first — there is no active search to refine." : "اكتب البحث أو التقرير كامل الأول — مفيش بحث شغال نعدّل عليه.",
+        windowLabel: en ? "Need full question" : "سياق ناقص",
+        understood: { job: "clarify_context", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
+        cards: [],
+        actions: [],
+        links: [],
+        nextContext: null,
+        aiUsed: false
+      };
+    }
     if (routeInfo.clarifyKind === "switch_mode_reports") {
       return {
         intent: "clarify",
@@ -999,14 +1029,26 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
   const explicitResale = /\bresale\b|ريسيل|اعاده البيع/.test(Router.normalize(cleanText));
   const marketLock = safeMode === "resale" || explicitResale || routeInfo.market === "resale" ? "resale" : null;
   const searchCtx = ViewGuard.active() ? { lang } : { pool, AI, broker: actor, agency, lang };
+  let searchText = cleanText;
+  let parsedOverride = null;
+  if (routeInfo.budgetBump) {
+    searchText = routeInfo.budgetBump.baseQuery || cleanText;
+    const decoded = routeInfo.budgetBump.f ? SearchLink.decodeFilters(routeInfo.budgetBump.f) : null;
+    if (decoded) {
+      const baseMax = decoded.price_max != null ? Number(decoded.price_max) : Number(routeInfo.budgetBump.baseMaxPrice || 0);
+      if (baseMax > 0) decoded.price_max = Math.round(baseMax + routeInfo.budgetBump.delta);
+      parsedOverride = { intent: "search", transcript: searchText, language: lang, filters: decoded, meta: {} };
+    }
+  }
   const found = await Search.search({
     pool,
     AI,
     agencyId: actor.agency_id,
-    text: cleanText,
+    text: searchText,
     ctx: searchCtx,
     pageSize: 20,
-    market: marketLock
+    market: marketLock,
+    ...(parsedOverride ? { parsedOverride } : {})
   });
   const rows = Array.isArray(found.rows) ? found.rows : [];
   const photos = rows.length
@@ -1025,6 +1067,14 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
   const ignoredTerms = found.ignoredTerms || [];
   const sort = found.parsed?.filters?.sort || null;
   const total = Math.min(found.total || 0, Search.SNAPSHOT_MAX);
+  const effectiveMaxPrice = found.parsed?.filters?.price_max ?? null;
+  const searchNextContext = {
+    job: "find_units",
+    market: effectiveMarketLock,
+    maxPrice: effectiveMaxPrice,
+    f,
+    originalQuery: searchText
+  };
   const understood = {
     job: "find_units",
     market: effectiveMarketLock,
@@ -1055,6 +1105,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
         { kind: "pivot_mode", mode: "primary", label: en ? "Search Primary projects instead?" : "تدور في مشاريع المطورين (برايمري)؟" }
       ],
       links: [{ label: en ? "Unit filters" : "فلاتر الوحدات", screen: "UnitsList", params: {} }],
+      nextContext: searchNextContext,
       aiUsed
     };
   }
@@ -1084,6 +1135,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", now 
     suggestPrimary: safeMode === "resale",
     actions: safeMode === "resale" ? [{ kind: "pivot_mode", mode: "primary", label: en ? "Check Primary projects too?" : "تشوف مشاريع برايمري كمان؟" }] : [],
     links: [{ label: en ? "Open all units" : "كل الوحدات", screen: "UnitsList", params: {} }],
+    nextContext: searchNextContext,
     aiUsed
   };
 }

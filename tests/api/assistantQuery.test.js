@@ -292,3 +292,36 @@ test("Wave 2 assistant executes crm_deals with closer/participant labels, invent
   expect(clarFin.body.actions.some((a) => a.kind === "pivot_mode" && a.mode === "resale")).toBe(true);
   expect(clarFin.body.actions.some((a) => a.kind === "pivot_mode" && a.mode === "primary")).toBe(true);
 });
+
+test("Wave 3 Task 1: stateful previousContext follow-ups (broker filter & budget bump) vs contextless clarify", async () => {
+  await h.query("UPDATE brokers SET name = 'Sara', preferred_lang = 'en' WHERE id = $1", [h.BROKERS.broker.id]);
+  await h.insertListing({ code: "BUMP-47", market: "resale", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", price_value: 4_700_000 });
+  const lead = (await Leads.captureLead(h.pool, h.BROKERS.broker, { phones: "01055551111", name: "Ctx Lead" })).lead;
+  const Deals = require("../../services/deals");
+  const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+  await Deals.createDeal(h.pool, admin, { leadKey: lead.ref, unitCode: "BUMP-47", price: 4_700_000, mode: "amount", amount: 94000, closingBrokerId: h.BROKERS.broker.id, status: "signed" });
+  await h.insertListing({ code: "BUMP-47B", market: "resale", compound: "Hyde Park", property_type: "apartment", listing_type: "sale", price_value: 4_700_000 });
+
+  const hdr = await auth("admin");
+
+  // Contextless fragment must return clarify, not guess
+  const bare = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "بس بتوع سارة", mode: "auto" });
+  expect(bare.status).toBe(200);
+  expect(bare.body.intent).toBe("clarify");
+
+  // Deals query -> nextContext -> follow-up "بس بتوع سارة" narrows to Sara
+  const deals = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "resale deals this month", mode: "auto" });
+  expect(deals.body.nextContext).toMatchObject({ job: "deals_report", market: "resale" });
+  const followBroker = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "بس بتوع سارة", mode: "auto", previousContext: deals.body.nextContext });
+  expect(followBroker.body.intent).toBe("crm_deals");
+  expect(followBroker.body.headline).toMatch(/Sara/i);
+
+  // Unit search under 4M misses 4.7M unit -> bump budget 1m finds it
+  const search1 = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "resale apartment in Hyde Park under 4m", mode: "resale" });
+  expect(search1.body.nextContext).toMatchObject({ job: "find_units", maxPrice: 4000000 });
+  expect(search1.body.units.total).toBe(0);
+  const bump = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "لو زودنا الميزانية مليون", mode: "resale", previousContext: search1.body.nextContext });
+  expect(bump.body.intent).toBe("unit_search");
+  expect(bump.body.units.total).toBe(1);
+  expect(bump.body.units.items[0].code).toBe("BUMP-47B");
+});

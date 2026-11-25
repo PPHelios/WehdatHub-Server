@@ -3,6 +3,7 @@
 "use strict";
 
 const Stages = require("./leadStages");
+const Phone = require("./phone");
 
 const MODES = Object.freeze(["auto", "resale", "primary", "reports"]);
 const DAY_MS = 24 * 3600 * 1000;
@@ -415,14 +416,86 @@ function crmRoute(q, raw, now = new Date()) {
   return null;
 }
 
+function parseBudgetAmount(raw) {
+  const ascii = Phone.toAsciiDigits(String(raw || "")).replace(/,/g, "").trim().toLowerCase();
+  const m = ascii.match(/^(?:(\d+(?:\.\d+)?)\s*)?(k|m|مليون|الف)$/) || ascii.match(/^(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const num = m[1] ? Number(m[1]) : 1;
+  if (!Number.isFinite(num) || num <= 0) return null;
+  const unit = m[2] || "";
+  if (unit === "m" || unit === "مليون") return Math.round(num * 1_000_000);
+  if (unit === "k" || unit === "الف") return Math.round(num * 1_000);
+  return Math.round(num);
+}
+
+function detectFollowup(q) {
+  const trimmed = String(q || "").trim().replace(/[؟?!.,]+$/g, "").trim();
+  if (!trimmed) return null;
+  const b1 = trimmed.match(/^(?:only|just)\s+(?:by|for|closed by|with)\s+([a-z\u0621-\u064a]+(?:\s+[a-z\u0621-\u064a]+)?)$/i)
+    || trimmed.match(/^(?:بس\s+(?:بتوع|لـ|ل|قفلها)|(?:بتوع|قفلها))\s+([a-z\u0621-\u064a]+)(?:\s+بس)?$/i)
+    || (/^بس\s+بتوع\s+/i.test(trimmed) ? trimmed.match(/^بس\s+بتوع\s+([a-z\u0621-\u064a]+)$/i) : null);
+  if (b1 && /\b(?:only|just)\b|بس|بتوع/i.test(trimmed)) {
+    return { kind: "filter_broker", brokerQuery: b1[1].trim() };
+  }
+  const incEn = trimmed.match(/^(?:if we |what if we )?(?:increase|bump|raise|add)\s+(?:the\s+)?budget\s+(?:by\s+)?([\d.,٠-٩]+\s*(?:k|m)?)$/i);
+  const incAr = trimmed.match(/^(?:لو\s+)?(?:زودنا|نزود|رفعنا|كبرنا)\s+(?:الميزانيه|البادجت)\s*(?:بـ|ب)?\s*((?:[\d.,٠-٩]+\s*)?(?:الف|مليون)|[\d.,٠-٩]+)$/i);
+  if (incEn || incAr) {
+    const delta = parseBudgetAmount((incEn || incAr)[1]);
+    if (delta) return { kind: "raise_budget", delta };
+  }
+  return null;
+}
+
 /**
  * Classifies one assistant query into an execution route.
  * Explicit modes (`resale`, `primary`, `reports`) lock routing strictly without cross-contamination.
  */
-function classifyAssistantQuery({ text = "", mode = "auto", now = new Date() } = {}) {
+function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), previousContext = null } = {}) {
   const safeMode = MODES.includes(mode) ? mode : "auto";
   const q = normalize(text);
   if (!q) return { route: "clarify" };
+
+  const followup = detectFollowup(q);
+  if (followup) {
+    if (!previousContext || typeof previousContext !== "object" || !previousContext.job) {
+      return { route: "clarify", clarifyKind: "missing_context", market: null, exclusions: [], preservedText: text };
+    }
+    if (followup.kind === "filter_broker") {
+      if (previousContext.job === "deals_report") {
+        return {
+          route: "crm_deals",
+          job: "deals_report",
+          market: previousContext.market || null,
+          exclusions: [],
+          brokerQuery: followup.brokerQuery,
+          brokerRole: previousContext.brokerRole || "closer",
+          areaQuery: previousContext.areaQuery || null,
+          windowInfo: previousContext.window || null
+        };
+      }
+      if (previousContext.job === "broker_activity" || previousContext.job === "brief") {
+        return { route: "crm_broker", brokerQuery: followup.brokerQuery, windowInfo: previousContext.window || null };
+      }
+      return { route: "clarify", clarifyKind: "missing_context", market: null, exclusions: [], preservedText: text };
+    }
+    if (followup.kind === "raise_budget") {
+      if (previousContext.job === "find_units" && (previousContext.f || previousContext.originalQuery)) {
+        return {
+          route: "unit_search",
+          job: "find_units",
+          market: safeMode === "resale" ? "resale" : (previousContext.market || null),
+          exclusions: [],
+          budgetBump: {
+            baseQuery: previousContext.originalQuery || "",
+            baseMaxPrice: previousContext.maxPrice || null,
+            f: previousContext.f || null,
+            delta: followup.delta
+          }
+        };
+      }
+      return { route: "clarify", clarifyKind: "missing_context", market: null, exclusions: [], preservedText: text };
+    }
+  }
 
   const signals = parseMarketSignals(q);
 
@@ -494,4 +567,36 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date() } =
   return { route: "unit_search", job: "find_units", market: null, exclusions: signals.exclusions };
 }
 
-module.exports = { MODES, DAY_MS, MAX_RANGE_DAYS, normalize, addCairoDaysYmd, cairoMidnight, extractTimeWindow, resolveInterval, extractSourceFilter, classifyAssistantQuery };
+const AR_SKELETON = {
+  ا: "a", أ: "a", إ: "a", آ: "a", ب: "b", ت: "t", ث: "th", ج: "g", ح: "h", خ: "kh",
+  د: "d", ذ: "z", ر: "r", ز: "z", س: "s", ش: "sh", ص: "s", ض: "d", ط: "t", ظ: "z",
+  ع: "a", غ: "gh", ف: "f", ق: "k", ك: "k", ل: "l", م: "m", ن: "n", ه: "", ة: "", و: "w", ي: "y", ى: "a", ئ: "y", ؤ: "w"
+};
+
+function phoneticToken(word) {
+  const n = normalize(word).replace(/[^a-z0-9\u0621-\u064a]/g, "");
+  if (!n) return "";
+  let lat = "";
+  for (const ch of n) lat += AR_SKELETON[ch] !== undefined ? AR_SKELETON[ch] : ch;
+  lat = lat.replace(/ph/g, "f").replace(/c(?=[eiy])/g, "s").replace(/c|q/g, "k").replace(/(.)\1+/g, "$1");
+  const head = lat[0] || "";
+  const body = lat.slice(1).replace(/[aeiouyh]/g, "");
+  return head + body;
+}
+
+function findMatchingBrokers(brokers, rawQuery) {
+  const nq = normalize(rawQuery || "");
+  if (!nq || !Array.isArray(brokers)) return [];
+  const exact = brokers.filter((b) => normalize(b.name) === nq);
+  if (exact.length === 1) return exact;
+  const sub = brokers.filter((b) => normalize(b.name).includes(nq));
+  if (sub.length) return sub;
+  const qToks = nq.split(/\s+/).map(phoneticToken).filter((t) => t.length >= 2);
+  if (!qToks.length) return [];
+  return brokers.filter((b) => {
+    const bToks = normalize(b.name).split(/\s+/).map(phoneticToken).filter(Boolean);
+    return qToks.every((qt) => bToks.some((bt) => bt === qt || bt.startsWith(qt)));
+  });
+}
+
+module.exports = { MODES, DAY_MS, MAX_RANGE_DAYS, normalize, addCairoDaysYmd, cairoMidnight, extractTimeWindow, resolveInterval, extractSourceFilter, findMatchingBrokers, classifyAssistantQuery };
