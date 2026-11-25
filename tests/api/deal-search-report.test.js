@@ -39,3 +39,29 @@ test("closed deal buckets match the lead-scoped list and exclude cancelled deals
   expect((await get()).body.items).toEqual([]);
   expect((await get()).body.summary.weeks.every((n) => n === 0)).toBe(true);
 });
+
+test("Deals.createDeal snapshots market and canonical area on deals so later unit deletion/edit preserves historical market/area", async () => {
+  const h = await createHarness();
+  const actor = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+  await h.insertListing({
+    code: "PR-10",
+    market: "primary",
+    inventory_type: "primary_unit",
+    compound: "Hyde Park",
+    district: "New Cairo",
+    area_id: "a0000000-0000-0000-0000-0000000000c1",
+    price_value: 6000000
+  });
+  const lead = (await Leads.captureLead(h.pool, actor, { phones: "01022223333", name: "Snapshot Buyer" })).lead;
+  const r = await Deals.createDeal(h.pool, actor, { leadKey: lead.ref, unitCode: "PR-10", price: 6000000, mode: "pct", pct: 2 });
+  expect(r.ok).toBe(true);
+  expect(r.deal.market).toBe("primary");
+  expect(r.deal.area_key).toBe("new cairo");
+  expect(r.deal.area_label).toBe("New Cairo");
+
+  // Unlink/delete unit after deal close: historical snapshot on deal stays untouched.
+  await h.pool.query("UPDATE deals SET listing_id = NULL WHERE id = $1", [r.deal.id]);
+  await h.pool.query("DELETE FROM listings WHERE code = 'PR-10' AND agency_id = $1", [actor.agency_id]);
+  const [stored] = await h.query("SELECT market, area_key, area_label FROM deals WHERE id = $1", [r.deal.id]);
+  expect(stored).toEqual({ market: "primary", area_key: "new cairo", area_label: "New Cairo" });
+});

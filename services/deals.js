@@ -97,6 +97,29 @@ async function prepare(pool, actor, input = {}) {
   if (input.markSold === true && unit && !mayMarkSold) return { error: unit.status === "active" ? "unit_not_yours" : "unit_not_active", code: unit.code };
   const markSold = input.markSold === undefined ? mayMarkSold : Boolean(input.markSold) && mayMarkSold;
   const dealType = ["sale", "rent"].includes(input.dealType) ? input.dealType : unit?.listing_type === "rent" || lead.kind === "tenant" ? "rent" : "sale";
+  let market = null;
+  if (unit) {
+    if (unit.market === "primary" || unit.market === "resale") market = unit.market;
+    else if (unit.inventory_type === "primary_unit" || unit.is_primary_developer || String(unit.details?.catalogue) === "true") market = "primary";
+    else market = "resale";
+  } else if (input.market === "primary" || input.market === "resale") {
+    market = input.market;
+  }
+  let areaKey = unit?.area_key || null;
+  let areaLabel = cleanText(unit?.district, 120) || cleanText(unit?.city, 120) || null;
+  if (unit?.area_id) {
+    const { rows: arRows } = await pool.query("SELECT name_key, name_en FROM areas WHERE id = $1", [unit.area_id]);
+    if (arRows[0]) {
+      areaKey = arRows[0].name_key || areaKey;
+      areaLabel = arRows[0].name_en || areaLabel;
+    }
+  } else if (unit?.place_id) {
+    const { rows: mpRows } = await pool.query("SELECT a.name_key, a.name_en FROM map_places mp LEFT JOIN areas a ON a.id = mp.area_id WHERE mp.id = $1", [unit.place_id]);
+    if (mpRows[0]) {
+      areaKey = mpRows[0].name_key || areaKey;
+      areaLabel = mpRows[0].name_en || areaLabel;
+    }
+  }
   const names = new Map([[closer.id, closer.name], ...splits.map((s) => [s.brokerId, s.name])]);
   return {
     draft: {
@@ -107,6 +130,9 @@ async function prepare(pool, actor, input = {}) {
       unitCode: unit?.code || null,
       unitBrokerId: unit?.broker_id || null,
       unitVersion: unit?.version ?? null,
+      market,
+      areaKey,
+      areaLabel,
       dealType,
       price: Number(price),
       mode: input.mode,
@@ -152,16 +178,19 @@ async function createDeal(pool, actor, input, { idemKey = null, unitVersion = nu
       const lead = await Leads.getLead(client, actor, d.leadId);
       const seq = await client.query("UPDATE agencies SET deal_ref_seq = GREATEST(deal_ref_seq, COALESCE((SELECT max(ref) FROM deals WHERE agency_id = $1), 0)) + 1 WHERE id = $1 RETURNING deal_ref_seq", [actor.agency_id]);
       const { rows } = await client.query(
-        `INSERT INTO deals (agency_id, ref, lead_id, listing_id, unit_code, closing_broker_id, created_by_broker_id, deal_type, price, commission_mode,
+        `INSERT INTO deals (agency_id, ref, lead_id, listing_id, unit_code, market, area_key, area_label, closing_broker_id, created_by_broker_id, deal_type, price, commission_mode,
                             commission_pct, commission_total, external_share, external_name, status, client_name, client_phone, notes, idem_key,
                             closed_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $20, $20) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $23, $23) RETURNING *`,
         [
           actor.agency_id,
           seq.rows[0].deal_ref_seq,
           d.leadId,
           d.listingId,
           d.unitCode,
+          d.market || null,
+          d.areaKey || null,
+          d.areaLabel || null,
           d.closingBrokerId,
           actor.id,
           d.dealType,
