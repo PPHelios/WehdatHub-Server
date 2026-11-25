@@ -464,8 +464,20 @@ async function countByStatus(pool, agencyId, parsed, status, fx) {
  * The whole search for one request: parse → intent guard → run.
  * @returns {Promise<{ status: "results"|"none"|"small_talk"|"listing", parsed, source, rows, ids, total, relaxed, timings }>}
  */
-async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false, status = "active" }) {
-  const parse = await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
+async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false, status = "active", market = null, sort = null, parsedOverride = null }) {
+  const parse = parsedOverride
+    ? { parsed: parsedOverride, source: "parser", modelUsed: "filter_token", usage: {}, ms: 0, local: parsedOverride, ai: null, reasons: [], disagree: [] }
+    : await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
+  if ((market || sort) && parse.parsed) {
+    parse.parsed = {
+      ...parse.parsed,
+      filters: {
+        ...(parse.parsed.filters || {}),
+        ...(market ? { market } : {}),
+        ...(sort ? { sort } : {})
+      }
+    };
+  }
   const intent = Q.classifyIntent(parse.parsed);
   const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons, disagree: parse.disagree || [], aiError: parse.aiError || null };
   // A budget with no unit ("budget 50") is never guessed: ask which unit was meant, and show how many units fit without the budget.
