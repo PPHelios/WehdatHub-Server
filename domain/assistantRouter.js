@@ -287,9 +287,69 @@ const BROKER_ACTIVITY_AR_RE = /^(?:ايه اخبار|اداء|تقييم|شغل|
 const BROKER_WORK_AR_RE = /^(.+?)\s+(?:عمل|سجل|كلم|حدث)\s+ايه/;
 const AGENCY_DO_RE = /\b(?:what did (?:the )?(?:agency|we|everyone|team) do|how many (?:viewings?|calls?|updates?|leads?|deals?) (?:did )?(?:the )?(?:agency|we)|(?:agency|team) activity)\b|الشركه عملت ايه|عملنا ايه|كام (?:مكالمه|معاينه|تحديث|صفقه)/;
 
-const PRIMARY_RE = /\b(primary|off[- ]plan|developer|payment plan|installments?|delivery|deliver|handover)\b|برايمري|برايمرى|اولي|مطور|انظمه سداد|تسهيلات|استلام|توصيل/;
-const UNIT_RE = /\b(apartment|villa|townhouse|twin|duplex|penthouse|studio|chalet|resale|rent|sale|sqm|m2|bedroom|beds?|bath)\b|شقه|شقق|فيلا|دوبلكس|ستوديو|ريسيل|غرف|متر|مليون|تجمع|زايد|اكتوبر|مدينتي|رحاب|مراسي/;
+const PRIMARY_EXPLICIT_RE = /\b(primary|off[- ]plan|developer|developers|projects?|launch(?:es)?)\b|برايمر[ي]|اولي|مطور(?:ين)?|مشروع|مشاريع/;
+const PRIMARY_WEAK_RE = /\b(payment plan|installments?|delivery|deliver|handover)\b|انظمه سداد|تسهيلات|استلام|توصيل|اقساط|قسط|مقدم/;
+const PRIMARY_RE = new RegExp(`${PRIMARY_EXPLICIT_RE.source}|${PRIMARY_WEAK_RE.source}`);
+const AMBIGUOUS_FINANCE_RE = /\b(down ?payment|installments?|monthly)\b|مقدم|قسط|اقساط|تقسيط/;
+const RESALE_EXPLICIT_RE = /\bresale\b|ريسيل|اعاده البيع/;
+const EXCLUDE_PRIMARY_RE = /(?:^|\s)(?:no|not|exclude|without)\s+(?:primary|developers?|projects?)\b|مفيش\s+برايمر[ي]|بدون\s+برايمر[ي]|مش\s+برايمر[ي]|غير\s+برايمر[ي]/;
+const EXCLUDE_RESALE_RE = /(?:^|\s)(?:no|not|exclude|without)\s+resale\b|مفيش\s+ريسيل|بدون\s+ريسيل|مش\s+ريسيل|غير\s+ريسيل/;
+const UNIT_RE = /\b(apartment|villa|townhouse|twin|duplex|penthouse|studio|chalet|resale|rent|sale|sqm|m2|bedroom|beds?|bath)\b|شقه|شقق|فيلا|فلل|دوبلكس|ستوديو|ريسيل|غرف|متر|مليون|تجمع|زايد|اكتوبر|مدينتي|رحاب|مراسي/;
 const UNIT_CODE_RE = /\b[a-z]{1,4}-?\d{2,}\b/i;
+const INVENTORY_COUNT_RE = /^(?:how many|count|total)\s+(?:available\s+)?(?:apartments?|villas?|units?|listings?|properties|studios?|duplex(?:es)?|townhouses?|penthouses?|chalets?)\b|^(?:كام|كم|عدد)\s+(?:شقه|شقق|فيلا|فلل|وحده|وحدات|دوبلكس|ستوديو|تاون|توين|بنتهاوس|شاليه)/;
+const DEALS_RE = /\bdeals?\b|صفقات|صفقه/;
+
+function parseMarketSignals(q) {
+  const exclusions = [];
+  if (EXCLUDE_PRIMARY_RE.test(q)) exclusions.push("primary");
+  if (EXCLUDE_RESALE_RE.test(q)) exclusions.push("resale");
+  const strippedExcl = q
+    .replace(/(?:^|\s)(?:no|not|exclude|without)\s+(?:primary|developers?|projects?|resale)\b/g, " ")
+    .replace(/(?:مفيش|بدون|مش|غير)\s+(?:برايمر[ي]|ريسيل)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const hasResale = RESALE_EXPLICIT_RE.test(strippedExcl);
+  const hasPrimary = PRIMARY_EXPLICIT_RE.test(strippedExcl);
+  let market = null;
+  if (exclusions.includes("primary") || (hasResale && !hasPrimary)) market = "resale";
+  else if (exclusions.includes("resale") || (hasPrimary && !hasResale)) market = "primary";
+  return { market, exclusions, hasResale, hasPrimary, hasBothExplicit: hasResale && hasPrimary };
+}
+
+function parseDealQuery(q, raw, now) {
+  const windowInfo = extractTimeWindow(q, now);
+  const { market, exclusions } = parseMarketSignals(q);
+  const stripped = stripWindowWords(q);
+  const brokerRole = /\b(involved|split|shared|participat)\b|شارك|مشترك|سبليت/.test(q) ? "participant" : "closer";
+
+  let brokerQuery = null;
+  const brEn1 = stripped.match(/\bclosed by\s+([a-z\u0621-\u064a]+(?:\s+[a-z\u0621-\u064a]+)?)(?:\s+(?:in|on|during|for)\b|$)/i);
+  const brEn2 = stripped.match(/\bdeals?\s+([a-z\u0621-\u064a]+?(?:\s+[a-z\u0621-\u064a]+?)?)\s+(?:was|were|is)\s+(?:involved|closed|made)\b/i)
+    || stripped.match(/\bdeals?\s+([a-z\u0621-\u064a]+?(?:\s+[a-z\u0621-\u064a]+?)?)\s+(?:involved|closed|made)\b/i);
+  const brEn3 = stripped.match(/\bdeals?\s+(?:for|by)\s+([a-z\u0621-\u064a]+(?:\s+[a-z\u0621-\u064a]+)?)(?:\s+(?:in|on|during)\b|$)/i);
+  const brAr = stripped.match(/(?:قفلها|شارك فيها|لـ|ل)\s+([a-z\u0621-\u064a]+)(?:\s+(?:في|خلال)\b|$)/i);
+  const rawBroker = brEn1?.[1] || brEn2?.[1] || brEn3?.[1] || brAr?.[1] || null;
+  if (rawBroker && !isGenericAgencySubject(rawBroker)) brokerQuery = rawBroker.trim();
+
+  let areaQuery = null;
+  const arEn = stripped.match(/\bin\s+([a-z\u0621-\u064a]+(?:\s+[a-z\u0621-\u064a]+)?)$/i);
+  const arAr = stripped.match(/\bفي\s+([a-z\u0621-\u064a]+(?:\s+[a-z\u0621-\u064a]+)?)$/i);
+  const candArea = (arEn?.[1] || arAr?.[1] || "").trim();
+  if (candArea && !/\b(resale|primary|deals?|involved)\b|ريسيل|برايمر/.test(candArea)) {
+    areaQuery = candArea;
+  }
+
+  return {
+    route: "crm_deals",
+    job: "deals_report",
+    market,
+    exclusions,
+    brokerQuery,
+    brokerRole,
+    areaQuery,
+    windowInfo
+  };
+}
 
 function isGenericAgencySubject(s) {
   return /^(?:we|the|my|our|this|the agency|agency|our agency|us|everyone|everybody|company|all|الشركه|احنا|الفريق|فريقي|الكل|كلنا)$/i.test(stripWindowWords(s));
@@ -307,6 +367,7 @@ function crmRoute(q, raw, now = new Date()) {
   if (RESPONSE_TIME_RE.test(q)) return { route: "crm_response_time", windowInfo };
   if (WIN_LOSS_RE.test(q)) return { route: "crm_win_loss", windowInfo };
   if (SOURCES_RE.test(q)) return { route: "crm_sources", sourceFilter: extractSourceFilter(q), windowInfo };
+  if (DEALS_RE.test(q)) return parseDealQuery(q, raw, now);
   if (LEASES_RE.test(q)) return { route: "crm_leases", windowInfo };
 
   // Strip time words before extracting broker or team subject so "what did Sara do today" -> "Sara".
@@ -362,17 +423,74 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date() } =
   const q = normalize(text);
   if (!q) return { route: "clarify" };
 
-  if (safeMode === "resale") return { route: "unit_search" };
-  if (safeMode === "primary") return { route: "primary" };
-  if (safeMode === "reports") return crmRoute(q, text, now) || { route: "crm_brief", windowInfo: extractTimeWindow(q, now) };
+  const signals = parseMarketSignals(q);
+
+  if (safeMode === "resale") {
+    return { route: "unit_search", job: "find_units", market: "resale", exclusions: signals.exclusions };
+  }
+  if (safeMode === "primary") {
+    const crmInPrimary = crmRoute(q, text, now);
+    if (crmInPrimary) {
+      return {
+        route: "clarify",
+        clarifyKind: "switch_mode_reports",
+        job: crmInPrimary.route,
+        market: "primary",
+        hintRoute: crmInPrimary.route,
+        preservedText: text
+      };
+    }
+    return { route: "primary", job: "project_info", market: "primary", exclusions: signals.exclusions };
+  }
+  if (safeMode === "reports") {
+    return crmRoute(q, text, now) || { route: "crm_brief", job: "brief", windowInfo: extractTimeWindow(q, now) };
+  }
 
   const crm = crmRoute(q, text, now);
   if (crm) return crm;
 
-  if (PRIMARY_RE.test(q) && !/\bresale\b|ريسيل/.test(q)) return { route: "primary" };
-  if (UNIT_RE.test(q) || UNIT_CODE_RE.test(q)) return { route: "unit_search" };
-  if (/^(?:who|why|when|where|what|how|امتى|كام|ليه|ايه|مين)\b/.test(q)) return { route: "primary" };
-  return { route: "unit_search" };
+  if (INVENTORY_COUNT_RE.test(q) && !signals.hasPrimary) {
+    return {
+      route: "inventory_count",
+      job: "inventory_count",
+      market: signals.market || "resale",
+      exclusions: signals.exclusions
+    };
+  }
+
+  if (signals.hasBothExplicit && !signals.exclusions.length) {
+    return {
+      route: "clarify",
+      clarifyKind: "market_choice",
+      market: null,
+      exclusions: [],
+      preservedText: text
+    };
+  }
+
+  if (AMBIGUOUS_FINANCE_RE.test(q) && !signals.hasResale && !signals.hasPrimary && !signals.exclusions.length) {
+    return {
+      route: "clarify",
+      clarifyKind: "market_choice",
+      market: null,
+      exclusions: [],
+      preservedText: text
+    };
+  }
+
+  if (signals.market === "resale") {
+    return { route: "unit_search", job: "find_units", market: "resale", exclusions: signals.exclusions };
+  }
+  if (signals.market === "primary" || PRIMARY_RE.test(q)) {
+    return { route: "primary", job: "project_info", market: "primary", exclusions: signals.exclusions };
+  }
+  if (UNIT_RE.test(q) || UNIT_CODE_RE.test(q)) {
+    return { route: "unit_search", job: "find_units", market: null, exclusions: signals.exclusions };
+  }
+  if (/^(?:who|why|when|where|what|how|امتى|كام|ليه|ايه|مين)\b/.test(q)) {
+    return { route: "primary", job: "project_info", market: "primary", exclusions: signals.exclusions };
+  }
+  return { route: "unit_search", job: "find_units", market: null, exclusions: signals.exclusions };
 }
 
 module.exports = { MODES, DAY_MS, MAX_RANGE_DAYS, normalize, addCairoDaysYmd, cairoMidnight, extractTimeWindow, resolveInterval, extractSourceFilter, classifyAssistantQuery };

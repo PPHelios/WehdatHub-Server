@@ -118,4 +118,72 @@ describe("domain/assistantRouter.classifyAssistantQuery", () => {
     expect(explicit.from.toISOString()).toBe("2026-10-31T22:00:00.000Z");
     expect(explicit.to.toISOString()).toBe("2026-11-15T22:00:00.000Z");
   });
+
+  test("decouples job and market, respects exclusions, detects inventory count & crm_deals, and clarifies ambiguous financial/mode queries without comparison mode", () => {
+    // Weak cues do not hijack Resale, while explicit project terms still route to Primary.
+    expect(Router.classifyAssistantQuery({ text: "ريسيل في مدينتي عليه أقساط متبقية", mode: "auto" })).toMatchObject({
+      route: "unit_search",
+      job: "find_units",
+      market: "resale"
+    });
+    expect(Router.classifyAssistantQuery({ text: "إيه أنظمة السداد والاستلام في مشروع X؟", mode: "auto" })).toMatchObject({
+      route: "primary",
+      job: "project_info",
+      market: "primary"
+    });
+
+    // Explicit exclusions.
+    expect(Router.classifyAssistantQuery({ text: "شقة في التجمع مفيش برايمري، ريسيل بس", mode: "auto" })).toMatchObject({
+      route: "unit_search",
+      market: "resale",
+      exclusions: ["primary"]
+    });
+    expect(Router.classifyAssistantQuery({ text: "developer projects in Zayed, no resale", mode: "auto" })).toMatchObject({
+      route: "primary",
+      market: "primary",
+      exclusions: ["resale"]
+    });
+
+    // Inventory availability count.
+    expect(Router.classifyAssistantQuery({ text: "كام شقة متاحة عندنا في زايد؟", mode: "auto" })).toMatchObject({
+      route: "inventory_count",
+      job: "inventory_count"
+    });
+    expect(Router.classifyAssistantQuery({ text: "how many villas do we have in New Cairo?", mode: "auto" })).toMatchObject({
+      route: "inventory_count",
+      job: "inventory_count"
+    });
+
+    // Ambiguous financial query in auto -> clarify market_choice; locked modes execute directly.
+    expect(Router.classifyAssistantQuery({ text: "شقق في زايد بمقدم مليون", mode: "auto" })).toMatchObject({
+      route: "clarify",
+      clarifyKind: "market_choice"
+    });
+    expect(Router.classifyAssistantQuery({ text: "شقق في زايد بمقدم مليون", mode: "resale" })).toMatchObject({
+      route: "unit_search",
+      market: "resale"
+    });
+
+    // Primary mode + CRM prompt clarifies mode switch cleanly.
+    expect(Router.classifyAssistantQuery({ text: "overdue leads", mode: "primary" })).toMatchObject({
+      route: "clarify",
+      clarifyKind: "switch_mode_reports"
+    });
+
+    // Deals queries: closer vs participant + market + area + window; no comparison mode.
+    expect(Router.classifyAssistantQuery({ text: "resale deals closed by Sara in New Cairo last month", mode: "auto" })).toMatchObject({
+      route: "crm_deals",
+      job: "deals_report",
+      market: "resale",
+      brokerQuery: "sara",
+      brokerRole: "closer",
+      windowInfo: { key: "last_month" }
+    });
+    expect(Router.classifyAssistantQuery({ text: "deals Sara was involved in this month", mode: "auto" })).toMatchObject({
+      route: "crm_deals",
+      brokerQuery: "sara",
+      brokerRole: "participant"
+    });
+    expect(Router.classifyAssistantQuery({ text: "قارن شقق ريسيل وبرايمري في التجمع", mode: "auto" }).route).not.toBe("compare_markets");
+  });
 });
