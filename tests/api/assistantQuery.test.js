@@ -433,3 +433,52 @@ test("Wave 3 Task 5: historical response activity vs waiting queue from yesterda
   expect(waitRes.body.intent).toBe("crm_leads");
   expect(waitRes.body.cards[0].items.some((x) => x.ref.includes("000"))).toBe(true);
 });
+
+test("review fixes: Arabic alef disambiguation replace, Solo stuck-brokers guard, non-manager deals no colleague leak, nextContext on broker/brief, budgetBump clarify", async () => {
+  await h.query("UPDATE brokers SET name = 'أحمد علي', preferred_lang = 'ar' WHERE id = $1", [h.BROKERS.broker.id]);
+  const [ahmad2] = (await h.pool.query(
+    "INSERT INTO brokers (agency_id, name, phone_number, role, is_active) VALUES ($1, 'أحمد حسن', '+201099988877', 'broker', true) RETURNING id, name",
+    [h.AGENCY_A]
+  )).rows;
+  expect(ahmad2.id).toBeTruthy();
+
+  const admHdr = await auth("admin");
+  const disRes = await api().post("/api/v1/assistant/query").set(admHdr).send({ q: "مكالمات أحمد امبارح", mode: "reports" });
+  expect(disRes.status).toBe(200);
+  expect(disRes.body.intent).toBe("disambiguate");
+  const firstOpt = disRes.body.cards[0].options[0];
+  expect(firstOpt.query).toMatch(/^مكالمات أحمد (?:علي|حسن) امبارح$/);
+
+  // Brief & broker scorecards emit nextContext for contextual follow-ups
+  const briefRes = await api().post("/api/v1/assistant/query").set(admHdr).send({ q: "agency brief today", mode: "reports" });
+  expect(briefRes.status).toBe(200);
+  expect(briefRes.body.nextContext).toMatchObject({ job: "brief" });
+
+  // Non-manager matching own first name resolves to self without leaking colleague names in disambiguate
+  const brHdr = await auth("broker");
+  const ownDealRes = await api().post("/api/v1/assistant/query").set(brHdr).send({ q: "deals closed by أحمد", mode: "reports" });
+  expect(ownDealRes.status).toBe(200);
+  expect(ownDealRes.body.intent).toBe("crm_deals");
+
+  // Open-budget search followed by budget bump clarifies instead of ignoring delta
+  await h.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [h.BROKERS.admin.id]);
+  const openSearch = await api().post("/api/v1/assistant/query").set(admHdr).send({ q: "apartments in Tagamoa", mode: "resale" });
+  expect(openSearch.status).toBe(200);
+  const bumpNoMax = await api().post("/api/v1/assistant/query").set(admHdr).send({
+    q: "increase budget by 1m",
+    mode: "resale",
+    previousContext: openSearch.body.nextContext
+  });
+  expect(bumpNoMax.status).toBe(200);
+  expect(bumpNoMax.body.intent).toBe("clarify");
+  expect(bumpNoMax.body.headline).toMatch(/maximum budget/i);
+
+  // Solo owner asking team next-step rankings gets clarify rather than board
+  await h.query("UPDATE agencies SET pilot = false, plan = 'solo', paid_until = now() + interval '30 days' WHERE id = $1", [h.AGENCY_A]);
+  await h.query("UPDATE brokers SET is_active = false WHERE agency_id = $1 AND id <> $2", [h.AGENCY_A, h.BROKERS.admin.id]);
+  PlanGuard.forget(h.AGENCY_A);
+  Workspace.forgetAll();
+  const soloStuck = await api().post("/api/v1/assistant/query").set(admHdr).send({ q: "brokers ranked by no next step", mode: "reports" });
+  expect(soloStuck.status).toBe(200);
+  expect(soloStuck.body.intent).toBe("clarify");
+});

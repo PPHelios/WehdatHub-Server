@@ -150,9 +150,20 @@ function buildUnitAppliedFilters(filters, marketLock, en) {
   return out;
 }
 
+function flexBrokerRegex(rawBroker) {
+  const clean = String(rawBroker || "").replace(/[\u0640\u064b-\u065f]/g, "").trim();
+  if (!clean) return null;
+  const body = [...clean].map((ch) => {
+    if (/[اأإآ]/.test(ch)) return "[اأإآ]";
+    if (/[هة]/.test(ch)) return "[هة]";
+    if (/[يى]/.test(ch)) return "[يى]";
+    return ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }).join("");
+  return new RegExp(body, "i");
+}
+
 function buildDisambiguateResponse({ queryText, rawBroker, matches, en }) {
-  const escaped = String(rawBroker || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = escaped ? new RegExp(escaped, "i") : null;
+  const re = flexBrokerRegex(rawBroker);
   const replaceBroker = (fullName) => (re && re.test(queryText) ? queryText.replace(re, fullName) : `${queryText} ${fullName}`.trim());
   return {
     intent: "disambiguate",
@@ -329,6 +340,7 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
         { label: en ? "Open team" : "الفريق", screen: "Team", params: {} },
         { label: en ? "Dashboard" : "لوحة الأداء", screen: isManagerOrOwner(actor) ? "Dashboard" : "LeadsList", params: {} }
       ],
+      nextContext: { job: "broker_activity", window: windowInfo || null },
       aiUsed: false
     };
   }
@@ -358,36 +370,41 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     let brokerRole = routeInfo.brokerRole === "participant" ? "participant" : "closer";
     if (routeInfo.brokerQuery) {
       const nq = Router.normalize(routeInfo.brokerQuery);
-      if (personalOnly && !Router.normalize(actor.name || "").includes(nq)) {
-        return {
-          intent: "clarify",
-          headline: en ? "Deals are personal-only for your role." : "الصفقات شخصية بس لصلاحياتك الحالية.",
-          windowLabel: en ? "Access scope" : "الصلاحيات",
-          cards: [],
-          actions: [],
-          links: [{ label: en ? "My Deals" : "صفقاتي", screen: "Deals", params: {} }],
-          aiUsed: false
-        };
+      if (personalOnly) {
+        if (!Router.normalize(actor.name || "").includes(nq)) {
+          return {
+            intent: "clarify",
+            headline: en ? "Deals are personal-only for your role." : "الصفقات شخصية بس لصلاحياتك الحالية.",
+            windowLabel: en ? "Access scope" : "الصلاحيات",
+            cards: [],
+            actions: [],
+            links: [{ label: en ? "My Deals" : "صفقاتي", screen: "Deals", params: {} }],
+            aiUsed: false
+          };
+        }
+        brokerId = actor.id;
+        brokerName = actor.name || null;
+      } else {
+        const { rows: brokers } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY is_active DESC, name", [actor.agency_id]);
+        const matches = Router.findMatchingBrokers(brokers, routeInfo.brokerQuery);
+        if (matches.length > 1) {
+          return buildDisambiguateResponse({ queryText: cleanText || routeInfo.brokerQuery, rawBroker: routeInfo.brokerQuery, matches, en });
+        }
+        const match = matches[0] || null;
+        if (!match) {
+          return {
+            intent: "clarify",
+            headline: en ? `Could not find a team member matching "${routeInfo.brokerQuery}".` : `ملقيناش حد بالاسم "${routeInfo.brokerQuery}".`,
+            windowLabel: en ? range.labelEn : range.labelAr,
+            cards: [],
+            actions: [],
+            links: [{ label: en ? "Open Deals" : "افتح الصفقات", screen: "Deals", params: {} }],
+            aiUsed: false
+          };
+        }
+        brokerId = match.id;
+        brokerName = match.name;
       }
-      const { rows: brokers } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 ORDER BY is_active DESC, name", [actor.agency_id]);
-      const matches = Router.findMatchingBrokers(brokers, routeInfo.brokerQuery);
-      if (matches.length > 1) {
-        return buildDisambiguateResponse({ queryText: cleanText || routeInfo.brokerQuery, rawBroker: routeInfo.brokerQuery, matches, en });
-      }
-      const match = matches[0] || null;
-      if (!match) {
-        return {
-          intent: "clarify",
-          headline: en ? `Could not find a team member matching "${routeInfo.brokerQuery}".` : `ملقيناش حد بالاسم "${routeInfo.brokerQuery}".`,
-          windowLabel: en ? range.labelEn : range.labelAr,
-          cards: [],
-          actions: [],
-          links: [{ label: en ? "Open Deals" : "افتح الصفقات", screen: "Deals", params: {} }],
-          aiUsed: false
-        };
-      }
-      brokerId = match.id;
-      brokerName = match.name;
     } else if (personalOnly) {
       brokerId = actor.id;
       brokerName = actor.name || null;
@@ -869,6 +886,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       ],
       actions: [],
       links: [{ label: personal ? (en ? "Open My Stats" : "افتح إحصائياتي") : (en ? "Open Dashboard" : "افتح لوحة الأداء"), screen: "Dashboard", params: {} }],
+      nextContext: { job: "brief", window: windowInfo || null },
       aiUsed: false
     };
   }
@@ -892,6 +910,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     ],
     actions: [],
     links: [{ label: personal ? (en ? "Open My Stats" : "افتح إحصائياتي") : (en ? "Open Dashboard" : "افتح لوحة الأداء"), screen: "Dashboard", params: {} }],
+    nextContext: { job: "brief", window: windowInfo || null },
     aiUsed: false
   };
 }
@@ -1039,6 +1058,20 @@ async function runStuckBrokers(pool, actor, routeInfo, now, en) {
       cards: [],
       actions: [],
       links: [{ label: en ? "My leads" : "عملائي", screen: "LeadsList", params: {} }],
+      aiUsed: false
+    };
+  }
+  if (!hasMultiBrokerScope(actor)) {
+    return {
+      intent: "clarify",
+      headline: en ? "Team next-step rankings require adding teammates to your workspace." : "ترتيب الوسطاء متاح لما تضيف أعضاء للفريق.",
+      windowLabel: en ? "Personal workspace" : "مساحة عمل فردية",
+      cards: [],
+      actions: [],
+      links: [
+        { label: en ? "My Stats" : "إحصائياتي", screen: "Dashboard", params: {} },
+        { label: en ? "Plan" : "الباقة", screen: "Plan", params: {} }
+      ],
       aiUsed: false
     };
   }
@@ -1247,11 +1280,26 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
   if (routeInfo.budgetBump) {
     searchText = routeInfo.budgetBump.baseQuery || cleanText;
     const decoded = routeInfo.budgetBump.f ? SearchLink.decodeFilters(routeInfo.budgetBump.f) : null;
-    if (decoded) {
-      const baseMax = decoded.price_max != null ? Number(decoded.price_max) : Number(routeInfo.budgetBump.baseMaxPrice || 0);
-      if (baseMax > 0) decoded.price_max = Math.round(baseMax + routeInfo.budgetBump.delta);
-      parsedOverride = { intent: "search", transcript: searchText, language: lang, filters: decoded, meta: {} };
+    const baseMax = decoded
+      ? (decoded.price_max != null ? Number(decoded.price_max) : Number(routeInfo.budgetBump.baseMaxPrice || 0))
+      : Number(routeInfo.budgetBump.baseMaxPrice || 0);
+    if (!decoded || !(baseMax > 0)) {
+      return {
+        intent: "clarify",
+        modeUsed: safeMode,
+        headline: en
+          ? "Your previous search did not set a maximum budget — include the full budget (e.g. \"under 6 million\")."
+          : "البحث اللي فات مكانش فيه حد أقصى للميزانية — اكتب الميزانية الجديدة كاملة (مثلاً: \"بحد أقصى ٦ مليون\").",
+        windowLabel: en ? "Missing budget baseline" : "مفيش ميزانية سابقة",
+        cards: [],
+        actions: searchText ? [{ kind: "change_search", label: en ? "Edit search" : "تعديل البحث", query: searchText }] : [],
+        links: [],
+        nextContext: null,
+        aiUsed: false
+      };
     }
+    decoded.price_max = Math.round(baseMax + routeInfo.budgetBump.delta);
+    parsedOverride = { intent: "search", transcript: searchText, language: lang, filters: decoded, meta: {} };
   }
   const found = await Search.search({
     pool,
@@ -1298,7 +1346,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
 
   let counts;
   if (found.status === "results" || found.status === "none") {
-    counts = { active: 0, sold: 0, archived: 0, active: found.total || 0 };
+    counts = { active: found.total || 0, sold: 0, archived: 0 };
     const others = Search.SEARCH_STATUSES.filter((x) => x !== "active");
     (await Promise.all(others.map((other) => Search.countByStatus(pool, actor.agency_id, found.parsed, other, found.fx)))).forEach((n, i) => (counts[others[i]] = n));
   }

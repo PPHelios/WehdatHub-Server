@@ -108,11 +108,6 @@
       "classifyBroker": ["params"],
       "summarizeBoard": ["board"]
     },
-    "domain/urgency.js": {
-      "URGENCY": "Object",
-      "roleGroup": ["role"],
-      "buildPriorities": ["params"]
-    },
     "domain/catalogueUpdate.js": {
       "ACTIONS": "Array",
       "clean": ["text"],
@@ -413,7 +408,6 @@
       "rulesFields": ["input"],
       "inWorkHours": ["rules", "at"],
       "dueAt": ["rules", "from"],
-      "workMinutesBetween": ["rules", "from", "to"],
       "awayNow": ["broker", "now"],
       "minutesBetween": ["from", "to"],
       "cairo": ["at"]
@@ -2107,13 +2101,9 @@
       "remindDue": ["pool", "params"],
       "nudgeUntouched": ["pool", "params"],
       "nudgeInterested": ["pool", "params"],
-      "nudgePostViewing": ["pool", "params"],
-      "nudgeLinkSilence": ["pool", "params"],
       "reminderMessage": ["broker", "leads"],
       "nudgeMessage": ["broker", "leads"],
       "interestMessage": ["broker", "leads"],
-      "postViewingMessage": ["broker", "leads"],
-      "linkSilenceMessage": ["broker", "leads"],
       "reminderJob": []
     },
     "services/fx.js": {
@@ -2228,7 +2218,6 @@
       "routingOf": ["db", "agencyId"],
       "saveRouting": ["pool", "manager", "params"],
       "routingList": ["db", "agencyId"],
-      "warnMidwaySla": ["pool", "params"],
       "moveOverdue": ["pool", "params"],
       "responseJob": [],
       "unassignedDigest": ["pool", "params"],
@@ -2838,7 +2827,6 @@
     },
     "services/viewings.js": {
       "OPEN": "Array",
-      "listForBroker": ["pool", "broker", "params"],
       "whenLabel": ["at", "lang"],
       "unitLabel": ["listing", "lang"],
       "clientMessage": ["params"],
@@ -2880,7 +2868,6 @@
       "html": ["strings", "values"],
       "raw": ["text"],
       "phoneLtr": ["value"],
-      "phoneOrText": ["value"],
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],
@@ -3112,7 +3099,7 @@
     },
     "web/todayCards.js": {
       "render": ["cards", "en", "csrf"],
-      "oldUnitsCard": ["c", "en", "csrf", "back", "inline"]
+      "oldUnitsCard": ["c", "en", "csrf", "back"]
     },
     "web/uploads.js": {
       "MB": "Number",
@@ -3194,7 +3181,8 @@
     },
     "web/views/tabs.js": {
       "tabs": ["name", "panels", "params"],
-      "seg": ["label", "items", "current"]
+      "seg": ["label", "items", "current"],
+      "dealsSwitch": ["lang", "current"]
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],
@@ -3211,7 +3199,7 @@
       "stripMarkdown": ["s"],
       "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"],
-      "statusForm": ["code", "en", "csrf", "back", "inline"]
+      "statusForm": ["code", "en", "csrf", "back"]
     }
   },
   "invariant_variable_names": {

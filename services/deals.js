@@ -294,7 +294,7 @@ function buildDealWhere(actor, { status = null, from = null, to = null, brokerId
 }
 
 /** Role-scoped list, newest first, with the viewer's own share. */
-async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null, from = null, to = null, brokerId = null, brokerRole = "closer", market = null, area = null } = {}) {
+async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null, from = null, to = null, brokerId = null, brokerRole = "closer", market = null, area = null, excludeCancelled = false } = {}) {
   const { params, where } = buildDealWhere(actor, {
     status: report && !(from && to) ? null : status,
     from,
@@ -302,7 +302,8 @@ async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0,
     brokerId,
     brokerRole,
     market,
-    area
+    area,
+    excludeCancelled: Boolean(excludeCancelled) || (Boolean(from && to) && status !== "cancelled")
   });
   if (report && !(from && to)) where.push("$2::uuid IS NOT NULL");
   const fromWhere = () => `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id

@@ -185,6 +185,17 @@ describe("domain/assistantRouter.classifyAssistantQuery", () => {
       brokerRole: "participant"
     });
     expect(Router.classifyAssistantQuery({ text: "قارن شقق ريسيل وبرايمري في التجمع", mode: "auto" }).route).not.toBe("compare_markets");
+
+    // Trailing 'ل' in 'كل' / 'ريسيل' must NOT trigger Arabic deal-broker capture
+    expect(Router.classifyAssistantQuery({ text: "كل الصفقات في التجمع", mode: "auto" })).toMatchObject({
+      route: "crm_deals",
+      brokerQuery: null
+    });
+    expect(Router.classifyAssistantQuery({ text: "صفقات ريسيل التجمع", mode: "auto" })).toMatchObject({
+      route: "crm_deals",
+      market: "resale",
+      brokerQuery: null
+    });
   });
 
   test("routes Wave 3 operational sales Q&A queries (opened links no follow-up, approaching SLA, brokers by noNextStep)", () => {

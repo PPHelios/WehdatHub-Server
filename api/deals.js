@@ -44,8 +44,9 @@ function register(api, { pool }) {
     const area = typeof req.query.area === "string" && req.query.area.trim() ? req.query.area.trim().slice(0, 80) : null;
     const filterOpts = { status: req.query.status, from, to, brokerId, brokerRole, market, area };
     const wantSummary = req.query.summary === "1" || Boolean(from || brokerId || market || area);
+    const excludeCancelled = wantSummary && req.query.status !== "cancelled";
     const [list, totals, dealSummary] = await Promise.all([
-      Deals.listDeals(pool, b, { ...filterOpts, offset: n * PAGE, report, week }),
+      Deals.listDeals(pool, b, { ...filterOpts, excludeCancelled, offset: n * PAGE, report, week }),
       report || (from && to) ? [] : Deals.monthlyTotals(pool, b),
       wantSummary ? Deals.dealsSummary(pool, b, filterOpts) : null
     ]);

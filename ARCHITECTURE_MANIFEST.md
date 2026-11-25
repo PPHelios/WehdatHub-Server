@@ -130,7 +130,6 @@
   | `143_trial_team_plan.sql` | Self-serve team trial: 5 seats, 50 units and 200 shared AI credits. Existing signups default to Solo. |
   | `144_trial_credit_allowance.sql` | Preserve the configured AI allowance on each newly verified self-serve trial. |
   | `145_trial_funnel.sql` | Persist anonymous trial offer and verification milestones for the CRM Owner Board. |
-  | `146_coached_accountability_scheduler.sql` | Phase 4 Coached Accountability deduplication columns (`sla_warning_sent_at`, `post_viewing_nudged_at`, `link_silence_nudged_at`) and reset trigger updates on `leads`. |
   | `147_deals_market_area_snapshot.sql` | Snapshot `market`, `area_key`, and `area_label` on `deals` at close and backfill from linked `listings`/`areas`/`commissions`. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.

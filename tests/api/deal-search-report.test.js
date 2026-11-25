@@ -127,4 +127,17 @@ test("dealsSummary & GET /api/v1/deals separate closer vs participant without do
   const tlDeals = await api.get(`/api/v1/deals?broker=${b2.id}&brokerRole=closer`).set("Authorization", `Bearer ${tlTok}`);
   expect(tlDeals.status).toBe(200);
   expect(tlDeals.body.items.every((x) => x.closing_broker_id === b1.id || x.my_share != null)).toBe(true);
+
+  // Cancelled deal inside [from, to) is excluded from BOTH listDeals items and dealSummary
+  const d4 = await Deals.createDeal(h.pool, admin, {
+    leadKey: lead3.ref, unitCode: "RS-A", price: 9999999, mode: "amount", amount: 99000,
+    closingBrokerId: b1.id, status: "cancelled"
+  });
+  expect(d4.ok).toBe(true);
+  const fromYmd = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const toYmd = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const ranged = await api.get(`/api/v1/deals?from=${fromYmd}&to=${toYmd}`).set("Authorization", `Bearer ${token}`);
+  expect(ranged.status).toBe(200);
+  expect(ranged.body.items.every((x) => x.status !== "cancelled")).toBe(true);
+  expect(ranged.body.items.length).toBe(ranged.body.dealSummary.deals);
 });

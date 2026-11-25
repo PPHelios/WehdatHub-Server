@@ -332,7 +332,7 @@ function parseDealQuery(q, raw, now) {
   const brEn2 = stripped.match(/\bdeals?\s+([a-z\u0621-\u064a]+?(?:\s+[a-z\u0621-\u064a]+?)?)\s+(?:was|were|is)\s+(?:involved|closed|made)\b/i)
     || stripped.match(/\bdeals?\s+([a-z\u0621-\u064a]+?(?:\s+[a-z\u0621-\u064a]+?)?)\s+(?:involved|closed|made)\b/i);
   const brEn3 = stripped.match(/\bdeals?\s+(?:for|by)\s+([a-z\u0621-\u064a]+(?:\s+[a-z\u0621-\u064a]+)?)(?:\s+(?:in|on|during)\b|$)/i);
-  const brAr = stripped.match(/(?:قفلها|شارك فيها|لـ|ل)\s+([a-z\u0621-\u064a]+)(?:\s+(?:في|خلال)\b|$)/i);
+  const brAr = stripped.match(/(?:^|\s)(?:قفلها|شارك فيها|لـ|ل)\s+([a-z\u0621-\u064a]+)(?:\s+(?:في|خلال)\b|$)/i);
   const rawBroker = brEn1?.[1] || brEn2?.[1] || brEn3?.[1] || brAr?.[1] || null;
   if (rawBroker && !isGenericAgencySubject(rawBroker)) brokerQuery = rawBroker.trim();
 
