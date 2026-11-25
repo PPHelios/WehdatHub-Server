@@ -162,17 +162,7 @@ function extractTimeWindow(raw, now = new Date()) {
     return resolveRangeFromYmds(`last_${d}d`, startYmd, todayYmd, d === 7 ? "Last 7 days" : `Last ${d} days`, `آخر ${d} أيام`, "rolling");
   }
 
-  // 5. Calendar named presets
-  if (/\b(tomorrow)\b|بكره|غدا/.test(q)) {
-    return makeWindow({ key: "tomorrow", from: tomorrowStart, to: cairoMidnight(addCairoDaysYmd(todayYmd, 2)), inclusiveEndCairoDate: tomorrowYmd, labelEn: "Tomorrow", labelAr: "بكرة" });
-  }
-  if (/\b(today|this morning|so far)\b|النهارده|اليوم/.test(q)) {
-    return makeWindow({ key: "today", from: todayStart, to: tomorrowStart, inclusiveEndCairoDate: todayYmd, labelEn: "Today", labelAr: "النهارده" });
-  }
-  if (/\b(yesterday)\b|امبارح|امس/.test(q)) {
-    const yestYmd = addCairoDaysYmd(todayYmd, -1);
-    return makeWindow({ key: "yesterday", from: cairoMidnight(yestYmd), to: todayStart, inclusiveEndCairoDate: yestYmd, labelEn: "Yesterday", labelAr: "امبارح" });
-  }
+  // 5. Calendar named presets (check multi-word week/month phrases before single-day words; keep Arabic امس word-bounded so it never matches الخامس).
   if (/\b(this week|weekly)\b|الاسبوع ده|هذا الاسبوع|اسبوعيا/.test(q)) {
     const thisMonYmd = addCairoDaysYmd(todayYmd, -cairoWeekdayMon0(todayYmd));
     return resolveRangeFromYmds("this_week", thisMonYmd, todayYmd, "This week", "الأسبوع ده", "calendar");
@@ -196,6 +186,16 @@ function extractTimeWindow(raw, now = new Date()) {
     const thisMonth01 = `${curY}-${pad2(curM)}-01`;
     const nextMonth01 = `${ny}-${pad2(nm)}-01`;
     return resolveRangeFromYmds("this_month", thisMonth01, addCairoDaysYmd(nextMonth01, -1), "This month", "الشهر ده", "calendar");
+  }
+  if (/\b(tomorrow)\b|(?:^|\s)(?:بكره|غدا)(?=\s|[؟?!.,]|$)/.test(q)) {
+    return makeWindow({ key: "tomorrow", from: tomorrowStart, to: cairoMidnight(addCairoDaysYmd(todayYmd, 2)), inclusiveEndCairoDate: tomorrowYmd, labelEn: "Tomorrow", labelAr: "بكرة" });
+  }
+  if (/\b(today|this morning|so far)\b|(?:^|\s)(?:النهارده|اليوم)(?=\s|[؟?!.,]|$)/.test(q)) {
+    return makeWindow({ key: "today", from: todayStart, to: tomorrowStart, inclusiveEndCairoDate: todayYmd, labelEn: "Today", labelAr: "النهارده" });
+  }
+  if (/\b(yesterday)\b|(?:^|\s)(?:امبارح|امس)(?=\s|[؟?!.,]|$)/.test(q)) {
+    const yestYmd = addCairoDaysYmd(todayYmd, -1);
+    return makeWindow({ key: "yesterday", from: cairoMidnight(yestYmd), to: todayStart, inclusiveEndCairoDate: yestYmd, labelEn: "Yesterday", labelAr: "امبارح" });
   }
   return null;
 }
@@ -257,7 +257,8 @@ function stripWindowWords(raw) {
     .replace(/\b(?:since|from)\s+(?:yesterday|today|\d{4}-\d{2}-\d{2})\b|من\s+(?:امبارح|امس|النهارده|اليوم|\d{4}-\d{2}-\d{2})/gi, "")
     .replace(/\b(?:last|past)\s+\d+\s+(?:h(?:ours?|rs?)?|days?|weeks?)\b|(?:اخر|خلال)\s+\d+\s*(?:ساعه|ساعات|يوم|ايام|اسبوع|اسابيع|اسبوعين)/gi, "")
     .replace(/\b(today|tomorrow|yesterday|this week|last week|last 2 weeks|this month|last month|this morning|so far|past 7 days|last 7 days|weekly)\b/gi, "")
-    .replace(/النهارده|اليوم|بكره|غدا|امبارح|امس|الاسبوع ده|هذا الاسبوع|الاسبوع اللي فات|الاسبوع الماضي|اخر اسبوعين|اسبوعين|الشهر ده|هذا الشهر|الشهر اللي فات|الشهر الماضي|اخر 7 ايام|اسبوعيا/g, "")
+    .replace(/الاسبوع ده|هذا الاسبوع|الاسبوع اللي فات|الاسبوع الماضي|اخر اسبوعين|اسبوعين|الشهر ده|هذا الشهر|الشهر اللي فات|الشهر الماضي|اخر 7 ايام|اسبوعيا/g, "")
+    .replace(/(?:^|\s)(?:النهارده|اليوم|بكره|غدا|امبارح|امس)(?=\s|[؟?!.,]|$)/g, "")
     .replace(/\b(in|on|during|for|في|خلال)\s*$/i, "")
     .replace(/[؟?!.,]+$/g, "")
     .replace(/\s+/g, " ")
@@ -268,7 +269,7 @@ const DISCIPLINE_RE = /\b(silent|discipline|updating|not updating|update rate|no
 const COMMISSIONS_RE = /\b(commissions?|claimable|developer commission|collected)\b|عمولات|العموله|عموله المطور|مستحقه/;
 const WAITING_RE = /waiting.*(?:1\s*h|hour)|over (?:an |1 )?hour|delayed first|مستن(?:ي|يين).*ساعه|اكتر من ساعه|تاخر اول تواصل/;
 const UNASSIGNED_RE = /\bunassigned\b|without (?:a )?(?:broker|agent)|من غير وسيط|مش متوزع/;
-const OVERDUE_RE = /\boverdue\b|متابعات متاخره|المتابعات اللي اتاخرت/;
+const OVERDUE_RE = /\boverdue\b|(?:عملاء|العملاء|متابعات|المتابعات)\s*(?:ال)?متاخر(?:ين|ه)|متابعات متاخره|المتابعات اللي اتاخرت/;
 const UNCONTACTED_RE = /\buncontacted\b|not contacted|محدش كلم/;
 const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest)\b|وقت الرد|متوسط الرد|اول رد|اسرع رد/;
 const WIN_LOSS_RE = /\b(win ?loss|win rate|lost reasons?|why.*los(?:ing|t))\b|اسباب الخسار|معدل القفل|الخساير/;
