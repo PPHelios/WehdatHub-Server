@@ -46,6 +46,21 @@ function createTurnPipeline({ pool, config, tapGuard, state }) {
     for (const entry of body?.entry || []) {
       for (const change of entry?.changes || []) {
         for (const message of change?.value?.messages || []) {
+          const verifyToken = WaOwnerOnly.extractTrialVerifyToken(message);
+          if (verifyToken) {
+            const TrialSignup = require("../services/trialSignup");
+            const WebAuth = require("../lib/webAuth");
+            const { t } = require("../lib/copy");
+            WaOwnerOnly.allowTrialReply(message.from);
+            const res = await TrialSignup.verifyWhatsApp(pool, verifyToken, message.from);
+            if (res.ok) {
+              const msg = t("web_login_code", res.broker.preferred_lang || "ar", { code: res.loginCode, minutes: WebAuth.LOGIN_CODE_TTL_MINUTES });
+              await WA.sendWhatsAppText(message.from, msg).catch(() => {});
+            } else if (res.error === "mismatch") {
+              await WA.sendWhatsAppText(message.from, "⚠️ ابعت الرسالة من نفس رقم الموبايل اللي سجلته في التطبيق.").catch(() => {});
+            }
+            continue;
+          }
           // WhatsApp serves the CRM owner's number only, and only login and help (lib/waOwnerOnly.js). Others get nothing.
           if (!WaOwnerOnly.inboundAllowed(message)) continue;
           await handleInboundMessage(message);

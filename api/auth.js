@@ -33,6 +33,35 @@ function isDemoBroker(env, broker) {
 }
 
 function register(api, { pool }) {
+  api.get("/auth/trial-options", async (_req, res) => {
+    const Signup = require("../services/signup");
+    const settings = await Signup.trialSettings(pool);
+    const waAvailable = Boolean(Phone.normalizePhone(process.env.WHATSAPP_BUSINESS_PHONE || ""));
+    return res.json({ ...settings, waAvailable });
+  });
+
+  api.post("/auth/signup", async (req, res) => {
+    const TrialSignup = require("../services/trialSignup");
+    const ipGate = await RateLimit.hit(pool, `signup:ip:${req.ip}`, TrialSignup.LIMITS.ip);
+    if (!ipGate.allowed) return res.set("Retry-After", String(ipGate.retryAfterSec)).status(429).json({ error: "too_many" });
+    const body = req.body || {};
+    const digits = Phone.normalizePhone(body.phone);
+    if (digits) {
+      const phoneGate = await RateLimit.hit(pool, `signup:phone:${digits}`, TrialSignup.LIMITS.phone);
+      if (!phoneGate.allowed) return res.set("Retry-After", String(phoneGate.retryAfterSec)).status(429).json({ error: "too_many" });
+    }
+    const tier = body.tier === "team" ? "team" : "solo";
+    const name = String(body.name || "").trim().slice(0, 80);
+    const agency = String(body.agency || "").trim().slice(0, 120) || (tier === "solo" ? name : "");
+    const channel = body.channel === "whatsapp" ? "whatsapp" : "telegram";
+    const r = await TrialSignup.start(pool, { agency, name, phone: body.phone, lang: body.lang, tier, referral: body.referral, channel });
+    if (r.error) {
+      const status = r.error === "closed" ? 403 : r.error === "phone_taken" || r.error === "trial_used" ? 409 : r.error === "telegram_off" || r.error === "whatsapp_off" ? 503 : 422;
+      return res.status(status).json({ error: r.error });
+    }
+    return res.json({ ok: true, channel: r.channel, verifyUrl: r.url, phone: r.phone, codeMinutes: WebAuth.LOGIN_CODE_TTL_MINUTES });
+  });
+
   api.post("/auth/code/request", async (req, res) => {
     const ipGate = await RateLimit.hit(pool, `login_request:ip:${req.ip}`, RateLimit.LIMITS.loginRequestIp);
     if (!ipGate.allowed) return res.set("Retry-After", String(ipGate.retryAfterSec)).status(429).json({ error: "too_many" });
