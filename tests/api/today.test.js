@@ -60,21 +60,41 @@ test("a broker with nothing waiting gets an empty list, not an error", async () 
 
 const old = (days) => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
 
-test("old units: a broker sees theirs, a manager and data entry see the agency's, private units stay hidden, status never changes", async () => {
+test("old units: only data entry sees them on today, private units stay hidden, status never changes", async () => {
   await h.insertListing({ code: "O-1", confirmed_at: old(30) });
   await h.insertListing({ code: "O-2", broker_id: h.BROKERS.colleague.id, confirmed_at: old(25) });
   await h.insertListing({ code: "O-NEW", confirmed_at: old(2) });
   await h.insertListing({ code: "O-P", confirmed_at: old(40), is_private: true });
   await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
   await h.seedBroker("manager");
-  const mine = (await get("broker")).body.cards.oldUnits;
-  expect(mine.items.map((u) => u.code)).toEqual(["O-1"]);
-  const mgr = (await get("manager")).body.cards.oldUnits;
-  expect(mgr.items.map((u) => u.code).sort()).toEqual(["O-1", "O-2"]);
+  expect((await get("broker")).body.cards.oldUnits).toBeNull();
+  expect((await get("manager")).body.cards.oldUnits).toBeNull();
   const de = await get("colleague");
   expect(de.body.cards.oldUnits.total).toBe(2);
   expect(de.body.tasks).toEqual([]);
   expect((await h.query("SELECT status FROM listings WHERE code = 'O-1'"))[0].status).toBe("active");
+});
+
+test("owner and manager can toggle dataEntryMissingPhotos and dataEntryOverdueUnits switches", async () => {
+  await h.insertListing({ code: "O-1", confirmed_at: old(30) });
+  await h.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  await h.seedBroker("manager");
+  const mgrAuth = { Authorization: `Bearer ${await token("manager")}` };
+  const deAuth = { Authorization: `Bearer ${await token("colleague")}` };
+
+  const settingsRes = await request(h.app.app).get("/api/v1/settings").set(mgrAuth);
+  expect(settingsRes.status).toBe(200);
+  expect(settingsRes.body.switches).toEqual({ dataEntryMissingPhotos: true, dataEntryOverdueUnits: true });
+
+  const saveRes = await request(h.app.app).post("/api/v1/settings").set(mgrAuth)
+    .send({ switches: { dataEntryMissingPhotos: false, dataEntryOverdueUnits: false } });
+  expect(saveRes.status).toBe(200);
+
+  const homeDe = await request(h.app.app).get("/api/v1/today/home").set(deAuth);
+  expect(homeDe.status).toBe(200);
+  expect(homeDe.body.missingPhotos).toBe(0);
+  expect(homeDe.body.units.total).toBe(0);
+  expect(homeDe.body.priorities).toEqual([]);
 });
 
 test("a card with nothing in it is null", async () => {
@@ -136,12 +156,12 @@ test("home priorities rank Waiting > 1h, intake alerts, and missing photos witho
   const mgrRes = await request(h.app.app).get("/api/v1/today/home").set(authMgr);
   expect(mgrRes.status).toBe(200);
   expect(mgrRes.body).toMatchObject({ waitingOver1h: 1, missingPhotos: 1, intake: { disconnected: 1, failed: 0 } });
-  expect(mgrRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h", "intake", "missing-photos"]);
+  expect(mgrRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h", "intake"]);
 
   const authBroker = { Authorization: `Bearer ${await token("broker")}` };
   const brokerRes = await request(h.app.app).get("/api/v1/today/home").set(authBroker);
   expect(brokerRes.status).toBe(200);
-  expect(brokerRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h", "missing-photos"]);
+  expect(brokerRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h"]);
   // Uncontacted leads under 1h are distinct from waiting-over-1h; with 0 fresh remaining, new-leads is omitted.
   expect(brokerRes.body.newLeads).toBe(1);
   expect(admin.role).toBe("admin");

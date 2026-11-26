@@ -532,7 +532,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       }
     }
     const { rows } = await pool.query(
-      `SELECT l.ref, l.stage, l.next_follow_up_at, b.name AS broker_name, u.code AS unit_code
+      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, l.next_follow_up_at, b.name AS broker_name, u.code AS unit_code
          FROM leads l
          LEFT JOIN brokers b ON b.id = l.assigned_broker_id
          LEFT JOIN listings u ON u.id = l.follow_up_listing_id AND u.agency_id = l.agency_id AND ${Vis.units("u")}
@@ -549,6 +549,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       byBroker.set(k, (byBroker.get(k) || 0) + 1);
     }
     const showBrokers = hasMultiBrokerScope(actor);
+    const locale = en ? "en-GB" : "ar-EG";
     return {
       intent: "crm_viewings",
       headline: en ? `${rows.length} viewing(s) scheduled · ${range.labelEn}` : `${rows.length} معاينة مجدولة · ${range.labelAr}`,
@@ -566,6 +567,31 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
               kind: "bar_breakdown",
               title: en ? "By broker" : "حسب البروكر",
               rows: [...byBroker.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ key: label, label, count }))
+            }]
+          : []),
+        ...(rows.length
+          ? [{
+              kind: "stuck_leads",
+              title: en ? "Scheduled viewings" : "المعاينات المجدولة",
+              queue: "viewings",
+              total: rows.length,
+              recommendedBrokers: [],
+              canAssign: false,
+              canNudge: false,
+              items: rows.slice(0, 10).map((l) => {
+                const time = l.next_follow_up_at
+                  ? new Date(l.next_follow_up_at).toLocaleTimeString(locale, { timeZone: "Africa/Cairo", hour: "numeric", minute: "2-digit" })
+                  : "";
+                return {
+                  ref: `L-${String(l.ref).padStart(4, "0")}`,
+                  name: l.name || null,
+                  stage: [time, l.unit_code, l.stage].filter(Boolean).join(" · "),
+                  version: Number(l.version || 1),
+                  assignee: l.broker_name || null,
+                  assigneeId: l.assigned_broker_id || null,
+                  createdAt: l.next_follow_up_at ? new Date(l.next_follow_up_at).toISOString() : null
+                };
+              })
             }]
           : [])
       ],
@@ -1120,6 +1146,21 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
   }
 
   if (routeInfo.route === "clarify") {
+    if (routeInfo.clarifyKind === "unknown_question") {
+      return {
+        intent: "clarify",
+        modeUsed: safeMode,
+        headline: en
+          ? "I didn't understand that question. Try asking about leads, viewings, team performance, or search for units."
+          : "مفهمتش السؤال ده. جرّب تسأل عن العملاء، المعاينات، أداء الفريق، أو ابحث عن وحدات.",
+        windowLabel: en ? "Clarification needed" : "وضّح طلبك",
+        understood: { job: "clarify_question", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
+        cards: [],
+        actions: [],
+        links: [],
+        aiUsed: false
+      };
+    }
     if (routeInfo.clarifyKind === "missing_context") {
       return {
         intent: "clarify",

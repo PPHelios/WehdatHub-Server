@@ -77,8 +77,7 @@ function buildPriorities({
       viewingEntry,
       item("calls", URGENCY.MEDIUM, calls, { kind: "leads_tab", tab: "due_today" }),
       item("leases-soon", URGENCY.LOW, leasesSoon, { kind: "screen", screen: "Leases" }),
-      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" }),
-      item("missing-photos", URGENCY.LOW, missingPhotos, { kind: "units_missing_photos" })
+      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" })
     ].filter(Boolean);
   }
 
@@ -96,8 +95,7 @@ function buildPriorities({
       viewingEntry,
       item("calls", URGENCY.MEDIUM, calls, { kind: "leads_tab", tab: "due_today" }),
       freshRow,
-      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" }),
-      item("missing-photos", URGENCY.LOW, missingPhotos, { kind: "units_missing_photos" })
+      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" })
     ].filter(Boolean);
   }
 
@@ -108,8 +106,7 @@ function buildPriorities({
     viewingEntry,
     item("calls", URGENCY.MEDIUM, calls, { kind: "leads_tab", tab: "due_today" }),
     freshRow,
-    item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" }),
-    item("missing-photos", URGENCY.LOW, missingPhotos, { kind: "units_missing_photos" })
+    item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" })
   ].filter(Boolean);
 }
 

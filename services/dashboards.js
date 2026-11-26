@@ -9,8 +9,9 @@ const { MANAGER_ROLES } = require("../lib/authz");
 const { getConfig } = require("../config");
 const Vis = require("../lib/visibility");
 
-const PERIODS = [7, 30, 90];
+const PERIODS = [1, 7, 30, 90, 365];
 const DAY = 24 * 3600 * 1000;
+const { resolveInterval } = require("../domain/assistantRouter");
 
 const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCase());
 
@@ -183,7 +184,7 @@ async function brokerActivity(pool, agencyId, { since, until = new Date() }) {
  * The agency dashboard: pipeline now, the period's totals, and the leaderboard (deals, then commission, then moves).
  * brokerId narrows it to one broker; teamLeadId to one team lead's brokers (an id that is not a team lead here gives the agency view).
  */
-async function agencyDashboard(pool, manager, { days = 30, now = new Date(), brokerId = null, teamLeadId = null } = {}) {
+async function agencyDashboard(pool, manager, { days = 30, from = null, to = null, now = new Date(), brokerId = null, teamLeadId = null } = {}) {
   if (!isManager(manager)) return null;
   const workspace = manager.workspace;
   const mode = workspace?.mode || "agency";
@@ -194,7 +195,13 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     teamLeadId = null;
   }
   const period = periodOf(days);
-  const since = new Date(now.getTime() - period * DAY);
+  const interval = (from || to)
+    ? resolveInterval({ from, to, days: period, now, maxDays: 366 })
+    : period === 1
+      ? { since: new Date(Stages.cairoDayAt(now, 0, 0)), until: now }
+      : { since: new Date(now.getTime() - period * DAY), until: now };
+  const since = interval.since;
+  const until = interval.until;
   const agencyId = manager.agency_id;
   const team = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId]);
   const who = team.rows.some((b) => b.id === brokerId) ? brokerId : null; // an id from another agency is ignored
@@ -232,18 +239,18 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     us
   );
   const { rows: teamLeads } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active AND lower(role) = 'team_lead' ORDER BY name", [agencyId]);
-  const ds = [agencyId, since.toISOString()];
+  const ds = [agencyId, since.toISOString(), until.toISOString()];
   const { rows: dealRows } = await pool.query(
     `SELECT count(*)::int AS n, coalesce(sum(commission_total), 0)::bigint AS commission, coalesce(sum(price), 0)::bigint AS value
-       FROM deals WHERE agency_id = $1 AND closed_at >= $2 AND status <> 'cancelled'${scope("closing_broker_id", ds)}`,
+       FROM deals WHERE agency_id = $1 AND closed_at >= $2 AND closed_at < $3 AND status <> 'cancelled'${scope("closing_broker_id", ds)}`,
     ds
   );
-  const brokers = (await brokerActivity(pool, agencyId, { since, until: now })).filter((b) => !ids || ids.includes(b.id));
+  const brokers = (await brokerActivity(pool, agencyId, { since, until })).filter((b) => !ids || ids.includes(b.id));
   const board = brokers
     .filter((b) => b.active || b.deals || b.leads)
     .sort((a, b) => b.deals - a.deals || b.commission - a.commission || b.forward - a.forward || b.contacted - a.contacted || a.name.localeCompare(b.name));
   // Headline new leads counts agency-wide leads (including unassigned leads, while broker/team scopes narrow it).
-  const la = [agencyId, since.toISOString(), now.toISOString()];
+  const la = [agencyId, since.toISOString(), until.toISOString()];
   const { rows: leadRows } = await pool.query(
     `SELECT count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2 AND created_at < $3${scope("assigned_broker_id", la)}`,
     la

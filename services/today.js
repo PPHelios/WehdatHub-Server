@@ -94,6 +94,17 @@ async function approvalsCard(pool, v) {
   return access || names.length ? { access, names: names.length } : null;
 }
 
+async function dataEntrySwitches(pool, agencyId) {
+  const { rows } = await pool.query(
+    "SELECT data_entry_missing_photos, data_entry_overdue_units FROM agencies WHERE id = $1",
+    [agencyId]
+  );
+  return {
+    missingPhotos: rows[0]?.data_entry_missing_photos !== false,
+    overdueUnits: rows[0]?.data_entry_overdue_units !== false
+  };
+}
+
 /** Today for one person: { counts, tasks, moreTasks, cards }. The app (api/today.js) and the website (web/routes/home.js) both use it. */
 async function build(pool, viewer, now = new Date()) {
   const dataEntry = Authz.isDataEntry(viewer);
@@ -102,7 +113,13 @@ async function build(pool, viewer, now = new Date()) {
     : await Digest.briefData(pool, viewer, now);
   const tasks = tasksOf(d);
   const ids = await scopeIds(pool, viewer);
-  const [old, ops, approvals, leases] = await Promise.all([oldUnits(pool, viewer, ids, now), opsCard(pool, viewer, now), approvalsCard(pool, viewer), dataEntry ? [] : Leases.list(pool, viewer, { soon: true, now })]);
+  const deSwitches = dataEntry ? await dataEntrySwitches(pool, viewer.agency_id) : null;
+  const [old, ops, approvals, leases] = await Promise.all([
+    dataEntry && deSwitches.overdueUnits ? oldUnits(pool, viewer, ids, now) : null,
+    opsCard(pool, viewer, now),
+    approvalsCard(pool, viewer),
+    dataEntry ? [] : Leases.list(pool, viewer, { soon: true, now })
+  ]);
   const t = d.target;
   const com = d.commissions;
   return {
@@ -169,9 +186,10 @@ async function home(pool, viewer, now = new Date()) {
   const tomorrow = Stages.cairoDayAt(now, 1, 0).toISOString();
   const ids = await scopeIds(pool, viewer);
   if (Authz.isDataEntry(viewer)) {
+    const deSwitches = await dataEntrySwitches(pool, viewer.agency_id);
     const [units, missingPhotos, recent] = await Promise.all([
-      oldUnits(pool, viewer, ids, now, 3),
-      missingPhotosCount(pool, viewer, ids),
+      deSwitches.overdueUnits ? oldUnits(pool, viewer, ids, now, 3) : { total: 0, items: [] },
+      deSwitches.missingPhotos ? missingPhotosCount(pool, viewer, ids) : 0,
       evening ? pool.query(
         `SELECT count(DISTINCT listing_code)::int AS n FROM operation_logs
           WHERE agency_id = $1 AND broker_id = $2 AND created_at >= $3 AND created_at < $4

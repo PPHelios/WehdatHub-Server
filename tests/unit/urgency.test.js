@@ -28,8 +28,7 @@ describe("domain/urgency.buildPriorities", () => {
       "commissions",
       "next-viewing",
       "calls",
-      "leases-soon",
-      "missing-photos"
+      "leases-soon"
     ]);
     expect(out.find((p) => p.id === "waiting-over-1h").extra).toEqual({ over24h: 1 });
     expect(out.find((p) => p.id === "intake")).toMatchObject({ count: 3, urgency: "high", action: { kind: "screen", screen: "Sources" } });
@@ -39,7 +38,7 @@ describe("domain/urgency.buildPriorities", () => {
 
   test("broker & team_lead deduplicate waiting-over-1h against new-leads", () => {
     const exact = Urgency.buildPriorities({ role: "broker", overdue: 1, waitingOver1h: 2, newLeads: 2, calls: 0, missingPhotos: 1 });
-    expect(exact.map((p) => p.id)).toEqual(["overdue", "waiting-over-1h", "missing-photos"]);
+    expect(exact.map((p) => p.id)).toEqual(["overdue", "waiting-over-1h"]);
 
     const withFresh = Urgency.buildPriorities({ role: "team_lead", waitingOver1h: 2, newLeads: 5 });
     expect(withFresh.map((p) => [p.id, p.count])).toEqual([

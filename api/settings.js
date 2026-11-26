@@ -15,15 +15,23 @@ function register(api, { pool }) {
     const b = req.session.broker;
     const { rows } = await pool.query("SELECT quiet_line FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id]);
     const owner = Authz.isAgencyOwner(b);
+    const manager = Authz.isManager(b);
+    const agencyFlags = manager
+      ? (await pool.query("SELECT data_entry_missing_photos, data_entry_overdue_units FROM agencies WHERE id = $1", [b.agency_id])).rows[0]
+      : null;
     res.json({
       quietLine: rows[0]?.quiet_line !== false,
-      switches: owner ? {
-        brokersMayWrite: await Rights.brokersMayWrite(pool, b.agency_id),
-        dataEntryOwners: await UnitOwners.dataEntryOwnersOn(pool, b.agency_id),
-        brokersSeeAllLeads: await LeadScope.brokersSeeAll(pool, b.agency_id),
-        ...(b.workspace?.tier === "team" && b.workspace.members > 1 ? {
-          brokersWorkSharedLeads: Boolean(b.workspace.brokersWorkSharedLeads),
-          brokersEditColleagueUnits: Boolean(b.workspace.brokersEditColleagueUnits)
+      switches: manager ? {
+        dataEntryMissingPhotos: agencyFlags?.data_entry_missing_photos !== false,
+        dataEntryOverdueUnits: agencyFlags?.data_entry_overdue_units !== false,
+        ...(owner ? {
+          brokersMayWrite: await Rights.brokersMayWrite(pool, b.agency_id),
+          dataEntryOwners: await UnitOwners.dataEntryOwnersOn(pool, b.agency_id),
+          brokersSeeAllLeads: await LeadScope.brokersSeeAll(pool, b.agency_id),
+          ...(b.workspace?.tier === "team" && b.workspace.members > 1 ? {
+            brokersWorkSharedLeads: Boolean(b.workspace.brokersWorkSharedLeads),
+            brokersEditColleagueUnits: Boolean(b.workspace.brokersEditColleagueUnits)
+          } : {})
         } : {})
       } : null
     });
@@ -33,15 +41,26 @@ function register(api, { pool }) {
     const body = req.body || {};
     if (typeof body.quietLine === "boolean") await pool.query("UPDATE brokers SET quiet_line = $3 WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id, body.quietLine]);
     if (body.switches) {
-      if (!Authz.isAgencyOwner(b)) return res.status(403).json({ error: "forbidden" });
-      const { brokersSeeAllLeads, brokersWorkSharedLeads, brokersEditColleagueUnits } = body.switches;
+      const s = body.switches;
+      const hasOwnerSwitch = ["brokersSeeAllLeads", "brokersWorkSharedLeads", "brokersEditColleagueUnits", "brokersMayWrite", "dataEntryOwners"].some((k) => typeof s[k] === "boolean");
+      if (!Authz.isManager(b) || (hasOwnerSwitch && !Authz.isAgencyOwner(b))) return res.status(403).json({ error: "forbidden" });
+      const { brokersSeeAllLeads, brokersWorkSharedLeads, brokersEditColleagueUnits, dataEntryMissingPhotos, dataEntryOverdueUnits } = s;
+      if (typeof dataEntryMissingPhotos === "boolean" || typeof dataEntryOverdueUnits === "boolean") {
+        await pool.query(
+          `UPDATE agencies SET
+             data_entry_missing_photos = COALESCE($2, data_entry_missing_photos),
+             data_entry_overdue_units = COALESCE($3, data_entry_overdue_units)
+           WHERE id = $1`,
+          [b.agency_id, typeof dataEntryMissingPhotos === "boolean" ? dataEntryMissingPhotos : null, typeof dataEntryOverdueUnits === "boolean" ? dataEntryOverdueUnits : null]
+        );
+      }
       if (typeof brokersWorkSharedLeads === "boolean" || typeof brokersEditColleagueUnits === "boolean") {
         const result = await Team.setCollaboration(pool, b, { brokersWorkSharedLeads, brokersEditColleagueUnits });
         if (result.error) return res.status(403).json({ error: result.error });
       }
       if (typeof brokersSeeAllLeads === "boolean") await LeadScope.setBrokersSeeAll(pool, b, brokersSeeAllLeads);
-      if (typeof body.switches.brokersMayWrite === "boolean") await Rights.setBrokersMayWrite(pool, b, body.switches.brokersMayWrite);
-      if (typeof body.switches.dataEntryOwners === "boolean") await UnitOwners.setDataEntryOwners(pool, b, body.switches.dataEntryOwners);
+      if (typeof s.brokersMayWrite === "boolean") await Rights.setBrokersMayWrite(pool, b, s.brokersMayWrite);
+      if (typeof s.dataEntryOwners === "boolean") await UnitOwners.setDataEntryOwners(pool, b, s.dataEntryOwners);
     }
     res.json({ ok: true });
   });

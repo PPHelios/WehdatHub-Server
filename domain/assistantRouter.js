@@ -164,6 +164,9 @@ function extractTimeWindow(raw, now = new Date()) {
   }
 
   // 5. Calendar named presets (check multi-word week/month phrases before single-day words; keep Arabic امس word-bounded so it never matches الخامس).
+  if (/\b(next week)\b|الاسبوع الجاي|الاسبوع القادم/.test(q)) {
+    return resolveRangeFromYmds("next_week", todayYmd, addCairoDaysYmd(todayYmd, 7), "Next 7 days", "الأسبوع الجاي", "calendar");
+  }
   if (/\b(this week|weekly)\b|الاسبوع ده|هذا الاسبوع|اسبوعيا/.test(q)) {
     const thisMonYmd = addCairoDaysYmd(todayYmd, -cairoWeekdayMon0(todayYmd));
     return resolveRangeFromYmds("this_week", thisMonYmd, todayYmd, "This week", "الأسبوع ده", "calendar");
@@ -266,30 +269,30 @@ function stripWindowWords(raw) {
     .trim();
 }
 
-const DISCIPLINE_RE = /\b(silent|discipline|updating|not updating|update rate|no updates|ghost)\b|مش بيحدث|تحديث التطبيق|الالتزام بالتحديث|مين مش شغال|مفيش تحديث/;
-const COMMISSIONS_RE = /\b(commissions?|claimable|developer commission|collected)\b|عمولات|العموله|عموله المطور|مستحقه/;
-const WAITING_RE = /waiting.*(?:1\s*h|hour)|over (?:an |1 )?hour|delayed first|waiting\s*(?:for\s*)?(?:a\s*)?reply|مستن(?:ي|يين).*ساعه|مستن(?:ي|يين)\s*رد|اكتر من ساعه|تاخر اول تواصل/;
-const UNASSIGNED_RE = /\bunassigned\b|without (?:a )?(?:broker|agent)|من غير وسيط|مش متوزع/;
-const OVERDUE_RE = /\boverdue\b|(?:عملاء|العملاء|متابعات|المتابعات)\s*(?:ال)?متاخر(?:ين|ه)|متابعات متاخره|المتابعات اللي اتاخرت/;
-const UNCONTACTED_RE = /\buncontacted\b|not contacted|محدش كلم/;
-const OPENED_NO_FU_RE = /(?:offer\s*links?|links?).*(?:opened).*(?:without|no)\s*follow|opened\s*(?:offer\s*)?links?.*no\s*follow|فتح(?:وا)?\s*(?:ال)?(?:لينك|العرض).*(?:مفيش|بدون)\s*متابع/;
-const APPROACHING_SLA_RE = /\bapproaching\s*sla\b|close\s*to\s*sla|near\s*sla|قربوا\s*(?:علي|يكسروا)\s*(?:sla|وقت\s*الرد)/;
-const STUCK_BROKERS_RE = /\b(?:brokers?|agents?)\b.*no\s*next\s*step|ranked\s*by\s*no\s*next\s*step|بدون\s*خطوه\s*جايه/;
-const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest|who replied|who responded)\b|وقت الرد|متوسط الرد|اول رد|اسرع رد|مين رد/;
-const WIN_LOSS_RE = /\b(win ?loss|win rate|lost reasons?|why.*los(?:ing|t))\b|اسباب الخسار|معدل القفل|الخساير/;
-const SOURCES_RE = /\b(sources?|facebook|fb|meta|instagram|tiktok|bayut|dubizzle|olx|property finder|nawy|marketing|ad spend|cpl|cpd|campaigns?)\b|مصادر|فيسبوك|فيس بوك|انستجرام|تسويق|اعلانات/;
-const LEASES_RE = /\b(leases?|expiring|rent ending)\b|عقود الايجار|ايجارات قربت تخلص|ايجارات/;
-const BRIEF_RE = /\b(dashboard|executive brief|agency brief|my stats|my summary|my performance|my activity|summary|overview|performance|stuck|activity)\b|ملخص(?:ي)?|احصائياتي|ادائي|شغلي|تقرير|لوحه الشركه|اداء الشركه/;
+const DISCIPLINE_RE = /\b(silent|discipline|updating|not updating|update rate|no updates|ghost|inactive brokers?|quiet brokers?|who isn'?t updating|who is not updating)\b|مش بيحدث|مبيحدثش|مبيحدثوش|تحديث التطبيق|الالتزام بالتحديث|التزام الفريق|تحديثات الوسطاء|(?:الوسطاء|البروكرز) (?:اللي مش بيردوا|الصامتين)|اللي مش بيردوا|مش بيردوا|مبيردوش|مش بيتابعوا|مبيتابعوش|مين مش (?:شغال|بيرد|بيتابع)|مين ساحب|مين نايم|مفيش تحديث/;
+const COMMISSIONS_RE = /\b(commissions?|claimable|developer commission|collected|pending commissions?)\b|عمولات|العموله|عمولاتي|عموله المطور|مستحقات المطورين|فلوس المطورين|مستحقه/;
+const WAITING_RE = /waiting.*(?:1\s*h|hour|contact|called)|over (?:an |1 )?hour|delayed (?:first|reply)|late first contact|no first contact|haven'?t been called|waiting\s*(?:for\s*)?(?:a\s*)?reply|مستن(?:ي|يين).*(?:ساعه|تواصل|حد يكلمهم)|مستن(?:ي|يين)\s*رد|اكتر من ساعه|عدي ساعه|تاخر اول تواصل|تاخير اول تواصل|ات[اأ]خر(?:وا)? في اول تواصل|ات[اأ]خرنا عليهم|محدش رد عليهم/;
+const UNASSIGNED_RE = /\bunassigned\b|\bunallocated\b|not assigned|no broker|without (?:a )?(?:broker|agent|owner)|need(?:s)? (?:a )?broker|(?:من غير|بدون) (?:وسيط|بروكر|سيلز|حد)|مش متوزع|لسه متوزعوش|مش متسلم|لسه متسلموش|مفيش حد مسكهم|محدش استلمهم|محدش مسكهم|ملهمش (?:وسيط|بروكر)/;
+const OVERDUE_RE = /\boverdue\b|(?:missed|late|pending) follow[ -]?ups?|(?:عملاء|العملاء|متابعات|المتابعات)\s*(?:ال)?متاخر(?:ين|ه)|متابعات (?:متاخره|فايته|عدت)|المتابعات اللي اتاخرت|عملاء عد[ىي] ميعادهم|مين متاخر في المتابعه/;
+const UNCONTACTED_RE = /\buncontacted\b|not contacted|never contacted|no contact yet|not called yet|nobody called|haven'?t called|محدش كلم|لسه متكلموش|لسه محدش تواصل|محدش اتصل بيهم|لسه مفيش مكالمه/;
+const OPENED_NO_FU_RE = /(?:offer\s*links?|links?).*(?:opened|clicked|viewed).*(?:without|no)\s*follow|(?:opened|clicked|viewed)\s*(?:offer\s*)?links?.*(?:without|no)\s*follow|فتح(?:وا)?\s*(?:ال)?(?:لينك|الرابط|العرض).*(?:مفيش|بدون|محدش)\s*(?:متابع|كلم)|شافوا العرض ومحدش تابع/;
+const APPROACHING_SLA_RE = /\bapproaching\s*sla\b|close\s*to\s*sla|near\s*sla|sla\s*soon|about\s*to\s*breach|almost\s*overdue|قربوا\s*(?:علي|يكسروا|يعدوا|يخلصوا|يتاخروا)\s*(?:sla|وقت\s*الرد|المهله)?/;
+const STUCK_BROKERS_RE = /\b(?:brokers?|agents?|leads?)\b.*(?:no|missing)\s*next\s*step|ranked\s*by\s*no\s*next\s*step|no\s*follow[ -]?up\s*scheduled|بدون\s*(?:خطوه\s*جايه|متابعه\s*جايه)|من\s*غير\s*خطوه|مفيش\s*خطوه\s*جايه/;
+const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest|who replied|who responded|speed to lead)\b|how fast.*(?:respond|reply)|وقت الرد|متوسط الرد|اول رد|اسرع (?:رد|واحد بيرد)|ابط[اأ] (?:رد|واحد بيرد)|سرعه الرد|بنرد في قد ايه|مين رد/;
+const WIN_LOSS_RE = /\b(win\s*\/?\s*loss|win rate|conversion rate|closing rate|lost reasons?|why.*los(?:ing|t))\b|اسباب الخسار|ليه بنخسر|الصفقات اللي ضاعت|معدل القفل|نسبه القفل|نسبه النجاح|الخساير/;
+const SOURCES_RE = /\b(sources?|facebook|fb|meta|instagram|tiktok|google|olx|dubizzle|bayut|property finder|nawy|marketing|ad spend|cpl|cpd|campaigns?|best lead source|marketing roi)\b|where are leads coming from|مصادر|احسن مصدر|افضل مصدر|العملاء جايين منين|فيسبوك|فيس بوك|انستجرام|تيك توك|جوجل|اوليكس|دوبيزل|بروبرتي|بيوت|نوي|تسويق|اعلانات/;
+const LEASES_RE = /\b(leases?|expiring|rent ending|renewals?)\b|عقود (?:ال)?ايجار|ايجارات (?:قربت|هت)تخلص|ايجارات|تجديد الايجار/;
+const BRIEF_RE = /\b(dashboard|executive brief|agency brief|daily brief|my stats|my summary|my performance|my activity|summary|overview|performance|stuck|activity|how are we doing|today'?s summary|what happened today)\b|ملخص(?:ي)?|احصائياتي|ادائي|شغلي|تقرير(?: اليوم)?|لوحه الشركه|اداء الشركه|حاله الشركه|وضع الشركه|اخبار الشركه|الوضع ايه/;
 
 // Viewings scheduled today / tomorrow at agency/team level (not past broker activity query).
-const SCHEDULED_VIEWINGS_RE = /\b(?:how many |what |list |any )?viewings? (?:do we have|are scheduled|we have|planned)? ?(?:today|tomorrow)?\b|عندنا كام معاين|معاينات (?:النهارده|بكره)/;
+const SCHEDULED_VIEWINGS_RE = /\b(?:how many |what |list |any |upcoming |scheduled )?(?:viewings?|showings?) (?:do we have|are scheduled|we have|planned)? ?(?:today|tomorrow)?\b|\bwho has (?:a )?(?:showing|viewing)\b|عندنا (?:كام )?معاين|معاينات (?:النهارده|بكره|امتي)|مين عنده معاينه|جدول المعاينات/;
 
 // Broker & team activity queries: "what did sara do today", "how many viewings did omar do this week", "calls by ali", "omar's team this week"
 const TEAM_POSSESSIVE_RE = /^(?:what did |how did |how many (?:viewings?|calls?|updates?|leads?|deals?) did )?(.+?)(?:'s|’s)?\s+team(?:\s+do|\s+make|\s+close|\s+log)?(?:\s+(.+))?$/;
-const TEAM_AR_RE = /^(?:شغل|اداء|تقييم|معاينات|مكالمات|تحديثات)?\s*فريق\s+(.+?)(?:\s+عمل ايه)?$/;
-const BROKER_ACTIVITY_RE = /^(?:what did|how did|how many (?:viewings?|calls?|updates?|leads?|deals?) did|viewings? (?:by|for|of)|calls? (?:by|for|of)|updates? (?:by|for|of)|stats for|check on|how is|performance of|scorecard for|status of)\s+(.+?)(?:\s+(?:do|doing|make|have|get|log|close|completed))?$/;
-const BROKER_ACTIVITY_AR_RE = /^(?:ايه اخبار|اداء|تقييم|شغل|معاينات|مكالمات|تحديثات)\s+(.+?)$/;
-const BROKER_WORK_AR_RE = /^(.+?)\s+(?:عمل|سجل|كلم|حدث)\s+ايه/;
+const TEAM_AR_RE = /^(?:شغل|اداء|تقييم|ملخص|اخبار|احصائيات|معاينات|مكالمات|تحديثات)?\s*(?:فريق|تيم)\s+(.+?)(?:\s+عمل(?:ت)? ايه)?$/;
+const BROKER_ACTIVITY_RE = /^(?:what (?:did|has)|how did|how many (?:viewings?|showings?|calls?|updates?|leads?|deals?) (?:did|does|do)|(?:viewings?|showings?) (?:by|for|of)|calls? (?:by|for|of)|updates? (?:by|for|of)|stats for|summary for|report for|check on|how is|performance of|scorecard for|status of)\s+(.+?)(?:\s+(?:do|doing|done|have|has|make|get|log|close|completed))?$/;
+const BROKER_ACTIVITY_AR_RE = /^(?:ايه اخبار|اخبار|اداء|تقييم|شغل|ملخص|احصائيات|نتايج|ارقام|معاينات|مكالمات|تحديثات)\s+(.+?)$/;
+const BROKER_WORK_AR_RE = /^(.+?)\s+(?:عمل|عملت|سجل|سجلت|كلم|كلمت|حدث|حدثت|قفل|قفلت|جاب|جابت|عنده|عندها|اخباره|اخبارها)\s*(?:ايه|كام)?/;
 const AGENCY_DO_RE = /\b(?:what did (?:the )?(?:agency|we|everyone|team) do|how many (?:viewings?|calls?|updates?|leads?|deals?) (?:did )?(?:the )?(?:agency|we)|(?:agency|team) activity)\b|الشركه عملت ايه|عملنا ايه|كام (?:مكالمه|معاينه|تحديث|صفقه)/;
 
 const PRIMARY_EXPLICIT_RE = /\b(primary|off[- ]plan|developer|developers|projects?|launch(?:es)?)\b|برايمر[ي]|اولي|مطور(?:ين)?|مشروع|مشاريع/;
@@ -394,13 +397,13 @@ function crmRoute(q, raw, now = new Date()) {
 
   // Scheduled viewings today / tomorrow (only when NOT naming a specific broker and not a past-week activity summary).
   const isTodayOrTomorrow = windowInfo?.key === "today" || windowInfo?.key === "tomorrow";
-  if (/\bviewings?\b|معاين/.test(q) && !/\bdid\b|\bby\b|عملها|عملت/.test(q) && (isTodayOrTomorrow || (!windowInfo && SCHEDULED_VIEWINGS_RE.test(q)))) {
+  if (/\b(?:viewings?|showings?)\b|معاين/.test(q) && !/\b(?:did|does|do)\b|\bby\b|عملها|عملت/.test(q) && !(/عنده|عندها/.test(q) && !/^(?:مين|من)\s+(?:عنده|عندها)/.test(q)) && (isTodayOrTomorrow || (SCHEDULED_VIEWINGS_RE.test(q) && (!windowInfo || !/\bhow many\b|كام|كم/.test(q))))) {
     return { route: "crm_viewings", windowInfo: windowInfo || extractTimeWindow("today", now) };
   }
 
   const brokerEn = BROKER_ACTIVITY_RE.exec(stripped);
   if (brokerEn) {
-    const subj = stripWindowWords(brokerEn[1]).replace(/\s+(?:do|doing|make|have|get|log|close|completed)$/i, "").trim();
+    const subj = stripWindowWords(brokerEn[1]).replace(/\s+(?:do|doing|done|have|has|make|get|log|close|completed)$/i, "").trim();
     if (!subj || isGenericAgencySubject(subj)) return { route: "crm_brief", windowInfo };
     return { route: "crm_broker", brokerQuery: subj, windowInfo };
   }
@@ -567,8 +570,14 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), pr
   if (UNIT_RE.test(q) || UNIT_CODE_RE.test(q)) {
     return { route: "unit_search", job: "find_units", market: null, exclusions: signals.exclusions };
   }
-  if (/^(?:who|why|when|where|what|how|امتى|كام|ليه|ايه|مين)\b/.test(q)) {
-    return { route: "primary", job: "project_info", market: "primary", exclusions: signals.exclusions };
+  if (/^(?:(?:who|why|when|where|what|how)\b|(?:امتى|امتي|كام|كم|ليه|ايه|مين)(?=\s|$|[؟?!.,]))/.test(q)) {
+    return {
+      route: "clarify",
+      clarifyKind: "unknown_question",
+      market: null,
+      exclusions: [],
+      preservedText: text
+    };
   }
   return { route: "unit_search", job: "find_units", market: null, exclusions: signals.exclusions };
 }
