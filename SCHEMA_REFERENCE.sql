@@ -457,7 +457,9 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   segment_hint text,
   manager_can_renew_plan boolean DEFAULT false NOT NULL,
   manager_can_buy_credits boolean DEFAULT false NOT NULL,
-  trial_ai_credits integer
+  trial_ai_credits integer,
+  data_entry_missing_photos boolean DEFAULT true NOT NULL,
+  data_entry_overdue_units boolean DEFAULT true NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -1912,7 +1914,7 @@ CREATE TABLE IF NOT EXISTS public.search_actions (
 CREATE TABLE IF NOT EXISTS public.trial_claims (
   id bigint DEFAULT nextval('trial_claims_id_seq'::regclass) NOT NULL,
   phone_e164 text NOT NULL,
-  telegram_id bigint NOT NULL,
+  telegram_id bigint,
   agency_id uuid,
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );

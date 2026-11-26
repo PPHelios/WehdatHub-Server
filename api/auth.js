@@ -125,7 +125,19 @@ function register(api, { pool }) {
     const rights = await require("../services/unitRights").rights(pool, b);
     const workspace = b.workspace || (b.agency_id ? await require("../lib/workspace").stateOf(pool, b.agency_id, { role: b.role }).catch(() => null) : null);
     const inviteRoles = workspace ? require("../domain/segments").inviteRolesFor(workspace, require("../services/team").ADD_ROLES) : [];
-    return res.json({ broker: brokerView(b), workspace, inviteRoles, agency: agencyView(req.session.agency), rights, nav: require("../lib/navSpec").forBroker(b, { rights, workspace }), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
+    const [unitRow, linkRow, tgRow] = b.agency_id
+      ? await Promise.all([
+          pool.query("SELECT EXISTS (SELECT 1 FROM listings WHERE agency_id = $1) AS ok", [b.agency_id]),
+          pool.query("SELECT EXISTS (SELECT 1 FROM share_links WHERE agency_id = $1) AS ok", [b.agency_id]),
+          pool.query("SELECT telegram_user_id IS NOT NULL AS ok FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id])
+        ])
+      : [{ rows: [{ ok: false }] }, { rows: [{ ok: false }] }, { rows: [{ ok: false }] }];
+    const onboarding = {
+      hasUnit: Boolean(unitRow.rows[0]?.ok),
+      hasSharedLink: Boolean(linkRow.rows[0]?.ok),
+      telegramConnected: Boolean(tgRow.rows[0]?.ok)
+    };
+    return res.json({ broker: brokerView(b), workspace, inviteRoles, onboarding, agency: agencyView(req.session.agency), rights, nav: require("../lib/navSpec").forBroker(b, { rights, workspace }), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
   });
 
   // The test switch from the app: the same actions as the website's test switch (web/routes/testRole.js).
