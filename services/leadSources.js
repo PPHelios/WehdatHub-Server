@@ -55,7 +55,12 @@ async function report(pool, actor, { month: monthText = null, now = new Date(), 
   for (const [en] of Stages.SOURCES) row(en);
   const per = (spent, n) => (spent > 0 && n > 0 ? Math.round(spent / n) : null);
   const rows = [...by.values()]
-    .map((r) => ({ ...r, perLead: per(r.spend, r.leads), perDeal: per(r.spend, r.deals) }))
+    .map((r) => ({
+      ...r,
+      perLead: per(r.spend, r.leads),
+      perDeal: per(r.spend, r.deals),
+      adBurn: Boolean(r.spend > 0 && (r.leads === 0 || (r.leads >= 5 && r.deals === 0)))
+    }))
     .sort((a, b) => b.leads - a.leads || b.spend - a.spend || a.source.localeCompare(b.source));
   const totals = rows.reduce((t, r) => ({ leads: t.leads + r.leads, deals: t.deals + r.deals, commission: t.commission + r.commission, spend: t.spend + r.spend }), { leads: 0, deals: 0, commission: 0, spend: 0 });
   totals.perLead = per(totals.spend, totals.leads);

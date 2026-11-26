@@ -108,7 +108,7 @@ async function search(pool, agencyId, filters = {}, { sort = "best", page = 1, p
   const empty = { total_projects: 0, total_options: 0, page: 1, pages: 1, per_page: per, sort: order, projects: [] };
   if (!asked || f.listing_type === "rent") return empty;
 
-  await Offers.sync(pool, agencyId);
+  await (require("../lib/viewGuard").active() ? Promise.resolve() : Offers.sync(pool, agencyId));
   const [{ rows: projects }, { rows: offerRows }, lists] = await Promise.all([
     pool.query(
       `SELECT p.id, p.name, p.name_en, p.status, p.district, p.city, p.governorate, p.delivery_year, p.delivery_quarter, p.delivery_raw, p.notes, p.updated_at,
@@ -271,10 +271,13 @@ async function fromQuery(pool, broker, query = {}, { AI = null } = {}) {
   // switch or credit is off); both readings and their differences go to the search log (channel "ask") and the parser learns from the AI.
   let parse = null;
   let base = query.f ? SearchLink.decodeFilters(String(query.f)) : null;
+  const ViewGuard = require("../lib/viewGuard");
   if (!base) {
     const Search = require("./search");
     const Switches = require("./aiSwitches");
-    parse = await Search.parseRequest(AI, { text: q, ctx: { pool, AI, broker, lang: broker.preferred_lang === "en" ? "en" : "ar" }, aiAllowed: Boolean(AI) && (await Switches.isOn(pool, broker.agency_id, "search_ai").catch(() => false)), neverCharge: true }).catch(() => null);
+    const lang = broker.preferred_lang === "en" ? "en" : "ar";
+    const parseCtx = ViewGuard.active() ? { lang } : { pool, AI, broker, lang };
+    parse = await Search.parseRequest(AI, { text: q, ctx: parseCtx, aiAllowed: Boolean(AI) && (await Switches.isOn(pool, broker.agency_id, "search_ai").catch(() => false)), neverCharge: true }).catch(() => null);
     base = parse ? parse.parsed.filters : Q.fallbackParse(q).filters;
   }
   const token = SearchLink.encodeFilters(base);
@@ -292,7 +295,7 @@ async function fromQuery(pool, broker, query = {}, { AI = null } = {}) {
   const lang = broker.preferred_lang === "en" ? "en" : "ar";
   const r = await search(pool, broker.agency_id, filters, { sort: query.sort, page: query.page, perPage: query.per, q, lang, developer: /^[0-9a-f-]{36}$/i.test(query.dev || "") ? query.dev : null, unitsOnly: query.units === "1" });
   let logId = null;
-  if (parse) {
+  if (parse && !ViewGuard.active()) {
     const SearchLog = require("./searchLog");
     logId = await SearchLog.record(pool, { broker, channel: "ask", text: q, parse: { ...parse, timings: { parseMs: parse.ms } }, startedAt: t0, used: filters, total: r.total_projects, ids: r.projects.map((p) => p.id) });
     if (logId && AI) require("./searchShadow").schedule(pool, AI, { logId, text: q, parse });

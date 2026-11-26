@@ -31,14 +31,23 @@ function register(api, { pool }) {
     const drop = req.query.drop === "1";
     // Active is the default; Sold and Archived are the same search for those units, and the three counts come with it.
     const st = Search.SEARCH_STATUSES.includes(req.query.status) ? req.query.status : "active";
+    const market = ["resale", "primary"].includes(req.query.market) ? req.query.market : null;
+    const sort = Q.SORTS.includes(req.query.sort) ? req.query.sort : null;
+    const lang = broker.preferred_lang === "en" ? "en" : "ar";
+    const fToken = typeof req.query.f === "string" ? req.query.f.trim() : "";
+    const decoded = fToken ? SearchLink.decodeFilters(fToken) : null;
+    const parsedOverride = decoded
+      ? { intent: "search", transcript: text, language: lang, filters: { ...decoded, ...(market ? { market } : {}), ...(sort ? { sort } : {}) }, meta: {} }
+      : null;
     // The one search service, as the website and Telegram use it: same reading, same budget question, same "words not understood" ask.
-    const found = await Search.search({ pool, AI, agencyId: broker.agency_id, text, ctx: { pool, AI, broker, agency: req.session.agency, lang: broker.preferred_lang === "en" ? "en" : "ar" }, pageSize: PAGE, forceAi, allowDrop: drop, status: st });
+    const found = await Search.search({ pool, AI, agencyId: broker.agency_id, text, ctx: { pool, AI, broker, agency: req.session.agency, lang }, pageSize: PAGE, forceAi, allowDrop: drop, status: st, market, sort, parsedOverride });
     // What was understood, in the broker's language: the reading line, a spelling the quick reader guessed ("Couldn't find X, showing Y"),
     // and what the filters cannot say ("near the mall"). The app shows the same notes as the website.
-    const lang = broker.preferred_lang === "en" ? "en" : "ar";
     const base = {
       source: found.source,
       aiError: found.aiError || null,
+      marketLock: found.parsed?.filters?.market || market || null,
+      sort: found.parsed?.filters?.sort || null,
       f: found.parsed?.filters ? SearchLink.encodeFilters(found.parsed.filters) : null,
       reading: found.parsed?.filters ? String(formatInterpretation(found.parsed, lang) || "").replace(/\*/g, "") : "",
       guesses: (found.parsed?.meta?.guesses || []).map((g) => ({ typed: g.typed, as: g.as })),

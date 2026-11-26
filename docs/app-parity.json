@@ -67,7 +67,7 @@
     "web": "imports stay on the website"
   },
   "leads.js": {
-    "app": "Leads"
+    "app": "Calendar, Leads"
   },
   "legal.js": {
     "web": "public legal pages"

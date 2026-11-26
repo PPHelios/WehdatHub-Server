@@ -147,3 +147,14 @@ test("QA round 4 #95: a bad unit code is refused with the rule, keeps what was t
   expect(good.headers.location).toMatch(/saved=1/);
   expect((await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].code_prefix).toBe("NH");
 });
+
+test("the browser's unit sharing language is independent of the interface language", async () => {
+  await h.insertListing({ code: "UNIT-LANG", broker_id: h.BROKERS.broker.id });
+  const { agent, csrf } = await signIn(h, "broker");
+  const saved = await agent.post("/app/settings/client-language").type("form").send({ _csrf: csrf, lang: "en" });
+  expect(saved.status).toBe(303);
+  const unit = await agent.get("/app/units/UNIT-LANG?lang=ar");
+  expect(unit.status).toBe(200);
+  expect(unit.text).toMatch(/<html lang="ar"/);
+  expect(unit.text).toMatch(/<select name="lang">[^<]*<option value="ar">[^<]*<\/option><option value="en" selected/);
+});

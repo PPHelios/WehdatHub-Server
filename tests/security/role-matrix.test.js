@@ -18,7 +18,10 @@ jest.setTimeout(600000);
 const ROLES = ["broker", "team_lead", "manager", "owner", "data_entry"];
 
 // "role key": why that role may open the page although its menu does not show it.
-const OPEN_WITHOUT_MENU = {};
+const OPEN_WITHOUT_MENU = {
+  "broker pipeline": "Brokers open their own Kanban board from Leads.",
+  "team_lead leadrules": "The Team page opens, but managers' Lead Rules are absent."
+};
 
 let h;
 beforeAll(async () => {
@@ -44,8 +47,9 @@ test("every role opens the pages on its menu and is refused the others", async (
     const { agent } = await as(role);
     for (const it of items) {
       const { key, roles, web } = it;
-      const res = await agent.get(web).redirects(0);
+      const res = await agent.get(web).redirects(key === "portal" && roles.includes(role) ? 1 : 0);
       const sees = roles.includes(role);
+      if (role === "team_lead" && key === "leadrules") expect(res.text).not.toContain("data-lead-rules");
       if (sees && res.status !== 200) wrong.push(`${role} sees "${key}" (${web}) but gets ${res.status}`);
       if (!sees && res.status === 200 && !OPEN_WITHOUT_MENU[`${role} ${key}`]) wrong.push(`${role} does not see "${key}" (${web}) but it opens`);
     }

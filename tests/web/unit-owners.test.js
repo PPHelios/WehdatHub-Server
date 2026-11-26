@@ -38,6 +38,25 @@ test("a unit saved with an owner phone makes one profile; a second unit with the
   expect(await h.query("SELECT code FROM listings WHERE owner_id = $1 ORDER BY code", [all[0].id])).toEqual([{ code: "U-1" }, { code: "U-2" }]);
 });
 
+test("Arabic unit details and owner pages isolate the phone and phone-as-name", async () => {
+  const phone = "+971 50 123 4567";
+  const { id } = (await h.query(
+    "INSERT INTO unit_owners (agency_id, name, phones) VALUES ($1, $2, ARRAY['971501234567']) RETURNING id",
+    [h.AGENCY_A, phone]
+  ))[0];
+  await h.insertListing({ code: "RTL-PHONE", broker_id: h.BROKERS.broker.id, owner_id: id, details: { owner_name: phone, owner_phone: phone } });
+  const { agent } = await signIn(h, "broker");
+  const token = '<bdi dir="ltr">+971 50 123 4567</bdi>';
+  const unit = await agent.get("/app/units/RTL-PHONE").expect(200);
+  expect(unit.text).toContain('dir="rtl"');
+  expect(unit.text).toContain("تليفون المالك: " + token);
+  expect(unit.text).toContain('href="/app/owners/' + id + '">' + token);
+  expect((await agent.get("/app/owners").expect(200)).text).toContain("<b>" + token + "</b>");
+  const profile = await agent.get("/app/owners/" + id).expect(200);
+  expect(profile.text).toContain("<h1>👤 " + token + "</h1>");
+  expect(profile.text).toContain('href="tel:+971501234567" dir="ltr">📞 <bdi dir="ltr">+971501234567</bdi>');
+});
+
 test("saving a unit on the website links the owner", async () => {
   const { agent, csrf } = await signIn(h, "broker");
   await agent.post("/app/units/new").field("_csrf", csrf).field("listing_type", "sale").field("market", "resale").field("property_type", "apartment")

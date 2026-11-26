@@ -45,11 +45,14 @@ describe("allows", () => {
   test("the team page works for a lone owner on the team tier (to invite)", () => {
     expect(Seg.allows(ws("team", 1), "teamPage")).toBe(true);
   });
-  test("agency features are agency only; private units never at team level", () => {
-    for (const f of ["leadRules", "teamLead", "dataEntry", "sources", "winLoss", "privateUnits"]) {
+  test("agency features are agency only; private units require at least team tier", () => {
+    for (const f of ["leadRules", "teamLead", "dataEntry", "sources", "winLoss"]) {
       expect(Seg.allows(ws("team", 5), f)).toBe(false);
       expect(Seg.allows(ws("agency", 20), f)).toBe(true);
     }
+    expect(Seg.allows(ws("solo", 1), "privateUnits")).toBe(false);
+    expect(Seg.allows(ws("team", 5), "privateUnits")).toBe(true);
+    expect(Seg.allows(ws("agency", 20), "privateUnits")).toBe(true);
   });
   test("unknown feature or workspace is refused", () => {
     expect(Seg.allows(ws("agency", 20), "nope")).toBe(false);

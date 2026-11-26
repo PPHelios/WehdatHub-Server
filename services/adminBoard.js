@@ -219,8 +219,8 @@ async function computeTrials(pool, since, now) {
             ))
       ) AS teammate
     FROM (
-      SELECT created_at AS at FROM listings WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
-      UNION ALL SELECT created_at FROM leads WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      SELECT created_at AS at FROM listings WHERE ${Vis.allUnits()} AND agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM leads WHERE ${Vis.allLeads()} AND agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
       UNION ALL SELECT created_at FROM search_log WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
       UNION ALL SELECT created_at FROM usage_events WHERE agency_id = t.agency_id AND ok AND event <> 'screen_slow'
         AND created_at >= t.verified_at AND created_at < t.activity_until

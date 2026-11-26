@@ -30,6 +30,8 @@ function register(api, { pool }) {
         area: u.area_value,
         price: u.price_value,
         priceText: u.price_display,
+        currency: u.details?.currency || "EGP",
+        rentPeriod: u.listing_type === "rent" ? (u.details?.rent_period || null) : null,
         photo: u.photo ? Storage.photoUrl(u.photo) : null,
         thumb: u.photo ? Storage.thumbUrl(u.photo) : null
       }))

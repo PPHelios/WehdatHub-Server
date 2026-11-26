@@ -48,7 +48,7 @@ function leadView(l) {
 const ERRORS = {
   phone_required: 422, phone_invalid: 422, name_too_long: 422, notes_too_long: 422, too_many_phones: 422, lawful_basis: 422, kind: 422, assignee: 422, assignee_away: 422,
   lost_reason_required: 422, follow_up_time: 422, past: 422, note_empty: 422, note_too_long: 422, unknown_stage: 422, unit_not_found: 422,
-  invalid_update: 422, forbidden: 403, not_found: 404
+  invalid_update: 422, forbidden: 403, not_found: 404, too_many: 429
 };
 
 function register(api, { pool }) {
@@ -68,6 +68,7 @@ function register(api, { pool }) {
   const readFilters = (query) => ({
     q: String(query.q || "").slice(0, 80),
     brokerId: String(query.broker || ""),
+    teamLeadId: String(query.team || ""),
     assignedLastMonth: query.assigned === "last",
     queue: query.queue
   });
@@ -339,6 +340,16 @@ function register(api, { pool }) {
     if (!lead) return;
     const b = req.body || {};
     return answer(req, res, lead, await Leads.addNote(pool, req.session.broker, lead.id, b.text, { version: versionOf(b) }));
+  });
+
+  api.post("/leads/:ref/nudge", async (req, res) => {
+    if (!(await writeGate(req, res))) return;
+    const out = await Leads.nudgeLead(pool, req.session.broker, req.params.ref);
+    if (out.error) {
+      if (out.retryAfterSec) res.set("Retry-After", String(out.retryAfterSec));
+      return res.status(ERRORS[out.error] || 422).json({ error: out.error });
+    }
+    return res.json({ ok: true });
   });
 }
 

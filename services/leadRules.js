@@ -112,7 +112,7 @@ async function saveRouting(pool, manager, { roundRobin, order }) {
 async function routingList(db, agencyId) {
   const routing = await routingOf(db, agencyId);
   const { rows } = await db.query(
-    `SELECT b.id, b.name, b.role, b.away_until,
+    `SELECT b.id, b.name, b.role, b.team_lead_id, b.away_until,
             (SELECT count(*)::int FROM leads l WHERE ${Vis.leads("l")} AND l.assigned_broker_id = b.id AND l.agency_id = b.agency_id AND l.stage NOT IN ('won', 'lost')) AS open_leads
        FROM brokers b WHERE b.agency_id = $1 AND b.is_active AND lower(b.role) IN ('broker', 'team_lead')
       ORDER BY (lower(b.role) = 'broker') DESC, b.name, b.id`,
@@ -263,6 +263,10 @@ async function tellMove(pool, { lead, from, to, rules }, now) {
     body: [Card.card(lead, { lang: en(to) ? "en" : "ar" }), L(to, `⏱️ كلّمه في خلال ${mins} دقيقة شغل، وإلا هيتحول لزميل.`, `⏱️ Contact them within ${mins} working minutes, or they move to a colleague.`)].join("\n"),
     url: leadUrl(lead),
     leadId: lead.id,
+    buttons: [
+      { id: `ld:called:${ref}`, title: L(to, "📞 كلمته", "📞 Called") },
+      { id: `ld:fu:${ref}`, title: L(to, "📅 متابعة", "📅 Follow-up") }
+    ],
     now
   });
   if (old) {
@@ -321,11 +325,85 @@ async function tellStop(pool, { lead, reason, from = null }, now) {
   }
 }
 
+/**
+ * Midway SLA warning (Phase 4): once an uncontacted new lead passes 50% of its response_due_at window
+ * (and before it jumps), warn the current holder once with 1-tap [Called], [Follow-up], and [Status note] buttons.
+ * Skipped if the broker already logged any update/activity since assignment.
+ */
+async function warnMidwaySla(pool, { now = new Date(), limit = BATCH } = {}) {
+  const claimed = await withTransaction(pool, async (client) => {
+    const { rows } = await client.query(
+      `SELECT l.*, a.lead_rules AS _lead_rules FROM leads l
+         JOIN agencies a ON a.id = l.agency_id
+        WHERE ${Vis.leads("l")}
+          AND l.stage = 'new'
+          AND l.last_contact_at IS NULL
+          AND l.assigned_broker_id IS NOT NULL
+          AND l.response_due_at IS NOT NULL
+          AND l.response_due_at > $1
+          AND l.sla_warning_sent_at IS NULL
+          AND l.follow_up_status IS DISTINCT FROM 'open'
+          AND coalesce(a.lead_rules->>'enabled', 'false') = 'true'
+        ORDER BY l.response_due_at, l.id LIMIT $2 FOR UPDATE OF l SKIP LOCKED`,
+      [now.toISOString(), limit]
+    );
+    const dueIds = [];
+    for (const lead of rows) {
+      const rules = Rules.rulesOf(lead._lead_rules);
+      if (!Rules.inWorkHours(rules, now)) continue;
+      const startAt = lead.assigned_at || lead.created_at;
+      const startMs = new Date(startAt).getTime();
+      const dueMs = new Date(lead.response_due_at).getTime();
+      if (!(dueMs > startMs)) continue;
+      if (lead.last_activity_at && new Date(lead.last_activity_at).getTime() > startMs) continue;
+      const workElapsed = Rules.workMinutesBetween(rules, startAt, now);
+      const workLeft = Rules.workMinutesBetween(rules, now, lead.response_due_at);
+      const totalWork = workElapsed + workLeft;
+      if (totalWork > 0 && workElapsed / totalWork >= 0.5) {
+        lead._workLeft = workLeft;
+        dueIds.push(lead);
+      }
+    }
+    if (!dueIds.length) return [];
+    await client.query("UPDATE leads SET sla_warning_sent_at = $2 WHERE id = ANY($1::uuid[])", [dueIds.map((r) => r.id), now.toISOString()]);
+    return dueIds;
+  });
+  let warned = 0;
+  for (const lead of claimed) {
+    const holder = await brokerOf(pool, lead.agency_id, lead.assigned_broker_id);
+    if (!holder || !holder.is_active || Rules.awayNow(holder, now)) continue;
+    const ref = Card.refLabel(lead.ref);
+    const minsLeft = Math.max(1, lead._workLeft ?? Rules.minutesBetween(now, lead.response_due_at));
+    await Notifications.notifyBroker(pool, holder, {
+      kind: "assignment",
+      dedupeKey: `sla_warn:${lead.id}:${lead.version}`,
+      title: L(holder, `⏳ تذكير سريع: ${Card.displayName(lead, "ar")} (${ref}) هيتحوّل بعد ~${minsLeft} د`, `⏳ Quick heads-up: ${Card.displayName(lead, "en")} (${ref}) moves in ~${minsLeft}m`),
+      body: L(holder, "لسه متسجّلش تواصل أو تحديث. اتصرف دلوقتي قبل التحويل:", "No call or update logged yet. Act now before auto-reassignment:"),
+      url: leadUrl(lead),
+      leadId: lead.id,
+      urgent: false,
+      now,
+      buttons: [
+        { id: `ld:called:${ref}`, title: L(holder, "📞 كلمته", "📞 Called") },
+        { id: `ld:fu:${ref}`, title: L(holder, "📅 متابعة", "📅 Follow-up") },
+        { id: `ld:note:${ref}`, title: L(holder, "📝 أضف تحديث", "📝 Status note") }
+      ]
+    });
+    warned++;
+  }
+  return { warned };
+}
+
 /** The scheduler job entry (lib/jobs.js). */
 const responseJob = () => ({
   name: "lead_response",
   everyMs: 60 * 1000,
-  run: async ({ pool, now }) => ({ counts: await moveOverdue(pool, { now: new Date(now) }) })
+  run: async ({ pool, now }) => {
+    const d = new Date(now);
+    const w = await warnMidwaySla(pool, { now: d });
+    const m = await moveOverdue(pool, { now: d });
+    return { counts: { ...m, warned: w.warned } };
+  }
 });
 
 /**
@@ -369,22 +447,24 @@ const unassignedJob = () => ({ name: "lead_unassigned_digest", everyMs: 60 * 60 
  * Speed-to-lead per broker over the last `days`: leads contacted after someone gave them one (count, median minutes,
  * how many within the waiting minutes) and leads that moved away unanswered. → Map(broker_id → stats)
  */
-async function speedToLead(pool, agencyId, { days = 30, now = new Date(), waitMinutes = null } = {}) {
-  const since = new Date(now.getTime() - days * DAY).toISOString();
+async function speedToLead(pool, agencyId, { days = 30, since: sinceOpt = null, until = null, now = new Date(), waitMinutes = null } = {}) {
+  const end = until ? new Date(until) : new Date(now);
+  const sinceIso = (sinceOpt ? new Date(sinceOpt) : new Date(end.getTime() - days * DAY)).toISOString();
+  const untilIso = end.toISOString();
   const wait = waitMinutes ?? (await getRules(pool, agencyId)).wait_minutes;
   const { rows } = await pool.query(
     `SELECT broker_id, count(*)::int AS n,
             percentile_cont(0.5) WITHIN GROUP (ORDER BY (data->>'response_min')::numeric) AS median,
             count(*) FILTER (WHERE (data->>'response_min')::numeric <= $3)::int AS on_time
        FROM lead_events
-      WHERE agency_id = $1 AND kind = 'contacted' AND undone_at IS NULL AND created_at >= $2 AND data ? 'response_min' AND broker_id IS NOT NULL
+      WHERE agency_id = $1 AND kind = 'contacted' AND undone_at IS NULL AND created_at >= $2 AND created_at < $4 AND data ? 'response_min' AND broker_id IS NOT NULL
       GROUP BY broker_id`,
-    [agencyId, since, wait]
+    [agencyId, sinceIso, wait, untilIso]
   );
   const { rows: missed } = await pool.query(
     `SELECT data->>'from' AS broker_id, count(*)::int AS n FROM lead_events
-      WHERE agency_id = $1 AND kind = 'assigned' AND data->>'reason' = 'no_response' AND created_at >= $2 GROUP BY 1`,
-    [agencyId, since]
+      WHERE agency_id = $1 AND kind = 'assigned' AND data->>'reason' = 'no_response' AND created_at >= $2 AND created_at < $3 GROUP BY 1`,
+    [agencyId, sinceIso, untilIso]
   );
   const out = new Map();
   const get = (id) => {
@@ -399,4 +479,4 @@ async function speedToLead(pool, agencyId, { days = 30, now = new Date(), waitMi
 module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, nextBroker, nextStep, advanceRotation,
   routingOf,
   saveRouting,
-  routingList, moveOverdue, responseJob, unassignedDigest, unassignedJob, speedToLead, cairoMidnight };
+  routingList, warnMidwaySla, moveOverdue, responseJob, unassignedDigest, unassignedJob, speedToLead, cairoMidnight };

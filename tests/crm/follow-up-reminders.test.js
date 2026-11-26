@@ -200,10 +200,10 @@ test("the 24-hour nudge: once, only for new leads nobody contacted, never for ol
   expect(n).toEqual({ title: "⏰ Quiet (L-0001) لسه محدش كلمه من 24 ساعة", lead_id: untouched.id });
 });
 
-test("the reminder job runs all three, and the 'no next step' filter lists leads without an open follow-up", async () => {
+test("the reminder job runs all accountability checks, and the 'no next step' filter lists leads without an open follow-up", async () => {
   const job = Reminders.reminderJob();
   expect(job).toMatchObject({ name: "follow_up_reminders", everyMs: 60000 });
-  expect((await job.run({ pool: h.pool, now: new Date() })).counts).toEqual({ reminded: 0, nudged: 0, interest: 0, brokers: 0 });
+  expect((await job.run({ pool: h.pool, now: new Date() })).counts).toEqual({ reminded: 0, nudged: 0, interest: 0, postViewing: 0, linkSilence: 0, brokers: 0 });
   expect(require("../../lib/jobs").buildJobs().map((j) => j.name)).toContain("follow_up_reminders");
 
   const planned = await lead("broker", "01012345678", "Planned");
@@ -215,4 +215,65 @@ test("the reminder job runs all three, and the 'no next step' filter lists leads
   const page = await b.agent.get("/app/leads?tab=no_next_step");
   expect(page.text).toContain("Adrift");
   expect(page.text).not.toContain("Planned");
+});
+
+test("Phase 4 scheduler replaces overlapping nudges, skips updated leads, and stage buttons offer optional note", async () => {
+  const LeadRules = require("../../services/leadRules");
+  const LeadIntake = require("../../lib/leadIntake");
+  const bRow = await row("broker");
+
+  // 1) Agency with round-robin SLA enabled: midway warning fires at >=50%, 24h nudgeUntouched is suppressed.
+  await LeadRules.saveRules(h.pool, await row("admin"), { enabled: true, wait_minutes: 60, start: 0, end: 24, days: [0, 1, 2, 3, 4, 5, 6], max_jumps: 2 });
+  const slaLead = await lead("broker", "01055551111", "SlaClient");
+  const start = new Date(Date.now() - 35 * 60000);
+  const due = new Date(start.getTime() + 60 * 60000);
+  await h.query("UPDATE leads SET assigned_at = $2, response_due_at = $3, created_at = $2, last_activity_at = $2 WHERE id = $1", [slaLead.id, start.toISOString(), due.toISOString()]);
+  expect(await LeadRules.warnMidwaySla(h.pool, { now: new Date() })).toEqual({ warned: 1 });
+  expect(await LeadRules.warnMidwaySla(h.pool, { now: new Date() })).toEqual({ warned: 0 });
+  // Even after 25h untouched, nudgeUntouched must not double-notify when SLA rules are active.
+  await h.query("UPDATE leads SET created_at = $2 WHERE id = $1", [slaLead.id, new Date(Date.now() - 25 * 3600 * 1000).toISOString()]);
+  expect(await Reminders.nudgeUntouched(h.pool, { now: new Date() })).toEqual({ nudged: 0, brokers: 0 });
+
+  // 2) Post-viewing check-in (2h after viewing) skipped if user already updated; fires with next-phase buttons if quiet.
+  const viewQuiet = await lead("broker", "01055552222", "ViewQuiet");
+  const viewUpdated = await lead("broker", "01055553333", "ViewUpdated");
+  const vAt = new Date(Date.now() - 3 * 3600 * 1000);
+  await h.query(
+    "UPDATE leads SET follow_up_status = 'open', follow_up_kind = 'viewing', next_follow_up_at = $2, last_activity_at = $3 WHERE id = $1",
+    [viewQuiet.id, vAt.toISOString(), new Date(vAt.getTime() - 60000).toISOString()]
+  );
+  await h.query(
+    "UPDATE leads SET follow_up_status = 'open', follow_up_kind = 'viewing', next_follow_up_at = $2, last_activity_at = $3 WHERE id = $1",
+    [viewUpdated.id, vAt.toISOString(), new Date(vAt.getTime() + 30 * 60000).toISOString()]
+  );
+  expect(await Reminders.nudgePostViewing(h.pool, { now: new Date() })).toEqual({ nudged: 1, brokers: 1 });
+  const pvMsg = sentTo("broker").pop();
+  expect(ids(pvMsg)).toEqual(["ld:st:L-0002:interested", "ld:st:L-0002:negotiation", "ld:fu:L-0002", "ld:st:L-0002:lost"]);
+
+  // Tapping next-phase stage button saves stage AND offers optional status note + overdue follow-up button.
+  const waBefore = h.WA.outbox.length;
+  await LeadIntake.handleButton(bRow, "ld:st:L-0002:negotiation", { pool: h.pool, lang: "en" });
+  const afterSt = h.WA.outbox.slice(waBefore).pop();
+  expect(ids(afterSt)).toEqual(["ld:note:L-0002", "ld:fu:L-0002", expect.stringMatching(/^ld:undo:/)]);
+
+  // 3) 2h opened-link silence check fires once when no broker activity followed the link open.
+  const linkLead = await lead("broker", "01055554444", "LinkSilent");
+  const openedAt = new Date(Date.now() - 3 * 3600 * 1000);
+  await h.query("UPDATE leads SET last_activity_at = $2 WHERE id = $1", [linkLead.id, new Date(openedAt.getTime() - 60000).toISOString()]);
+  await h.query("INSERT INTO lead_events (agency_id, lead_id, broker_id, kind, data, created_at) VALUES ($1, $2, NULL, 'share_opened', '{}', $3)", [bRow.agency_id, linkLead.id, openedAt.toISOString()]);
+  expect(await Reminders.nudgeLinkSilence(h.pool, { now: new Date() })).toEqual({ nudged: 1, brokers: 1 });
+  expect(await Reminders.nudgeLinkSilence(h.pool, { now: new Date() })).toEqual({ nudged: 0, brokers: 0 });
+
+  // 4) warnMidwaySla skips outside agency working hours, while self-captured untouched leads (response_due_at IS NULL) still get 24h nudgeUntouched.
+  await LeadRules.saveRules(h.pool, await row("admin"), { enabled: true, wait_minutes: 30, start: 9, end: 18, days: [0, 1, 2, 3, 4, 5, 6], max_jumps: 2 });
+  const nightLead = await lead("broker", "01055556666", "NightLead");
+  const assignedEve = Stages.cairoDayAt(new Date(), 0, 17, 55);
+  const dueMorn = Stages.cairoDayAt(new Date(), 1, 9, 25);
+  const nightCheck = new Date(Stages.cairoDayAt(new Date(), 1, 1, 40));
+  await h.query("UPDATE leads SET assigned_at = $2, response_due_at = $3, created_at = $2, last_activity_at = $2 WHERE id = $1", [nightLead.id, assignedEve.toISOString(), dueMorn.toISOString()]);
+  expect(await LeadRules.warnMidwaySla(h.pool, { now: nightCheck })).toEqual({ warned: 0 });
+
+  const selfLead = await lead("broker", "01055557777", "SelfCaptured");
+  await h.query("UPDATE leads SET created_at = $2, response_due_at = NULL WHERE id = $1", [selfLead.id, new Date(Date.now() - 25 * 3600 * 1000).toISOString()]);
+  expect(await Reminders.nudgeUntouched(h.pool, { now: new Date() })).toEqual({ nudged: 1, brokers: 1 });
 });

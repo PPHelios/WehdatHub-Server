@@ -21,6 +21,7 @@ const NOTICES = {
   error: ["❌ حصلت مشكلة. اتأكد من البيانات وحاول تاني.", "❌ Something went wrong. Check the details and try again."]
 };
 const ERRORS = {
+  no_rotation_broker: ["مفيش بروكر متاح للتوزيع بالدور دلوقتي.", "No broker is available for round-robin assignment."],
   not_enquiry: ["الرسالة دي مش رسالة استفسار من بوابة (Bayut أو Dubizzle أو Nawy).", "That is not a portal enquiry message (Bayut, Dubizzle or Nawy)."],
   phone_invalid: ["الرقم مش مظبوط.", "The phone number isn't valid."],
   already_assigned: ["الاستفسار ده اتحول قبل كده.", "This enquiry was already assigned."],
@@ -43,6 +44,7 @@ function pasteBox(brokers, lang) {
   <input name="phone" dir="ltr" inputmode="tel" placeholder="${L(lang, "رقم العميل (اختياري)", "Client phone (optional)")}" aria-label="${L(lang, "الرقم", "Phone")}">
   <select name="broker_id" aria-label="${L(lang, "البروكر", "Broker")}">
     <option value="">${L(lang, "البروكر (اختياري)", "Broker (optional)")}</option>
+    <option value="round_robin">${L(lang, "وزّع بالدور", "Assign by round robin")}</option>
     ${brokers.map((b) => html`<option value="${b.id}">${b.name}</option>`)}
   </select>
   <button type="submit">${L(lang, "اقرأ الرسالة", "Read message")}</button>
@@ -62,7 +64,8 @@ function enquiryRow(e, brokers, lang) {
           <input name="phone" dir="ltr" inputmode="tel" placeholder="+20 1xx xxx xxxx" required aria-label="${L(lang, "الرقم", "Phone")}">
           <select name="broker_id" required aria-label="${L(lang, "البروكر", "Broker")}">
             <option value="">${L(lang, "اختار بروكر", "Choose a broker")}</option>
-            ${brokers.map((b) => html`<option value="${b.id}">${b.name}</option>`)}
+            <option value="round_robin">${L(lang, "وزّع بالدور", "Assign by round robin")}</option>
+    ${brokers.map((b) => html`<option value="${b.id}">${b.name}</option>`)}
           </select>
           <button type="submit">${L(lang, "أضف وحوّل", "Add and assign")}</button>
         </form>`;
@@ -105,6 +108,8 @@ function noticeFor(lang, query = {}) {
 const TAB = "/app/leads?tab=portal";
 const back = (qs) => `${TAB}&${qs}`;
 
+const assignment = (brokerId) => brokerId === "round_robin" ? { roundRobin: true } : { brokerId };
+
 function register(web, { pool }) {
   const managersOnly = (req, res) => {
     const lang = langOf(req);
@@ -132,7 +137,7 @@ function register(web, { pool }) {
     if (cap.outcome === "not_enquiry") return res.redirect(303, back("error=not_enquiry"));
     if (cap.outcome !== "created" && cap.outcome !== "repeat") return res.redirect(303, back("error=error"));
     if (phone && brokerId) {
-      const r = await Enquiries.assign(pool, actor, cap.outcome === "repeat" ? cap.id : cap.enquiry.id, { phone, brokerId });
+      const r = await Enquiries.assign(pool, actor, cap.outcome === "repeat" ? cap.id : cap.enquiry.id, { phone, ...assignment(brokerId) });
       if (r.error) return res.redirect(303, back(`error=${encodeURIComponent(r.error)}`));
       return res.redirect(303, back(`done=${r.outcome === "created" ? "assigned" : r.outcome === "colleague" ? "colleague" : "merged"}`));
     }
@@ -141,7 +146,7 @@ function register(web, { pool }) {
 
   web.post("/portal-enquiries/:id/assign", async (req, res) => {
     if (!managersOnly(req, res)) return undefined;
-    const r = await Enquiries.assign(pool, req.session.broker, req.params.id, { phone: req.body.phone, brokerId: req.body.broker_id });
+    const r = await Enquiries.assign(pool, req.session.broker, req.params.id, { phone: req.body.phone, ...assignment(req.body.broker_id) });
     if (r.error) return res.redirect(303, back(`error=${encodeURIComponent(r.error)}`));
     const done = r.outcome === "created" ? "assigned" : r.outcome === "colleague" ? "colleague" : "merged";
     return res.redirect(303, back(`done=${done}`));

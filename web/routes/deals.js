@@ -13,7 +13,6 @@ const Card = require("../../domain/leadCard");
 const Commission = require("../../domain/commission");
 const { isManager, canEditDeal } = require("../../lib/authz");
 const { html } = require("../html");
-const { dealsSwitch } = require("../views/tabs");
 const Vis = require("../../lib/visibility");
 
 const { L } = require("../../lib/copy");
@@ -64,7 +63,6 @@ function register(web, { pool, page }) {
       title: L(lang, "الصفقات", "Deals"),
       nav: "deals",
       body: html`<h1>🤝 ${L(lang, "الصفقات", "Deals")}</h1>
-${dealsSwitch(lang, "/app/deals")}
 <section class="card" id="totals"><h2>📊 ${manager ? L(lang, "إجمالي الشهور", "Monthly totals") : L(lang, "نصيبك كل شهر", "Your share per month")}</h2>
 ${totals.length
   ? html`<table class="table"><thead><tr><th>${L(lang, "الشهر", "Month")}</th><th>${L(lang, "صفقات", "Deals")}</th>${manager

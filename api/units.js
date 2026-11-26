@@ -25,7 +25,7 @@ const ReadCaps = require("../lib/readCaps");
 const STATUSES = ["active", "sold", "archived"];
 const MAX_LIMIT = 50;
 const COLS = `listings.id, listings.code, listings.status, listings.title, listings.property_type, listings.listing_type, listings.price_value,
-  listings.price_display, listings.area_value, listings.bedrooms, listings.bathrooms, listings.compound, listings.district, listings.city,
+  listings.price_display, listings.details, listings.area_value, listings.bedrooms, listings.bathrooms, listings.compound, listings.district, listings.city,
   listings.finishing, listings.furnishing, listings.floor_level, listings.is_ready, listings.delivery_year, listings.delivery_quarter,
   listings.down_payment_value, listings.installment_years, listings.installment_value, listings.confirmed_at, listings.updated_at, listings.created_at,
   listings.broker_id, ${PHASE_NAME_COLS}`;
@@ -45,6 +45,8 @@ function unitView(r) {
     dealType: r.listing_type,
     price: r.price_value === null ? null : Number(r.price_value),
     priceText: r.price_display,
+    currency: r.details?.currency || "EGP",
+    rentPeriod: r.listing_type === "rent" ? (r.details?.rent_period || null) : null,
     area: r.area_value === null ? null : Number(r.area_value),
     bedrooms: r.bedrooms,
     bathrooms: r.bathrooms,

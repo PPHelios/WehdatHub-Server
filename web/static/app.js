@@ -153,6 +153,7 @@
   // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
   document.addEventListener("submit", function (e) {
     var by = e.submitter && e.submitter.getAttribute && e.submitter.getAttribute("data-confirm");
+    if (e.defaultPrevented && e.target && e.target.hasAttribute("hx-confirm")) return;
     var msg = by || (e.target && e.target.getAttribute && e.target.getAttribute("data-confirm"));
     if (msg && !window.confirm(msg)) e.preventDefault();
   });

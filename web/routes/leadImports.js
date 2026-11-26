@@ -1,5 +1,5 @@
-// web/routes/leadImports.js — Importing clients from a CSV or Excel file (Release 3 step 6): upload with the lawful-basis
-// tick, a preview of what each row will do (new, merge, colleague, erased before, repeated, invalid), one apply that
+// web/routes/leadImports.js — Importing clients from a CSV or Excel file (Release 3 step 6): upload,
+// a preview of what each row will do (new, merge, colleague, erased before, repeated, invalid), one apply that
 // runs in the background with a progress bar, and the template. Nothing is written before the apply.
 "use strict";
 
@@ -65,11 +65,6 @@ ${error ? html`<p class="card notice bad" role="alert">⚠️ ${error}</p>` : ""
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <p class="muted">${L(lang, "ملف CSV أو إكسيل (.xlsx)، لحد 5 ميجا و2000 صف. لازم عمود الموبايل؛ الباقي اختياري. هنوريك كل صف هيعمل إيه قبل أي حفظ. استخدم", "A CSV or Excel (.xlsx) file, up to 5 MB and 2,000 rows. The phone column is required; the rest is optional. You see what each row will do before anything is saved. Use")} <a href="/app/leads/import/template.xlsx">${L(lang, "النموذج ده", "this template")}</a>.</p>
   <input type="file" name="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-  <fieldset class="stack"><legend>${L(lang, "الأساس القانوني للعملاء دول *", "Lawful basis for these clients *")}</legend>
-    ${Stages.LAWFUL_BASES.map((b, i) => html`<label class="check"><input type="radio" name="basis" value="${b}"${i === 0 ? raw(" checked") : ""} required> ${Stages.basisLabel(b, lang)}</label>`)}
-    <p class="muted">${L(lang, "عمود «الأساس القانوني» في الملف (لو موجود) بيغلب على الاختيار ده للصف بتاعه.", "A \"Lawful basis\" column in the file (if any) wins for its row.")}</p>
-    <label class="check"><input type="checkbox" name="confirm" value="1" required> ${L(lang, "أأكد إن كل العملاء في الملف ده ليهم الأساس ده (طلبوا التواصل، أو وافقوا، أو عملاء حاليين).", "I confirm every client in this file has this basis (they asked to be contacted, consented, or are existing clients).")}</label>
-  </fieldset>
   ${manager
     ? html`<label class="check"><input type="checkbox" name="round_robin" value="1"> ${L(lang, "وزّع العملاء الجداد اللي مالهمش بروكر في الملف على البروكرز بالدور", "Share new clients with no broker in the file among the brokers, in turn")}</label>`
     : ""}
@@ -165,9 +160,6 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
     if (!gate.allowed) return importPage(req, res, formBody(req, { error: L(lang, "حملت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.") }), 429);
-    if (req.body.confirm !== "1" || !Stages.LAWFUL_BASES.includes(req.body.basis)) {
-      return importPage(req, res, formBody(req, { error: L(lang, "لازم تختار الأساس القانوني وتأكده قبل التحميل.", "Pick the lawful basis and confirm it before importing.") }), 422);
-    }
     const file = (req.files?.file || [])[0];
     let table;
     try {
@@ -184,7 +176,7 @@ function register(web, { pool, page }) {
       if (!msg) throw err;
       return importPage(req, res, formBody(req, { error: msg }), 422);
     }
-    const plan = await LeadImports.planLeads(pool, broker, table, { basis: req.body.basis, roundRobin: req.body.round_robin === "1" });
+    const plan = await LeadImports.planLeads(pool, broker, table, { roundRobin: req.body.round_robin === "1" });
     const id = await LeadImports.savePlan(pool, broker, plan, { filename: String(file.originalname || "").slice(0, 120) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "leads", rows: table.rows.length, counts: plan.counts } });
     return res.redirect(303, `/app/leads/import/${id}`);

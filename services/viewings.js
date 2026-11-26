@@ -8,6 +8,7 @@
 
 const crypto = require("crypto");
 const Leads = require("./leads");
+const LeadScope = require("./leadScope");
 const Authz = require("../lib/authz");
 const Links = require("../lib/links");
 const Phone = require("../domain/phone");
@@ -221,4 +222,21 @@ function googleCalendarUrl(entry) {
   return `https://calendar.google.com/calendar/render?${q}`;
 }
 
-module.exports = { OPEN, whenLabel, unitLabel, clientMessage, latestFor, schedule, byToken, isLive, respond, calendarEntry, ics, googleCalendarUrl };
+/** Upcoming open viewings for the signed-in broker. */
+async function listForBroker(pool, broker, { from, to }) {
+  const allLeads = Authz.isManager(broker) || await LeadScope.open(pool, broker);
+  const { rows } = await pool.query(
+    `SELECT v.id, v.starts_at, v.place, v.status, v.client_proposed_at, v.client_note, ld.ref, ld.name, l.code
+       FROM viewings v JOIN leads ld ON ld.id = v.lead_id AND ld.agency_id = v.agency_id
+       LEFT JOIN listings l ON l.id = v.listing_id AND l.agency_id = v.agency_id
+       LEFT JOIN brokers assignee ON assignee.id = ld.assigned_broker_id AND assignee.agency_id = ld.agency_id
+      WHERE ${Vis.units("l")} AND ${Vis.leads("ld")}
+        AND v.agency_id = $1 AND v.broker_id = $2 AND v.status = ANY($3) AND v.starts_at >= $4 AND v.starts_at < $5
+        AND ($6::boolean OR ld.assigned_broker_id = $2 OR ($7::boolean AND assignee.team_lead_id = $2))
+      ORDER BY v.starts_at LIMIT 200`,
+    [broker.agency_id, broker.id, OPEN, from.toISOString(), to.toISOString(), allLeads, Authz.isTeamLead(broker)]
+  );
+  return rows;
+}
+
+module.exports = { OPEN, listForBroker, whenLabel, unitLabel, clientMessage, latestFor, schedule, byToken, isLive, respond, calendarEntry, ics, googleCalendarUrl };

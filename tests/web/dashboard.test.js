@@ -81,6 +81,67 @@ describe("agency dashboard (7.2)", () => {
     expect((await b.agent.get("/app/dashboard")).status).toBe(403);
     expect((await Dash.agencyDashboard(h.pool, await row("admin"), { days: "999" })).days).toBe(30);
   });
+
+  test("headline new leads includes unassigned leads in the agency view, and stale units matches Today's queue", async () => {
+    await seedActivity();
+    const admin = await row("admin");
+    // Unassigned lead in this period: counted in agency headline & unassigned count, excluded when scoped to a broker.
+    await Leads.captureLead(h.pool, admin, { phones: "01512345678", name: "Unassigned Secret", assignTo: null });
+    const oldAt = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    await h.insertListing({ code: "OLD-1", broker_id: h.BROKERS.broker.id });
+    await h.insertListing({ code: "DEV-OLD", broker_id: h.BROKERS.broker.id, inventory_type: "developer_model" });
+    await h.insertListing({ code: "HID-1", broker_id: h.BROKERS.broker.id, status: "archived" });
+    const nowIso = new Date().toISOString();
+    await h.query(
+      `UPDATE listings
+          SET created_at = $1,
+              updated_at = $1,
+              confirmed_at = NULL,
+              stale_hidden_at = CASE WHEN code = 'HID-1' THEN $2::timestamptz ELSE NULL END,
+              stale_asked_at = CASE WHEN code = 'HID-1' THEN $2::timestamptz ELSE NULL END
+        WHERE agency_id = $3 AND code IN ('OLD-1', 'DEV-OLD', 'HID-1')`,
+      [oldAt, nowIso, h.AGENCY_A]
+    );
+
+    const all = await Dash.agencyDashboard(h.pool, admin, { days: 30 });
+    expect(all.leads).toBe(3); // 2 assigned + 1 unassigned
+    expect(all.unassigned).toBe(1);
+    expect(all.board.reduce((s, b) => s + b.leads, 0)).toBe(2);
+    expect(all.units.stale).toBe(2); // OLD-1 + HID-1; DEV-OLD excluded
+
+    const one = await Dash.agencyDashboard(h.pool, admin, { days: 30, brokerId: h.BROKERS.broker.id });
+    expect(one.leads).toBe(1);
+  });
+
+  test("board includes app update discipline, updates48h accuracy on long ranges, and missed jumps", async () => {
+    const bRow = await row("broker");
+    const cRow = await row("colleague");
+    const fourDaysAgo = new Date(Date.now() - 96 * 3600 * 1000).toISOString();
+    for (let i = 1; i <= 3; i++) {
+      const cap = await Leads.captureLead(h.pool, bRow, { phones: `0103333000${i}`, name: `Silent ${i}` });
+      await h.query("UPDATE leads SET stage = 'contacted', last_activity_at = $2, follow_up_status = NULL WHERE id = $1", [cap.lead.id, fourDaysAgo]);
+    }
+    const oldEventLead = (await h.query("SELECT id FROM leads WHERE agency_id = $1 AND assigned_broker_id = $2 LIMIT 1", [h.AGENCY_A, bRow.id]))[0];
+    await h.query(
+      "INSERT INTO lead_events (agency_id, lead_id, broker_id, kind, data, created_at) VALUES ($1, $2, $3, 'note', '{}', $4)",
+      [h.AGENCY_A, oldEventLead.id, bRow.id, fourDaysAgo]
+    );
+    await h.query(
+      "INSERT INTO lead_events (agency_id, lead_id, broker_id, kind, data, created_at) VALUES ($1, $2, NULL, 'assigned', $3, NOW())",
+      [h.AGENCY_A, oldEventLead.id, JSON.stringify({ from: cRow.id, to: bRow.id, reason: "no_response" })]
+    );
+    const activeLead = await Leads.captureLead(h.pool, cRow, { phones: "01044440001", name: "Active One" });
+    await Leads.markContacted(h.pool, cRow, activeLead.lead.id, { version: activeLead.lead.version });
+
+    const dash = await Dash.agencyDashboard(h.pool, await row("admin"), { days: 365 });
+    const silentBroker = dash.board.find((x) => x.id === bRow.id);
+    expect(silentBroker).toMatchObject({ updates: 1, updates48h: 0, noNextStep: 3, staleOpen: 3, discipline: "silent" });
+    const colleagueBoard = dash.board.find((x) => x.id === cRow.id);
+    expect(colleagueBoard).toMatchObject({ missed: 1 });
+    expect(colleagueBoard.updates48h).toBeGreaterThanOrEqual(1);
+    expect(dash.disciplineSummary.silent).toBeGreaterThanOrEqual(1);
+    expect(dash.disciplineSummary.totalMissed).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe("owner dashboard (5.4)", () => {

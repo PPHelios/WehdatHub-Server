@@ -40,7 +40,7 @@ test("the agency owner flips the switches", async () => {
   const a = await auth("owner");
   expect((await api().post("/api/v1/settings").set(a).send({ switches: { brokersMayWrite: false, dataEntryOwners: false } })).status).toBe(200);
   const got = await api().get("/api/v1/settings").set(a);
-  expect(got.body.switches).toEqual({ brokersMayWrite: false, dataEntryOwners: false });
+  expect(got.body.switches).toEqual({ brokersMayWrite: false, brokersSeeAllLeads: false, dataEntryOwners: false });
 });
 
 test("logo: the agency owner uploads and removes it from the app; a manager or broker cannot", async () => {

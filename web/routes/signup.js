@@ -11,7 +11,7 @@ const TrialSignup = require("../../services/trialSignup");
 const Referrals = require("../../services/referrals");
 const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
-const { html } = require("../html");
+const { html, phoneLtr } = require("../html");
 const { MARK } = require("../icons");
 
 const { L } = require("../../lib/copy");
@@ -69,7 +69,7 @@ function signupForm(lang, { error, values = {}, tiers } = {}) {
 function telegramStep(lang, r) {
   return html`<div class="card notice ok stack auth" role="status" data-signup-telegram>
   <h1>📲 ${L(lang, "كمّل على تيليجرام", "Continue on Telegram")}</h1>
-  <p>${L(lang, `افتح البوت واضغط «ابعت رقمي» عشان نتأكد إن ${r.phone} رقمك. بعدها شركتك بتتفتح فوراً وبيجيلك لينك الدخول على تيليجرام.`, `Open the bot and tap "Share my number" to confirm ${r.phone} is yours. Your agency is created right away and your sign-in link arrives on Telegram.`)}</p>
+  <p>${L(lang, 'افتح البوت واضغط «ابعت رقمي» عشان نتأكد إن', 'Open the bot and tap "Share my number" to confirm')} ${phoneLtr(r.phone)} ${L(lang, "رقمك. بعدها شركتك بتتفتح فوراً وبيجيلك لينك الدخول على تيليجرام.", "is yours. Your agency is created right away and your sign-in link arrives on Telegram.")}</p>
   <p><a class="btn" href="${r.url}" rel="noopener" data-signup-link>${L(lang, "افتح تيليجرام", "Open Telegram")}</a></p>
   <p class="muted">${L(lang, "اللينك صالح ١٥ دقيقة ويشتغل مرة واحدة. تجربة واحدة لكل رقم وحساب تيليجرام.", "The link is valid for 15 minutes and works once. One trial per number and Telegram account.")}</p>
 </div>`;

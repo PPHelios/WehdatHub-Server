@@ -146,18 +146,20 @@ function register(api, { pool }) {
     const canPay = isOwner || Boolean(agency?.manager_can_renew_plan);
     const canBuyCredits = isOwner || Boolean(agency?.manager_can_buy_credits);
     const running = allowance.source === "paid";
-    const currentTier = Plans.tierOf(allowance.plan.id);
+    const { id: activePlanId } = allowance.plan || {};
+    const currentTier = Plans.tierOf(activePlanId);
     const upgrades = Billing.upgradeQuotes(agency);
     const paymentChoices = [];
-    if (canPay) for (const plan of Plans.PLANS) {
-      const tier = Plans.tierOf(plan.id);
+    if (canPay) for (const p of Plans.PLANS) {
+      const pid = p.id;
+      const tier = Plans.tierOf(pid);
       if (running && currentTier >= 0 && tier !== currentTier) {
-        if (upgrades[plan.id]) paymentChoices.push({ kind: "upgrade", plan: plan.id, name: plan.name, amount: upgrades[plan.id].amount });
+        if (upgrades[pid]) paymentChoices.push({ kind: "upgrade", plan: pid, name: p.name, amount: upgrades[pid].amount });
         continue;
       }
-      for (const months of Plans.periodsOf(plan)) {
+      for (const months of Plans.periodsOf(p)) {
         if (running && agency.last_months && months !== Number(agency.last_months)) continue;
-        paymentChoices.push({ kind: "plan", plan: plan.id, months, name: plan.name, amount: Billing.priceAt(agency, plan.id, months)?.amount ?? Plans.priceFor(plan, months) });
+        paymentChoices.push({ kind: "plan", plan: pid, months, name: p.name, amount: Billing.priceAt(agency, pid, months)?.amount ?? Plans.priceFor(p, months) });
       }
     }
     if (canBuyCredits && !allowance.ladder) for (const bundle of Plans.BUNDLES) {

@@ -1,5 +1,8 @@
 {
   "libraries": {
+    "api/assistant.js": {
+      "register": ["api", "params"]
+    },
     "api/clientError.js": {
       "register": ["api", "params"]
     },
@@ -86,6 +89,24 @@
       "linesFromText": ["input"],
       "mergeFacts": ["pages"],
       "highlightsFor": ["h", "lang"]
+    },
+    "domain/assistantRouter.js": {
+      "MODES": "Array",
+      "DAY_MS": "Number",
+      "MAX_RANGE_DAYS": "Number",
+      "normalize": ["raw"],
+      "addCairoDaysYmd": ["ymd", "deltaDays"],
+      "cairoMidnight": ["ymd"],
+      "extractTimeWindow": ["raw", "now"],
+      "resolveInterval": ["params"],
+      "extractSourceFilter": ["q"],
+      "findMatchingBrokers": ["brokers", "rawQuery"],
+      "classifyAssistantQuery": ["params"]
+    },
+    "domain/discipline.js": {
+      "UPDATE_EVENT_KINDS": "Array",
+      "classifyBroker": ["params"],
+      "summarizeBoard": ["board"]
     },
     "domain/catalogueUpdate.js": {
       "ACTIONS": "Array",
@@ -387,6 +408,7 @@
       "rulesFields": ["input"],
       "inWorkHours": ["rules", "at"],
       "dueAt": ["rules", "from"],
+      "workMinutesBetween": ["rules", "from", "to"],
       "awayNow": ["broker", "now"],
       "minutesBetween": ["from", "to"],
       "cairo": ["at"]
@@ -1797,6 +1819,9 @@
       "datesLine": ["dates", "lang"],
       "unanswered": ["pool", "manager", "params"]
     },
+    "services/assistantQuery.js": {
+      "query": ["pool", "params"]
+    },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",
       "withClient": ["req", "_res", "next"],
@@ -2057,6 +2082,7 @@
       "createDeal": ["pool", "actor", "input", "params"],
       "getDeal": ["pool", "actor", "key"],
       "listDeals": ["pool", "actor", "params"],
+      "dealsSummary": ["pool", "actor", "opts"],
       "resaleCommissions": ["pool", "actor", "params"],
       "monthlyTotals": ["pool", "actor", "params"],
       "updateDeal": ["pool", "actor", "key", "change", "params"]
@@ -2076,9 +2102,13 @@
       "remindDue": ["pool", "params"],
       "nudgeUntouched": ["pool", "params"],
       "nudgeInterested": ["pool", "params"],
+      "nudgePostViewing": ["pool", "params"],
+      "nudgeLinkSilence": ["pool", "params"],
       "reminderMessage": ["broker", "leads"],
       "nudgeMessage": ["broker", "leads"],
       "interestMessage": ["broker", "leads"],
+      "postViewingMessage": ["broker", "leads"],
+      "linkSilenceMessage": ["broker", "leads"],
       "reminderJob": []
     },
     "services/fx.js": {
@@ -2193,6 +2223,7 @@
       "routingOf": ["db", "agencyId"],
       "saveRouting": ["pool", "manager", "params"],
       "routingList": ["db", "agencyId"],
+      "warnMidwaySla": ["pool", "params"],
       "moveOverdue": ["pool", "params"],
       "responseJob": [],
       "unassignedDigest": ["pool", "params"],
@@ -2213,6 +2244,7 @@
       "saveSpend": ["pool", "actor", "params"]
     },
     "services/leads.js": {
+      "nudgeLead": ["pool", "actor", "refOrId", "params"],
       "restoreBrokerLeads": ["pool", "agencyId", "brokerId", "params"],
       "historyFor": ["pool", "actor", "key", "params"],
       "historyPeople": ["pool", "actor"],
@@ -2801,6 +2833,7 @@
     },
     "services/viewings.js": {
       "OPEN": "Array",
+      "listForBroker": ["pool", "broker", "params"],
       "whenLabel": ["at", "lang"],
       "unitLabel": ["listing", "lang"],
       "clientMessage": ["params"],
@@ -2842,6 +2875,7 @@
       "html": ["strings", "values"],
       "raw": ["text"],
       "phoneLtr": ["value"],
+      "phoneOrText": ["value"],
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],
@@ -3073,7 +3107,7 @@
     },
     "web/todayCards.js": {
       "render": ["cards", "en", "csrf"],
-      "oldUnitsCard": ["c", "en", "csrf", "back"]
+      "oldUnitsCard": ["c", "en", "csrf", "back", "inline"]
     },
     "web/uploads.js": {
       "MB": "Number",
@@ -3155,8 +3189,7 @@
     },
     "web/views/tabs.js": {
       "tabs": ["name", "panels", "params"],
-      "seg": ["label", "items", "current"],
-      "dealsSwitch": ["lang", "current"]
+      "seg": ["label", "items", "current"]
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],
@@ -3173,7 +3206,12 @@
       "stripMarkdown": ["s"],
       "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"],
-      "statusForm": ["code", "en", "csrf", "back"]
+      "statusForm": ["code", "en", "csrf", "back", "inline"]
+    },
+    "domain/urgency.js": {
+      "URGENCY": "Object",
+      "roleGroup": ["role"],
+      "buildPriorities": ["params"]
     }
   },
   "invariant_variable_names": {

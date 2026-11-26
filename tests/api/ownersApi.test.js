@@ -67,6 +67,9 @@ test("dashboard and win-loss are for managers; prices and reports for everyone",
   const allowed = await api().get("/api/v1/dashboard" + scope + h.BROKERS.broker.id).set(await as("manager"));
   expect(allowed.status).toBe(200);
   expect(allowed.body.brokerId).toBe(h.BROKERS.broker.id);
+  expect(allowed.body.weeklyRanges).toHaveLength(8);
+  expect(allowed.body.weeklyRanges[0]).toEqual(expect.objectContaining({ from: expect.any(String), to: expect.any(String), label: expect.any(String) }));
+  expect(allowed.body.unassignedScope).toBe("agency");
   expect((await api().get("/api/v1/dashboard" + scope + h.BROKERS.rival.id).set(await as("manager"))).status).toBe(422);
   expect((await api().get("/api/v1/insights/winloss").set(await as("broker"))).status).toBe(403);
   expect((await api().get("/api/v1/insights/prices").set(await as("broker"))).status).toBe(200);
@@ -112,4 +115,48 @@ test("Search returns agency credit balance only to owners and managers", async (
   expect(owner.body.agency).toEqual(manager.body.agency);
   await h.query("UPDATE agencies SET ai_usage_mode = 'pool' WHERE id = $1", [h.AGENCY_A]);
   expect((await balance("broker")).body).toEqual({ personal: { used: 0, limit: null, remaining: null } });
+});
+
+test("Phase 5 commissions return claimable vs overdue split & byDeveloper, and sources return adBurn", async () => {
+  const mg = await as("manager");
+  const br = await as("broker");
+  const devComm = await api().get("/api/v1/commissions?kind=developers").set(mg);
+  expect(devComm.status).toBe(200);
+  expect(devComm.body.totals).toHaveProperty("claimable");
+  expect(devComm.body.totals).toHaveProperty("overdueAmount");
+  expect(Array.isArray(devComm.body.byDeveloper)).toBe(true);
+  const brComm = await api().get("/api/v1/commissions?kind=developers").set(br);
+  expect(brComm.status).toBe(200);
+  expect(brComm.body.byDeveloper).toEqual([]);
+  expect(brComm.body.period).toBe("all");
+
+  // Prior-month overdue developer commission still appears in default developer commissions + drill-through filters
+  const Catalogue = require("../../services/catalogue");
+  const CommissionsSvc = require("../../services/commissions");
+  const LeadsSvc = require("../../services/leads");
+  const DealsSvc = require("../../services/deals");
+  const adminRow = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.manager.id]))[0];
+  const brokerRow = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  const devObj = (await Catalogue.saveDeveloper(h.pool, adminRow, { name: "Sodic" })).developer;
+  const projObj = (await Catalogue.saveProject(h.pool, adminRow, { name: "Villette", developer_id: devObj.id })).project;
+  await CommissionsSvc.saveTerms(h.pool, adminRow, projObj.id, { mode: "pct", pct: "3", payment_days: "30" });
+  await h.insertListing({ broker_id: null, market: "primary", details: { catalogue: true }, project_id: projObj.id, code: "VL-1", price_value: 5000000 });
+  const leadOld = (await LeadsSvc.captureLead(h.pool, brokerRow, { phones: "01099988871", name: "Old Client" })).lead;
+  const dealOld = (await DealsSvc.createDeal(h.pool, adminRow, { leadKey: leadOld.ref, unitCode: "VL-1", mode: "pct", pct: 2, closingBrokerId: brokerRow.id, status: "signed" })).deal;
+  const oldClosed = new Date(Date.now() - 45 * 24 * 3600 * 1000).toISOString();
+  const pastDue = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  await h.query("UPDATE deals SET closed_at = $2 WHERE id = $1", [dealOld.id, oldClosed]);
+  await h.query("UPDATE commissions SET status = 'claimed', due_on = $2 WHERE deal_id = $1", [dealOld.id, pastDue]);
+
+  const overdueList = await api().get(`/api/v1/commissions?kind=developers&developer=${devObj.id}&overdue=1`).set(mg);
+  expect(overdueList.status).toBe(200);
+  expect(overdueList.body.items.length).toBe(1);
+  expect(overdueList.body.totals.overdueAmount).toBe(150000);
+  expect(overdueList.body.byDeveloper.find((d) => d.developerId === devObj.id)?.overdueCount).toBe(1);
+
+  const month = new Date().toISOString().slice(0, 7);
+  await h.query("INSERT INTO ad_spend (agency_id, month, source, amount_egp) VALUES ($1, $2, 'TikTok', 5000) ON CONFLICT DO NOTHING", [h.AGENCY_A, `${month}-01`]);
+  const srcRes = await api().get("/api/v1/sources").set(mg);
+  expect(srcRes.status).toBe(200);
+  expect(srcRes.body.rows.find((r) => r.source === "TikTok")?.adBurn).toBe(true);
 });

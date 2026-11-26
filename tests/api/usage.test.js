@@ -35,6 +35,21 @@ test("cleanBatch keeps allowlisted events and drops text meta", () => {
   ]);
 });
 
+test("Wave 3 Task 3: search_corrected, route_override, voice_edited allow safe enum meta and strip query/PII keys", () => {
+  const out = UsageLog.cleanBatch({
+    events: [
+      { event: "search_corrected", ok: true, meta: { action: "change_search", mode: "resale", q: "apartment sara", query: "villa", name: "Sara", phone: "0101234" } },
+      { event: "route_override", ok: true, meta: { action: "view_all_markets", mode: "resale", to_mode: "primary", q: "raw" } },
+      { event: "voice_edited", ok: true, meta: { edited: true, mode: "auto", query: "transcript", phone: "011" } }
+    ]
+  });
+  expect(out).toEqual([
+    { event: "search_corrected", ok: true, ms: null, meta: { action: "change_search", mode: "resale" } },
+    { event: "route_override", ok: true, ms: null, meta: { mode: "resale", action: "view_all_markets", to_mode: "primary" } },
+    { event: "voice_edited", ok: true, ms: null, meta: { mode: "auto", edited: true } }
+  ]);
+});
+
 test("POST /usage-events stores events and always answers 204", async () => {
   const auth = await login("owner");
   const res = await request(h.app.app).post("/api/v1/usage-events").set(auth).send({ events: [{ event: "ask", ms: 900 }, { event: "bogus" }] });

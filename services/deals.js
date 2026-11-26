@@ -97,6 +97,29 @@ async function prepare(pool, actor, input = {}) {
   if (input.markSold === true && unit && !mayMarkSold) return { error: unit.status === "active" ? "unit_not_yours" : "unit_not_active", code: unit.code };
   const markSold = input.markSold === undefined ? mayMarkSold : Boolean(input.markSold) && mayMarkSold;
   const dealType = ["sale", "rent"].includes(input.dealType) ? input.dealType : unit?.listing_type === "rent" || lead.kind === "tenant" ? "rent" : "sale";
+  let market = null;
+  if (unit) {
+    if (unit.market === "primary" || unit.market === "resale") market = unit.market;
+    else if (unit.inventory_type === "primary_unit" || unit.is_primary_developer || String(unit.details?.catalogue) === "true") market = "primary";
+    else market = "resale";
+  } else if (input.market === "primary" || input.market === "resale") {
+    market = input.market;
+  }
+  let areaKey = unit?.area_key || null;
+  let areaLabel = cleanText(unit?.district, 120) || cleanText(unit?.city, 120) || null;
+  if (unit?.area_id) {
+    const { rows: arRows } = await pool.query("SELECT name_key, name_en FROM areas WHERE id = $1", [unit.area_id]);
+    if (arRows[0]) {
+      areaKey = arRows[0].name_key || areaKey;
+      areaLabel = arRows[0].name_en || areaLabel;
+    }
+  } else if (unit?.place_id) {
+    const { rows: mpRows } = await pool.query("SELECT a.name_key, a.name_en FROM map_places mp LEFT JOIN areas a ON a.id = mp.area_id WHERE mp.id = $1", [unit.place_id]);
+    if (mpRows[0]) {
+      areaKey = mpRows[0].name_key || areaKey;
+      areaLabel = mpRows[0].name_en || areaLabel;
+    }
+  }
   const names = new Map([[closer.id, closer.name], ...splits.map((s) => [s.brokerId, s.name])]);
   return {
     draft: {
@@ -107,6 +130,9 @@ async function prepare(pool, actor, input = {}) {
       unitCode: unit?.code || null,
       unitBrokerId: unit?.broker_id || null,
       unitVersion: unit?.version ?? null,
+      market,
+      areaKey,
+      areaLabel,
       dealType,
       price: Number(price),
       mode: input.mode,
@@ -152,16 +178,19 @@ async function createDeal(pool, actor, input, { idemKey = null, unitVersion = nu
       const lead = await Leads.getLead(client, actor, d.leadId);
       const seq = await client.query("UPDATE agencies SET deal_ref_seq = GREATEST(deal_ref_seq, COALESCE((SELECT max(ref) FROM deals WHERE agency_id = $1), 0)) + 1 WHERE id = $1 RETURNING deal_ref_seq", [actor.agency_id]);
       const { rows } = await client.query(
-        `INSERT INTO deals (agency_id, ref, lead_id, listing_id, unit_code, closing_broker_id, created_by_broker_id, deal_type, price, commission_mode,
+        `INSERT INTO deals (agency_id, ref, lead_id, listing_id, unit_code, market, area_key, area_label, closing_broker_id, created_by_broker_id, deal_type, price, commission_mode,
                             commission_pct, commission_total, external_share, external_name, status, client_name, client_phone, notes, idem_key,
                             closed_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $20, $20) RETURNING *`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $23, $23) RETURNING *`,
         [
           actor.agency_id,
           seq.rows[0].deal_ref_seq,
           d.leadId,
           d.listingId,
           d.unitCode,
+          d.market || null,
+          d.areaKey || null,
+          d.areaLabel || null,
           d.closingBrokerId,
           actor.id,
           d.dealType,
@@ -223,23 +252,67 @@ async function getDeal(pool, actor, key) {
   return deal;
 }
 
-/** Role-scoped list, newest first, with the viewer's own share. */
-async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null } = {}) {
+function buildDealWhere(actor, { status = null, from = null, to = null, brokerId = null, brokerRole = "closer", market = null, area = null, excludeCancelled = false } = {}) {
+  const manager = Authz.isManager(actor);
   const params = [actor.agency_id, actor.id];
-  const where = ["d.agency_id = $1"];
-  if (!Authz.isManager(actor)) where.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
-  else if (report) where.push("$2::uuid IS NOT NULL");
+  const baseWhere = ["d.agency_id = $1", "$2::uuid IS NOT NULL"];
+  if (excludeCancelled) baseWhere.push("d.status <> 'cancelled'");
+  if (!manager) {
+    baseWhere.push("(d.closing_broker_id = $2 OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2))");
+  } else if (brokerId && UUID.test(String(brokerId))) {
+    params.push(brokerId);
+    const colIdx = params.length;
+    if (brokerRole === "participant") {
+      baseWhere.push(`(d.closing_broker_id = $${colIdx} OR EXISTS (SELECT 1 FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $${colIdx}))`);
+    } else {
+      baseWhere.push(`d.closing_broker_id = $${colIdx}`);
+    }
+  }
   if (STATUSES.includes(status)) {
     params.push(status);
-    where.push(`d.status = $${params.length}`);
+    baseWhere.push(`d.status = $${params.length}`);
   }
+  if (from && to) {
+    params.push(new Date(from).toISOString(), new Date(to).toISOString());
+    baseWhere.push(`d.closed_at >= $${params.length - 1} AND d.closed_at < $${params.length}`);
+  }
+  const baseParams = [...params];
+  const where = [...baseWhere];
+  if (market === "unknown") {
+    where.push("d.market IS NULL");
+  } else if (market === "primary" || market === "resale") {
+    params.push(market);
+    where.push(`d.market = $${params.length}`);
+  }
+  if (area === "unknown") {
+    where.push("d.area_key IS NULL");
+  } else if (area && String(area).trim()) {
+    params.push(String(area).trim().toLowerCase());
+    where.push(`lower(d.area_key) = $${params.length}`);
+  }
+  return { params, baseParams, baseWhere, where, scopeBrokerId: manager ? (UUID.test(String(brokerId)) ? brokerId : null) : actor.id };
+}
+
+/** Role-scoped list, newest first, with the viewer's own share. */
+async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0, report = null, week = null, from = null, to = null, brokerId = null, brokerRole = "closer", market = null, area = null, excludeCancelled = false } = {}) {
+  const { params, where } = buildDealWhere(actor, {
+    status: report && !(from && to) ? null : status,
+    from,
+    to,
+    brokerId,
+    brokerRole,
+    market,
+    area,
+    excludeCancelled: Boolean(excludeCancelled) || (Boolean(from && to) && status !== "cancelled")
+  });
+  if (report && !(from && to)) where.push("$2::uuid IS NOT NULL");
   const fromWhere = () => `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
        LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
        WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`;
   const cairo = "d.closed_at AT TIME ZONE 'Africa/Cairo'";
   const bucket = `(extract(day FROM (${cairo}))::int - 1) / 7`;
   let summary;
-  if (report) {
+  if (report && !(from && to)) {
     const now = new Date();
     const parts = new Intl.DateTimeFormat("en", { timeZone: "Africa/Cairo", year: "numeric", month: "numeric" }).formatToParts(now);
     const year = Number(parts.find((p) => p.type === "year").value);
@@ -264,13 +337,66 @@ async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0,
   }
   params.push(limit + 1, offset);
   const { rows } = await pool.query(
-    `SELECT d.id, d.ref, d.unit_code, d.deal_type, d.price, d.commission_total, d.external_share, d.status, d.closed_at, d.client_name,
+    `SELECT d.id, d.ref, d.unit_code, d.market, d.area_key, d.area_label, d.deal_type, d.price, d.commission_total, d.external_share, d.status, d.closed_at, d.client_name,
             d.closing_broker_id, b.name AS closing_broker_name, l.ref AS lead_ref,
             (SELECT amount FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2) AS my_share
        ${fromWhere()} ORDER BY d.closed_at DESC, d.ref DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   return { rows: rows.slice(0, limit).map((r) => ({ ...r, my_share: r.my_share == null ? null : Number(r.my_share) })), more: rows.length > limit, summary };
+}
+
+/**
+ * Aggregated deal summary using the exact same SQL classification, closer/participant split, and snapshot columns as listDeals.
+ * Separates unknownMarketCount from unknownAreaCount and never double-counts split deals.
+ */
+async function dealsSummary(pool, actor, opts = {}) {
+  const { params, baseParams, baseWhere, where, scopeBrokerId } = buildDealWhere(actor, { ...opts, excludeCancelled: opts.status !== "cancelled" });
+  const join = `FROM deals d LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id WHERE ${Vis.leads("l")}`;
+  const filteredSql = `${join} AND ${where.join(" AND ")}`;
+  const baseSql = `${join} AND ${baseWhere.join(" AND ")}`;
+
+  let shareSelect = "NULL::bigint AS broker_share_total";
+  const aggParams = [...params];
+  if (scopeBrokerId) {
+    aggParams.push(scopeBrokerId);
+    const spIdx = aggParams.length;
+    shareSelect = `COALESCE(SUM(COALESCE((SELECT SUM(s.amount) FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $${spIdx}), 0)), 0)::bigint AS broker_share_total`;
+  }
+
+  const [{ rows: head }, { rows: unkRows }, { rows: byMkt }, { rows: byAr }] = await Promise.all([
+    pool.query(
+      `SELECT count(*)::int AS deals, COALESCE(SUM(d.price), 0)::bigint AS volume, COALESCE(SUM(d.commission_total), 0)::bigint AS commission_total, ${shareSelect} ${filteredSql}`,
+      aggParams
+    ),
+    pool.query(
+      `SELECT count(*) FILTER (WHERE d.market IS NULL)::int AS unknown_market_count, count(*) FILTER (WHERE d.area_key IS NULL)::int AS unknown_area_count ${baseSql}`,
+      baseParams
+    ),
+    pool.query(
+      `SELECT coalesce(d.market, 'unknown') AS market, count(*)::int AS deals, COALESCE(SUM(d.commission_total), 0)::bigint AS commission_total, COALESCE(SUM(d.price), 0)::bigint AS volume ${filteredSql} GROUP BY 1 ORDER BY 2 DESC`,
+      params
+    ),
+    pool.query(
+      `SELECT coalesce(d.area_key, 'unknown') AS area_key, coalesce(d.area_label, 'Unknown') AS area_label, count(*)::int AS deals, COALESCE(SUM(d.commission_total), 0)::bigint AS commission_total, COALESCE(SUM(d.price), 0)::bigint AS volume ${filteredSql} GROUP BY 1, 2 ORDER BY 3 DESC, 2`,
+      params
+    )
+  ]);
+
+  const h = head[0] || {};
+  const u = unkRows[0] || {};
+  return {
+    deals: Number(h.deals || 0),
+    volume: Number(h.volume || 0),
+    commissionTotal: Number(h.commission_total || 0),
+    brokerShareTotal: h.broker_share_total == null ? null : Number(h.broker_share_total),
+    commissionBasis: scopeBrokerId && !Authz.isManager(actor) ? "broker_share" : "deal_commission",
+    brokerRole: opts.brokerRole === "participant" ? "participant" : "closer",
+    unknownMarketCount: Number(u.unknown_market_count || 0),
+    unknownAreaCount: Number(u.unknown_area_count || 0),
+    byMarket: byMkt.map((r) => ({ market: r.market, deals: Number(r.deals || 0), commissionTotal: Number(r.commission_total || 0), volume: Number(r.volume || 0) })),
+    byArea: byAr.map((r) => ({ areaKey: r.area_key, areaLabel: r.area_label, deals: Number(r.deals || 0), commissionTotal: Number(r.commission_total || 0), volume: Number(r.volume || 0) }))
+  };
 }
 
 /**
@@ -402,4 +528,4 @@ async function updateDeal(pool, actor, key, change = {}, { version = null, now =
   });
 }
 
-module.exports = { STATUSES, statusMoveError, allowedStatuses, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, resaleCommissions, monthlyTotals, updateDeal };
+module.exports = { STATUSES, statusMoveError, allowedStatuses, refLabel, parseRef, statusLabel, prepare, createDeal, getDeal, listDeals, dealsSummary, resaleCommissions, monthlyTotals, updateDeal };

@@ -4,6 +4,7 @@
 "use strict";
 
 const Stages = require("../domain/leadStages");
+const Discipline = require("../domain/discipline");
 const { MANAGER_ROLES } = require("../lib/authz");
 const { getConfig } = require("../config");
 const Vis = require("../lib/visibility");
@@ -27,9 +28,40 @@ const periodOf = (days) => (PERIODS.includes(Number(days)) ? Number(days) : 30);
  */
 async function brokerActivity(pool, agencyId, { since, until = new Date() }) {
   const args = [agencyId, since.toISOString(), until.toISOString()];
-  const { rows: brokers } = await pool.query("SELECT id, name, role, is_active FROM brokers WHERE agency_id = $1 ORDER BY name", [agencyId]);
+  const { rows: brokers } = await pool.query(
+    "SELECT id, name, role, is_active, (telegram_chat_id IS NOT NULL) AS telegram_linked FROM brokers WHERE agency_id = $1 ORDER BY name",
+    [agencyId]
+  );
   const per = new Map(
-    brokers.map((b) => [b.id, { id: b.id, name: b.name, role: b.role, active: b.is_active, leads: 0, contacted: 0, forward: 0, viewings: 0, deals: 0, commission: 0, units: 0, responseMin: null, open: 0 }])
+    brokers.map((b) => [
+      b.id,
+      {
+        id: b.id,
+        name: b.name,
+        role: b.role,
+        active: b.is_active,
+        leads: 0,
+        contacted: 0,
+        calls: 0,
+        forward: 0,
+        viewings: 0,
+        deals: 0,
+        commission: 0,
+        units: 0,
+        responseMin: null,
+        open: 0,
+        updates: 0,
+        updates48h: 0,
+        activeDays: 0,
+        lastUpdateAt: null,
+        noNextStep: 0,
+        staleOpen: 0,
+        missed: 0,
+        onTimePct: null,
+        telegramLinked: Boolean(b.telegram_linked),
+        discipline: "consistent"
+      }
+    ])
   );
   const put = (rows, field, key = "n") => {
     for (const r of rows) if (per.has(r.broker_id)) per.get(r.broker_id)[field] = Number(r[key]) || 0;
@@ -38,25 +70,62 @@ async function brokerActivity(pool, agencyId, { since, until = new Date() }) {
     (await pool.query(`SELECT assigned_broker_id AS broker_id, count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2 AND created_at < $3 GROUP BY 1`, args)).rows,
     "leads"
   );
-  put(
-    (await pool.query(`SELECT assigned_broker_id AS broker_id, count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND stage NOT IN ('won', 'lost') GROUP BY 1`, [agencyId])).rows,
-    "open"
+  const staleCut = new Date(until.getTime() - 48 * 3600 * 1000).toISOString();
+  const { rows: openRows } = await pool.query(
+    `SELECT assigned_broker_id AS broker_id,
+            count(*)::int AS open,
+            count(*) FILTER (WHERE stage NOT IN ('new', 'won', 'lost') AND follow_up_status IS DISTINCT FROM 'open')::int AS no_next_step,
+            count(*) FILTER (WHERE stage <> 'new' AND coalesce(last_activity_at, updated_at, created_at) < $2)::int AS stale_open
+       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND stage NOT IN ('won', 'lost') GROUP BY 1`,
+    [agencyId, staleCut]
   );
+  for (const r of openRows) {
+    const b = per.get(r.broker_id);
+    if (!b) continue;
+    b.open = Number(r.open) || 0;
+    b.noNextStep = Number(r.no_next_step) || 0;
+    b.staleOpen = Number(r.stale_open) || 0;
+  }
   const { rows: events } = await pool.query(
-    `SELECT broker_id, kind, data->>'to' AS to_stage, count(*)::int AS n FROM lead_events
-      WHERE agency_id = $1 AND created_at >= $2 AND created_at < $3 AND undone_at IS NULL AND kind IN ('contacted', 'stage')
-      GROUP BY 1, 2, 3`,
+    `SELECT broker_id, kind, data->>'to' AS to_stage, data->>'kind' AS fu_kind, count(*)::int AS n FROM lead_events
+      WHERE agency_id = $1 AND created_at >= $2 AND created_at < $3 AND undone_at IS NULL AND kind IN ('contacted', 'stage', 'follow_up_done')
+      GROUP BY 1, 2, 3, 4`,
     args
   );
   const forward = new Set(["contacted", "interested", "viewing", "negotiation", "won"]);
   for (const e of events) {
     const b = per.get(e.broker_id);
     if (!b) continue;
-    if (e.kind === "contacted") b.contacted += e.n;
-    else if (forward.has(e.to_stage)) {
+    if (e.kind === "contacted") {
+      b.contacted += e.n;
+      b.calls += e.n;
+    } else if (e.kind === "follow_up_done") {
+      if (e.fu_kind === "viewing") b.viewings += e.n;
+      else b.calls += e.n;
+    } else if (forward.has(e.to_stage)) {
       b.forward += e.n;
       if (e.to_stage === "viewing") b.viewings += e.n;
     }
+  }
+  const { rows: updRows } = await pool.query(
+    `SELECT broker_id,
+            count(*) FILTER (WHERE created_at >= $2)::int AS period_updates,
+            count(*) FILTER (WHERE created_at >= $4)::int AS updates_48h,
+            count(DISTINCT to_char(created_at AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD')) FILTER (WHERE created_at >= $2)::int AS active_days,
+            max(created_at) AS last_update_at
+       FROM lead_events
+      WHERE agency_id = $1 AND broker_id IS NOT NULL AND undone_at IS NULL AND created_at < $3
+        AND kind = ANY($5::text[])
+      GROUP BY 1`,
+    [agencyId, since.toISOString(), until.toISOString(), staleCut, Discipline.UPDATE_EVENT_KINDS]
+  );
+  for (const r of updRows) {
+    const b = per.get(r.broker_id);
+    if (!b) continue;
+    b.updates = Number(r.period_updates) || 0;
+    b.updates48h = Number(r.updates_48h) || 0;
+    b.activeDays = Number(r.active_days) || 0;
+    b.lastUpdateAt = r.last_update_at ? new Date(r.last_update_at).toISOString() : null;
   }
   put(
     (
@@ -97,6 +166,16 @@ async function brokerActivity(pool, agencyId, { since, until = new Date() }) {
     args
   );
   for (const r of resp) if (per.has(r.broker_id) && r.m !== null) per.get(r.broker_id).responseMin = Math.round(Number(r.m));
+  const sla = await require("./leadRules").speedToLead(pool, agencyId, { since, until }).catch(() => new Map());
+  for (const b of per.values()) {
+    const s = sla.get(b.id);
+    const responded = s ? Number(s.responded) || 0 : 0;
+    if (s) {
+      b.missed = Number(s.missed) || 0;
+      b.onTimePct = responded > 0 ? Math.round(((Number(s.on_time) || 0) * 100) / responded) : null;
+    }
+    b.discipline = Discipline.classifyBroker({ ...b, responded });
+  }
   return [...per.values()];
 }
 
@@ -132,18 +211,23 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
   const { rows: stageRows } = await pool.query(`SELECT stage, count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1${scope("assigned_broker_id", a)} GROUP BY stage`, a);
   const pipeline = Object.fromEntries(Stages.STAGES.map((s) => [s, 0]));
   for (const r of stageRows) pipeline[r.stage] = r.n;
-  const ua = [agencyId, now.toISOString()];
+  const ua = [agencyId, now.toISOString(), new Date(now.getTime() - 3600 * 1000).toISOString()];
+  const uScope = ids ? ` AND assigned_broker_id = ANY($${ua.push(ids)}::uuid[])` : "";
   const { rows: un } = await pool.query(
     `SELECT count(*) FILTER (WHERE assigned_broker_id IS NULL AND stage NOT IN ('won', 'lost'))::int AS unassigned,
-            count(*) FILTER (WHERE stage = 'new' AND last_contact_at IS NULL)::int AS uncontacted,
-            count(*) FILTER (WHERE follow_up_status = 'open' AND next_follow_up_at < $2)::int AS overdue
-       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1${scope("assigned_broker_id", ua)}`,
+            count(*) FILTER (WHERE stage = 'new' AND last_contact_at IS NULL${uScope})::int AS uncontacted,
+            count(*) FILTER (WHERE assigned_broker_id IS NOT NULL AND stage = 'new' AND last_contact_at IS NULL AND created_at < $3${uScope})::int AS "waitingOver1h",
+            count(*) FILTER (WHERE follow_up_status = 'open' AND next_follow_up_at < $2${uScope})::int AS overdue
+       FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1`,
     ua
   );
   const us = [agencyId, new Date(now.getTime() - 21 * DAY).toISOString()];
+  const vouched = "coalesce(confirmed_at, updated_at, created_at)";
   const { rows: units } = await pool.query(
     `SELECT count(*) FILTER (WHERE status = 'active')::int AS active,
-            count(*) FILTER (WHERE status = 'active' AND coalesce(confirmed_at, updated_at) < $2)::int AS stale
+            count(*) FILTER (WHERE inventory_type IS DISTINCT FROM 'developer_model'
+              AND ((status = 'active' AND ${vouched} < $2)
+                OR (status = 'archived' AND stale_hidden_at IS NOT NULL AND stale_asked_at >= ${vouched})))::int AS stale
        FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1${scope("broker_id", us)}`,
     us
   );
@@ -158,7 +242,13 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
   const board = brokers
     .filter((b) => b.active || b.deals || b.leads)
     .sort((a, b) => b.deals - a.deals || b.commission - a.commission || b.forward - a.forward || b.contacted - a.contacted || a.name.localeCompare(b.name));
-  const leads = brokers.reduce((n, b) => n + b.leads, 0);
+  // Headline new leads counts agency-wide leads (including unassigned leads, while broker/team scopes narrow it).
+  const la = [agencyId, since.toISOString(), now.toISOString()];
+  const { rows: leadRows } = await pool.query(
+    `SELECT count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2 AND created_at < $3${scope("assigned_broker_id", la)}`,
+    la
+  );
+  const leads = leadRows[0].n;
   // New leads per week (last 8 weeks, oldest first) and the period's top sources, for the bars on the page.
   const weekStart = new Date(now.getTime() - 8 * 7 * DAY);
   const wa = [agencyId, now.toISOString(), weekStart.toISOString()];
@@ -168,6 +258,16 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     wa
   );
   const weekly = Array.from({ length: 8 }, (_, i) => wk.find((r) => r.ago === 7 - i)?.n || 0);
+  const fmtCairoMd = (d) => {
+    const ymd = Stages.cairoDay(d);
+    return `${ymd.slice(5, 7)}/${ymd.slice(8, 10)}`;
+  };
+  const weeklyRanges = Array.from({ length: 8 }, (_, i) => {
+    const ago = 7 - i;
+    const start = new Date(now.getTime() - (ago + 1) * 7 * DAY);
+    const end = new Date(now.getTime() - ago * 7 * DAY);
+    return { from: Stages.cairoDay(start), to: Stages.cairoDay(end), label: `${fmtCairoMd(start)}–${fmtCairoMd(end)}` };
+  });
   const sa = [agencyId, since.toISOString()];
   const { rows: sources } = await pool.query(
     `SELECT coalesce(nullif(source, ''), '-') AS source, count(*)::int AS n
@@ -175,11 +275,24 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
       GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 3`,
     sa
   );
+  const Intake = require("./leadIntake");
+  const channels = reports.sources ? await Intake.listForAgency(pool, agencyId).catch(() => []) : [];
+  const intake = channels.reduce((acc, ch) => {
+    if (ch.revoked_at) return acc;
+    if (ch.status === "disconnected") acc.disconnected += 1;
+    acc.failed += Number(ch.failed_30 || 0);
+    return acc;
+  }, { disconnected: 0, failed: 0 });
+  const disciplineSummary = Discipline.summarizeBoard(mode === "solo" ? [] : board);
   return {
     mode,
     reports,
+    intake,
+    disciplineSummary,
     days: period,
     weekly,
+    weeklyRanges,
+    unassignedScope: "agency",
     sources: reports.sources ? sources : [],
     team: mode === "solo" ? [] : team.rows,
     brokerId: who,
