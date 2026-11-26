@@ -236,9 +236,16 @@ CREATE OR REPLACE FUNCTION public.leads_reset_reminder_steps()
  SET search_path TO 'public'
 AS $function$
 BEGIN
-  IF NEW.next_follow_up_at IS DISTINCT FROM OLD.next_follow_up_at OR NEW.follow_up_status IS DISTINCT FROM OLD.follow_up_status
+  IF NEW.next_follow_up_at IS DISTINCT FROM OLD.next_follow_up_at
+     OR NEW.follow_up_status IS DISTINCT FROM OLD.follow_up_status
+     OR NEW.follow_up_kind IS DISTINCT FROM OLD.follow_up_kind
      OR NEW.assigned_broker_id IS DISTINCT FROM OLD.assigned_broker_id THEN
     NEW.follow_up_reminded_steps := '{}';
+    NEW.post_viewing_nudged_at := NULL;
+  END IF;
+  IF NEW.response_due_at IS DISTINCT FROM OLD.response_due_at
+     OR NEW.assigned_broker_id IS DISTINCT FROM OLD.assigned_broker_id THEN
+    NEW.sla_warning_sent_at := NULL;
   END IF;
   RETURN NEW;
 END;
@@ -861,7 +868,10 @@ CREATE TABLE IF NOT EXISTS public.leads (
   flagged_at timestamp with time zone,
   flag_note text,
   flagged_by uuid,
-  follow_up_reminded_steps integer[] DEFAULT '{}'::integer[] NOT NULL
+  follow_up_reminded_steps integer[] DEFAULT '{}'::integer[] NOT NULL,
+  sla_warning_sent_at timestamp with time zone,
+  post_viewing_nudged_at timestamp with time zone,
+  link_silence_nudged_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -2668,7 +2678,9 @@ CREATE INDEX lead_requests_open ON public.lead_requests USING btree (agency_id, 
 CREATE INDEX idx_leads_assigned ON public.leads USING btree (agency_id, assigned_broker_id, last_activity_at DESC);
 CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at) WHERE (follow_up_status = 'open'::text);
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
+CREATE INDEX idx_leads_post_viewing_nudge ON public.leads USING btree (next_follow_up_at) WHERE ((follow_up_status = 'open'::text) AND (follow_up_kind = 'viewing'::text) AND (post_viewing_nudged_at IS NULL));
 CREATE INDEX idx_leads_response_due ON public.leads USING btree (response_due_at) WHERE (response_due_at IS NOT NULL);
+CREATE INDEX idx_leads_sla_warning ON public.leads USING btree (response_due_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (response_due_at IS NOT NULL) AND (sla_warning_sent_at IS NULL));
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
 CREATE INDEX leads_flagged ON public.leads USING btree (agency_id, flagged_at) WHERE (flagged_at IS NOT NULL);
 CREATE INDEX leads_private ON public.leads USING btree (agency_id) WHERE is_private;

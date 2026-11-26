@@ -86,10 +86,27 @@ function dueAt(rules, from) {
   return new Date(t);
 }
 
+/** Working minutes between two moments (only minutes inside `inWorkHours(rules, ...)` count). */
+function workMinutesBetween(rules, from, to) {
+  let t = new Date(from).getTime();
+  const end = new Date(to).getTime();
+  if (!(end > t)) return 0;
+  const stop = Math.min(end, t + 14 * 24 * HOUR);
+  let totalMs = 0;
+  while (t < stop) {
+    const { minute } = cairo(new Date(t));
+    const toHour = (60 - minute) * MIN - (t % MIN);
+    const step = Math.min(stop - t, Math.max(1000, toHour));
+    if (inWorkHours(rules, new Date(t))) totalMs += step;
+    t += step;
+  }
+  return Math.max(0, Math.round(totalMs / MIN));
+}
+
 /** On leave right now: no new leads, skipped by round robin, their reminders go to the managers. */
 const awayNow = (broker, now = new Date()) => Boolean(broker?.away_until && new Date(broker.away_until).getTime() > now.getTime());
 
 /** Minutes between two moments, whole. */
 const minutesBetween = (from, to) => Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / MIN));
 
-module.exports = { DEFAULTS, MIN_WAIT, MAX_WAIT, MAX_JUMPS, rulesOf, rulesFields, inWorkHours, dueAt, awayNow, minutesBetween, cairo };
+module.exports = { DEFAULTS, MIN_WAIT, MAX_WAIT, MAX_JUMPS, rulesOf, rulesFields, inWorkHours, dueAt, workMinutesBetween, awayNow, minutesBetween, cairo };

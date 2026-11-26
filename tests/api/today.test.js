@@ -119,3 +119,59 @@ test("the evening brief shows recorded agency deals, and personal counts for a b
   const manager = await Today.home(h.pool, await row("admin"), evening);
   expect(manager).toMatchObject({ hour: 20, completed: 0, tomorrowViewings: 0 });
 });
+
+test("home priorities rank Waiting > 1h, intake alerts, and missing photos without duplicating old fields", async () => {
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  const broker = await row("broker");
+  const admin = await row("admin");
+  const lead = await Leads.captureLead(h.pool, broker, { phones: "01055551111", name: "Waiting 2h" });
+  await h.query("UPDATE leads SET created_at = $2 WHERE id = $1", [lead.lead.id, twoHoursAgo]);
+  await h.insertListing({ code: "NO-PIC-1", broker_id: broker.id });
+  await h.query(
+    "INSERT INTO lead_intakes (agency_id, source, name, token_hash, token_hint, status) VALUES ($1, 'facebook', 'FB Page 1', 'hash1', 'hint1', 'disconnected')",
+    [h.AGENCY_A]
+  );
+
+  const authMgr = { Authorization: `Bearer ${await token("admin")}` };
+  const mgrRes = await request(h.app.app).get("/api/v1/today/home").set(authMgr);
+  expect(mgrRes.status).toBe(200);
+  expect(mgrRes.body).toMatchObject({ waitingOver1h: 1, missingPhotos: 1, intake: { disconnected: 1, failed: 0 } });
+  expect(mgrRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h", "intake", "missing-photos"]);
+
+  const authBroker = { Authorization: `Bearer ${await token("broker")}` };
+  const brokerRes = await request(h.app.app).get("/api/v1/today/home").set(authBroker);
+  expect(brokerRes.status).toBe(200);
+  expect(brokerRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h", "missing-photos"]);
+  // Uncontacted leads under 1h are distinct from waiting-over-1h; with 0 fresh remaining, new-leads is omitted.
+  expect(brokerRes.body.newLeads).toBe(1);
+  expect(admin.role).toBe("admin");
+});
+
+test("team_lead new-leads priority keeps scoped uncontacted leads under 1h and excludes intake alerts when sources are gated", async () => {
+  await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [h.BROKERS.colleague.id]);
+  const broker = await row("broker");
+  const tl = await row("colleague");
+  await h.query("UPDATE brokers SET team_lead_id = $2 WHERE id = $1", [broker.id, tl.id]);
+  await h.query(
+    "INSERT INTO lead_intakes (agency_id, source, name, token_hash, token_hint, status) VALUES ($1, 'facebook', 'FB Gated', 'hash2', 'hint2', 'disconnected')",
+    [h.AGENCY_A]
+  );
+
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  const teamWait = await Leads.captureLead(h.pool, broker, { phones: "01066661111", name: "Team Wait 2h" });
+  await h.query("UPDATE leads SET created_at = $2 WHERE id = $1", [teamWait.lead.id, twoHoursAgo]);
+  await Leads.captureLead(h.pool, tl, { phones: "01066662222", name: "TL Fresh" });
+
+  const tlRes = await request(h.app.app).get("/api/v1/today/home").set({ Authorization: `Bearer ${await token("colleague")}` });
+  expect(tlRes.status).toBe(200);
+  expect(tlRes.body.priorities.map((p) => [p.id, p.count])).toEqual([
+    ["waiting-over-1h", 1],
+    ["new-leads", 1]
+  ]);
+
+  const Today = require("../../services/today");
+  const teamTierViewer = { ...(await row("admin")), workspace: { tier: "team", mode: "team", members: 3, keep: [] } };
+  const gatedHome = await Today.home(h.pool, teamTierViewer);
+  expect(gatedHome.intake).toEqual({ disconnected: 0, failed: 0 });
+  expect(gatedHome.priorities.map((p) => p.id)).not.toContain("intake");
+});

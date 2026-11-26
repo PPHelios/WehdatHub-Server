@@ -9,6 +9,7 @@ const Vis = require("../lib/visibility");
 const Notifications = require("../lib/notifications");
 const Phone = require("../domain/phone");
 const Leads = require("./leads");
+const LeadRules = require("./leadRules");
 const Parse = require("../domain/portalEnquiry");
 
 const DUP_HOURS = 24;
@@ -78,7 +79,7 @@ async function list(pool, actor) {
  * Adds the phone and assigns a broker: the enquiry becomes a lead (source = the portal, its unit code in the notes).
  * An existing lead with that phone is merged and keeps its broker.
  */
-async function assign(pool, actor, id, { phone, brokerId }) {
+async function assign(pool, actor, id, { phone, brokerId, roundRobin = false }) {
   if (!Authz.isManager(actor)) return { error: "forbidden" };
   const e164 = Phone.toE164(String(phone || ""));
   if (!e164) return { error: "phone_invalid" };
@@ -87,13 +88,15 @@ async function assign(pool, actor, id, { phone, brokerId }) {
   if (!enquiry) return { error: "not_found" };
   if (enquiry.status === "assigned") return { error: "already_assigned" };
   const unit = await unitFor(pool, actor.agency_id, enquiry.listing_no);
+  const next = roundRobin ? await LeadRules.nextBroker(pool, actor.agency_id) : null;
+  if (roundRobin && !next) return { error: "no_rotation_broker" };
   const notes = [`${enquiry.portal} enquiry: ${enquiry.link}`, unit ? `Unit: ${unit.code}` : null].filter(Boolean).join("\n");
   const res = await Leads.captureLead(pool, actor, {
     phones: [e164],
     name: enquiry.client_name,
     source: enquiry.portal,
     notes,
-    assignTo: brokerId || null,
+    assignTo: next?.id || brokerId || null,
     lawfulBasis: "client_request"
   });
   if (!["created", "merged", "colleague"].includes(res.outcome)) return { error: res.outcome === "erased_before" ? "erased_before" : res.error || res.outcome };
@@ -102,6 +105,9 @@ async function assign(pool, actor, id, { phone, brokerId }) {
             merged = $6, updated_at = now() WHERE id = $1 AND agency_id = $2`,
     [id, actor.agency_id, e164, res.lead.id, res.lead.assigned_broker_id, res.outcome !== "created"]
   );
+  if (res.outcome === "created" && next && res.lead.assigned_broker_id === next.id) {
+    await LeadRules.advanceRotation(pool, actor.agency_id, next.id);
+  }
   const keptBroker = res.outcome !== "created" && Boolean(res.lead.assigned_broker_id) && res.lead.assigned_broker_id !== brokerId;
   return { outcome: res.outcome, leadRef: res.lead.ref, keptBroker };
 }

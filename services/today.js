@@ -7,6 +7,9 @@
 const Digest = require("./dailyDigest");
 const Leases = require("./leases");
 const Owners = require("./unitOwners");
+const Intake = require("./leadIntake");
+const Urgency = require("../domain/urgency");
+const Segments = require("../domain/segments");
 const Describe = require("../domain/describe");
 const Vis = require("../lib/visibility");
 const Stages = require("../domain/leadStages");
@@ -77,11 +80,14 @@ async function opsCard(pool, v, now) {
 /** Private-details requests and owner name changes waiting for a manager or the agency owner. */
 async function approvalsCard(pool, v) {
   if (!Authz.isManager(v)) return null;
+  const accessAllowed = !v.workspace || Segments.allows(v.workspace, "accessRequests");
   const [{ rows }, names] = await Promise.all([
-    pool.query(
-      `SELECT count(*)::int AS n FROM unit_access_requests r JOIN listings l ON l.id = r.listing_id WHERE ${Vis.units("l")} AND r.agency_id = $1 AND r.status = 'pending'`,
-      [v.agency_id]
-    ),
+    accessAllowed
+      ? pool.query(
+        `SELECT count(*)::int AS n FROM unit_access_requests r JOIN listings l ON l.id = r.listing_id WHERE ${Vis.units("l")} AND r.agency_id = $1 AND r.status = 'pending'`,
+        [v.agency_id]
+      )
+      : Promise.resolve({ rows: [{ n: 0 }] }),
     Owners.pendingFor(pool, v).catch(() => [])
   ]);
   const access = rows[0].n;
@@ -120,6 +126,41 @@ async function oldUnitsFor(pool, viewer, now = new Date()) {
   return oldUnits(pool, viewer, await scopeIds(pool, viewer), now);
 }
 
+async function leadSlaCounts(pool, viewer, ids, now) {
+  const args = [viewer.agency_id, new Date(now.getTime() - 3600 * 1000).toISOString(), !ids];
+  if (ids) args.push(ids);
+  const { rows } = await pool.query(
+    `SELECT count(*) FILTER (WHERE l.assigned_broker_id IS NOT NULL AND l.created_at < $2)::int AS waiting_over_1h,
+            count(*) FILTER (WHERE $3::boolean OR l.assigned_broker_id IS NOT NULL)::int AS uncontacted
+       FROM leads l
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage = 'new' AND l.last_contact_at IS NULL${ids ? " AND l.assigned_broker_id = ANY($4::uuid[])" : ""}`,
+    args
+  );
+  return { waitingOver1h: rows[0].waiting_over_1h, uncontacted: rows[0].uncontacted };
+}
+
+async function missingPhotosCount(pool, viewer, ids) {
+  const args = [viewer.agency_id];
+  if (ids) args.push(ids);
+  const { rows } = await pool.query(
+    `SELECT count(*)::int AS n FROM listings l
+      WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.status = 'active'
+        AND l.inventory_type IS DISTINCT FROM 'developer_model'
+        AND NOT EXISTS (SELECT 1 FROM listing_images i WHERE i.listing_id = l.id AND i.agency_id = l.agency_id AND (i.role IS NULL OR i.role NOT IN ('document', 'unrelated')))${ids ? " AND l.broker_id = ANY($2::uuid[])" : ""}`,
+    args
+  );
+  return rows[0].n;
+}
+
+function summarizeIntake(channels = []) {
+  return channels.reduce((acc, ch) => {
+    if (ch.revoked_at) return acc;
+    if (ch.status === "disconnected") acc.disconnected += 1;
+    acc.failed += Number(ch.failed_30 || 0);
+    return acc;
+  }, { disconnected: 0, failed: 0 });
+}
+
 /** Search home, scoped independently of the displayed mobile role. */
 async function home(pool, viewer, now = new Date()) {
   const { hour } = Digest.cairoDay(now);
@@ -128,8 +169,9 @@ async function home(pool, viewer, now = new Date()) {
   const tomorrow = Stages.cairoDayAt(now, 1, 0).toISOString();
   const ids = await scopeIds(pool, viewer);
   if (Authz.isDataEntry(viewer)) {
-    const [units, recent] = await Promise.all([
+    const [units, missingPhotos, recent] = await Promise.all([
       oldUnits(pool, viewer, ids, now, 3),
+      missingPhotosCount(pool, viewer, ids),
       evening ? pool.query(
         `SELECT count(DISTINCT listing_code)::int AS n FROM operation_logs
           WHERE agency_id = $1 AND broker_id = $2 AND created_at >= $3 AND created_at < $4
@@ -137,14 +179,26 @@ async function home(pool, viewer, now = new Date()) {
         [viewer.agency_id, viewer.id, since, tomorrow]
       ) : null
     ]);
-    return { hour, units, completed: recent?.rows[0].n };
+    const priorities = Urgency.buildPriorities({
+      role: viewer.role,
+      overdueUnitsTotal: units?.total || 0,
+      missingPhotos
+    });
+    return { hour, units, missingPhotos, priorities, completed: recent?.rows[0].n };
   }
 
-  const [personal, ops, progress, nextDay] = await Promise.all([
+  const manager = Authz.isManager(viewer);
+  const sourcesAllowed = manager && (!viewer.workspace || Segments.allows(viewer.workspace, "sources"));
+  const [personal, ops, sla, missingPhotos, approvals, leasesSoonList, intakeChannels, progress, nextDay] = await Promise.all([
     Digest.briefData(pool, viewer, now),
     opsCard(pool, viewer, now),
+    leadSlaCounts(pool, viewer, ids, now),
+    missingPhotosCount(pool, viewer, ids),
+    approvalsCard(pool, viewer),
+    Leases.list(pool, viewer, { soon: true, now }).catch(() => []),
+    sourcesAllowed ? Intake.listForAgency(pool, viewer.agency_id).catch(() => []) : [],
     evening ? (
-      Authz.isManager(viewer)
+      manager
         ? pool.query(
           `SELECT count(*)::int AS n FROM deals WHERE agency_id = $1 AND status <> 'cancelled' AND closed_at >= $2 AND closed_at < $3`,
           [viewer.agency_id, since, tomorrow]
@@ -165,10 +219,38 @@ async function home(pool, viewer, now = new Date()) {
       [viewer.agency_id, ids, tomorrow, Stages.cairoDayAt(now, 2, 0).toISOString()]
     ) : null
   ]);
+  const nextViewing = tasksOf({ ...personal, overdue: [] }).find((task) => task.kind === "viewing" && task.at && new Date(task.at) >= now) || null;
+  const overdue = personal.overdue.length;
+  const calls = personal.calls.length;
+  const newLeads = personal.uncontacted;
+  const waitingOver1h = sla.waitingOver1h;
+  const tomorrowViewings = nextDay?.rows[0].n;
+  const intake = summarizeIntake(intakeChannels);
+  const com = personal.commissions;
+  const commissions = com && (com.overdue.length || com.registrations.length)
+    ? { overdue: com.overdue.length, registrations: com.registrations.length }
+    : null;
+  const leasesSoon = leasesSoonList.length;
+  const priorities = Urgency.buildPriorities({
+    role: viewer.role,
+    ops,
+    overdue,
+    calls,
+    newLeads: sla.uncontacted,
+    tomorrowViewings,
+    nextViewing,
+    waitingOver1h,
+    intake,
+    approvals,
+    commissions,
+    leasesSoon,
+    missingPhotos
+  });
   return {
-    hour, ops, tomorrowViewings: nextDay?.rows[0].n, completed: progress?.rows[0].n,
-    overdue: personal.overdue.length, calls: personal.calls.length, newLeads: personal.uncontacted,
-    nextViewing: tasksOf({ ...personal, overdue: [] }).find((task) => task.kind === "viewing" && task.at && new Date(task.at) >= now) || null
+    hour, ops, tomorrowViewings, completed: progress?.rows[0].n,
+    overdue, calls, newLeads, nextViewing,
+    waitingOver1h, missingPhotos, intake, approvals, commissions, leasesSoon,
+    priorities
   };
 }
 

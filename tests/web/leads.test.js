@@ -250,3 +250,18 @@ describe("requests on the lead page (step 7)", () => {
     expect((await agent.post("/app/leads/L-0001/requests").type("form").send({ _csrf: csrf, type: "villa" })).status).toBe(404);
   });
 });
+
+test("bulk assignment updates current versions and reports a stale selection", async () => {
+  const { lead: first } = await capture("broker", { name: "First bulk" });
+  const { lead: second } = await capture("broker", { name: "Second bulk", phones: "01112345678" });
+  const { agent, csrf } = await signIn(h, "admin");
+  const selected = [
+    `L-${String(first.ref).padStart(4, "0")}:${first.version}`,
+    `L-${String(second.ref).padStart(4, "0")}:${second.version + 1}`
+  ];
+  const response = await form(agent, "/app/leads/bulk-assign", csrf, { lead: selected, broker: h.BROKERS.colleague.id });
+  expect(response.status).toBe(303);
+  expect(response.headers.location).toBe("/app/leads?bulk=1,1");
+  expect((await h.query("SELECT assigned_broker_id FROM leads WHERE id = $1", [first.id]))[0].assigned_broker_id).toBe(h.BROKERS.colleague.id);
+  expect((await h.query("SELECT assigned_broker_id FROM leads WHERE id = $1", [second.id]))[0].assigned_broker_id).toBe(h.BROKERS.broker.id);
+});

@@ -161,3 +161,21 @@ describe("the client's page", () => {
     expect(await h.query("SELECT * FROM viewings")).toHaveLength(0);
   });
 });
+
+test("the web calendar filters Cairo tomorrow and shows only the signed-in broker's viewings", async () => {
+  const tomorrow = await lead({ name: "Tomorrow Calendar" });
+  const later = await lead({ name: "Later Calendar", phone: "01001234568" });
+  expect((await Viewings.schedule(h.pool, broker(), tomorrow.id, { at: future(1) })).ok).toBe(true);
+  expect((await Viewings.schedule(h.pool, broker(), later.id, { at: future(2) })).ok).toBe(true);
+  const { agent } = await signIn(h, "broker");
+  const filtered = await agent.get("/app/calendar?tomorrow=1");
+  expect(filtered.status).toBe(200);
+  expect(filtered.text).toContain("Tomorrow Calendar");
+  expect(filtered.text).not.toContain("Later Calendar");
+  expect((await agent.get("/app/calendar")).text).toContain("Later Calendar");
+  const colleague = await signIn(h, "colleague");
+  expect((await colleague.agent.get("/app/calendar")).text).not.toContain("Tomorrow Calendar");
+  await h.query("UPDATE agencies SET crm_settings = crm_settings || '{\"brokers_see_all_leads\":false}'::jsonb WHERE id = $1", [broker().agency_id]);
+  await h.query("UPDATE leads SET assigned_broker_id = $1 WHERE id = $2", [h.BROKERS.colleague.id, tomorrow.id]);
+  expect((await agent.get("/app/calendar?tomorrow=1")).text).not.toContain("Tomorrow Calendar");
+});

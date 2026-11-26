@@ -49,14 +49,7 @@ function register(api, { pool }) {
     const from = tomorrow ? Stages.cairoDayAt(now, 1, 0) : new Date(req.query.from || now.getTime() - 12 * 3600 * 1000);
     const to = tomorrow ? Stages.cairoDayAt(now, 2, 0) : new Date(req.query.to || now.getTime() + 60 * 86400 * 1000);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return res.status(400).json({ error: "bad_dates" });
-    const { rows } = await pool.query(
-      `SELECT v.id, v.starts_at, v.place, v.status, v.client_proposed_at, v.client_note, ld.ref, ld.name, l.code
-         FROM viewings v JOIN leads ld ON ld.id = v.lead_id AND ld.agency_id = v.agency_id
-         LEFT JOIN listings l ON l.id = v.listing_id
-        WHERE ${Vis.units("l")} AND v.agency_id = $1 AND v.broker_id = $2 AND v.status = ANY($3) AND v.starts_at >= $4 AND v.starts_at < $5
-        ORDER BY v.starts_at LIMIT 200`,
-      [broker.agency_id, broker.id, Viewings.OPEN, from.toISOString(), to.toISOString()]
-    );
+    const rows = await Viewings.listForBroker(pool, broker, { from, to });
     return res.json({
       items: rows.map((r) => ({ id: r.id, startsAt: iso(r.starts_at), place: r.place, status: r.status, proposedAt: iso(r.client_proposed_at), clientNote: r.client_note, leadRef: Card.refLabel(r.ref), leadName: r.name, unitCode: r.code }))
     });
