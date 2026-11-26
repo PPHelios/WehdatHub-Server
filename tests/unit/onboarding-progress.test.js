@@ -45,6 +45,10 @@ describe("Onboarding progress on GET /api/v1/me", () => {
     expect(me1.status).toBe(200);
     expect(me1.body.onboarding).toEqual({ hasUnit: false, hasSharedLink: false, telegramConnected: false });
 
+    const home1 = await request(h.app.app).get("/api/v1/today/home").set("Authorization", `Bearer ${token}`);
+    expect(home1.status).toBe(200);
+    expect(home1.body.onboarding).toEqual({ hasUnit: false, hasSharedLink: false, telegramConnected: false });
+
     await h.pool.query(
       `INSERT INTO listings (agency_id, broker_id, code, listing_type, property_type, title, price_value, status)
        VALUES ($1, $2, 'T1', 'sale', 'apartment', 'Test Unit', 3000000, 'active')`,
@@ -53,5 +57,9 @@ describe("Onboarding progress on GET /api/v1/me", () => {
     const me2 = await request(h.app.app).get("/api/v1/me").set("Authorization", `Bearer ${token}`);
     expect(me2.status).toBe(200);
     expect(me2.body.onboarding.hasUnit).toBe(true);
+
+    const home2 = await request(h.app.app).get("/api/v1/today/home").set("Authorization", `Bearer ${token}`);
+    expect(home2.status).toBe(200);
+    expect(home2.body.onboarding.hasUnit).toBe(true);
   });
 });
