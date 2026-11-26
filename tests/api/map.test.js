@@ -64,10 +64,13 @@ test("pins count only the units this broker may see, and the tiles address is se
 
 test("a pin opens its units, never private or other agencies' ones", async () => {
   await seed();
+  await h.insertListing({ code: "MV-USD", compound: "Mivida", listing_type: "rent", price_value: 3000, details: { currency: "USD", rent_period: "monthly" } });
   const token = await login("broker");
   const pin = (await api().get("/api/v1/map").set(auth(token))).body.pins[0];
   const res = await api().get(`/api/v1/map/places/${pin.id}/units`).set(auth(token));
   expect(res.status).toBe(200);
-  expect(res.body.items.map((u) => u.code).sort()).toEqual(["MV-1", "MV-2"]);
+  expect(res.body.items.map((u) => u.code).sort()).toEqual(["MV-1", "MV-2", "MV-USD"]);
+  expect(res.body.items.find((u) => u.code === "MV-1")).toMatchObject({ currency: "EGP", rentPeriod: null });
+  expect(res.body.items.find((u) => u.code === "MV-USD")).toMatchObject({ currency: "USD", rentPeriod: "monthly" });
   expect((await api().get("/api/v1/map/places/00000000-0000-0000-0000-000000000000/units").set(auth(token))).status).toBe(404);
 });
