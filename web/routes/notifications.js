@@ -9,6 +9,8 @@ const { refLabel } = require("../../domain/leadCard");
 const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const isManager = (b) => MANAGER_ROLES.includes(String(b.role || "").toLowerCase());
+const inboxPage = (n) => n > 0 ? `/app/notifications?page=${n}` : "/app/notifications";
+const pageNumber = (value) => Math.max(0, Math.min(10000, parseInt(value, 10) || 0));
 const PAGE = 20;
 const when = (d) => new Date(d).toISOString().slice(0, 16).replace("T", " ");
 
@@ -35,12 +37,14 @@ function register(web, { pool, page }) {
   web.get("/notifications", async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
-    const n = Math.max(0, parseInt(req.query.page, 10) || 0);
+    const n = pageNumber(req.query.page);
+    const pageQuery = n ? `?page=${n}` : "";
     const { rows, more } = await Notifications.listInbox(pool, broker, { limit: PAGE, offset: n * PAGE });
+    if (n && !rows.length) return res.redirect(303, inboxPage(0));
     return page(req, res, {
       title: L(lang, "التنبيهات", "Notifications"),
       nav: "notifications",
-      body: html`<h1>🔔 ${L(lang, "التنبيهات", "Notifications")}</h1>
+      body: html`<section id="inbox-panel"><h1>🔔 ${L(lang, "التنبيهات", "Notifications")}</h1>
 <div class="row">
   <form method="post" action="/app/notifications/read-all"><button type="submit" class="secondary">${L(lang, "✓ علّم الكل مقروء", "✓ Mark all read")}</button></form>
   ${rows.length ? html`<form method="post" action="/app/notifications/delete-all"><button type="submit" class="secondary danger" data-delete-all data-confirm="${L(lang, `تمسح كل التنبيهات (${rows.length})؟`, `Delete all ${rows.length} notifications?`)}">🗑 ${L(lang, "امسح الكل", "Delete all")}</button></form>` : ""}
@@ -58,16 +62,17 @@ ${rows.length
     <form method="post" action="/app/leads/${refLabel(r.follow_up_ref)}/follow-up/postpone"><button type="submit" class="secondary">${L(lang, "📅 أجّل يوم", "📅 Postpone a day")}</button></form>
   </div>`
     : ""}
-  <form method="post" action="/app/notifications/${r.id}/delete"><button type="submit" class="quiet danger small" data-delete-notification data-confirm="${L(lang, `تمسح التنبيه «${String(r.title || "").slice(0, 60)}»؟`, `Delete the notification “${String(r.title || "").slice(0, 60)}”?`)}">${L(lang, "امسح", "Delete")}</button></form>
+  <form method="post" action="/app/notifications/${r.id}/delete${pageQuery}" hx-confirm="${L(lang, "تمسح التنبيه؟", "Delete this notification?")}" hx-post="/app/notifications/${r.id}/delete${pageQuery}" hx-target="#inbox-panel" hx-select="#inbox-panel" hx-select-oob="#inbox-bell" hx-swap="outerHTML" hx-sync="#inbox-panel:drop" data-no-lock><button type="submit" class="quiet danger small" data-delete-notification data-confirm="${L(lang, `تمسح التنبيه «${String(r.title || "").slice(0, 60)}»؟`, `Delete the notification “${String(r.title || "").slice(0, 60)}”?`)}">${L(lang, "امسح", "Delete")}</button></form>
   ${r.url
     ? html`<form method="post" action="/app/notifications/${r.id}/open"><button type="submit" class="link">${L(lang, "افتح", "Open")}</button></form>`
-    : !r.read_at
-      ? html`<form method="post" action="/app/notifications/${r.id}/read"><button type="submit" class="link">${L(lang, "تم", "Mark read")}</button></form>`
+    : ""}
+  ${!r.read_at
+    ? html`<form method="post" action="/app/notifications/${r.id}/read${pageQuery}" hx-post="/app/notifications/${r.id}/read${pageQuery}" hx-target="#inbox-panel" hx-select="#inbox-panel" hx-select-oob="#inbox-bell" hx-swap="outerHTML" hx-sync="#inbox-panel:drop" data-no-lock><button type="submit" class="link">${L(lang, "تم", "Mark read")}</button></form>`
       : ""}
 </li>`
     )}</ul>
 <p class="row">${n > 0 ? html`<a href="/app/notifications?page=${n - 1}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${more ? html`<a href="/app/notifications?page=${n + 1}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
-  : html`<p class="card">${L(lang, "مفيش تنبيهات لسه. التنبيهات بتتجمع هنا دايماً، حتى اللي وصلتك على تليجرام.", "No notifications yet. Every alert lands here, even the ones you got on Telegram.")}</p>`}`
+  : html`<p class="card">${L(lang, "مفيش تنبيهات لسه. التنبيهات بتتجمع هنا دايماً، حتى اللي وصلتك على تليجرام.", "No notifications yet. Every alert lands here, even the ones you got on Telegram.")}</p>`}</section>`
     });
   });
 
@@ -80,7 +85,7 @@ ${rows.length
 
   web.post("/notifications/:id/read", async (req, res) => {
     await Notifications.markRead(pool, req.session.broker, req.params.id);
-    return res.redirect(303, "/app/notifications");
+    return res.redirect(303, inboxPage(pageNumber(req.query.page)));
   });
 
   web.post("/notifications/delete-all", async (req, res) => {
@@ -90,7 +95,7 @@ ${rows.length
 
   web.post("/notifications/:id/delete", async (req, res) => {
     await Notifications.dismiss(pool, req.session.broker, req.params.id);
-    return res.redirect(303, "/app/notifications");
+    return res.redirect(303, inboxPage(pageNumber(req.query.page)));
   });
 
   web.post("/notifications/read-all", async (req, res) => {

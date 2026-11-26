@@ -24,9 +24,8 @@ beforeEach(async () => {
 afterAll(closeHarness);
 
 const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
-const send = (agent, csrf, buf, { name = "clients.csv", type = "text/csv", basis = "client_request", confirm = "1", roundRobin = null } = {}) => {
-  let r = agent.post("/app/leads/import").field("_csrf", csrf).field("basis", basis);
-  if (confirm) r = r.field("confirm", confirm);
+const send = (agent, csrf, buf, { name = "clients.csv", type = "text/csv", roundRobin = null } = {}) => {
+  let r = agent.post("/app/leads/import").field("_csrf", csrf);
   if (roundRobin) r = r.field("round_robin", "1");
   return r.attach("file", Buffer.isBuffer(buf) ? buf : Buffer.from(buf), { filename: name, contentType: type });
 };
@@ -74,15 +73,14 @@ describe("preview", () => {
     expect(JSON.stringify(ops)).not.toMatch(/01012345678|سارة/);
   });
 
-  test("the lawful-basis tick is required; a file without a phone column is refused", async () => {
+  test("accepts uploads without a lawful-basis confirmation and still requires a phone column", async () => {
     const { agent, csrf } = await signIn(h, "broker");
-    const r = await send(agent, csrf, "name,phone\nSara,01012345678\n", { confirm: null });
-    expect(r.status).toBe(422);
-    expect(r.text).toMatch(/لازم تختار الأساس القانوني/);
+    const r = await send(agent, csrf, "name,phone\nSara,01012345678\n");
+    expect(r.status).toBe(303);
     const bad = await send(agent, csrf, "name,city\nSara,Cairo\n");
     expect(bad.status).toBe(422);
     expect(bad.text).toMatch(/مش لاقيين عمود الموبايل/);
-    expect(await h.query("SELECT 1 FROM web_imports")).toHaveLength(0);
+    expect(await h.query("SELECT 1 FROM web_imports")).toHaveLength(1);
   });
 
   test("CSRF is required", async () => {
@@ -96,7 +94,7 @@ describe("apply", () => {
   test("creates and merges once; merge fills blanks only; colleague not reassigned; a second apply is 409", async () => {
     await seed();
     const { agent, csrf } = await signIn(h, "broker");
-    const id = idOf(await send(agent, csrf, CSV, { basis: "consent" }));
+    const id = idOf(await send(agent, csrf, CSV));
     const r = await apply(agent, csrf, id);
     expect(r.status).toBe(303);
     const done = await agent.get(`/app/leads/import/${id}`);
@@ -105,7 +103,7 @@ describe("apply", () => {
     expect(done.text).toMatch(/اتحدّثوا: 1/);
 
     const sara = (await h.query("SELECT * FROM leads WHERE phone_e164 = '+201012345678'"))[0];
-    expect(sara).toMatchObject({ name: "سارة", kind: "buyer", source: "Facebook", stage: "interested", lawful_basis: "consent", assigned_broker_id: h.BROKERS.broker.id, notes: "عايزة تسليم قريب" });
+    expect(sara).toMatchObject({ name: "سارة", kind: "buyer", source: "Facebook", stage: "interested", lawful_basis: "client_request", assigned_broker_id: h.BROKERS.broker.id, notes: "عايزة تسليم قريب" });
     const req = await h.query("SELECT data FROM lead_events WHERE lead_id = $1 AND kind = 'request_set'", [sara.id]);
     expect(req[0].data.filters).toMatchObject({ property_types: ["apartment"], price_min: 7000000, price_max: 9000000, bedrooms_min: 3 });
     expect((await h.query("SELECT kind FROM leads WHERE phone_e164 = '+201111111111'"))[0].kind).toBe("tenant");

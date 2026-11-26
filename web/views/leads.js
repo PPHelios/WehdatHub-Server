@@ -7,7 +7,7 @@ const Stages = require("../../domain/leadStages");
 const Phone = require("../../domain/phone");
 const { phoneHelp } = require("./phoneHelp");
 const Credits = require("../../services/credits");
-const { html, raw } = require("../html");
+const { html, raw, phoneOrText } = require("../html");
 
 const { L } = require("../../lib/copy");
 const sel = (on) => (on ? raw(" selected") : "");
@@ -16,13 +16,15 @@ const when = (d, lang) =>
   d ? new Date(d).toLocaleString(lang === "en" ? "en-GB" : "ar-EG", { timeZone: "Africa/Cairo", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 const leadPath = (lead, sub = "") => `/app/leads/${Card.refLabel(lead.ref)}${sub}`;
 
-function leadRow(lead, lang, { manager = false, now = new Date() } = {}) {
+function leadRow(lead, lang, { manager = false, now = new Date(), selectable = false } = {}) {
   const overdue = lead.follow_up_status === "open" && new Date(lead.next_follow_up_at) < now;
   const phone = (lead.phones || [])[0];
   const digits = phone ? String(phone).replace(/\D/g, "") : "";
   return html`<li class="card leadcard" data-lead="${Card.refLabel(lead.ref)}">
+  ${selectable ? html`<input class="pick" form="lead-bulk" type="checkbox" name="lead" value="${Card.refLabel(lead.ref)}:${lead.version}" aria-label="${L(lang, "اختار", "Select")} ${Card.refLabel(lead.ref)}">` : ""}
+  <span class="more-avatar lead-avatar" aria-hidden="true">${[...Card.displayName(lead, lang)][0]}</span>
   <a class="lc-main" href="${leadPath(lead)}">
-    <span class="lc-top"><strong>${Card.displayName(lead, lang)}</strong><span class="muted small" dir="ltr">${Card.refLabel(lead.ref)}</span></span>
+    <span class="lc-top"><strong>${phoneOrText(Card.displayName(lead, lang))}</strong><span class="muted small" dir="ltr">${Card.refLabel(lead.ref)}</span></span>
     <span class="tags"><span class="chip">${Stages.stageLabel(lead.stage, lang)}</span>${lead.hot_at ? html`<span class="chip hot">${L(lang, "مهتم جداً", "Very interested")}</span>` : ""}<span class="muted small">${Stages.kindLabel(lead.kind, lang)}${lead.source ? ` · ${Stages.sourceLabel(lead.source, lang)}` : ""}</span></span>
     <span class="${overdue ? "bad-text" : "muted"} small">${lead.follow_up_status === "open"
       ? `⏰ ${when(lead.next_follow_up_at, lang)}${overdue ? L(lang, " (متأخرة)", " (overdue)") : ""}`
@@ -83,7 +85,7 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
 /** The lead's header: every number with a real Call link, stage, kind, next step, assignee, notes. */
 function leadHeader(lead, lang) {
   return html`<article class="card leadhead" data-lead="${Card.refLabel(lead.ref)}" data-version="${lead.version}">
-  <div class="lc-top"><h1>${Card.displayName(lead, lang)}</h1><span class="chip" dir="ltr">${Card.refLabel(lead.ref)}</span></div>
+  <div class="lc-top"><h1>${phoneOrText(Card.displayName(lead, lang))}</h1><span class="chip" dir="ltr">${Card.refLabel(lead.ref)}</span></div>
   <p class="tags"><span class="chip new">${Stages.stageLabel(lead.stage, lang)}</span>${lead.hot_at ? html`<span class="chip hot">${L(lang, "مهتم جداً", "Very interested")}</span>` : ""}<span class="muted">${Stages.kindLabel(lead.kind, lang)}${lead.stage === "lost" && lead.lost_reason ? ` (${lead.lost_reason})` : ""}${lead.source ? ` · ${Stages.sourceLabel(lead.source, lang)}` : ""}</span></p>
   <ul class="tags">${(lead.phones || []).map((p) => html`<li><a href="${Phone.telUrl(p)}" dir="ltr">${Phone.displayPhone(p)}</a></li>`)}</ul>
   <p class="${lead.follow_up_status === "open" && new Date(lead.next_follow_up_at) < new Date() ? "bad-text" : ""}">${lead.follow_up_status === "open"

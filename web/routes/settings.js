@@ -172,6 +172,14 @@ async function planSection({ pool, broker, lang }) {
 }
 
 function register(web, { pool, page }) {
+  web.post("/settings/client-language", (req, res) => {
+    const lang = req.body.lang;
+    if (lang !== "ar" && lang !== "en") return res.sendStatus(400);
+    if (isCrmOwner(req.session.broker) || isDataEntry(req.session.broker)) return res.sendStatus(403);
+    res.cookie("aq_client_lang", lang, { path: "/app", maxAge: 365 * 24 * 3600 * 1000, sameSite: "lax", secure: Boolean(getConfig().isProd), httpOnly: true });
+    return res.redirect(303, "/app/settings?clientLanguageSaved=1#client-language");
+  });
+
   web.get("/settings", async (req, res) => {
     const lang = langOf(req);
     const broker = await loadBroker(pool, req.session.broker);
@@ -208,6 +216,7 @@ ${pushed === "ok" ? html`<p class="card notice ok" role="status">🔔 ${L(lang, 
 ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "الإشعارات مش مفعلة على أي جهاز لسه.", "Notifications aren't on in any browser yet.")}</p>` : ""}
 <section id="me" class="sect stack" data-settings-section="me">
 <h1 class="sect-title">🙋 ${L(lang, "أنا", "Me")}</h1>
+${!dataEntry ? html`<form class="card row" id="client-language" method="post" action="/app/settings/client-language"><label>${L(lang, "لغة مشاركة الوحدات", "Default unit sharing language")} <select name="lang"><option value="ar">العربية</option><option value="en"${req.cookies.aq_client_lang === "en" ? html` selected` : ""}>English</option></select></label><button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>${req.query.clientLanguageSaved === "1" ? html`<span role="status">${L(lang, "اتحفظت.", "Saved.")}</span>` : ""}</form>` : ""}
 <div class="fold" data-fold>
 <form method="post" action="/app/settings" class="card stack" data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}">
   <h2>🌐 ${L(lang, "اللغة", "Language")}</h2>

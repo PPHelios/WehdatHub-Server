@@ -315,7 +315,7 @@
     keys.forEach(function (k) {
       var miss = missing.indexOf(k) >= 0 && cells[k] === undefined;
       var v = cells[k] === undefined ? "" : (SHOWN_VALUE[cells[k]] || cells[k]);
-      grid.appendChild(el("div", { class: "uc-field" + (miss ? " missing" : ""), "data-field": k }, [el("dt", { text: LABELS[k] || k }), el("dd", { text: miss ? "⚠️ " + TEXT.missingField : v })]));
+      grid.appendChild(el("div", { class: "uc-field" + (miss ? " missing" : ""), "data-field": k }, [el("dt", { text: LABELS[k] || k }), el("dd", { dir: !miss && (k === "owner_phone" || (k === "owner_name" && /^[+\p{Nd}\s().-]+$/u.test(v))) ? "ltr" : "auto", text: miss ? "⚠️ " + TEXT.missingField : v })]));
     });
     var box = el("div", { class: "stack", "data-cp-summary-box": true }, [grid]);
     if (missing.length) box.appendChild(el("p", { class: "warn", "data-cp-missing": missing.join(","), text: "⚠️ " + TEXT.missingNote }));

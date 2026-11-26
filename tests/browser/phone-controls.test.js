@@ -52,6 +52,7 @@ const problems = [];
 const note = (where, what) => problems.push(`${where}: ${what}`);
 
 function watch(pg, where) {
+  pg.on("dialog", (d) => (d.type() === "beforeunload" ? d.accept() : d.dismiss()).catch(() => {}));
   pg.on("pageerror", (e) => note(where, `page error: ${e.message.split("\n")[0]}`));
   pg.on("console", (m) => {
     if (m.type() === "error" && !/Failed to load resource/.test(m.text())) note(where, `console error: ${m.text().slice(0, 120)}`);

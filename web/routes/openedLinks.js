@@ -45,13 +45,13 @@ function linkRow(r, lang) {
   const lead = r.lead
     ? r.lead.hidden
       ? html`<span class="muted">${L(lang, "عميل", "Lead")} ${Card.refLabel(r.lead.ref)} · ${L(lang, "مش ظاهر ليك", "not visible to you")}</span>`
-      : html`<span>${Card.refLabel(r.lead.ref)} ${r.lead.name || ""}${r.lead.phone ? html` <span dir="ltr" class="muted">${r.lead.phone}</span>` : ""}</span>`
+      : html`<span>${Card.refLabel(r.lead.ref)} ${r.lead.name || ""}${r.lead.phone ? html` <bdi dir="ltr" class="muted">${r.lead.phone}</bdi>` : ""}</span>`
     : html`<span class="muted">${L(lang, "من غير عميل محدد", "No lead named")}</span>`;
   const recent = r.last_opened_at && Date.now() - new Date(r.last_opened_at).getTime() < 48 * 3600 * 1000;
   return html`<li class="card result" data-opened-link data-opens="${r.open_count}">
   <div class="row between"><a href="/app/units/${encodeURIComponent(r.unit_code)}"><b dir="ltr">${r.unit_code}</b> <span class="muted">${r.property_type || ""}${r.compound ? ` · ${r.compound}` : ""}</span></a>
   ${recent ? html`<span class="badge" data-recent>🔥 ${L(lang, "جديد", "New")}</span>` : ""}</div>
-  <p class="small">${lead}${r.recipient_phone ? html` · <span dir="ltr">${r.recipient_phone}</span>` : html` · <span class="muted">${L(lang, "من غير مستلم", "no recipient")}</span>`}</p>
+  <p class="small">${lead}${r.recipient_phone ? html` · <bdi dir="ltr">${r.recipient_phone}</bdi>` : html` · <span class="muted">${L(lang, "من غير مستلم", "no recipient")}</span>`}</p>
   <p class="muted small">${L(lang, "اتبعت بواسطة", "Sent by")} ${r.sent_by || "—"} · ${CHANNEL_LABEL[r.channel] ? L(lang, ...CHANNEL_LABEL[r.channel]) : r.channel}${r.source ? ` · ${SOURCE_LABEL[r.source] ? L(lang, ...SOURCE_LABEL[r.source]) : r.source}` : ""} · ${when(r.created_at, lang)}</p>
   ${r.devices > 1 ? html`<p class="small" data-devices="${r.devices}">📱 ${L(lang, `اتفتح من ${r.devices} أجهزة: ممكن اتبعت تاني`, `opened from ${r.devices} devices: it may have been forwarded`)}</p>` : ""}
   ${r.note ? html`<p class="muted small">📝 ${r.note}</p>` : ""}

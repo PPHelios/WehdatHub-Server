@@ -31,7 +31,7 @@ const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartme
 
 test("defaults per plan, owner overrides, and what counts", async () => {
   expect(Plans.planById("free").units).toBe(50);
-  expect(await Billing.planLimits(h.pool)).toEqual({ solo: 1000, team: 5000, office: 1000000, agency: 1000000, free: 50, trial: 50 });
+  expect(await Billing.planLimits(h.pool)).toEqual({ solo: 1000, team: 5000, office: 1000000, agency: 1000000, free: 50, trial: 50, trial_team: 50 });
   await setCap("office", 2);
   await h.insertListing({ code: "CAP-1" });
   await h.insertListing({ code: "CAP-2", status: "sold" });

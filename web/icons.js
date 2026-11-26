@@ -75,9 +75,9 @@ function icon(name, size = 24) {
   return raw(`<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="${SPRITE_URL}#i-${name}"/></svg>`);
 }
 
-/** The invariant WehdatHub mark (always the same in light and dark: outer 4 towers Satin Gold, middle tower Cobalt Blue). */
+/** WehdatHub mark: theme-aware green wings and a gold center. */
 const MARK = raw(
-  '<svg class="mark" viewBox="0 15 154 140" aria-hidden="true" focusable="false"><polygon points="10,20 32,55 32,150 10,150" fill="#C29741"/><polygon points="38,95 60,70 60,150 38,150" fill="#C29741"/><polygon points="66,62 88,35 88,150 66,150" fill="#4B83D4"/><polygon points="94,70 116,95 116,150 94,150" fill="#C29741"/><polygon points="122,55 144,20 144,150 122,150" fill="#C29741"/></svg>'
+  '<svg class="mark" viewBox="0 15 154 140" aria-hidden="true" focusable="false"><polygon points="10,20 32,55 32,150 10,150" fill="currentColor"/><polygon points="38,95 60,70 60,150 38,150" fill="currentColor"/><polygon points="66,62 88,35 88,150 66,150" fill="#C29741"/><polygon points="94,70 116,95 116,150 94,150" fill="currentColor"/><polygon points="122,55 144,20 144,150 122,150" fill="currentColor"/></svg>'
 );
 
 module.exports = { icon, MARK, PATHS, SPRITE };

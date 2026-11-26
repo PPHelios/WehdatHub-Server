@@ -298,7 +298,7 @@ describe("group import (forwarded posts and chat exports)", () => {
   test("an uploaded WhatsApp chat export (.txt): the poster is kept as internal co-broker, never in client copy; a zip is sent to the photos tab", async () => {
     scripted();
     const { agent, csrf } = await signIn(h, "manager");
-    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", Buffer.from("[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون 01012345678\n[24/10/2026, 10:16:01] Sara: تمام"), { filename: "chat.txt", contentType: "text/plain" });
+    const r = await agent.post("/app/import/group").field("_csrf", csrf).field("range", "all").attach("chat", Buffer.from("[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون 01012345678\n[24/10/2026, 10:16:01] Sara: تمام"), { filename: "chat.txt", contentType: "text/plain" });
     const id = importId(r);
     await Imports.waitForGroupImport(id);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/Ahmed Broker/);

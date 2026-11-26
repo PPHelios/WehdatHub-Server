@@ -1,7 +1,7 @@
 // web/routes/home.js — /app/ home of a signed-in broker
 "use strict";
 
-const { html, raw, moreGroups } = require("../html");
+const { html, raw, navFor } = require("../html");
 const Swallow = require("../../lib/swallow");
 const { icon } = require("../icons");
 const { searchBar } = require("../views/searchBar");
@@ -30,29 +30,25 @@ function register(web, { pool, page }) {
     const url = await Onboarding.telegramLink(pool, req.session.broker);
     return res.redirect(303, url || "/app/settings");
   });
-  // More: every page that isn't on the bottom bar, grouped, plus language, support and Sign out.
+  // More: sections outside the bottom bar, plus language, support and Sign out.
   web.get("/more", (req, res) => {
     const { broker } = req.session;
     const en = broker.preferred_lang === "en";
-    const groups = moreGroups(broker); // the same groups as the side menu and the app (lib/navSpec.js)
+    const sections = navFor(broker);
     const support = Onboarding.supportUrl(broker, en ? "en" : "ar");
     const row = (href, ic, label, extra = "", cls = "") => html`<li${cls ? raw(` class="${cls}"`) : ""}><a class="listrow" href="${href}"${extra}>${icon(ic)}<span>${label}</span></a></li>`;
     return page(req, res, {
       title: en ? "More" : "المزيد",
       body: html`<h1>${en ? "More" : "المزيد"}</h1>
-${groups.map((g) => {
-  const list = g.items;
-  const label = en ? g.label.en : g.label.ar;
-  const allDesktop = list.length > 0 && list.every((n) => n.desktop); // nothing to show on a phone: hide the whole card, not just its rows
-  return list.length ? html`<section class="card list${allDesktop ? " desktop-only" : ""}" data-more="${g.key}"><h2>${label}</h2><ul class="rows">${list.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : "";
-})}
+<a class="card more-profile" href="/app/settings"><span class="more-avatar" aria-hidden="true">${[...(broker.name || "?")][0]}</span><span><strong>${broker.name}</strong><span class="muted">${req.session.agency?.name}</span></span></a>
+${sections.length ? html`<section class="card list"><ul class="rows">${sections.map((n) => row(n.href, n.icon, en ? n.en : n.ar, "", n.desktop ? "desktop-only" : ""))}</ul></section>` : ""}
 <section class="card list"><ul class="rows">
   <li><a class="listrow" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${icon("globe")}<span>${en ? "عربي" : "English"}</span></a></li>
   <li><div class="listrow theme-row" data-theme-row>${icon("sun")}<span>${en ? "Appearance" : "المظهر"}</span><span class="row">
     <button type="button" class="chip" data-theme-set="system">${en ? "System" : "النظام"}</button>
     <button type="button" class="chip" data-theme-set="light">${en ? "Light" : "فاتح"}</button>
     <button type="button" class="chip" data-theme-set="dark">${en ? "Dark" : "داكن"}</button></span></div></li>
-  ${row("/app/report", "bug", en ? "Report a problem" : "بلّغ عن مشكلة")}
+
   ${support ? html`<li><a class="listrow" href="${support}" target="_blank" rel="noopener" data-support>${icon("support")}<span>${en ? "Talk to a person" : "كلّم حد من فريقنا"}</span></a></li>` : ""}
   <li><form method="post" action="/app/logout" class="logout"><button type="submit" class="listrow danger">${icon("logout")}<span>${en ? "Sign out" : "خروج"}</span></button></form></li>
 </ul></section>`

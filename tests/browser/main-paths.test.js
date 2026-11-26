@@ -280,3 +280,91 @@ test("search: a typed search finds a unit of this agency and never another agenc
   expect(errors).toEqual([]);
   await ctx.close();
 });
+
+test("Today confirms an old unit inline and keeps the current document", async () => {
+  await h.insertListing({ code: "MP-OLD-INLINE", confirmed_at: new Date(Date.now() - 24 * 86400000), broker_id: h.BROKERS.broker.id });
+  const { ctx, pg } = await openAs("broker");
+  try {
+    await pg.goto(`${BASE}/app/`);
+    await pg.evaluate(() => { window.todayInline = true; });
+    const review = pg.locator("#today-old-units");
+    const row = review.locator("li").filter({ hasText: "MP-OLD-INLINE" });
+    await row.locator('[name="status"][value="active"]').click();
+    await row.waitFor({ state: "detached" });
+    expect(await pg.evaluate(() => window.todayInline)).toBe(true);
+    expect(Date.now() - new Date((await unit("MP-OLD-INLINE")).confirmed_at).getTime()).toBeLessThan(60000);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("Inbox marks read inline and respects confirmation before deleting", async () => {
+  const broker = h.BROKERS.broker;
+  await require("../../lib/notifications").notifyBroker(h.pool, broker, { kind: "match", title: "MP inbox inline", dedupeKey: "mp-inbox-inline", url: "/app/notifications" });
+  const { ctx, pg } = await openAs("broker");
+  try {
+    await pg.goto(`${BASE}/app/notifications`);
+    await pg.evaluate(() => { window.inboxInline = true; });
+    const row = pg.locator("#inbox-panel [data-notification]").filter({ hasText: "MP inbox inline" });
+    const before = await pg.locator("#inbox-bell").getAttribute("aria-label");
+    await row.locator('form[hx-post*="/read"] button').click();
+    await row.locator('form[hx-post*="/read"]').waitFor({ state: "detached" });
+    expect(await pg.locator("#inbox-bell").getAttribute("aria-label")).not.toBe(before);
+    const remove = row.locator("[data-delete-notification]");
+    pg.once("dialog", (dialog) => dialog.dismiss());
+    await remove.click();
+    expect(await row.isVisible()).toBe(true);
+    pg.once("dialog", (dialog) => dialog.accept());
+    await remove.click();
+    await row.waitFor({ state: "detached" });
+    expect(await pg.evaluate(() => window.inboxInline)).toBe(true);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("the capsule clears floating Search in Arabic and English, and the desktop rail takes over", async () => {
+  const { ctx, pg } = await openAs("broker");
+  try {
+    await pg.setViewportSize({ width: 320, height: 720 });
+    for (const [lang, dir, colorScheme] of [["en", "ltr", "light"], ["ar", "rtl", "dark"]]) {
+      await pg.emulateMedia({ colorScheme });
+      await pg.goto(`${BASE}/app/search?lang=${lang}`);
+      const bar = pg.locator(".tabbar");
+      expect(await bar.evaluate((el) => getComputedStyle(el).direction)).toBe(dir);
+      expect(await bar.evaluate((el) => [...el.querySelectorAll("a")].every((tab) => tab.scrollWidth <= tab.clientWidth))).toBe(true);
+      const floating = pg.locator(".searchbox.float").first();
+      if (await floating.isVisible()) {
+        const [search, tabs] = await Promise.all([floating.boundingBox(), bar.boundingBox()]);
+        expect(search.y + search.height).toBeLessThan(tabs.y);
+      }
+    }
+    await pg.setViewportSize({ width: 1280, height: 800 });
+    expect(await pg.locator(".tabbar").isVisible()).toBe(false);
+    expect(await pg.locator(".sidemenu").isVisible()).toBe(true);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("the bulk assignment bar stays above the mobile navigation when a lead is selected", async () => {
+  const broker = h.BROKERS.broker;
+  const { lead } = await require("../../services/leads").captureLead(h.pool, broker, { name: "MP bulk lead", phones: "01034123000" }, { quiet: true });
+  const { ctx, pg } = await openAs("admin");
+  try {
+    await pg.setViewportSize({ width: 320, height: 720 });
+    await pg.goto(`${BASE}/app/leads?lang=en`);
+    const bar = pg.locator("#lead-bulk");
+    expect(await bar.isVisible()).toBe(false);
+    await pg.locator(".leadcard").filter({ hasText: "MP bulk lead" }).locator('input[name="lead"]').check();
+    expect(await bar.isVisible()).toBe(true);
+    const [bulk, tabs] = await Promise.all([bar.boundingBox(), pg.locator(".tabbar").boundingBox()]);
+    expect(bulk.y + bulk.height).toBeLessThan(tabs.y);
+    await bar.locator("select").selectOption(h.BROKERS.colleague.id);
+    await Promise.all([pg.waitForNavigation(), bar.locator("button").click()]);
+    const [current] = await h.query("SELECT assigned_broker_id FROM leads WHERE id = $1", [lead.id]);
+    expect(current.assigned_broker_id).toBe(h.BROKERS.colleague.id);
+  } finally {
+    await ctx.close();
+  }
+});

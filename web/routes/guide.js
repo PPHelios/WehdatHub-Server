@@ -262,11 +262,11 @@ function webGuideContent(lang, assets) {
 
   <h3>${T(lang, ["الخطوة 1 من 4: نوع الوحدة والمكان", "Step 1 of 4: Unit Type and Location"])}</h3>
   <ul>
-    <li>${T(lang, ["نوع العرض: اضغط على «بيع» (أو «إيجار» لوحدة معروضة للإيجار).", "Offer Type: click \"Sale\" (بيع) or \"Rent\" (إيجار)."])}</li>
-    <li>${T(lang, ["نوع الوحدة: اختر نوع العقار (مثال: «شقة» أو فيلا، تاون هاوس، دوبلكس...).", "Unit Type: select the property category (e.g., Apartment / شقة, Villa, Townhouse...)."])}</li>
+    <li>${T(lang, ["نوع العرض: اضغط على «بيع» (أو «إيجار» لوحدة معروضة للإيجار).", "Offer Type: click \"Sale\" or \"Rent\"."])}</li>
+    <li>${T(lang, ["نوع الوحدة: اختر نوع العقار (مثال: «شقة» أو فيلا، تاون هاوس، دوبلكس...).", "Unit Type: select the property category (e.g., Apartment, Villa, Townhouse...)."])}</li>
     <li>${T(lang, ["صندوق المكان والمميزات الموحد: اكتب اسم الكمبوند أو المنطقة (مثال: هايد بارك)، واضغط على الاقتراح الذكي ليتحول إلى بطاقة مسار زرقاء.", "Unified Place Box: type the compound name (e.g. Hyde Park) and pick the matching suggestion to lock its geographic hierarchy."])}</li>
     <li>${T(lang, ["المميزات: اكتب أي ميزة إضافية في نفس الخانة (مثال: غرفة مربية، بحري) لتضاف كرقاقة مميزات.", "Features: type additional perks (e.g., Nanny room, Sea view) in the same box to add them as badges."])}</li>
-    <li>${T(lang, ["اضغط زر «التالي» الأزرق في أسفل الشاشة.", "Click the blue \"Next\" (التالي) button at the bottom."])}</li>
+    <li>${T(lang, ["اضغط زر «التالي» الأزرق في أسفل الشاشة.", "Click the blue \"Next\" button at the bottom."])}</li>
   </ul>
   ${shot("guide/add-unit-01-place-features.png", T(lang, ["الخطوة 1: نوع الوحدة، الكمبوند، وصندوق المكان والمميزات الموحد", "Step 1: Unit type, compound, and the unified place & feature box"]))}
 
@@ -276,16 +276,16 @@ function webGuideContent(lang, assets) {
     <li>${T(lang, ["الغرف والحمامات والدور: اضغط على أزرار الأرقام بنقرة واحدة (مثال: 3 غرف، 2 حمام، دور 3).", "Rooms & Floor: click the buttons for bedrooms (3), bathrooms (2), and floor level (3)."])}</li>
     <li>${T(lang, ["التشطيب والفرش: اختر حالة التشطيب (تشطيب كامل) وحالة الفرش (بدون فرش).", "Finishing & Furnishing: select Finishing (Fully Finished) and Furnishing (Unfurnished)."])}</li>
     <li>${T(lang, ["السعر والعملة: اكتب إجمالي السعر (5500000) وتأكد من اختيار العملة (EGP أو USD).", "Price & Currency: enter the total amount (5500000) and pick the currency (EGP or USD)."])}</li>
-    <li>${T(lang, ["اضغط زر «التالي».", "Click the \"Next\" (التالي) button."])}</li>
+    <li>${T(lang, ["اضغط زر «التالي».", "Click the \"Next\" button."])}</li>
   </ul>
   ${shot("guide/add-unit-02-size-price.png", T(lang, ["الخطوة 2: تحديد المساحة، الغرف، الحمامات، التشطيب، والسعر", "Step 2: Entering area, bedrooms, bathrooms, finishing, and asking price"]))}
 
   <h3>${T(lang, ["الخطوة 3 من 4: الاستلام ونظام السداد", "Step 3 of 4: Delivery and Payment Terms"])}</h3>
   <ul>
-    <li>${T(lang, ["موعد الاستلام: إذا كانت الوحدة جاهزة، ضع علامة صح داخل مربع «استلام فوري». إذا كانت تحت الإنشاء، حدد سنة الاستلام والربع السنوي.", "Delivery: if the unit is finished, tick \"Immediate Delivery / Ready to move\" (استلام فوري); otherwise specify delivery year & quarter."])}</li>
-    <li>${T(lang, ["طريقة الدفع: في حالة الكاش، اكتب المبلغ في خانة «المدفوع كاش المطلوب» (5500000) واترك الأقساط فارغة.", "Payment: for cash deals, enter full price in \"Required Cash Amount\" (المدفوع كاش المطلوب) and leave installments empty."])}</li>
+    <li>${T(lang, ["موعد الاستلام: إذا كانت الوحدة جاهزة، ضع علامة صح داخل مربع «استلام فوري». إذا كانت تحت الإنشاء، حدد سنة الاستلام والربع السنوي.", "Delivery: if the unit is finished, tick \"Immediate Delivery / Ready to move\"; otherwise specify delivery year & quarter."])}</li>
+    <li>${T(lang, ["طريقة الدفع: في حالة الكاش، اكتب المبلغ في خانة «المدفوع كاش المطلوب» (5500000) واترك الأقساط فارغة.", "Payment: for cash deals, enter full price in \"Required Cash Amount\" and leave installments empty."])}</li>
     <li>${T(lang, ["في حالة التقسيط: حدد المقدم المطلوب، المتبقي من الأقساط، قيمة القسط ونظامه (شهري/ربع سنوي)، وتاريخ آخر قسط.", "For installment plans: enter cash down payment, remaining installments, installment value & frequency, and final date."])}</li>
-    <li>${T(lang, ["اضغط زر «التالي».", "Click the \"Next\" (التالي) button."])}</li>
+    <li>${T(lang, ["اضغط زر «التالي».", "Click the \"Next\" button."])}</li>
   </ul>
   ${shot("guide/add-unit-03-delivery-payment.png", T(lang, ["الخطوة 3: تحديد حالة الاستلام الفوري وتفاصيل الدفع كاش أو أقساط", "Step 3: Specifying delivery status and cash or installment schedule"]))}
 
@@ -294,8 +294,8 @@ function webGuideContent(lang, assets) {
     <li>${T(lang, ["بيانات المالك: اكتب اسم المالك (محمد أحمد) ورقم الموبايل (01012345678). 🔒 تنبيه: رقم المالك سري ومحمي تماماً ولن يظهر للعملاء أبداً.", "Owner Information: enter owner name and mobile (01012345678). 🔒 Note: owner details are strictly private and never exposed to clients."])}</li>
     <li>${T(lang, ["الوصف التسويقي: اضغط على زرار «✨ اكتب الوصف من بيانات الوحدة» ليقوم الموقع تلقائياً بصياغة رسالة تسويقية ممتازة للعملاء.", "Marketing Description: click \"✨ Write description from unit data\" to automatically generate an attractive summary for clients."])}</li>
     <li>${T(lang, ["الصور: اضغط على مربع الصور لاختيار حتى 15 صورة من جهازك، أو اسحب الصور مباشرة للمربع.", "Photos: click the photo box to select up to 15 property images, or drag & drop image files."])}</li>
-    <li>${T(lang, ["المراجعة: اضغط «📋 مراجعة قبل الحفظ» للتأكد من اكتمال كافة البيانات.", "Review: click \"📋 Review before saving\" (مراجعة قبل الحفظ) to double-check all fields."])}</li>
-    <li>${T(lang, ["الحفظ النهائي: اضغط زر «✅ حفظ» الأخضر. مبروك! تم حفظ الوحدة وتوليد كود مميز لها (مثل HP301).", "Save: click the green \"✅ Save\" (حفظ) button. Congratulations! Your unit is saved with its unique code (e.g., HP301)."])}</li>
+    <li>${T(lang, ["المراجعة: اضغط «📋 مراجعة قبل الحفظ» للتأكد من اكتمال كافة البيانات.", "Review: click \"📋 Review before saving\" to double-check all fields."])}</li>
+    <li>${T(lang, ["الحفظ النهائي: اضغط زر «✅ حفظ» الأخضر. مبروك! تم حفظ الوحدة وتوليد كود مميز لها (مثل HP301).", "Save: click the green \"✅ Save\" button. Congratulations! Your unit is saved with its unique code (e.g., HP301)."])}</li>
   </ul>
   ${shot("guide/add-unit-04-owner.png", T(lang, ["الخطوة 4 أ: بيانات المالك السرية والوصف التسويقي التلقائي", "Step 4A: Private owner contact and auto-generated marketing description"]))}
   ${shot("guide/add-unit-05-photos-review.png", T(lang, ["الخطوة 4 ب: رفع الصور، قائمة الفحص، وزر الحفظ النهائي", "Step 4B: Uploading photos, pre-save checklist, and final save button"]))}
@@ -431,19 +431,19 @@ function excelGuideContent(lang, assets) {
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
     <div class="notice ok">
-      <strong>🆕 جديدة (New):</strong>
+      <strong>🆕 ${T(lang, ["جديدة:", "New:"])}</strong>
       <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة جديدة لم تسجل من قبل. سيتم إنشاؤها وتوليد كود خاص بها.", "Brand new listing. Will be added to your inventory with a unique code."])}</p>
     </div>
     <div class="notice" style="border-inline-start-color: #1971c2;">
-      <strong>✏️ تعديل (Updated):</strong>
+      <strong>✏️ ${T(lang, ["تعديل:", "Updated:"])}</strong>
       <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة مسجلة بالفعل حدث تغيير في سعرها أو تفاصيلها. يوضح لك النظام التغيير بوضوح: السعر القديم ➡ السعر الجديد.", "Existing listing with detected updates, showing old vs new values clearly."])}</p>
     </div>
     <div class="notice warn">
-      <strong>⚠️ للمراجعة (Review):</strong>
+      <strong>⚠️ ${T(lang, ["للمراجعة:", "Review:"])}</strong>
       <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["وحدة تبدو مشابهة جداً لوحدة قائمة. يتيح لك النظام إما تحديث الوحدة القديمة أو إضافتها كوحدة جديدة.", "Unit very similar to an existing one. You can choose whether to update the existing unit or add as new."])}</p>
     </div>
     <div class="notice">
-      <strong>✔️ متطابقة (Unchanged):</strong>
+      <strong>✔️ ${T(lang, ["متطابقة:", "Unchanged:"])}</strong>
       <p style="margin: 4px 0 0; font-size: 12px;">${T(lang, ["بيانات مطابقة تماماً للمسجل عندك، يتم تخطيها تلقائياً لتوفير الوقت.", "Identical to current inventory records. Safely skipped by default."])}</p>
     </div>
   </div>
@@ -528,7 +528,7 @@ function chatGuideContent(lang, assets) {
 
   <ul>
     <li>${T(lang, ["تمييز الإعلانات المكتملة: يتعرف النظام على الرسائل التي تحتوي على تفاصيل عقار حقيقي، مثل السعر والمساحة والكمبوند ونوع الوحدة.", "Identifying Real Listings: detects messages with property details like price, area, compound, and unit type."])}</li>
-    <li>${T(lang, ["استبعاد طلبات المشترين تلقائياً: الرسائل التي تبدأ بكلمات طلب (مثل: مطلوب، عايز، محتاج، ابحث عن) يتم استبعادها تلقائياً حتى لا تسجل كوحدات بالمخزون.", "Filtering Buyer Requests: buyer inquiries starting with 'looking for', 'wanted', 'مطلوب', or 'محتاج' are automatically filtered out."])}</li>
+    <li>${T(lang, ["استبعاد طلبات المشترين تلقائياً: الرسائل التي تبدأ بكلمات طلب (مثل: مطلوب، عايز، محتاج، ابحث عن) يتم استبعادها تلقائياً حتى لا تسجل كوحدات بالمخزون.", "Filtering Buyer Requests: buyer inquiries starting with 'looking for', 'wanted', or 'interested in' are automatically filtered out."])}</li>
     <li>${T(lang, ["دعم جميع الهواتف: يدعم النظام ملفات المحادثة المصدرة من أجهزة آيفون (iOS) وأندرويد باللغتين العربية والإنجليزية.", "Cross-Platform Support: seamlessly reads chat exports from both iPhone and Android in Arabic and English."])}</li>
   </ul>
   ${shot("guide/import-chat-02-parse-extract.png", T(lang, ["شاشة استخراج بيانات العقار من رسالة الواتساب واستبعاد طلبات البحث", "Property listing extraction preview and buyer request filtering"]))}
@@ -559,7 +559,7 @@ function chatGuideContent(lang, assets) {
   ])}</p>
 
   <div class="callout-box alert">
-    <strong style="color: #e03131;">🔒 قاعدة أمان أساسية: رقم مرسل الواتساب ليس رقم المالك!</strong>
+    <strong style="color: #e03131;">🔒 ${T(lang, ["قاعدة أمان أساسية: رقم مرسل الواتساب ليس رقم المالك!", "Key privacy rule: the WhatsApp sender's number is not the owner's number!"])}</strong>
     <p style="margin: 4px 0 0; font-size: 12px; color: #4c596f;">
       ${T(lang, [
         "رقم تليفون الراسل في جروب الواتساب يُحفظ فقط في خانة الملاحظات كمرجع للمصدر، ولا يتم تعيينه أبداً كرقم مالك الوحدة. يجب كتابة رقم المالك الحقيقي من نص الإعلان أو إدخاله يدوياً لحماية خصوصية وسرية الشركة.",

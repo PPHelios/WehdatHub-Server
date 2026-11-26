@@ -101,6 +101,8 @@ test("the paste box keeps a portal message (and makes the lead when phone and br
   const { agent, csrf } = await signIn(h, "admin");
   const page = await agent.get("/app/leads?tab=portal");
   expect(page.text).toMatch(/data-portal-paste/);
+  expect(page.text).toMatch(/ليدز جدد|New Leads/);
+  expect(page.text).toContain('value="round_robin"');
   expect(page.text).toMatch(/اقرأ الرسالة|Read message/);
   const post = (body) => agent.post("/app/portal-enquiries/paste").set("X-CSRF-Token", csrf).type("form").send(body);
   const bad = await post({ message: "hello there" });
@@ -114,6 +116,9 @@ test("the paste box keeps a portal message (and makes the lead when phone and br
   const both = await post({ message: sample("Two Step", "622222222"), phone: "01012345680", broker_id: h.BROKERS.broker.id });
   expect(both.headers.location).toBe("/app/leads?tab=portal&done=assigned");
   expect((await h.query("SELECT name FROM leads WHERE phone_e164 = '+201012345680'"))[0].name).toBe("Two Step");
+  const rotated = await post({ message: sample("Rotate Me", "633333333"), phone: "01012345681", broker_id: "round_robin" });
+  expect(rotated.headers.location).toBe("/app/leads?tab=portal&done=assigned");
+  expect((await h.query("SELECT assigned_broker_id FROM leads WHERE phone_e164 = '+201012345681'"))[0].assigned_broker_id).toBe(h.BROKERS.colleague.id);
   const { agent: b } = await signIn(h, "broker");
   expect((await b.post("/app/portal-enquiries/paste").type("form").send({ message: sample() })).status).toBeGreaterThanOrEqual(400);
 });

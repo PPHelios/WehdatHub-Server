@@ -24,7 +24,7 @@ function recorder() {
   return { rec, out };
 }
 
-const API_MODULES = ["units", "today", "search", "leads", "unitsWrite", "viewings", "team", "usage", "settings", "leases", "savedSearches", "requests", "capabilities", "owners", "access", "teamAdmin", "insights", "deals", "more", "ask", "map", "places", "devices", "clientError", "notificationSettings", "notifications", "chatDecisions"];
+const API_MODULES = ["units", "today", "search", "leads", "unitsWrite", "viewings", "team", "usage", "settings", "leases", "savedSearches", "requests", "capabilities", "owners", "access", "teamAdmin", "insights", "deals", "more", "ask", "assistant", "map", "places", "devices", "clientError", "notificationSettings", "notifications", "chatDecisions"];
 
 /** [{ method, path }] of /api/v1 routes that need a signed-in person (path without the /api/v1 prefix). */
 function apiRoutes() {

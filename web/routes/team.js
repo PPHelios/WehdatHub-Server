@@ -95,7 +95,7 @@ const DAYS = [
 const hourOptions = (from, to, selected) => Array.from({ length: to - from + 1 }, (_, i) => from + i).map((h) => html`<option value="${h}"${h === selected ? html` selected` : ""}>${String(h).padStart(2, "0")}:00</option>`);
 
 function rulesCard(rules, lang, ws = null) {
-  return html`<form method="post" action="/app/team/rules" class="card stack" data-lead-rules>
+  return html`<form method="post" action="/app/team/rules" class="card stack" id="rules" data-lead-rules>
   <h2>⏱️ ${L(lang, "قاعدة الرد على العملاء", "Lead response rule")}</h2>
   <p class="muted">${L(lang, "لو البروكر مكلّمش عميل جديد اتسلمله في خلال الدقايق دي (بتتحسب في ساعات الشغل بس)، العميل بيتحول للبروكر اللي بعده والمديرين بيعرفوا.", "If a broker doesn't contact a new lead given to them within these minutes (counted in working hours only), the lead moves to the next broker and the managers are told.")}</p>
   <label class="row"><input type="checkbox" name="enabled" value="on"${rules.enabled ? html` checked` : ""}> ${L(lang, "شغّال", "On")}</label>
