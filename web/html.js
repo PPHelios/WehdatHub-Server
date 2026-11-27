@@ -133,10 +133,10 @@ const WEB_TAB_LABELS = {
 };
 
 const WEB_SECTIONS = [
-  ["Clients", "العملاء", ["leads", "pipeline", "requests", "portal", "links", "leadimport"]],
+  ["Clients", "العملاء", ["leads", "pipeline", "requests", "portal", "links", "leadimport", "leases"]],
   ["Inventory", "المخزون العقاري", ["units", "owners", "catalogue", "library", "import"]],
   ["Search", "البحث", ["search", "searches", "map", "compare", "insights", "ask"]],
-  ["Deals", "الصفقات", ["deals", "commissions", "leases"]],
+  ["Deals", "الصفقات", ["deals", "commissions"]],
   ["Calendar", "التقويم", ["calendar"]],
   ["Team", "الفريق", ["team", "leadrules", "access", "addteammate"]],
   ["Agency Reports", "تقارير الشركة", ["dashboard", "sources", "winloss", "market", "activity"]],

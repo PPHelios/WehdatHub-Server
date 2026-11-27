@@ -27,12 +27,12 @@ test("manager sidebar puts role main shortcuts outside menus with no duplicates 
 
 test("secondary pages stay in their section and highlight the current destination", () => {
   expect(links(tabs("manager", "/app/leads"))).toEqual([
-    "/app/leads", "/app/leads/board", "/app/requests", "/app/leads?tab=portal", "/app/links", "/app/leads/import"
+    "/app/leads", "/app/leads/board", "/app/requests", "/app/leads?tab=portal", "/app/links", "/app/leads/import", "/app/leases"
   ]);
   expect(tabs("manager", "/app/leads?tab=portal")).toContain('href="/app/leads?tab=portal" aria-current="page"');
   expect(page("manager", "/app/links")).toContain('<details class="side-group" data-group="clients" open>');
   expect(page("manager", "/app/links")).toContain('href="/app/links" aria-current="page"');
-  expect(links(tabs("manager", "/app/deals"))).toEqual(["/app/deals", "/app/commissions", "/app/leases"]);
+  expect(links(tabs("manager", "/app/deals"))).toEqual(["/app/deals", "/app/commissions"]);
   expect(links(tabs("manager", "/app/dashboard"))).toContain("/app/activity-log");
   expect(links(tabs("manager", "/app/search"))).toContain("/app/insights");
 });

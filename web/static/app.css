@@ -36,11 +36,15 @@ img { max-width: 100%; }
 .top { position: sticky; inset-block-start: 0; z-index: 20; display: flex; align-items: center; gap: 6px; min-height: 58px; padding: 6px 14px; padding-block-start: max(6px, env(safe-area-inset-top, 0px)); background: var(--card); background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-block-end: 1px solid var(--line); }
 .top a { text-decoration: none; color: var(--ink); }
 .brand { display: inline-flex; align-items: center; gap: 9px; margin-inline-end: auto; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em; }
-.brand b { color: var(--brand-ink); font-weight: 800; }
-.mark { color: var(--brand-ink); }
+.brand b { color: var(--brand); font-weight: 800; }
+.mark { color: var(--brand); }
 .brand .mark { width: 30px; height: 28px; flex: none; }
 .iconbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--ink); box-shadow: none; transition: background 0.16s var(--ease), color 0.16s var(--ease); }
-.iconbtn[aria-current="page"], .iconbtn:hover { background: var(--soft); color: var(--brand-ink); filter: none; box-shadow: none; }
+button.iconbtn:hover:not(:disabled), .iconbtn[aria-current="page"], .iconbtn:hover { background: var(--soft); color: var(--brand-ink); filter: none; box-shadow: none; }
+:root[data-theme="dark"] .top { background: #173866; border-block-end-color: var(--line); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .top { background: #173866; border-block-end-color: var(--line); }
+}
 .theme-toggle .ico-sun { display: none; }
 .theme-toggle .ico-moon { display: inline-flex; align-items: center; gap: 5px; }
 :root[data-theme="dark"] .theme-toggle .ico-sun { display: inline-flex; align-items: center; gap: 5px; }
@@ -159,6 +163,8 @@ form.inline { display: inline; }
 .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--soft); overflow-x: auto; scrollbar-width: none; }
 .seg a, .seg button { gap: 6px; flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 11px; background: transparent; color: var(--muted); font-weight: 600; font-size: 0.92rem; text-decoration: none; border: 0; white-space: nowrap; }
 .seg a[aria-current="page"], .seg a.btn:not(.secondary), .seg button[aria-pressed="true"] { background: var(--brand-grad); color: var(--on-brand); box-shadow: 0 1px 3px rgba(10, 17, 31, 0.12); }
+.seg a[aria-current="page"] .muted, .seg a.btn:not(.secondary) .muted, .seg button[aria-pressed="true"] .muted,
+.tabnav a:is([aria-selected="true"], [aria-current="page"]) .muted { color: inherit; opacity: 0.85; }
 .seg a.btn.secondary { border: 0; background: transparent; }
 /* Settings tabs: the open tab is filled with the brand colour; without script all sections show and the tabs are links. */
 .tabnav { display: flex; gap: 4px; align-items: center; min-height: 52px; overflow-x: auto; padding: 4px; margin-block: var(--gap); }
@@ -2072,7 +2078,7 @@ article[data-public-unit] > form#interest button[type="submit"]:hover {
 /* 2. Units List & Unit Detail (web/routes/units.js, web/views/units.js) — App UnitCard parity */
 .unitcard { padding: 0; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
 .unitcard:hover, .unitcard:focus-within { border-color: var(--brand-ink); box-shadow: var(--shadow); }
-.unitcard .uc-main { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; color: var(--ink); text-decoration: none; }
+.unitcard .uc-main { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 12px; color: var(--ink); text-decoration: none; }
 .unitcard .uc-main:focus-visible { outline-offset: -3px; }
 .inventory-unitcard .uc-main { padding-inline-end: 40px; }
 .unitcard .pick {
@@ -2090,43 +2096,56 @@ article[data-public-unit] > form#interest button[type="submit"]:hover {
   display: grid;
   place-items: center;
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 108px;
+  height: 108px;
   flex: none;
-  border-radius: var(--radius-field);
+  border-radius: 14px;
   border: 1px solid var(--line);
   overflow: hidden;
   background: var(--soft);
   color: var(--muted);
 }
 .uc-photo .uc-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.uc-over-top { position: absolute; inset-block-start: 4px; inset-inline-start: 4px; z-index: 1; }
-.uc-over-bottom { position: absolute; inset-block-end: 4px; inset-inline-end: 4px; z-index: 1; }
-.uc-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.uc-over-top { position: absolute; inset-block-start: 6px; inset-inline-start: 6px; z-index: 1; }
+.uc-over-bottom { position: absolute; inset-block-end: 6px; inset-inline-start: 6px; z-index: 1; }
+.uc-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .uc-pill {
   display: inline-flex;
   align-items: center;
   padding: 2px 9px;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 700;
   line-height: 1.35;
   white-space: nowrap;
 }
 .uc-pill.solid-primary { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.uc-pill.solid-rent { background: #1d63dc; border-color: #1d63dc; color: #ffffff; }
 .uc-pill.solid-accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.uc-pill.solid-code { background: rgba(13, 24, 43, 0.82); color: #ffffff; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; backdrop-filter: blur(4px); }
 .uc-pill.tone-primary { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-ink); }
 .uc-pill.tone-accent { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--accent-ink); }
 .uc-pill.tone-neutral { background: var(--bg); border-color: var(--line); color: var(--ink); font-variant-numeric: tabular-nums; }
+.uc-finishing { font-size: 0.78rem; font-weight: 500; color: var(--muted); }
 .uc-info { flex: 1; display: grid; align-content: start; gap: 4px; min-width: 0; }
-.uc-title { font-size: 1rem; font-weight: 800; line-height: 1.35; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.uc-info .uc-sub { display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); min-width: 0; }
+.uc-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.uc-info .uc-sub { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--muted); min-width: 0; }
 .uc-sub .ico { flex: none; }
-.uc-info .uc-size { display: flex; flex-wrap: wrap; gap: 4px 0; font-size: 0.82rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-.uc-size > span + span { margin-inline-start: 8px; padding-inline-start: 8px; border-inline-start: 1px solid var(--line); }
-.uc-price { margin: 0; color: var(--brand-ink); font-size: 1.06rem; font-weight: 800; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.uc-chev { flex: none; color: var(--muted); display: inline-flex; align-items: center; }
+.uc-info .uc-size { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.8rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.uc-size > span { display: inline-flex; align-items: center; gap: 3px; }
+.uc-price { margin: 2px 0 0; color: var(--ink); font-size: 1.04rem; font-weight: 800; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.uc-chev { flex: none; color: var(--muted); display: inline-flex; align-items: center; align-self: center; opacity: 0.45; }
 [dir="rtl"] .uc-chev .ico { transform: scaleX(-1); }
 .unitcard > :is(.tags, .uc-feat, .uc-more, .row, p) { margin: 0; padding: 8px 12px; border-top: 1px solid var(--line); }
 .uc-feat li { border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent); }
@@ -2134,8 +2153,7 @@ ol.results { gap: 12px; margin-top: 12px; }
 @media (min-width: 820px) {
   ol.results:has(.unitcard) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .unitcard .uc-main { padding: 14px; gap: 14px; }
-  .uc-photo { width: 112px; height: 112px; }
-  .uc-title { white-space: normal; overflow-wrap: anywhere; }
+  .uc-photo { width: 118px; height: 118px; }
 }
 /* Unit Detail card, header pills, spec grid & symmetric action bar */
 .unit-card {
@@ -2668,10 +2686,10 @@ body:not(.has-tabbar) .savebar { inset-block-end: 0; padding-block-end: calc(10p
 #unit-form label:has(> small[data-readback]) { position: relative; }
 #unit-form label > small[data-readback] { position: absolute; inset-inline: 2px; top: 100%; margin-top: 3px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* "Your unfinished unit was restored": a loud amber box with a clear button, so nobody saves old values by mistake. */
-[data-draft-note] { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--warn-soft); border: 1px solid var(--warn); border-inline-start-width: 5px; color: var(--ink); font-weight: 600; }
+/* "Your unfinished unit was restored": a clear brand-tinted box with a clear button, so nobody saves old values by mistake. */
+[data-draft-note] { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--brand-soft); border: 1px solid var(--brand-line); border-inline-start: 5px solid var(--brand); color: var(--ink); font-weight: 600; }
 [data-draft-note]::before { content: "↩️"; font-size: 1.2rem; }
-[data-draft-note] button { margin-inline-start: auto; background: var(--warn); color: var(--on-warn); border-color: var(--warn); }
+[data-draft-note] button { margin-inline-start: auto; background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
 .owner-found { color: var(--ok); }
 
 /* Import review: a problem row is a small card: where + reason, the unit line, the notes, then the Fix button on its own line, never beside the text. */

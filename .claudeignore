@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Lockfiles (massive token sinks)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# React Native & Expo Native Builds
+.expo/
+.expo-shared/
+android/
+ios/
+web-build/
+dist/
+build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Metro & Bundler Caches
+.metro-health-check*
+.babel-cache/
+.cache/
+.tmp/
+tmp/
+
+# Node.js / Express Outputs & Logs
+coverage/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.tsbuildinfo
+*.tsbuildinfo
+
+# Environment & Secrets (prevents accidental reads & saves tokens)
+.env
+.env.*
+!.env.example
+
+# Media, Fonts & Static Assets (binary/vector noise)
+assets/fonts/
+assets/images/
+assets/animations/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+*.mp4
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.pdf
+*.xlsx
+*.zip
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

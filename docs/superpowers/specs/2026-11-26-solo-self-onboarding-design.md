@@ -45,15 +45,31 @@
 - Broker taps **"Open WhatsApp & Send"** — opens a pre-filled message to the WhatsApp number.
 - Because the broker messages first, the reply with the 6-digit login code is free (within the 24-hour customer service window) and proves number ownership.
 
-### Step 4: First 5 Minutes Inside the App
-- Instead of an empty screen, the new broker sees a dismissible **3-step Starter Checklist**:
-  1. **Add or import your first unit** (paste a WhatsApp message, upload a photo/details, or try a sample).
-  2. **Share a client link** (see what your buyer sees).
-  3. **Connect / try the Telegram bot** (especially visible if they verified via WhatsApp, giving them a second chance to unlock Telegram features later).
+### Step 4: First 5 Minutes Inside the App (Home Starter Card)
+- No forced multi-slide onboarding carousel. Instead, show a **dismissible 3-step Starter Card** at the top of the Home screen:
+  1. **Add or import your first unit:**
+     - Opens Add Unit with **"Paste a WhatsApp message or describe the unit"** highlighted at the top (so fields auto-fill in seconds), **"Fill details manually"** below it, and an optional **"Load a sample unit"** to test immediately.
+     - Checks off automatically on save and immediately nudges Step 2 (*"Unit saved! Preview & share its Client Link"*).
+  2. **Share a client link** (preview & share their first unit or a sample unit so they feel the buyer experience immediately).
+  3. **Try / Connect Telegram** (already checked off with a voice-note tip if signed up via Telegram; 1-tap connect button if signed up via WhatsApp).
+- Card disappears automatically once all 3 steps are done or when dismissed.
+
+### Step 5: Trial, Credits & Upgrade Visibility (Without Cluttering the App)
+- **Never plaster banners on every screen.** Keep the workspace clean:
+  - **Calm status pill** on Home (e.g., `Trial · 14d left`) — subtle, tappable, zero noise.
+  - **Smart nudges only when relevant:** Show a friendly banner only when **≤ 3 days remain** on the trial, or when **Units / AI Credits hit 80% or 100%**.
+- **Full "Trial & Plans" view** (opened by tapping the pill, a nudge, or **Settings → Plan & Billing**):
+  - **What your trial includes:** Live progress bars for Units and AI Credits, plus what happens when the trial ends (data stays safe; adding/editing pauses until upgraded).
+  - **What upgrading unlocks:** Side-by-side Solo vs. Team/Agency benefits.
+  - **Available AI Bundles:** Clear top-up packs for extra voice/brochure credits.
+- **Platform-safe checkout:**
+  - **Android & Web:** In-app upgrade & bundle purchase with local payment methods.
+  - **iOS:** Same full informational breakdown (usage, limits, plans, bundles), with no buy buttons or external checkout links—just a plain note: *"Subscriptions and bundles are managed on your web account."*
 
 ---
 
 ## 4. Key Trade-Offs & Decisions
 - **Trial always open:** Self-serve trial signup must stay open by default so solo brokers never hit a "signups closed" wall.
 - **WhatsApp kept secondary:** Offering WhatsApp only as a secondary link with a clear "what you miss" note protects Telegram adoption while eliminating hard drop-offs.
-- **Re-prompt inside the app:** Brokers who choose WhatsApp can still connect Telegram later from their starter checklist or settings.
+- **Calm visibility over constant upsells:** Keeping trial/credit status as a subtle pill until near limits preserves trust and keeps the app focused on closing deals.
+- **iOS compliance first:** Read-only plan view on iOS avoids App Store rejection and Apple's 15–30% fee while keeping Android & Web frictionless.
