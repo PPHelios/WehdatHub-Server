@@ -1,0 +1,23 @@
+# Secrets
+.env*
+*.pem
+
+# Not needed at runtime
+node_modules
+.git
+.github
+.claude
+.claudeignore
+tests
+test-results
+coverage
+qa
+docs
+*.log
+*.md
+Dockerfile
+.dockerignore
+render.yaml
+SCHEMA_REFERENCE.sql
+API_CONTRACTS.json
+jsconfig.json

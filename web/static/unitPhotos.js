@@ -241,21 +241,21 @@
       .catch(function () { return null; });
   }
 
-  // The same call storage's own library makes for a file: a form with the cache setting and the file, and no sign-in (the link is the permission).
-  function put(url, blob, name, onFraction) {
+  // The raw JPEG bytes, no sign-in (the link is the permission). Works for a Supabase signed link and an R2 presigned PUT alike:
+  // none of these headers is signed, so R2 accepts them (its CORS rule must allow them).
+  function put(url, blob, onFraction) {
     return new Promise(function (ok, no) {
       var xhr = new XMLHttpRequest();
       xhr.open("PUT", url, true);
+      xhr.setRequestHeader("Content-Type", "image/jpeg");
+      xhr.setRequestHeader("Cache-Control", "max-age=31536000");
       xhr.setRequestHeader("x-upsert", "false");
       xhr.timeout = 120000;
       xhr.upload.onprogress = function (e) { if (e.lengthComputable && onFraction) onFraction(e.loaded / e.total); };
       xhr.onload = function () { return xhr.status >= 200 && xhr.status < 300 ? ok() : no(new Error("put " + xhr.status)); };
       xhr.onerror = function () { no(new Error("network")); };
       xhr.ontimeout = function () { no(new Error("timeout")); };
-      var fd = new FormData();
-      fd.append("cacheControl", "31536000");
-      fd.append("", blob, name);
-      xhr.send(fd);
+      xhr.send(blob);
     });
   }
 
@@ -279,8 +279,8 @@
       return signOne().then(function (u) {
         if (!u) { direct = false; it.state = "local"; return null; }
         it.pct = 5; showState(it);
-        return put(u.upload_url, r.small, "photo.jpg", function (f) { it.pct = 5 + 90 * f; showState(it); })
-          .then(function () { return r.thumb && u.thumb_upload_url ? put(u.thumb_upload_url, r.thumb, "thumb.jpg").catch(function () { /* the full photo is shown instead */ }) : null; })
+        return put(u.upload_url, r.small, function (f) { it.pct = 5 + 90 * f; showState(it); })
+          .then(function () { return r.thumb && u.thumb_upload_url ? put(u.thumb_upload_url, r.thumb).catch(function () { /* the full photo is shown instead */ }) : null; })
           .then(function () { it.key = u.key; it.state = "done"; it.pct = 100; });
       });
     }).catch(function () { it.state = "failed"; }).then(function () { showState(it); });
