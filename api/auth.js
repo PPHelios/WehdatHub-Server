@@ -33,16 +33,23 @@ function isDemoBroker(env, broker) {
 }
 
 async function onboardingOf(pool, b) {
-  if (!b?.agency_id) return { hasUnit: false, hasSharedLink: false, telegramConnected: false };
-  const [unitRow, linkRow, tgRow] = await Promise.all([
+  if (!b?.agency_id) return { hasUnit: false, hasSharedLink: false, telegramConnected: false, hasAsked: false };
+  const [unitRow, linkRow, tgRow, askRow] = await Promise.all([
     pool.query("SELECT EXISTS (SELECT 1 FROM listings WHERE agency_id = $1) AS ok", [b.agency_id]),
     pool.query("SELECT EXISTS (SELECT 1 FROM share_links WHERE agency_id = $1) AS ok", [b.agency_id]),
-    pool.query("SELECT telegram_user_id IS NOT NULL AS ok FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id])
+    pool.query("SELECT telegram_user_id IS NOT NULL AS ok FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id]),
+    // Asked = any search or assistant question by this broker (search_log, or the app's usage events).
+    pool.query(
+      `SELECT (EXISTS (SELECT 1 FROM search_log WHERE agency_id = $1 AND broker_id = $2)
+         OR EXISTS (SELECT 1 FROM usage_events WHERE agency_id = $1 AND broker_id = $2 AND event IN ('ask','search','voice_search','assistant_query_run'))) AS ok`,
+      [b.agency_id, b.id]
+    )
   ]);
   return {
     hasUnit: Boolean(unitRow.rows[0]?.ok),
     hasSharedLink: Boolean(linkRow.rows[0]?.ok),
-    telegramConnected: Boolean(tgRow.rows[0]?.ok)
+    telegramConnected: Boolean(tgRow.rows[0]?.ok),
+    hasAsked: Boolean(askRow.rows[0]?.ok)
   };
 }
 

@@ -43,11 +43,11 @@ describe("Onboarding progress on GET /api/v1/me", () => {
 
     const me1 = await request(h.app.app).get("/api/v1/me").set("Authorization", `Bearer ${token}`);
     expect(me1.status).toBe(200);
-    expect(me1.body.onboarding).toEqual({ hasUnit: false, hasSharedLink: false, telegramConnected: false });
+    expect(me1.body.onboarding).toEqual({ hasUnit: false, hasSharedLink: false, telegramConnected: false, hasAsked: false });
 
     const home1 = await request(h.app.app).get("/api/v1/today/home").set("Authorization", `Bearer ${token}`);
     expect(home1.status).toBe(200);
-    expect(home1.body.onboarding).toEqual({ hasUnit: false, hasSharedLink: false, telegramConnected: false });
+    expect(home1.body.onboarding).toEqual({ hasUnit: false, hasSharedLink: false, telegramConnected: false, hasAsked: false });
 
     await h.pool.query(
       `INSERT INTO listings (agency_id, broker_id, code, listing_type, property_type, title, price_value, status)
@@ -61,5 +61,13 @@ describe("Onboarding progress on GET /api/v1/me", () => {
     const home2 = await request(h.app.app).get("/api/v1/today/home").set("Authorization", `Bearer ${token}`);
     expect(home2.status).toBe(200);
     expect(home2.body.onboarding.hasUnit).toBe(true);
+    expect(home2.body.onboarding.hasAsked).toBe(false);
+
+    await h.pool.query(
+      `INSERT INTO usage_events (agency_id, broker_id, channel, event) VALUES ($1, $2, 'app', 'assistant_query_run')`,
+      [verified.agency.id, verified.broker.id]
+    );
+    const me3 = await request(h.app.app).get("/api/v1/me").set("Authorization", `Bearer ${token}`);
+    expect(me3.body.onboarding.hasAsked).toBe(true);
   });
 });
