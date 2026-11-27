@@ -195,3 +195,17 @@ test("team_lead new-leads priority keeps scoped uncontacted leads under 1h and e
   expect(gatedHome.intake).toEqual({ disconnected: 0, failed: 0 });
   expect(gatedHome.priorities.map((p) => p.id)).not.toContain("intake");
 });
+
+test("home adds stale units and stuck leads with why and a decisions summary", async () => {
+  const broker = await row("broker");
+  const old = new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString();
+  await h.insertListing({ code: "STALE-1", broker_id: broker.id });
+  await h.query("UPDATE listings SET confirmed_at = $2, updated_at = $2 WHERE agency_id = $1 AND code = 'STALE-1'", [h.AGENCY_A, old]);
+  const { lead } = await Leads.captureLead(h.pool, broker, { phones: "01077771111", name: "Stuck" });
+  await h.query("UPDATE leads SET stage = 'contacted', last_activity_at = $2 WHERE id = $1", [lead.id, old]);
+  const res = await request(h.app.app).get("/api/v1/today/home").set({ Authorization: `Bearer ${await token("broker")}` });
+  const ids = res.body.priorities.map((p) => p.id);
+  expect(ids).toEqual(expect.arrayContaining(["stuck-leads", "stale-units"]));
+  expect(res.body.priorities.every((p) => p.why)).toBe(true);
+  expect(res.body.summary.decisions).toBeGreaterThanOrEqual(1);
+});

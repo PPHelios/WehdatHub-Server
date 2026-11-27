@@ -51,4 +51,12 @@ describe("domain/urgency.buildPriorities", () => {
     const out = Urgency.buildPriorities({ role: "data_entry", overdueUnitsTotal: 4, missingPhotos: 2, overdue: 99 });
     expect(out.map((p) => p.id)).toEqual(["overdue-units", "missing-photos"]);
   });
+
+  test("adds stale-units and stuck-leads with a why line in the viewer's language", () => {
+    const br = Urgency.buildPriorities({ role: "broker", stuckLeads: 2, staleUnits: 3, lang: "en" });
+    expect(br.map((p) => [p.id, p.count])).toEqual([["stuck-leads", 2], ["stale-units", 3]]);
+    expect(br[0].why).toBe("2 lead(s) stuck for over 14 days");
+    expect(Urgency.buildPriorities({ role: "owner", staleUnits: 1, stuckLeads: 5 }).map((p) => p.id)).toEqual(["stale-units"]);
+    expect(Urgency.buildPriorities({ role: "broker", overdue: 1 })[0].why).toContain("1");
+  });
 });
