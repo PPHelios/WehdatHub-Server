@@ -497,3 +497,22 @@ test("every answer carries 1-3 suggestion chips; unknown and off-topic questions
   const unit = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "3 bedroom apartment in New Cairo", mode: "auto" });
   expect(unit.body.units.statusCounts).toEqual(unit.body.units.counts);
 });
+
+test("chart cards: win/loss share and prices-in-area price_range, no AI", async () => {
+  AI.ask = () => { throw new Error("AI must not run for chart answers"); };
+  const hdr = await auth("admin");
+  const ins = (code, price) => h.query(
+    `INSERT INTO listings (agency_id, broker_id, code, status, listing_type, price_value, area_value, compound, details)
+     VALUES ($1, $2, $3, 'active', 'sale', $4, 100, 'Chartville', '{}')`,
+    [h.AGENCY_A, h.BROKERS.admin.id, code, price]
+  );
+  for (const [i, p] of [1e6, 2e6, 2e6, 3e6, 5e6].entries()) await ins(`CH${i}`, p);
+  const res = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "prices in Chartville", mode: "auto" });
+  expect(res.status).toBe(200);
+  expect(res.body).toMatchObject({ intent: "crm_prices", aiUsed: false });
+  const pr = res.body.cards.find((c) => c.kind === "price_range");
+  expect(pr.bins.reduce((s, b) => s + b.count, 0)).toBe(5);
+  expect(pr.summary).toMatch(/chartville/i);
+  const wl = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "win rate", mode: "auto" });
+  expect(wl.body.cards.filter((c) => ["share", "bar_breakdown", "metric_row"].includes(c.kind)).length).toBeGreaterThan(0);
+});

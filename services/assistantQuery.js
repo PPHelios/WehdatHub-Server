@@ -25,6 +25,7 @@ const ViewGuard = require("../lib/viewGuard");
 const { formatInterpretation } = require("../lib/search");
 
 const Suggest = require("../domain/assistantSuggestions");
+const Charts = require("../domain/assistantCharts");
 const isManagerOrOwner = (b) => Authz.isManager(b);
 const isTeamLead = (b) => Authz.isTeamLead(b);
 const langOf = (b) => (b?.preferred_lang === "en" ? "en" : "ar");
@@ -187,6 +188,34 @@ function buildDisambiguateResponse({ queryText, rawBroker, matches, en }) {
   };
 }
 
+/** Every bar_breakdown gets a text summary (accessibility + share). */
+function withSummaries(r, en) {
+  if (!r?.cards) return r;
+  return { ...r, cards: r.cards.map((c) => (c.kind === "bar_breakdown" && !c.summary ? { ...c, summary: Charts.barSummary(c.title, c.rows, en) } : c)) };
+}
+
+/** "prices in <area>": histogram of the agency's active EGP sale prices there (units the actor may see). */
+async function runPrices(pool, actor, routeInfo, en) {
+  const place = String(routeInfo.areaQuery || "").trim();
+  const { rows } = await pool.query(
+    `SELECT price_value FROM listings
+      WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = 'active' AND listing_type = 'sale' AND price_value > 0
+        AND coalesce(details->>'currency', 'EGP') = 'EGP'
+        AND (compound ILIKE $2 OR district ILIKE $2 OR city ILIKE $2) LIMIT 2000`,
+    [actor.agency_id, `%${place.replace(/[%_\\]/g, "")}%`]
+  );
+  const card = Charts.priceRangeCard({ title: en ? `Prices in ${place}` : `الأسعار في ${place}`, place, prices: rows.map((r) => r.price_value), budget: routeInfo.budget, en, link: { screen: "Prices", params: {} } });
+  return {
+    intent: "crm_prices",
+    headline: card ? card.summary : (en ? `Not enough units in ${place} to draw a price range (need 3+).` : `مفيش وحدات كفاية في ${place} نرسم منها نطاق الأسعار (محتاج ٣ على الأقل).`),
+    windowLabel: en ? "Active resale sale units" : "وحدات البيع المتاحة",
+    cards: card ? [card] : [],
+    actions: [],
+    links: [{ label: en ? "Price insights" : "أسعار المتر", screen: "Prices", params: {} }],
+    aiUsed: false
+  };
+}
+
 async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText = "") {
   if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
     return {
@@ -295,6 +324,14 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
             { label: en ? "Deals" : "صفقات", value: agg.deals, tone: agg.deals ? "ok" : "neutral" }
           ]
         },
+        ...(board.some((b) => Number(b.deals) > 0)
+          ? [{
+              kind: "bar_breakdown",
+              title: en ? "Deals by broker" : "الصفقات لكل بروكر",
+              rows: [...board].sort((a, b) => Number(b.deals || 0) - Number(a.deals || 0)).slice(0, 6).map((b) => ({ key: String(b.id), label: b.name, count: Number(b.deals || 0), ...(b.avatarUrl ? { avatarUrl: b.avatarUrl } : {}) })),
+              link: { screen: "Team", params: {} }
+            }]
+          : []),
         { kind: "broker_discipline", summary, rows: board.slice(0, 8) }
       ],
       actions: [],
@@ -757,6 +794,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
             { label: en ? "Win rate" : "نسبة النجاح", value: wl?.rate != null ? `${wl.rate}%` : "—", tone: "neutral" }
           ]
         },
+        ...[Charts.shareCard({ title: en ? "Won vs lost" : "اتقفلت وضاعت", parts: [{ key: "won", label: en ? "Won" : "اتقفلت", value: wl?.won }, { key: "lost", label: en ? "Lost" : "ضاعت", value: wl?.lost }], en, link: { screen: "WinLoss", params: {} } })].filter(Boolean),
         ...(wl?.reasons?.length
           ? [{
               kind: "bar_breakdown",
@@ -799,6 +837,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
                 ]
               : [{ label: en ? "Total leads" : "إجمالي العملاء", value: total, tone: "ok" }]
           },
+          ...[Charts.shareCard({ title: en ? "Source mix" : "توزيع المصادر", parts: cntRows.slice(0, 6).map((r) => ({ key: r.source, label: r.source, value: r.leads })), en })].filter(Boolean),
           ...(cntRows.length
             ? [{
                 kind: "bar_breakdown",
@@ -840,6 +879,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       headline,
       windowLabel: rep?.month || "",
       cards: [
+        ...[Charts.shareCard({ title: en ? "Source mix" : "توزيع المصادر", parts: rows.slice(0, 6).map((r) => ({ key: String(r.source), label: r.source, value: r.leads })), en, link: { screen: "Sources", params: {} } })].filter(Boolean),
         {
           kind: "bar_breakdown",
           title: en ? "By source" : "حسب المصدر",
@@ -933,7 +973,8 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
           { label: en ? "Overdue" : "متأخرة", value: Number(d.overdue || 0), tone: d.overdue ? "critical" : "ok" },
           { label: en ? "Deals" : "صفقات", value: Number(d.deals?.n || 0), tone: d.deals?.n ? "ok" : "neutral" }
         ]
-      }
+      },
+      ...[Charts.trendCard({ title: en ? "New leads per week" : "العملاء الجدد كل أسبوع", points: (d.weekly || []).map((value, i) => ({ label: d.weeklyRanges?.[i]?.label || "", value })), en, link: { screen: "Dashboard", params: {} } })].filter(Boolean)
     ],
     actions: [],
     links: [{ label: personal ? (en ? "Open My Stats" : "افتح إحصائياتي") : (en ? "Open Dashboard" : "افتح لوحة الأداء"), screen: "Dashboard", params: {} }],
@@ -1237,11 +1278,14 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
   }
   if (routeInfo.route === "crm_discipline" || routeInfo.route === "crm_broker" || routeInfo.route === "crm_team") {
     const r = await runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText);
-    return { modeUsed: safeMode, ...r };
+    return { modeUsed: safeMode, ...withSummaries(r, en) };
+  }
+  if (routeInfo.route === "crm_prices") {
+    return { modeUsed: safeMode, ...(await runPrices(pool, actor, routeInfo, en)) };
   }
   if (routeInfo.route.startsWith("crm_")) {
     const r = await runExecutiveReport(pool, actor, routeInfo, now, en, cleanText);
-    return { modeUsed: safeMode, ...r };
+    return { modeUsed: safeMode, ...withSummaries(r, en) };
   }
 
   if (routeInfo.route === "inventory_count") {

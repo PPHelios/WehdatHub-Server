@@ -90,6 +90,14 @@
       "mergeFacts": ["pages"],
       "highlightsFor": ["h", "lang"]
     },
+    "domain/assistantCharts.js": {
+      "trendDirection": ["values"],
+      "trendCard": ["params"],
+      "shareCard": ["params"],
+      "priceRangeCard": ["params"],
+      "compareCard": ["params"],
+      "barSummary": ["title", "rows", "en"]
+    },
     "domain/assistantSuggestions.js": {
       "suggestionsFor": ["params"],
       "ROLES": "Array",

@@ -366,8 +366,14 @@ function isGenericAgencySubject(s) {
   return /^(?:we|the|my|our|this|the agency|agency|our agency|us|everyone|everybody|company|all|الشركه|احنا|الفريق|فريقي|الكل|كلنا)$/i.test(stripWindowWords(s));
 }
 
+// "prices in New Cairo" / "اسعار في التجمع": letters only, so "prices in X under 5m" stays a unit search.
+const PRICES_IN_RE = /^(?:(?:what(?:s| is| are)? )?(?:the )?(?:average )?prices? (?:in|of|for)|اسعار(?: الوحدات| الشقق)? (?:في|ب)) ([a-zء-ي]+(?: [a-zء-ي]+)?)$/;
+
 function crmRoute(q, raw, now = new Date()) {
   const windowInfo = extractTimeWindow(q, now);
+
+  const pricesIn = q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim().match(PRICES_IN_RE);
+  if (pricesIn) return { route: "crm_prices", job: "prices", areaQuery: pricesIn[1], windowInfo: null };
 
   if (DISCIPLINE_RE.test(q)) return { route: "crm_discipline", windowInfo };
   if (OPENED_NO_FU_RE.test(q)) return { route: "crm_opened_no_followup", windowInfo };
