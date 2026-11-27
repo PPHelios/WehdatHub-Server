@@ -20,7 +20,7 @@ const phoneOf = (v) => Onboarding.normalizeEgyptMobile(v) || String(v || "").rep
 const BROKER_BY_PHONE = `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang
    FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`;
 
-const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar" });
+const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar", avatarUrl: require("../lib/supabase").photoUrl(b.avatar_path) });
 const agencyView = (a) => ({ id: a.id, name: a.name, slug: a.slug, logoUrl: a.logo_url || null });
 
 /** True only for the demo broker (demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true"). */

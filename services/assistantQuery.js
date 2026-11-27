@@ -1499,9 +1499,27 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
   };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Adds `avatarUrl` (null when unset) to every broker named in the answer's cards; only this agency's brokers are looked up. */
+async function withAvatars(pool, actor, answer) {
+  const refs = [];
+  for (const c of answer?.cards || []) {
+    for (const i of c.items || []) if (i.assigneeId) refs.push([i, i.assigneeId]);
+    for (const r of c.recommendedBrokers || []) refs.push([r, r.id]);
+    for (const r of c.rows || []) if (UUID.test(r.key || "")) refs.push([r, r.key]);
+    if (c.kind === "broker_scorecard" && c.broker?.id) refs.push([c.broker, c.broker.id]);
+  }
+  if (!refs.length || !actor?.agency_id) return answer;
+  const { rows } = await pool.query("SELECT id, avatar_path FROM brokers WHERE agency_id = $1 AND id = ANY($2::uuid[])", [actor.agency_id, [...new Set(refs.map(([, id]) => id))]]);
+  const path = new Map(rows.map((r) => [r.id, r.avatar_path]));
+  for (const [o, id] of refs) o.avatarUrl = require("../lib/supabase").photoUrl(path.get(id));
+  return answer;
+}
+
 /** Every answer carries follow-up chips (domain/assistantSuggestions), so no reply is a dead end. */
 async function query(pool, params) {
-  const r = await queryInner(pool, params);
+  const r = await withAvatars(pool, params.actor, await queryInner(pool, params));
   if (!r || r.error) return r;
   const actor = params.actor;
   const role = Authz.isDataEntry(actor) ? "data_entry" : isManagerOrOwner(actor) ? "manager" : isTeamLead(actor) ? "team_lead" : "broker";
@@ -1516,4 +1534,4 @@ async function query(pool, params) {
   return { ...r, suggestions };
 }
 
-module.exports = { query };
+module.exports = { query, withAvatars };

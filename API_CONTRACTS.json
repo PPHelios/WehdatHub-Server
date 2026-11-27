@@ -1131,7 +1131,8 @@
     "lib/images.js": {
       "MAX_PHOTOS": "Number",
       "normalizeImageBuffer": ["rawBuffer"],
-      "makeThumbBuffer": ["rawBuffer"]
+      "makeThumbBuffer": ["rawBuffer"],
+      "makeAvatarBuffer": ["rawBuffer"]
     },
     "lib/importFailed.js": {
       "failedRowsWorkbook": ["payload", "params"],
@@ -1839,7 +1840,8 @@
       "unanswered": ["pool", "manager", "params"]
     },
     "services/assistantQuery.js": {
-      "query": ["pool", "params"]
+      "query": ["pool", "params"],
+      "withAvatars": ["pool", "actor", "answer"]
     },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",

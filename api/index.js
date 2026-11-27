@@ -125,6 +125,7 @@ function mountApi(app, { pool }) {
   require("./unitsWrite").register(priv, { pool });
   require("./viewings").register(priv, { pool });
   require("./team").register(priv, { pool });
+  require("./avatar").register(priv, { pool });
   require("./usage").register(priv, { pool });
   require("./settings").register(priv, { pool });
   require("./leases").register(priv, { pool });
