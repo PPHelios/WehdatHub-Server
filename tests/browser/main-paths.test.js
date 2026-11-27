@@ -281,20 +281,20 @@ test("search: a typed search finds a unit of this agency and never another agenc
   await ctx.close();
 });
 
-test("Today confirms an old unit inline and keeps the current document", async () => {
+test("Data entry confirms an old unit from the units page strip", async () => {
   await h.insertListing({ code: "MP-OLD-INLINE", confirmed_at: new Date(Date.now() - 24 * 86400000), broker_id: h.BROKERS.broker.id });
-  const { ctx, pg } = await openAs("broker");
+  // Only data entry gets the old-units card (services/today.js), and their home is /app/units, where it shows as a strip.
+  await h.pool.query("UPDATE brokers SET role = 'data_entry' WHERE id = $1", [h.BROKERS.colleague.id]);
+  const { ctx, pg } = await openAs("colleague");
   try {
-    await pg.goto(`${BASE}/app/`);
-    await pg.evaluate(() => { window.todayInline = true; });
-    const review = pg.locator("#today-old-units");
-    const row = review.locator("li").filter({ hasText: "MP-OLD-INLINE" });
+    await pg.goto(`${BASE}/app/units`);
+    const row = pg.locator('[data-today-card="old-units"] li').filter({ hasText: "MP-OLD-INLINE" });
     await row.locator('[name="status"][value="active"]').click();
-    await row.waitFor({ state: "detached" });
-    expect(await pg.evaluate(() => window.todayInline)).toBe(true);
+    await pg.waitForLoadState("networkidle");
     expect(Date.now() - new Date((await unit("MP-OLD-INLINE")).confirmed_at).getTime()).toBeLessThan(60000);
   } finally {
     await ctx.close();
+    await h.pool.query("UPDATE brokers SET role = 'broker' WHERE id = $1", [h.BROKERS.colleague.id]);
   }
 });
 

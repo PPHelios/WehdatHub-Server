@@ -22,7 +22,7 @@
  "/catalogue/updates/:id": "web-only: smart catalogue updates",
  "/commissions": "api:/commissions",
  "/commissions/:id": "api:/commissions/:id",
- "/commissions/developers/:id": "api:/commissions/:id",
+ "/commissions/developers/:id": "api:/commissions",
  "/compare": "api:/compare",
  "/csrf": "web-only: form security token",
  "/dashboard": "api:/dashboard",

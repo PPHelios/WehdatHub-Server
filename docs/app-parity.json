@@ -19,7 +19,7 @@
     "web": "client-facing page"
   },
   "catalogue.js": {
-    "app": "Projects (read, archive, clarify; editing and uploads stay on the website)"
+    "app": "Projects (read, edit, photos and gallery, archive, clarify)"
   },
   "catalogueUpdates.js": {
     "app": "Projects"

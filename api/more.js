@@ -28,7 +28,7 @@ const uploadGallery = uploads([GALLERY_DOC], { maxMb: 25 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = { forbidden: 403, not_found: 404, duplicate: 409 };
-const fail = (res, r) => res.status(CODE[r.error] || 422).json({ error: r.error || "failed" });
+const fail = (res, r, status) => res.status(CODE[r.error] || status || 422).json({ error: r.error || "failed" });
 
 function register(api, { pool }) {
   const managers = (req, res, next) => (isManager(req.session.broker) ? next() : res.status(403).json({ error: "forbidden" }));

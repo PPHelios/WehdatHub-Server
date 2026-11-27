@@ -297,7 +297,8 @@ function register(api, { pool }) {
     if (!(await RateLimit.apiGate(pool, res, `crm_write:broker:${broker.id}`, RateLimit.LIMITS.crmWriteBroker))) return;
     const expectedVersion = Number(req.body && req.body.version);
     if (!Number.isInteger(expectedVersion)) return res.status(400).json({ error: "version_required" });
-    const form = Form.unitFromForm(fieldsOf(req.body));
+    const fields = fieldsOf(req.body);
+    const form = Form.unitFromForm(fields);
     const saveKey = SaveKeys.keyOf(req.body);
     const t0 = Date.now();
     const out = await Edits.withCodeLock(pool, broker.agency_id, req.params.code, async (client) => {
