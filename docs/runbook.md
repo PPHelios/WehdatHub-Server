@@ -85,7 +85,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 
 ## 2. Render
 
-* **Blueprint:** `render.yaml` (web service `aqarchat`, Starter, Frankfurt, Node 22, `npm ci --omit=dev`, `npm start`, health check `/health`). Create the service from the blueprint, then fill the secrets.
+* **Blueprint:** `render.yaml` (web service `aqarchat`, Starter, Frankfurt, `npm ci --omit=dev`, `node scripts/render-forwarder.js`, health check `/health`). Since the move to OCI it only forwards `wehdathub.onrender.com` to `https://wehdathub.com`; keep its environment free of secrets (no `DATABASE_URL`, no `TELEGRAM_BOT_TOKEN`). **Resume restarts the last deploy unchanged:** after changing the start command, use Manual Deploy → Deploy latest commit.
 * **Deploys:** if auto-deploy is on for `main`, every merge to `main` goes live. A deploy is healthy when `/health` answers `{"status":"healthy"}`. During a deploy the old instance drains: webhooks get 503 (Meta retries) for up to 25 s.
 * **Sizing:** start on Starter. Move to Standard if the Metrics tab shows peak memory above about 400 MB for days.
 * **Logs:** Render → service → Logs. Lines are JSON (`level`, `msg`, `agencyId`, `brokerId`); phone numbers are masked and tokens redacted.

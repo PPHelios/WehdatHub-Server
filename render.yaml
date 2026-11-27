@@ -1,4 +1,7 @@
-# Render blueprint for the pilot (Starter plan). Secrets are set in the dashboard (sync: false).
+# Render blueprint after the move to OCI + Coolify (see Dockerfile): Render only forwards the old
+# https://wehdathub.onrender.com address (released app builds, links already sent) to https://wehdathub.com.
+# It holds no secrets: no database, no bot token, so it can never take the Telegram webhook or write data.
+# Delete this service once APP_MIN_VERSION forces the app build that talks to wehdathub.com directly.
 services:
   - type: web
     name: aqarchat
@@ -6,35 +9,10 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: npm ci --omit=dev
-    startCommand: npm start
+    startCommand: node scripts/render-forwarder.js
     healthCheckPath: /health
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: NODE_VERSION
         value: "24"
-      # glibc arena cap: flyer rendering peak RSS ~250 MB instead of ~410 MB (scripts/render-flyer-samples.js).
-      - key: MALLOC_ARENA_MAX
-        value: "2"
-      # Optional until the domain exists: without it the app uses Render's RENDER_EXTERNAL_URL
-      # (https://<service>.onrender.com). Set it to the real domain once one exists.
-      - key: PUBLIC_BASE_URL
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: WHATSAPP_APP_SECRET
-        sync: false
-      - key: WHATSAPP_VERIFY_TOKEN
-        sync: false
-      - key: TOKEN_ENCRYPTION_KEY
-        sync: false
-      - key: WHATSAPP_ACCESS_TOKEN
-        sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
+      - key: FORWARD_TO
+        value: https://wehdathub.com
