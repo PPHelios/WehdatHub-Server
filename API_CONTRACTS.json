@@ -1162,6 +1162,9 @@
       "assignCommand": ["broker", "params", "ctx"],
       "handleButton": ["broker", "id", "ctx"]
     },
+    "lib/memoCache.js": {
+      "createLru": ["params"]
+    },
     "lib/links.js": {
       "compareUrl": ["agencySlug", "token"],
       "viewingUrl": ["token"],
@@ -2621,6 +2624,9 @@
       "SNAPSHOT_MAX": "Number",
       "SEARCH_PROMPT": ["featureList"],
       "parseRequest": ["AI", "params"],
+      "parseStats": [],
+      "normalizeQuery": ["text"],
+      "parseCache": "Object",
       "SEARCH_STATUSES": "Array",
       "buildSearchQuery": ["agencyId", "parsedOrFilters", "params"],
       "countByStatus": ["pool", "agencyId", "parsed", "status", "fx"],
