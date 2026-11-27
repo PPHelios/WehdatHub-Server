@@ -24,6 +24,7 @@ const SearchLink = require("../domain/searchLink");
 const ViewGuard = require("../lib/viewGuard");
 const { formatInterpretation } = require("../lib/search");
 
+const Suggest = require("../domain/assistantSuggestions");
 const isManagerOrOwner = (b) => Authz.isManager(b);
 const isTeamLead = (b) => Authz.isTeamLead(b);
 const langOf = (b) => (b?.preferred_lang === "en" ? "en" : "ar");
@@ -1124,7 +1125,7 @@ async function runStuckBrokers(pool, actor, routeInfo, now, en) {
   };
 }
 
-async function query(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
+async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
   const en = langOf(actor) === "en";
   const lang = en ? "en" : "ar";
   const safeMode = Router.MODES.includes(mode) ? mode : "auto";
@@ -1150,11 +1151,22 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
       return {
         intent: "clarify",
         modeUsed: safeMode,
-        headline: en
-          ? "I didn't understand that question. Try asking about leads, viewings, team performance, or search for units."
-          : "مفهمتش السؤال ده. جرّب تسأل عن العملاء، المعاينات، أداء الفريق، أو ابحث عن وحدات.",
+        headline: en ? "I didn't get that one. Try one of these:" : "مفهمتش السؤال ده. جرّب واحدة من دول:",
         windowLabel: en ? "Clarification needed" : "وضّح طلبك",
         understood: { job: "clarify_question", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
+        cards: [],
+        actions: [],
+        links: [],
+        aiUsed: false
+      };
+    }
+    if (routeInfo.clarifyKind === "off_topic") {
+      return {
+        intent: "clarify",
+        modeUsed: safeMode,
+        headline: en ? "That's outside what I do. I help with units, clients and numbers — try one of these:" : "دي مش من شغلي للأسف. أنا بساعدك في الوحدات والعملاء والأرقام — جرّب واحدة من دول:",
+        windowLabel: "",
+        understood: { job: "off_topic", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
         cards: [],
         actions: [],
         links: [],
@@ -1399,7 +1411,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
       headline: en ? "No matching Resale units found" : "مفيش وحدات ريسيل مطابقة دلوقتي",
       windowLabel: reading,
       understood,
-      units: { status: "none", total: 0, counts, marketLock: effectiveMarketLock, sort, relaxed: Boolean(found.relaxed), reading, f, guesses, unapplied, ignoredTerms, items: [] },
+      units: { status: "none", total: 0, counts, statusCounts: counts, marketLock: effectiveMarketLock, sort, relaxed: Boolean(found.relaxed), reading, f, guesses, unapplied, ignoredTerms, items: [] },
       cards: [],
       suggestPrimary: true,
       actions: [
@@ -1422,6 +1434,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
       status: found.status === "ask" ? "ask" : "results",
       total,
       counts,
+      statusCounts: counts,
       marketLock: effectiveMarketLock,
       sort,
       relaxed: Boolean(found.relaxed),
@@ -1440,6 +1453,23 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
     nextContext: searchNextContext,
     aiUsed
   };
+}
+
+/** Every answer carries follow-up chips (domain/assistantSuggestions), so no reply is a dead end. */
+async function query(pool, params) {
+  const r = await queryInner(pool, params);
+  if (!r || r.error) return r;
+  const actor = params.actor;
+  const role = Authz.isDataEntry(actor) ? "data_entry" : isManagerOrOwner(actor) ? "manager" : isTeamLead(actor) ? "team_lead" : "broker";
+  const suggestions = Suggest.suggestionsFor({
+    intent: r.intent,
+    kind: r.intent === "unit_search" && r.units?.status === "none" ? "none" : undefined,
+    role,
+    lang: langOf(actor),
+    solo: !hasMultiBrokerScope(actor),
+    context: r.nextContext
+  });
+  return { ...r, suggestions };
 }
 
 module.exports = { query };

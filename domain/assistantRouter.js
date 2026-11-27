@@ -305,6 +305,9 @@ const EXCLUDE_RESALE_RE = /(?:^|\s)(?:no|not|exclude|without)\s+resale\b|مفي�
 const UNIT_RE = /\b(apartment|villa|townhouse|twin|duplex|penthouse|studio|chalet|resale|rent|sale|sqm|m2|bedroom|beds?|bath)\b|شقه|شقق|فيلا|فلل|دوبلكس|ستوديو|ريسيل|غرف|متر|مليون|تجمع|زايد|اكتوبر|مدينتي|رحاب|مراسي/;
 const UNIT_CODE_RE = /\b[a-z]{1,4}-?\d{2,}\b/i;
 const INVENTORY_COUNT_RE = /^(?:how many|count|total)\s+(?:available\s+)?(?:apartments?|villas?|units?|listings?|properties|studios?|duplex(?:es)?|townhouses?|penthouses?|chalets?)\b|^(?:كام|كم|عدد)\s+(?:شقه|شقق|فيلا|فلل|وحده|وحدات|دوبلكس|ستوديو|تاون|توين|بنتهاوس|شاليه)/;
+// Clearly not real estate. Guarded by UNIT_RE/PRIMARY_EXPLICIT_RE so "شقة قريبة من النادي" or a Zamalek flat still search.
+const OFF_TOPIC_RE = /\b(?:weather|forecast|temperature outside|football|soccer|match scores?|who won the (?:match|game)|world cup|premier league|jokes?|recipes?|how to cook|prayer times?|adhan|azan|(?:latest|breaking|today'?s) news|news headlines)\b|الطقس|درجه الحراره|الجو (?:ايه|عامل|حر|برد)|هتمطر|ماتش|كوره|نتيجه (?:الماتش|المباراه)|مباراه|(?:^|\s)(?:نكته|نكت)(?:\s|$)|اضحكني|وصفه|طريقه (?:عمل|تحضير|طبخ)|مواقيت الصلاه|مواعيد الصلاه|الاذان|اخبار (?:مصر|العالم|السياسه|الكوره|الفن)|نشره الاخبار/;
+const GREETING_RE = /^(?:hi|hello|hey|hola|good (?:morning|evening)|how are you|thanks|thank you|ازيك|ازايك|اخبارك|عامل ايه|عامله ايه|صباح الخير|مساء الخير|السلام عليكم|اهلا|اهلا وسهلا|مرحبا|هاي|شكرا|تسلم)(?:\s+(?:ايه|there|bot|assistant|team|all|everyone|باشا|ورحمه الله|يا\s+\S+))*$/;
 const DEALS_RE = /\bdeals?\b|صفقات|صفقه/;
 
 function parseMarketSignals(q) {
@@ -504,6 +507,11 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), pr
       }
       return { route: "clarify", clarifyKind: "missing_context", market: null, exclusions: [], preservedText: text };
     }
+  }
+
+  const plain = q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim();
+  if (GREETING_RE.test(plain) || (OFF_TOPIC_RE.test(q) && !UNIT_RE.test(q) && !UNIT_CODE_RE.test(q) && !PRIMARY_EXPLICIT_RE.test(q))) {
+    return { route: "clarify", clarifyKind: "off_topic", market: null, exclusions: [], preservedText: text };
   }
 
   const signals = parseMarketSignals(q);

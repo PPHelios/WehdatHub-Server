@@ -482,3 +482,18 @@ test("review fixes: Arabic alef disambiguation replace, Solo stuck-brokers guard
   expect(soloStuck.status).toBe(200);
   expect(soloStuck.body.intent).toBe("clarify");
 });
+
+test("every answer carries 1-3 suggestion chips; unknown and off-topic questions never dead-end", async () => {
+  const hdr = await auth("admin");
+  for (const q of ["what is the weather today", "who knows", "leads waiting over 1h", "3 bedroom apartment in New Cairo", "how many apartments", "slowest response time"]) {
+    const res = await api().post("/api/v1/assistant/query").set(hdr).send({ q, mode: "auto" });
+    expect(res.status).toBe(200);
+    expect(res.body.suggestions.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.suggestions.length).toBeLessThanOrEqual(3);
+    for (const s of res.body.suggestions) expect(s).toMatchObject({ label: expect.any(String), q: expect.any(String) });
+  }
+  const off = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "tell me a joke", mode: "auto" });
+  expect(off.body).toMatchObject({ intent: "clarify", understood: { job: "off_topic" } });
+  const unit = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "3 bedroom apartment in New Cairo", mode: "auto" });
+  expect(unit.body.units.statusCounts).toEqual(unit.body.units.counts);
+});
