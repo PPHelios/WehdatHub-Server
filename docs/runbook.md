@@ -30,6 +30,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `GEMINI_API_KEY` | yes | — | Production Gemini key (billing on, budget alert set). The eval never uses it. |
 | `SUPABASE_URL` | yes for photos | — | Storage project URL (public bucket `listing-images`; the old private bucket `chat-imports` from migration 026 is no longer used and can be deleted in the dashboard). Without it storage runs in a mock mode: photos are not kept. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes for photos | — | Storage key (server only; never in the browser). `SUPABASE_ANON_KEY` is a fallback. |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | no | (unset) | Cloudflare R2 storage. When **all five** are set, files go to R2 instead of Supabase Storage (see 2b); unset any one to roll back to Supabase. `R2_PUBLIC_URL` is the bucket's public address (custom domain or `r2.dev`), no trailing slash needed. The key pair is an R2 API token with Object Read & Write on that bucket (server only). |
+| `R2_JURISDICTION` | no | (unset) | `eu` for a bucket created in the EU jurisdiction (endpoint `<account>.eu.r2.cloudflarestorage.com`). |
 | `MALLOC_ARENA_MAX` | no | `2` (blueprint) | Keeps flyer rendering around 250 MB peak RSS. |
 | `PORT` | no | `3000` | Render sets it. |
 | `MIGRATE_ON_BOOT` | no | `true` | `false` skips migrations at start (then run `npm run migrate` by hand). |
@@ -87,6 +89,14 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 * **Sizing:** start on Starter. Move to Standard if the Metrics tab shows peak memory above about 400 MB for days.
 * **Logs:** Render → service → Logs. Lines are JSON (`level`, `msg`, `agencyId`, `brokerId`); phone numbers are masked and tokens redacted.
 * **Webhook URL in Meta:** `<PUBLIC_BASE_URL>/webhook`, verify token = `WHATSAPP_VERIFY_TOKEN`, field `messages`.
+* **Docker / Coolify (alternative to Render):** the root `Dockerfile` (`node:24-bookworm-slim`, multi-arch, so ARM64 servers work) runs `node server.js` as the `node` user on port 3000 with a `/health` check. Set the same env vars in Coolify, including `PUBLIC_BASE_URL` (there is no `RENDER_EXTERNAL_URL` fallback off Render). The disk is still treated as ephemeral: files go to Supabase or R2, never to the container.
+
+## 2b. Storage on R2
+
+* **Switch:** set all five `R2_*` settings (section 1). Object keys are the same as in Supabase (`listings/…`, `thumbs/…`, `<agency>/brand/…`), so the database is not rewritten. Old rows that still hold a full Supabase link (`…/storage/v1/object/public/listing-images/<key>`) are shown from R2 under the same key. Rollback: unset an `R2_*` setting and redeploy; files written to R2 meanwhile must be copied back by hand.
+* **Bucket access:** the bucket must be public for reading, through a custom domain (preferred; Cloudflare caches it) or the `r2.dev` address. `R2_PUBLIC_URL` is that address.
+* **CORS (needed for direct photo uploads from the website):** on the bucket, allow `PUT` from the site origin (`PUBLIC_BASE_URL`), allowed headers `content-type`, `cache-control`, `x-upsert`. The app does not need CORS. Signed upload links are presigned `PUT` URLs valid 2 hours that sign only the host.
+* **Copy existing files first:** `node --env-file=.env scripts/copy-storage-to-r2.js --dry-run`, then without `--dry-run`. It needs the Supabase and R2 settings, copies every object of `listing-images` one at a time under the same key and content type, skips keys already in R2 and prints counts only. Run it again right before switching, so files uploaded meanwhile are copied too.
 
 ## 3. Migrations
 

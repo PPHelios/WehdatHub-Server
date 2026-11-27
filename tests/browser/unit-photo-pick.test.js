@@ -162,7 +162,8 @@ test("a picked photo is uploaded only at Save, reduced in the browser; the form 
     if (req.method() === "PUT") {
       const body = req.postDataBuffer();
       const path = decodeURIComponent(new URL(req.url()).pathname.replace("/upload/sign/", ""));
-      puts.push({ path, size: body.length, jpeg: body.includes("image/jpeg") });
+      // The raw JPEG bytes with their type (what both a Supabase signed link and an R2 presigned PUT store as is).
+      puts.push({ path, size: body.length, jpeg: req.headers()["content-type"] === "image/jpeg" && body[0] === 0xff && body[1] === 0xd8 });
       Fake.objects.set(path, body);
     }
     await route.fulfill({ status: 200, headers: CORS, body: "{}" });

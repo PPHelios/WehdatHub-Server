@@ -23,7 +23,7 @@ const CSP = [
 
 /**
  * The policy, plus the origins the browser reads or writes directly in connect-src: the map file's address when MAP_TILES_URL is
- * set (read in ranges) and the storage project's address when SUPABASE_URL is set (photos go straight to storage).
+ * set (read in ranges) and the storage address when SUPABASE_URL or R2_ACCOUNT_ID is set (photos go straight to storage).
  */
 function cspWithMap() {
   const origins = [];
@@ -31,6 +31,8 @@ function cspWithMap() {
   if (tiles) origins.push(new URL(tiles).origin);
   try {
     if (process.env.SUPABASE_URL) origins.push(new URL(process.env.SUPABASE_URL).origin);
+    // R2 signed uploads go to the S3 endpoint (same host rule as lib/supabase.js).
+    if (process.env.R2_ACCOUNT_ID) origins.push(`https://${process.env.R2_ACCOUNT_ID}${process.env.R2_JURISDICTION ? "." + process.env.R2_JURISDICTION : ""}.r2.cloudflarestorage.com`);
   } catch {
     /* a malformed address adds nothing */
   }
