@@ -23,10 +23,15 @@ const LEXICON = {
   "3o2od": "عقود", egar: "ايجار", igar: "ايجار", ejar: "ايجار", bay3: "بيع", lelbay3: "للبيع",
   milyon: "مليون", melyon: "مليون", alf: "الف", gineh: "جنيه", fila: "فيلا", dublex: "دوبلكس",
   sho8l: "شغل", "3ayez": "عايز", "3ayz": "عايز", "3ayza": "عايزه", "3andy": "عندي", "3ndy": "عندي", "3andena": "عندنا", "3ndna": "عندنا",
-  lesa: "لسه", matkalemoosh: "متكلموش", men: "من", "3ala": "على", ma3: "مع", w: "و", el: "", al: ""
+  lesa: "لسه", matkalemoosh: "متكلموش", men: "من", "3ala": "على", ma3: "مع", w: "و", el: "", al: "",
+  esboo3: "اسبوع", gay: "الجاي", gaay: "الجاي", gai: "الجاي", elly: "اللي", ellie: "اللي", eli: "اللي", elli: "اللي",
+  bnkhsar: "بنخسر", bnkhsr: "بنخسر", bnekhsar: "بنخسر", btrou7: "بتروح", btro7: "بتروح", btrooh: "بتروح",
+  "2adema": "قديمه", "2adeema": "قديمه", "2adim": "قديم", wa7dat: "وحدات", wa7da: "وحده", wa7da2: "وحدات", wa7det: "وحدات", wehdat: "وحدات",
+  mat7adasetsh: "متحدثتش", mat7adsh: "متحدثتش", mat7dtsh: "متحدثتش", mat7adasatsh: "متحدثتش",
+  "3ayzeen": "عايزين", "3ayzin": "عايزين", "3awzeen": "عايزين", me7tageen: "محتاجين", m7tageen: "محتاجين"
 };
 // Words that alone do not prove the text is Franco (they are valid English/Latin on their own).
-const WEAK = new Set(["fi", "fe", "fee", "fel", "fil", "da", "dah", "dy", "ay", "eh", "kam", "men", "w", "el", "al", "broker", "brokers", "million", "villa", "duplex", "alf", "leh", "meen", "fen", "fein", "shahr", "oda", "zayed", "sheikh", "dublex"]);
+const WEAK = new Set(["fi", "fe", "fee", "fel", "fil", "da", "dah", "dy", "ay", "eh", "kam", "men", "w", "el", "al", "broker", "brokers", "million", "villa", "duplex", "alf", "leh", "meen", "fen", "fein", "shahr", "oda", "zayed", "sheikh", "dublex", "gay", "gai", "elly", "eli", "elli", "ellie"]);
 const DIGIT_WORD = /[a-z]/i;
 
 function toArabic(text) {

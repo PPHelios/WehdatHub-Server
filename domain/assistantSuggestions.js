@@ -25,6 +25,7 @@ const POOL = {
   winloss: ["ليه بنخسر؟", "ليه بنخسر الصفقات", "Why do we lose?", "win rate", ""],
   commissions: ["العمولات", "عمولات المطورين", "Commissions", "developer commissions", ""],
   stale: ["وحدات محتاجة تحديث", "الوحدات اللي متحدثتش", "Stale units", "stale units", ""],
+  whowants: ["مين عايز شقة في التجمع؟", "مين من العملاء عايز شقة في التجمع", "Who wants New Cairo apartments?", "which clients want an apartment in New Cairo", ""],
   leases: ["إيجارات هتخلص", "ايجارات هتخلص", "Leases ending", "leases ending soon", ""]
 };
 
@@ -49,7 +50,8 @@ const NEXT = {
   crm_sources: ["winloss", "deals", "lastMonth"],
   crm_leases: ["brief", "deals", "viewings"],
   not_for_role: ["mystats", "waiting", "viewings"],
-  crm_viewings: ["waiting", "overdue", "brief"]
+  crm_viewings: ["waiting", "overdue", "brief"],
+  crm_client_matches: ["units", "waiting", "overdue"]
 };
 const DEFAULTS = {
   manager: ["brief", "waiting", "units", "deals"],

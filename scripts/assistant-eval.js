@@ -28,14 +28,20 @@ async function independentCount(pool, actor, kind, windowInfo, now) {
   if (kind === "viewings") {
     if (!windowInfo?.from || !windowInfo?.to) return null;
     const win = [new Date(windowInfo.from).toISOString(), new Date(windowInfo.to).toISOString()];
-    // The assistant counts leads with an open "viewing" next step in the window (booked from the app, the bot or the calendar).
-    const steps = await q(`SELECT count(*)::int AS n FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing'
-      AND l.stage NOT IN ('won', 'lost') AND l.next_follow_up_at >= $${n + 1} AND l.next_follow_up_at < $${n + 2}/*scope*/`, win);
-    // Every calendar viewing (viewings table) of those leads must be inside that number: the calendar can never show more.
-    const cal = await q(`SELECT count(DISTINCT l.id)::int AS n FROM viewings v JOIN leads l ON l.id = v.lead_id AND l.agency_id = v.agency_id
-      WHERE ${Vis.leads("l")} AND v.agency_id = $1 AND v.status = ANY($${n + 3}) AND l.stage NOT IN ('won', 'lost')
-        AND v.starts_at >= $${n + 1} AND v.starts_at < $${n + 2}/*scope*/`, [...win, require("../services/viewings").OPEN]);
-    return { want: steps, atLeast: cal };
+    const OPEN = require("../services/viewings").OPEN;
+    // Booked = leads with an open row in the viewings table (what the Calendar lists), counted from that table and from every in-scope broker's Calendar list.
+    const booked = await q(`SELECT count(DISTINCT l.id)::int AS n FROM viewings v JOIN leads l ON l.id = v.lead_id AND l.agency_id = v.agency_id
+      WHERE ${Vis.leads("l")} AND v.agency_id = $1 AND v.status = ANY($${n + 3}) AND v.starts_at >= $${n + 1} AND v.starts_at < $${n + 2}/*scope*/`, [...win, OPEN]);
+    const confirmed = await q(`SELECT count(DISTINCT l.id)::int AS n FROM viewings v JOIN leads l ON l.id = v.lead_id AND l.agency_id = v.agency_id
+      WHERE ${Vis.leads("l")} AND v.agency_id = $1 AND v.status = 'confirmed' AND v.starts_at >= $${n + 1} AND v.starts_at < $${n + 2}/*scope*/`, win);
+    const ids = manager ? (await pool.query("SELECT * FROM brokers WHERE agency_id = $1 AND is_active", [actor.agency_id])).rows : [actor];
+    let calendar = 0;
+    for (const b of ids) calendar += (await require("../services/viewings").listForBroker(pool, b, { from: new Date(win[0]), to: new Date(win[1]) })).length;
+    // Planned = an open viewing follow-up in the window with no open booking at all.
+    const planned = await q(`SELECT count(*)::int AS n FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing'
+      AND l.stage NOT IN ('won', 'lost') AND l.next_follow_up_at >= $${n + 1} AND l.next_follow_up_at < $${n + 2}
+      AND NOT EXISTS (SELECT 1 FROM viewings o WHERE o.agency_id = l.agency_id AND o.lead_id = l.id AND o.status = ANY($${n + 3}))/*scope*/`, [...win, OPEN]);
+    return { want: booked + planned, split: { booked, confirmed, planned }, calendar };
   }
   if (kind === "approaching_sla") {
     const rules = await require("../services/leadRules").getRules(pool, actor.agency_id);
@@ -54,6 +60,22 @@ async function independentCount(pool, actor, kind, windowInfo, now) {
   return undefined;
 }
 
+/** Clients with an open saved request of this type + place, in what the actor may see (own leads unless managers or the agency switch is on). */
+async function independentClientMatches(pool, actor, { types, place, bedsMin = 0, bedsMax = 1e9, priceMin = 0, priceMax = 1e12 }) {
+  const manager = ["owner", "manager", "admin"].includes(actor.role);
+  const sw = (await pool.query("SELECT crm_settings->>'brokers_see_all_leads' AS v FROM agencies WHERE id = $1", [actor.agency_id])).rows[0]?.v;
+  const args = [actor.agency_id, types[0], JSON.stringify([{ kind: "area", key: place }]), bedsMin, bedsMax, priceMin, priceMax];
+  let scope = "";
+  if (!manager && sw === "false") { args.push(actor.id); scope = " AND l.assigned_broker_id = $8"; }
+  const Vis = require("../lib/visibility");
+  const { rows } = await pool.query(`SELECT count(DISTINCT l.id)::int AS n FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
+    WHERE ${Vis.leads("l")} AND s.agency_id = $1 AND s.fulfilled_at IS NULL AND l.stage NOT IN ('won', 'lost')
+      AND s.filters->'property_types' ? $2 AND s.filters->'places' @> $3::jsonb
+      AND COALESCE((s.filters->>'bedrooms_max')::numeric, 1e9) >= $4::numeric AND COALESCE((s.filters->>'bedrooms_min')::numeric, 0) <= $5::numeric
+      AND COALESCE((s.filters->>'price_max')::numeric, 1e12) >= $6::numeric AND COALESCE((s.filters->>'price_min')::numeric, 0) <= $7::numeric${scope}`, args);
+  return rows[0].n;
+}
+
 /**
  * Runs the fixture and returns { results: [{ ok, role, intent, q, reason }], failed }.
  * actors: { owner, manager, broker1 } broker rows. AI: the lib/ai module (or a fake).
@@ -68,7 +90,7 @@ async function run({ pool, actors, fixture, AI, only = null }) {
 
   const ask = (actor, q) => AssistantQuery.query(pool, { AI, actor, agency: null, text: q, mode: "auto" });
   const jobs = [];
-  for (const i of fixture.intents || []) if (!only || i.id === only) for (const q of i.questions) jobs.push({ kind: "intent", id: i.id, expect: i.expect || {}, brokerExpect: i.brokerExpect, q });
+  for (const i of fixture.intents || []) if (!only || i.id === only) for (const q of i.questions) jobs.push({ kind: "intent", id: i.id, expect: i.expect || {}, brokerExpect: i.brokerExpect, eval: i.eval, q });
   for (const u of fixture.unitSearches || []) if (!only || only === "unitSearches") jobs.push({ kind: "unit", id: "unit_search", expect: u.expect || {}, q: u.q });
   for (const q of fixture.offTopic || []) if (!only || only === "offTopic") jobs.push({ kind: "off", id: "off_topic", expect: {}, q });
 
@@ -80,6 +102,7 @@ async function run({ pool, actors, fixture, AI, only = null }) {
       const bad = [];
       if (expect.route && r.route !== expect.route) bad.push(`route ${r.route} != ${expect.route}`);
       if (expect.queueHint && r.queueHint !== expect.queueHint) bad.push(`queue ${r.queueHint || "-"} != ${expect.queueHint}`);
+      if (expect.clarifyKind && r.clarifyKind !== expect.clarifyKind) bad.push(`clarify ${r.clarifyKind || "-"} != ${expect.clarifyKind}`);
       if (expect.windowKey && r.windowInfo?.key !== expect.windowKey) bad.push(`window ${r.windowInfo?.key || "-"} != ${expect.windowKey}`);
       if (bad.length) add(false, "router", r.route, q, bad.join("; "));
     }
@@ -104,6 +127,26 @@ async function run({ pool, actors, fixture, AI, only = null }) {
         if (crm && intent === "unit_search") bad.push("CRM question became a unit search");
         else if (intent === "clarify" && expect.route !== "clarify" && !a.notForRole) bad.push("got clarify");
         if (expect.route === "crm_leads" && intent !== "crm_leads") bad.push(`intent ${intent}`);
+        if (expect.clarifyKind) {
+          if (a?.clarifyKind !== expect.clarifyKind) bad.push(`clarifyKind ${a?.clarifyKind} != ${expect.clarifyKind}`);
+          if (a?.suggestions?.length !== 2 || !/^وحدات: /.test(a.suggestions[0]?.q || "") || !/^عملاء: /.test(a.suggestions[1]?.q || "")) bad.push("clarify chips are not the two prefixed choices");
+        }
+        if (expect.route === "crm_client_matches") {
+          const cm = a?.cards?.find((c) => c.kind === "client_matches");
+          if (intent !== "crm_client_matches" || !cm) bad.push(`intent ${intent}, no client_matches card`);
+          else {
+            if (/2010000d{5}/.test(JSON.stringify(a))) bad.push("a phone number is in the answer");
+            if (job.eval?.clientMatches) {
+              const want = await independentClientMatches(pool, actor, job.eval.clientMatches);
+              if (Number(cm.total) !== want) bad.push(`count ${cm.total} != independent SQL ${want} (client_matches)`);
+            }
+            // The seeded request that fits nothing must say 0 matching units; the ones that fit must say 1 or more.
+            for (const it of cm.items) {
+              if (it.name === "QA Wants cheap NC" && it.matchCount !== 0) bad.push(`matchCount ${it.matchCount} != 0 for the request that fits nothing`);
+              if (it.name === "QA Wants apartment NC" && !(it.matchCount >= 1)) bad.push("matchCount 0 for a request that fits seeded units");
+            }
+          }
+        }
         if (a?.notForRole) {
           if (role === "owner" || role === "manager") bad.push("owner/manager got a role decline");
           else if (!a.headline || !a.suggestions?.length) bad.push("role decline without text or suggestions");
@@ -115,7 +158,10 @@ async function run({ pool, actors, fixture, AI, only = null }) {
             const want = await independentCount(pool, actor, kindOf, r.windowInfo, new Date());
             const exact = want?.want ?? want;
             if (exact != null && Number(card.total) !== exact) bad.push(`count ${card.total} != independent SQL ${exact} (${kindOf})`);
-            if (want?.atLeast > Number(card.total)) bad.push(`count ${card.total} < calendar viewings ${want.atLeast}`);
+            if (want?.split) {
+              if (stable(card.split) !== stable(want.split)) bad.push(`split ${JSON.stringify(card.split)} != independent SQL ${JSON.stringify(want.split)}`);
+              if (want.calendar !== card.split?.booked) bad.push(`booked ${card.split?.booked} != Calendar lists ${want.calendar}`);
+            }
           } else {
             const list = await Leads.listLeads(pool, actor, { queue: card.queue, limit: 1, offset: 0 });
             if (Number(list.total) !== Number(card.total)) bad.push(`count ${card.total} != app list ${list.total} (${card.queue})`);

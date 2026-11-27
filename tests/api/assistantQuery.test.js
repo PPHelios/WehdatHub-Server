@@ -636,3 +636,73 @@ test("role-limited reports answer with a role message and the broker's own short
   expect(r.headline).toMatch(/managers/i);
   expect(r.suggestions.map((s) => s.q)).toContain("my stats this month");
 });
+
+describe("clients who want X (crm_client_matches)", () => {
+  async function seedRequests() {
+    const LeadRequests = require("../../services/leadRequests");
+    const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+    const mk = async (phone, name, to, filters) => {
+      const lead = (await Leads.captureLead(h.pool, admin, { phones: phone, name, assignTo: to.id })).lead;
+      const r = await LeadRequests.saveRequest(h.pool, admin, lead.id, filters);
+      expect(r.ok).toBe(true);
+      return lead;
+    };
+    await mk("01077770001", "Apt Client", h.BROKERS.broker, { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }] });
+    await mk("01077770002", "Villa Client", h.BROKERS.colleague, { property_types: ["villa"], places: [{ kind: "area", key: "sheikh_zayed" }] });
+  }
+  const ask = (hdr, q) => api().post("/api/v1/assistant/query").set(hdr).send({ q, mode: "auto" });
+
+  test("manager sees every matching client, no phones, card contract fields", async () => {
+    await seedRequests();
+    const res = await ask(await auth("admin"), "which clients want an apartment in new cairo");
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ intent: "crm_client_matches", aiUsed: false });
+    expect(res.body.suggestions.length).toBeGreaterThanOrEqual(1);
+    const card = res.body.cards.find((c) => c.kind === "client_matches");
+    expect(card).toMatchObject({ total: 1, queue: null });
+    expect(card.items[0]).toMatchObject({ ref: expect.stringMatching(/^L-\d+$/), name: "Apt Client", brokerId: h.BROKERS.broker.id, wants: expect.any(String), matchCount: expect.any(Number) });
+    expect(JSON.stringify(res.body)).not.toMatch(/0107777|2010777/);
+    const all = await ask(await auth("admin"), "clients looking for something");
+    expect(all.body.cards[0].total).toBe(2);
+  });
+
+  test("a broker only sees their own clients when the agency switch is off; Arabic and prefix routes work", async () => {
+    await seedRequests();
+    await h.query("UPDATE agencies SET crm_settings = crm_settings || '{\"brokers_see_all_leads\": false}'::jsonb WHERE id = $1", [h.AGENCY_A]);
+    const hdr = await auth("broker");
+    const own = await ask(hdr, "مين من العملاء عايز شقة في التجمع");
+    expect(own.body.cards[0].total).toBe(1);
+    const other = await ask(hdr, "عملاء: فيلا في زايد");
+    expect(other.body.intent).toBe("crm_client_matches");
+    expect(other.body.cards[0].total).toBe(0);
+  });
+
+  test("bedrooms and price must overlap; an empty request range still matches", async () => {
+    const LeadRequests = require("../../services/leadRequests");
+    const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+    const nc = { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }] };
+    const reqs = { "Three Bed": { ...nc, bedrooms_min: 3, bedrooms_max: 4 }, "Two Bed Small": { ...nc, bedrooms_min: 2, bedrooms_max: 2, price_max: 3000000 }, "Luxury": { ...nc, price_min: 12000000 }, "Open": nc };
+    let n = 0;
+    for (const [name, f] of Object.entries(reqs)) {
+      const lead = (await Leads.captureLead(h.pool, admin, { phones: `0107777100${n++}`, name, assignTo: h.BROKERS.broker.id })).lead;
+      expect((await LeadRequests.saveRequest(h.pool, admin, lead.id, f)).ok).toBe(true);
+    }
+    const hdr = await auth("admin");
+    const names = async (q) => (await ask(hdr, q)).body.cards[0].items.map((i) => i.name).sort();
+    expect(await names("which clients want a 3 bedroom apartment in new cairo")).toEqual(["Luxury", "Open", "Three Bed"]);
+    expect(await names("which clients want an apartment in new cairo under 9 million")).toEqual(["Open", "Three Bed", "Two Bed Small"]);
+  });
+
+  test("ambiguous wording asks which one, with exactly two prefixed chips; a client-wants wording stays a unit search", async () => {
+    const hdr = await auth("admin");
+    const mixed = await ask(hdr, "clients apartment new cairo");
+    expect(mixed.body).toMatchObject({ intent: "clarify", clarifyKind: "units_or_clients" });
+    expect(mixed.body.suggestions).toEqual([
+      { label: "Find units", q: "وحدات: clients apartment new cairo" },
+      { label: "Show clients", q: "عملاء: clients apartment new cairo" }
+    ]);
+    expect((await ask(hdr, mixed.body.suggestions[0].q)).body.intent).toBe("unit_search");
+    expect((await ask(hdr, mixed.body.suggestions[1].q)).body.intent).toBe("crm_client_matches");
+    expect((await ask(hdr, "my client wants an apartment in new cairo")).body.intent).toBe("unit_search");
+  });
+});

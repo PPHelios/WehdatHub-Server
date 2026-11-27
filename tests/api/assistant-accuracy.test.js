@@ -76,10 +76,15 @@ const TAGS = {
   uncontacted: ["wait", "appr", "fresh", "unas"],
   approaching: ["appr"],
   opened: ["opened"],
-  vToday: ["vtoday"],
+  vToday: ["vtoday", "vconf", "vplan"],
   vTomorrow: ["vtomorrow"],
-  vNextWeek: ["vtoday", "vtomorrow", "vnext"] // "next week" is the next 7 days from today
+  vNextWeek: ["vtoday", "vconf", "vplan", "vtomorrow", "vnext"] // "next week" is the next 7 days from today
 };
+// Viewings split: booked = on the Calendar (vtoday leads also carry a follow-up: still one viewing), confirmed = the client said yes, planned = follow-up only.
+const BOOKED = { vToday: ["vtoday", "vconf"], vTomorrow: ["vtomorrow"], vNextWeek: ["vtoday", "vconf", "vtomorrow", "vnext"] };
+const CONFIRMED = { vToday: ["vconf"], vTomorrow: [], vNextWeek: ["vconf"] };
+const PLANNED = { vToday: ["vplan"], vTomorrow: [], vNextWeek: ["vplan"] };
+const stuck = (b) => b.cards.find((c) => c.kind === "stuck_leads");
 const cal = () => S.cal;
 const inWindow = {
   today: (d) => D.ymdOf(d) === cal().today,
@@ -170,15 +175,26 @@ test("1. Truth: every count in an answer equals the seeded count and what the sc
     expect(body.intent).toBe("crm_viewings");
     expect(metrics(body)[0].value).toBe(count("manager", TAGS[key]));
     expect(queueTotal(body)).toBe(count("manager", TAGS[key]));
+    expect(stuck(body).split).toEqual({ booked: count("manager", BOOKED[key]), confirmed: count("manager", CONFIRMED[key]), planned: count("manager", PLANNED[key]) });
+    expect(stuck(body).queue).toBeNull();
+    for (const it of stuck(body).items) {
+      const lead = S.leads.find((l) => l.name === it.name);
+      const state = PLANNED[key].includes(lead.tag) ? "planned" : CONFIRMED[key].includes(lead.tag) ? "confirmed" : "booked";
+      expect(it.viewingState).toBe(state);
+      expect(typeof it.at).toBe("string");
+      if (state === "planned") expect(it.action).toEqual({ kind: "book_viewing", ref: it.ref, at: it.at });
+      else expect(it.action).toBeUndefined();
+      expect(it).toHaveProperty("lastAutoReminderAt", null);
+    }
     let calendars = 0;
     for (const who of ["b1", "b2", "b3"]) {
       const [from, to] = windows[key];
       const cal1 = await get(who, `/api/v1/viewings?from=${from.toISOString()}&to=${to.toISOString()}`);
-      const mine = metrics(await ask(who, q))[0].value;
-      expect(mine).toBe(cal1.items.length); // the broker's answer == the broker's calendar
+      const mine = stuck(await ask(who, q))?.split.booked ?? 0;
+      expect(mine).toBe(cal1.items.length); // the broker's booked viewings == the broker's calendar
       calendars += cal1.items.length;
     }
-    expect(calendars).toBe(count("manager", TAGS[key]));
+    expect(calendars).toBe(count("manager", BOOKED[key]));
   }
 
   // Deals: this month / last month, with commission and volume.
@@ -362,8 +378,27 @@ test("6. Windows follow Cairo days: a lead or deal at 23:30 and at 00:30 lands o
   const vTomorrow = await ask("manager", "viewings tomorrow");
   const refs = (b) => b.cards.find((c) => c.kind === "stuck_leads").items.map((i) => i.name).sort();
   const names = (tag) => S.leads.filter((l) => l.tag === tag).map((l) => l.name);
-  expect(refs(vToday)).toEqual(names("vtoday").sort());
+  expect(refs(vToday)).toEqual([...names("vtoday"), ...names("vconf"), ...names("vplan")].sort());
   expect(refs(vTomorrow)).toEqual(names("vtomorrow").sort());
+});
+
+test("7. Tap-through: every card queue opens the exact list the card shows (first page), and the card carries the last automatic reminder", async () => {
+  const stamp = new Date(Date.now() - 3600000).toISOString();
+  const waiting = S.leads.find((l) => l.tag === "wait");
+  await h.query("UPDATE leads SET follow_up_reminded_at = $2, nudged_at = $3 WHERE ref = $1", [waiting.ref, new Date(Date.now() - 7200000).toISOString(), stamp]);
+  const ids = (body) => stuck(body).items.map((i) => i.ref);
+  for (const who of ["manager", "tl1", "b1"]) {
+    for (const { q } of QUEUES.filter((x) => x.intent !== "crm_viewings")) {
+      const body = await ask(who, q);
+      const card = stuck(body);
+      expect({ who, q, queue: typeof card.queue }).toEqual({ who, q, queue: "string" });
+      const list = await get(who, `/api/v1/leads?queue=${card.queue}`);
+      expect({ who, q, refs: list.items.slice(0, card.items.length).map((i) => i.ref), total: list.total }).toEqual({ who, q, refs: ids(body), total: card.total });
+    }
+  }
+  const items = stuck(await ask("manager", "waiting over 1h")).items;
+  expect(items.find((i) => i.ref === `L-${waiting.ref}`)?.lastAutoReminderAt).toBe(stamp);
+  expect(items.filter((i) => i.ref !== `L-${waiting.ref}`).every((i) => i.lastAutoReminderAt === null)).toBe(true);
 });
 
 test("no client name or phone reached the logs", () => {

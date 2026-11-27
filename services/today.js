@@ -208,6 +208,42 @@ function summarizeIntake(channels = []) {
 /** Things that need a decision: every high or medium item (low ones are housekeeping). */
 const decisionsOf = (priorities) => priorities.filter((p) => p.urgency !== "low").length;
 
+// Home cards that are one lead queue: the list that card opens, so the top lead is the first one of that list.
+const QUEUE_OF = { unassigned: { queue: "unassigned" }, "waiting-over-1h": { queue: "waiting-over-1h" }, "uncontacted-old": { queue: "delayed-first-contact" }, overdue: { queue: "overdue" }, "new-leads": { queue: "uncontacted" } };
+
+/** Adds canNudge / canAssign (same rules as the assistant cards) and the top lead to the home cards that are a lead queue. */
+async function withLeadActions(pool, viewer, priorities, now) {
+  const Leads = require("./leads");
+  const LeadRules = require("./leadRules");
+  const lead = Authz.isManager(viewer) || Authz.isTeamLead(viewer);
+  const canAssign = lead && (!viewer.workspace || Segments.allows(viewer.workspace, "assignLeads"));
+  const canNudge = lead && (!viewer.workspace || Segments.allows(viewer.workspace, "seeAll"));
+  let brokers = null;
+  const recommend = async (holderId) => {
+    if (!canAssign) return null;
+    brokers ||= (await LeadRules.routingList(pool, viewer.agency_id)).brokers;
+    const nowMs = now.getTime();
+    const ok = brokers.filter((b) => (!b.away_until || new Date(b.away_until).getTime() <= nowMs) && (!Authz.isTeamLead(viewer) || Authz.isManager(viewer) || b.id === viewer.id || b.team_lead_id === viewer.id));
+    const pick = (ok.filter((b) => b.id !== holderId).length ? ok.filter((b) => b.id !== holderId) : ok)
+      .sort((a, b) => Number(a.open_leads || 0) - Number(b.open_leads || 0) || a.name.localeCompare(b.name))[0];
+    return pick ? { id: pick.id, name: pick.name } : null;
+  };
+  const stamps = ["follow_up_reminded_at", "nudged_at", "interest_nudged_at", "post_viewing_nudged_at", "link_silence_nudged_at", "sla_warning_sent_at"];
+  return Promise.all(priorities.map(async (p) => {
+    const q = QUEUE_OF[p.id];
+    if (!q) return p;
+    const { rows } = await Leads.listLeads(pool, viewer, { ...q, limit: 1 }, { now });
+    const l = rows?.[0];
+    const times = l ? stamps.map((k) => l[k]).filter(Boolean).map((d) => new Date(d).getTime()) : [];
+    return {
+      ...p,
+      canNudge,
+      canAssign,
+      ...(l ? { lead: { ref: refLabel(l.ref), version: Number(l.version || 1), assigneeId: l.assigned_broker_id || null, lastAutoReminderAt: times.length ? new Date(Math.max(...times)).toISOString() : null, recommendedBroker: await recommend(l.assigned_broker_id) } } : {})
+    };
+  }));
+}
+
 /** Search home, scoped independently of the displayed mobile role. */
 async function home(pool, viewer, now = new Date()) {
   const { hour } = Digest.cairoDay(now);
@@ -301,12 +337,13 @@ async function home(pool, viewer, now = new Date()) {
     stuckLeads,
     lang
   });
+  const richPriorities = await withLeadActions(pool, viewer, priorities, now);
   return {
     summary: { decisions: decisionsOf(priorities) },
     hour, ops, tomorrowViewings, completed: progress?.rows[0].n,
     overdue, calls, newLeads, nextViewing,
     waitingOver1h, missingPhotos, intake, approvals, commissions, leasesSoon,
-    priorities
+    priorities: richPriorities
   };
 }
 

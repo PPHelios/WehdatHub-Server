@@ -18,6 +18,7 @@ const phoneOf = (n) => `2010000${String(10000 + n).slice(-5)}`; // 12 digits, fa
 /** Removes what an earlier run made (only rows tagged as QA). */
 async function cleanOwned(pool, agencyId) {
   const qa = "SELECT id FROM leads WHERE agency_id = $1 AND name LIKE 'QA %' AND phone_e164 LIKE '2010000%'";
+  await pool.query(`DELETE FROM saved_searches WHERE agency_id = $1 AND lead_id IN (${qa})`, [agencyId]);
   await pool.query(`DELETE FROM deals WHERE agency_id = $1 AND lead_id IN (${qa})`, [agencyId]);
   await pool.query(`DELETE FROM viewings WHERE agency_id = $1 AND lead_id IN (${qa})`, [agencyId]);
   await pool.query(`DELETE FROM lead_events WHERE agency_id = $1 AND lead_id IN (${qa})`, [agencyId]);
@@ -185,6 +186,21 @@ async function seed(pool, agencyId) {
         await pool.query("UPDATE deals SET closed_at = $2, created_at = $2 WHERE agency_id = $1 AND idem_key = $3", [agencyId, when.toISOString(), `qa-seed-${d}`]);
       }
     }
+  }
+  // Clients with a saved request ("who wants X"): two fit the seeded New Cairo / Zayed units, one fits nothing.
+  const LeadRequests = require("../services/leadRequests");
+  const wants = [
+    ["Wants apartment NC", owners[0], { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }] }],
+    ["Wants villa Zayed", owners[1], { property_types: ["villa"], places: [{ kind: "area", key: "sheikh_zayed" }] }],
+    ["Wants 3bed NC", owners[1], { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }], bedrooms_min: 3, bedrooms_max: 4, price_max: 12_000_000 }],
+    ["Wants 2bed NC", owners[0], { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }], bedrooms_min: 2, bedrooms_max: 2, price_max: 3_000_000 }],
+    ["Wants luxury NC", owners[1], { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }], price_min: 12_000_000 }],
+    ["Wants cheap NC", owners[0], { property_types: ["apartment"], places: [{ kind: "area", key: "new_cairo" }], price_max: 1_000 }]
+  ];
+  for (const [name, to, filters] of wants) {
+    const w = await lead(name, { to, stage: "contacted", contacted: true, ageH: 30 });
+    const r = await LeadRequests.saveRequest(pool, a.manager, w.id, filters);
+    if (r.error) throw new Error(`QA request "${name}": ${r.error}`);
   }
   return { removed, leads: ids.length, units: units.length, deals: d, teamLead: !!a.teamLead };
 }

@@ -157,11 +157,16 @@ test("home priorities rank Waiting > 1h, intake alerts, and missing photos witho
   expect(mgrRes.status).toBe(200);
   expect(mgrRes.body).toMatchObject({ waitingOver1h: 1, missingPhotos: 1, intake: { disconnected: 1, failed: 0 } });
   expect(mgrRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h", "intake"]);
+  const [mgrWaiting, mgrIntake] = mgrRes.body.priorities;
+  expect(mgrWaiting).toMatchObject({ canNudge: true, canAssign: true, lead: { ref: lead.lead.ref ? expect.any(String) : expect.any(String), version: expect.any(Number), assigneeId: broker.id, lastAutoReminderAt: null } });
+  expect(JSON.stringify(mgrWaiting.lead)).not.toContain("0105555");
+  expect(mgrIntake).not.toHaveProperty("lead");
 
   const authBroker = { Authorization: `Bearer ${await token("broker")}` };
   const brokerRes = await request(h.app.app).get("/api/v1/today/home").set(authBroker);
   expect(brokerRes.status).toBe(200);
   expect(brokerRes.body.priorities.map((p) => p.id)).toEqual(["waiting-over-1h"]);
+  expect(brokerRes.body.priorities[0]).toMatchObject({ canNudge: false, canAssign: false });
   // Uncontacted leads under 1h are distinct from waiting-over-1h; with 0 fresh remaining, new-leads is omitted.
   expect(brokerRes.body.newLeads).toBe(1);
   expect(admin.role).toBe("admin");

@@ -69,6 +69,9 @@ function specs(now = new Date()) {
   const day = (n) => new Date(midnightOf(addDays(cal.today, n)).getTime() + 10 * HOUR);
   n3("vtoday", "broker", 1, { stage: "viewing", view: endToday, source: "Facebook" });
   n3("vtoday", "colleague", 1, { stage: "viewing", view: endToday, source: "Facebook" });
+  // A booking the client confirmed, and a viewing noted only as a follow-up (no booking). vtoday leads have both a follow-up and a booking: one viewing each.
+  n3("vconf", "broker", 1, { stage: "viewing", view: endToday, confirm: true, source: "Referral" });
+  n3("vplan", "colleague", 1, { stage: "viewing", fu: { kind: "viewing", at: endToday }, source: "Referral" });
   n3("vtomorrow", "broker", 1, { stage: "viewing", view: day(1), source: "Website" });
   n3("vtomorrow", "b3", 2, { stage: "viewing", view: day(1), source: "Referral" });
   n3("vnext", "colleague", 2, { stage: "viewing", view: day(4), source: "Website" });
@@ -162,6 +165,7 @@ async function seed(h, now = new Date()) {
       const row = (await pool.query("SELECT * FROM brokers WHERE id = $1", [assignee])).rows[0];
       const r = await Viewings.schedule(pool, row, l.id, { at: l.view, now });
       if (!r.ok) throw new Error(`viewing seed failed: ${r.error}`);
+      if (l.confirm) await pool.query("UPDATE viewings SET status = 'confirmed' WHERE id = $1", [r.viewing.id]);
     }
   }
 

@@ -251,6 +251,35 @@ test("manual lead nudge notifies assigned broker with 1-tap buttons, enforces te
   expect((await call("admin", "post", `/leads/${unassigned.ref}/nudge`)).status).toBe(422);
 });
 
+test("broker nudge: manager or the broker's team lead only, 204, counts in the message without names, 1 per broker per 2h, 404 outside scope", async () => {
+  const brokerId = h.BROKERS.broker.id;
+  const lead = (await call("broker", "post", "/leads", { phone1: "01077773333", name: "Secret Client" })).body.lead;
+  await h.query("UPDATE leads SET created_at = now() - interval '3 hours' WHERE ref = $1 AND agency_id = $2", [Number(lead.ref.replace(/[^0-9]/g, "")), h.AGENCY_A]);
+  expect((await call("broker", "post", `/brokers/${brokerId}/nudge`)).status).toBe(403);
+  expect((await request(h.app.app).post(`/api/v1/brokers/${brokerId}/nudge`)).status).toBe(401);
+  expect((await call("admin", "post", "/brokers/00000000-0000-4000-8000-000000000000/nudge")).status).toBe(404);
+  expect((await call("admin", "post", "/brokers/nope/nudge")).status).toBe(404);
+
+  // A team lead of another team cannot reach the broker; the broker's own team lead can.
+  await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [h.BROKERS.colleague.id]);
+  expect((await call("colleague", "post", `/brokers/${brokerId}/nudge`)).status).toBe(404);
+  await h.query("UPDATE brokers SET team_lead_id = $1 WHERE id = $2", [h.BROKERS.colleague.id, brokerId]);
+
+  const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+  const ok = await call("colleague", "post", `/brokers/${brokerId}/nudge`);
+  logSpy.mockRestore();
+  expect(ok.status).toBe(204);
+  const [note] = await h.query("SELECT title, body FROM notifications WHERE broker_id = $1 AND dedupe_key LIKE 'broker_nudge:%'", [brokerId]);
+  expect(note.body).toMatch(/1/);
+  expect(note.body + note.title).not.toContain("Secret Client");
+  const ops = await h.query("SELECT metadata FROM operation_logs WHERE operation_type = 'broker_nudge'");
+  expect(JSON.stringify(ops)).not.toContain("Secret Client");
+
+  const again = await call("admin", "post", `/brokers/${brokerId}/nudge`);
+  expect(again.status).toBe(429);
+  expect(again.body).toMatchObject({ error: "rate_limited" });
+});
+
 test("manager can filter waiting-over-1h, uncontacted, and overdue leads by team parameter", async () => {
   const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
   await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [h.BROKERS.colleague.id]);

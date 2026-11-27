@@ -420,6 +420,171 @@
     "وحدات قديمة محتاجة تحديث",
     "الشقق اللي متحدثتش"
    ]
+  },
+  {
+   "id": "client_matches",
+   "expect": {
+    "route": "crm_client_matches"
+   },
+   "questions": [
+    "which clients want an apartment in new cairo",
+    "which leads are looking for a villa in sheikh zayed",
+    "clients looking for 3 bedroom",
+    "who wants a studio",
+    "show me clients who want a villa",
+    "leads who want apartments in new cairo",
+    "clients for unit HP-12",
+    "client requests matching unit HP-12",
+    "wich clients want an apartment in new cairo",
+    "which cleints want a villa",
+    "clients: apartment in new cairo",
+    "مين من العملاء عايز شقة في التجمع",
+    "عملاء عايزين فيلا في زايد",
+    "طلبات العملاء على شقق التجمع",
+    "العملاء المحتاجين شقة 3 غرف",
+    "مين من العملاء يناسبه HP-12",
+    "العملاء اللي بيدوروا على شقة في التجمع",
+    "عملاء: شقة في التجمع",
+    "meen men el 3omala 3ayzeen sha2a fel tagamo3",
+    "3omala 3ayzeen fila fel tagamo3",
+    "meen men el 3omala me7tageen sha2a"
+   ]
+  },
+  {
+   "id": "clarify_units_or_clients",
+   "expect": {
+    "route": "clarify",
+    "clarifyKind": "units_or_clients"
+   },
+   "questions": [
+    "clients apartment new cairo",
+    "clients villa in sheikh zayed 5 million",
+    "leads 3 bedroom apartment new cairo",
+    "wich cleints apartment new cairo",
+    "عملاء شقة في التجمع",
+    "عملاء فيلا زايد ٥ مليون",
+    "العملاء شقة 3 غرف",
+    "3omala sha2a fel tagamo3",
+    "3omala fila fel tagamo3"
+   ]
+  },
+  {
+   "id": "viewings_next_week_franco",
+   "expect": {
+    "route": "crm_viewings",
+    "windowKey": "next_week"
+   },
+   "questions": [
+    "mo3aynat el esbo3 el gay",
+    "mo3aynat el esboo3 el gaay",
+    "mo3aynat el esbo3 el gai",
+    "kam mo3ayna el esbo3 el gay",
+    "3andena kam mo3ayna el esbo3 el gaay",
+    "mo3aynat esbo3 gay"
+   ]
+  },
+  {
+   "id": "win_loss_franco",
+   "expect": {
+    "route": "crm_win_loss"
+   },
+   "questions": [
+    "leh bnkhsar 3omala",
+    "leh el 3omala btrou7",
+    "leh bnekhsar 3omala",
+    "leh bnkhsr el safa2at",
+    "leh bnkhsar saf2at",
+    "leh 3omala btro7"
+   ]
+  },
+  {
+   "id": "stale_units_franco",
+   "expect": {
+    "route": "crm_stale_units"
+   },
+   "questions": [
+    "wa7dat 2adema",
+    "el wa7dat elly mat7adasetsh",
+    "wa7dat 2adeema",
+    "el wa7dat el 2adema",
+    "wa7dat mat7adasetsh",
+    "el wa7dat elli mat7adsh"
+   ]
+  },
+  {
+   "id": "client_matches_apartment_nc",
+   "expect": {
+    "route": "crm_client_matches"
+   },
+   "eval": {
+    "clientMatches": {
+     "types": [
+      "apartment"
+     ],
+     "place": "new_cairo"
+    }
+   },
+   "questions": [
+    "which clients want an apartment in new cairo",
+    "مين من العملاء عايز شقة في التجمع",
+    "meen men el 3omala 3ayzeen sha2a fel tagamo3"
+   ]
+  },
+  {
+   "id": "client_matches_villa_zayed",
+   "expect": {
+    "route": "crm_client_matches"
+   },
+   "eval": {
+    "clientMatches": {
+     "types": [
+      "villa"
+     ],
+     "place": "sheikh_zayed"
+    }
+   },
+   "questions": [
+    "which leads are looking for a villa in sheikh zayed",
+    "عملاء عايزين فيلا في زايد"
+   ]
+  },
+  {
+   "id": "client_matches_bedrooms",
+   "expect": {
+    "route": "crm_client_matches"
+   },
+   "eval": {
+    "clientMatches": {
+     "types": [
+      "apartment"
+     ],
+     "place": "new_cairo",
+     "bedsMin": 3
+    }
+   },
+   "questions": [
+    "which clients want a 3 bedroom apartment in new cairo",
+    "مين من العملاء عايز شقة 3 غرف في التجمع"
+   ]
+  },
+  {
+   "id": "client_matches_price",
+   "expect": {
+    "route": "crm_client_matches"
+   },
+   "eval": {
+    "clientMatches": {
+     "types": [
+      "apartment"
+     ],
+     "place": "new_cairo",
+     "priceMax": 9000000
+    }
+   },
+   "questions": [
+    "which clients want an apartment in new cairo under 9 million",
+    "مين من العملاء عايز شقة في التجمع تحت 9 مليون"
+   ]
   }
  ],
  "unitSearches": [
@@ -527,6 +692,58 @@
     "bedrooms_min": 3,
     "price_max": 9000000
    }
+  },
+  {
+   "q": "my client wants a 3 bedroom apartment in new cairo",
+   "expect": {}
+  },
+  {
+   "q": "my client is looking for a villa in sheikh zayed",
+   "expect": {}
+  },
+  {
+   "q": "عندي عميل عايز شقة 3 غرف في التجمع",
+   "expect": {}
+  },
+  {
+   "q": "عندي عميل محتاج فيلا في زايد",
+   "expect": {}
+  },
+  {
+   "q": "client wants ready to move in october",
+   "expect": {}
+  },
+  {
+   "q": "عميل ميزانيته 4 مليون عايز حاجة استلام فوري",
+   "expect": {}
+  },
+  {
+   "q": "a client wants an apartment in new cairo under 5 million",
+   "expect": {}
+  },
+  {
+   "q": "عميلي عايز شقة في الشيخ زايد",
+   "expect": {}
+  },
+  {
+   "q": "3andy 3amil 3ayez sha2a fel tagamo3",
+   "expect": {}
+  },
+  {
+   "q": "my cleint wants a villa in new cairo",
+   "expect": {}
+  },
+  {
+   "q": "وحدات: عملاء شقة في التجمع",
+   "expect": {}
+  },
+  {
+   "q": "units: clients apartment in new cairo",
+   "expect": {}
+  },
+  {
+   "q": "units: which clients want a villa",
+   "expect": {}
   }
  ],
  "offTopic": [

@@ -820,7 +820,7 @@ function tabWhere(f, now, where, add) {
 }
 
 /** The search-text part of a lead filter (L- ref, phone digits or name), added to `where`. */
-function searchWhere(f, where, add, now) {
+function searchWhere(f, where, add, now, slaOn = false) {
   if (f.queue === "unassigned") where.push("l.assigned_broker_id IS NULL AND l.stage NOT IN ('won', 'lost')");
   if (f.queue === "uncontacted") where.push("l.stage = 'new' AND l.last_contact_at IS NULL");
   if (f.queue === "delayed-first-contact") {
@@ -835,6 +835,26 @@ function searchWhere(f, where, add, now) {
     add("l.next_follow_up_at < ?", Stages.cairoDayAt(now, 2, 0).toISOString());
   }
   if (f.queue === "overdue") tabWhere({ overdue: true }, now, where, add);
+  // The assistant's "approaching SLA" and "offer link opened, no follow-up" cards tap through to exactly these lists.
+  if (f.queue === "approaching-sla") {
+    if (slaOn) {
+      add("l.stage = 'new' AND l.last_contact_at IS NULL AND l.response_due_at > ?", now.toISOString(), where);
+      add("l.response_due_at <= ?", new Date(now.getTime() + 1_800_000).toISOString(), where);
+    } else {
+      add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at > ?", new Date(now.getTime() - 3_600_000).toISOString(), where);
+      add("l.created_at <= ?", new Date(now.getTime() - 2_400_000).toISOString(), where);
+    }
+  }
+  if (f.queue === "opened-no-followup") {
+    where.push("l.stage NOT IN ('won', 'lost') AND l.follow_up_status IS DISTINCT FROM 'open'");
+    add(
+      `EXISTS (SELECT 1 FROM share_links s JOIN listings u ON u.id = s.listing_id AND u.agency_id = s.agency_id
+                WHERE s.lead_id = l.id AND s.agency_id = l.agency_id AND ${Vis.units("u")}
+                  AND s.revoked_at IS NULL AND s.expires_at > ? AND s.open_count > 0)`,
+      now.toISOString(),
+      where
+    );
+  }
   if (f.assignedLastMonth) {
     const thisMonth = "date_trunc('month', NOW() AT TIME ZONE 'Africa/Cairo')";
     where.push(`l.assigned_at >= ((${thisMonth} - interval '1 month') AT TIME ZONE 'Africa/Cairo')`,
@@ -849,6 +869,11 @@ function searchWhere(f, where, add, now) {
   else add("l.name ILIKE '%' || ? || '%'", q.replace(/[%_\\]/g, (c) => `\\${c}`), where);
 }
 
+/** Whether the agency's response SLA is on (only the "approaching-sla" queue needs it). */
+async function slaOn(pool, actor, f) {
+  return f.queue === "approaching-sla" && (await require("./leadRules").getRules(pool, actor.agency_id)).enabled;
+}
+
 /**
  * The number on every tab in one statement: the same filters as listLeads({ countOnly }) per tab.
  * @param {Object} f - { q, brokerId }
@@ -857,7 +882,7 @@ function searchWhere(f, where, add, now) {
  */
 async function countTabs(pool, actor, f, tabs, { now = new Date() } = {}) {
   const { where, args, add } = scopeWhere(actor, await LeadScope.open(pool, actor), f);
-  searchWhere(f, where, add, now);
+  searchWhere(f, where, add, now, await slaOn(pool, actor, f));
   const names = Object.keys(tabs);
   const cols = names.map((t, i) => {
     const tw = [];
@@ -878,7 +903,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   if (f.source) add("l.source = ?", String(f.source));
   if (f.private && Authz.isAgencyOwner(actor)) where.push("l.is_private");
   tabWhere(f, now, where, add);
-  searchWhere(f, where, add, now);
+  searchWhere(f, where, add, now, await slaOn(pool, actor, f));
   // Counts only (the app's tab numbers): the same filters, no rows.
   if (f.countOnly) {
     const { rows } = await pool.query(`SELECT count(*)::int AS n ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args);
@@ -1132,8 +1157,38 @@ async function nudgeLead(pool, actor, refOrId, { now = new Date() } = {}) {
   return { ok: true, delivered: Boolean(outcome) };
 }
 
+/** Sends a manager/team-lead nudge to one broker with their own counts: leads waiting, overdue and without a next step (1 per broker per 2h). */
+async function nudgeBroker(pool, actor, brokerId, { now = new Date() } = {}) {
+  if (!Authz.isManager(actor) && !Authz.isTeamLead(actor)) return { error: "forbidden" };
+  if (!UUID.test(String(brokerId || ""))) return { error: "not_found" };
+  const { rows } = await pool.query(`SELECT ${BROKER_COLS} FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active`, [brokerId, actor.agency_id]);
+  const target = rows[0];
+  // A team lead only reaches their own team; anything else looks like it doesn't exist.
+  if (!target || (!Authz.isManager(actor) && target.team_lead_id !== actor.id)) return { error: "not_found" };
+  const RateLimit = require("../lib/rateLimit");
+  const gate = await RateLimit.hit(pool, `broker_nudge:${target.id}`, { limit: 1, windowSec: 7200 });
+  if (!gate.allowed) return { error: "too_many", retryAfterSec: gate.retryAfterSec };
+  const n = async (f) => (await listLeads(pool, actor, { brokerId: target.id, ...f, countOnly: true }, { now })).total;
+  const [waiting, overdue, noNext] = await Promise.all([n({ queue: "waiting-over-1h" }), n({ overdue: true }), n({ noNextStep: true })]);
+  const en = target.preferred_lang === "en";
+  const actorName = actor.name || (en ? "Your manager" : "مديرك");
+  const outcome = await Notifications.notifyBroker(pool, target, {
+    kind: "follow_up",
+    dedupeKey: `broker_nudge:${target.id}:${Math.floor(now.getTime() / 60000)}`,
+    title: en ? "🔔 Your leads need attention" : "🔔 عملاءك محتاجين اهتمام",
+    body: en
+      ? `${actorName} asks you to catch up: ${waiting} waiting for a first reply, ${overdue} overdue follow-ups, ${noNext} with no next step.`
+      : `${actorName} بيطلب منك تلحقهم: ${waiting} مستنيين أول رد، ${overdue} متابعات متأخرة، ${noNext} من غير خطوة جاية.`,
+    url: "/app/leads",
+    now
+  });
+  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "broker_nudge", status: "success", metadata: { target_broker_id: target.id, waiting, overdue, no_next_step: noNext } });
+  return { ok: true, delivered: Boolean(outcome) };
+}
+
 module.exports = {
   nudgeLead,
+  nudgeBroker,
   restoreBrokerLeads,
   historyFor,
   historyPeople,

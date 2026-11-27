@@ -63,6 +63,24 @@ async function recommendedForAgency(pool, actor, excludeIds = new Set()) {
     .map((b) => ({ id: b.id, name: b.name, open: Number(b.open_leads || 0) }));
 }
 
+/** Last automatic Telegram reminder/nudge sent to the broker about this lead: the newest of the stamps the reminder jobs leave on the lead. */
+function lastAutoReminderAt(r) {
+  const t = [r.follow_up_reminded_at, r.nudged_at, r.interest_nudged_at, r.post_viewing_nudged_at, r.link_silence_nudged_at, r.sla_warning_sent_at]
+    .filter(Boolean)
+    .map((d) => new Date(d).getTime());
+  return t.length ? new Date(Math.max(...t)).toISOString() : null;
+}
+
+/** Discipline rows with the id and whether this viewer may nudge that broker (POST /brokers/:id/nudge: managers any, a team lead their team). */
+async function withNudgeFlags(pool, actor, rows) {
+  const mgr = isManagerOrOwner(actor);
+  const lead = !mgr && isTeamLead(actor);
+  const mine = lead
+    ? new Set((await pool.query("SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $2", [actor.agency_id, actor.id])).rows.map((r) => r.id))
+    : new Set();
+  return rows.map((b) => ({ ...b, brokerId: b.id, canNudgeBroker: b.id !== actor.id && (mgr || mine.has(b.id)) }));
+}
+
 async function runCrmLeads(pool, actor, queueHint, en) {
   const queue = queueHint || "waiting-over-1h";
   const { rows, total } = await Leads.listLeads(pool, actor, { queue, limit: 5, offset: 0 });
@@ -95,7 +113,8 @@ async function runCrmLeads(pool, actor, queueHint, en) {
           version: Number(l.version || 1),
           assignee: l.assignee_name || null,
           assigneeId: l.assigned_broker_id || null,
-          createdAt: l.created_at ? new Date(l.created_at).toISOString() : null
+          createdAt: l.created_at ? new Date(l.created_at).toISOString() : null,
+          lastAutoReminderAt: lastAutoReminderAt(l)
         }))
       }
     ],
@@ -392,7 +411,7 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
               link: { screen: "Team", params: {} }
             }]
           : []),
-        { kind: "broker_discipline", summary, rows: board.slice(0, 8) }
+        { kind: "broker_discipline", summary, rows: await withNudgeFlags(pool, actor, board.slice(0, 8)) }
       ],
       actions: [],
       links: [{ label: en ? "Team" : "الفريق", screen: "Team", params: {} }],
@@ -451,7 +470,7 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
       ? (en ? `${summary.silent} silent broker(s) · ${summary.lagging} lagging` : `${summary.silent} بروكر بدون تحديثات · ${summary.lagging} متأخر`)
       : (en ? `App updates: ${summary.consistent} consistent · ${summary.lagging} lagging` : `التزام التحديث: ${summary.consistent} منتظم · ${summary.lagging} متأخر`),
     windowLabel: en ? `${range.labelEn} · 48h silence check` : `${range.labelAr} · فحص ٤٨ ساعة`,
-    cards: [{ kind: "broker_discipline", summary, rows: sorted.slice(0, 8) }],
+    cards: [{ kind: "broker_discipline", summary, rows: await withNudgeFlags(pool, actor, sorted.slice(0, 8)) }],
     actions: [],
     links: isManagerOrOwner(actor) ? [{ label: en ? "Open Dashboard" : "افتح لوحة الأداء", screen: "Dashboard", params: {} }] : [],
     aiUsed: false
@@ -626,7 +645,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
   }
   if (route === "crm_viewings") {
     const range = resolveRange(windowInfo, now, 1);
-    const params = [actor.agency_id, range.since.toISOString(), range.until.toISOString()];
+    const params = [actor.agency_id, range.since.toISOString(), range.until.toISOString(), require("./viewings").OPEN];
     let scopeSql = "";
     if (!isManagerOrOwner(actor)) {
       if (isTeamLead(actor)) {
@@ -637,18 +656,37 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         scopeSql = ` AND l.assigned_broker_id = $${params.length}`;
       }
     }
+    // Each lead once: booked = an open row in viewings (the calendar), confirmed = a booked one the client confirmed,
+    // planned = an open viewing follow-up with no open booking at all.
     const { rows } = await pool.query(
-      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, l.next_follow_up_at, b.name AS broker_name, u.code AS unit_code
+      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS broker_name, u.code AS unit_code,
+              l.follow_up_reminded_at, l.nudged_at, l.interest_nudged_at, l.post_viewing_nudged_at, l.link_silence_nudged_at, l.sla_warning_sent_at,
+              CASE WHEN v.id IS NULL THEN 'planned' WHEN v.status = 'confirmed' THEN 'confirmed' ELSE 'booked' END AS viewing_state,
+              COALESCE(v.starts_at, l.next_follow_up_at) AS at
          FROM leads l
          LEFT JOIN brokers b ON b.id = l.assigned_broker_id
-         LEFT JOIN listings u ON u.id = l.follow_up_listing_id AND u.agency_id = l.agency_id AND ${Vis.units("u")}
+         LEFT JOIN LATERAL (
+           SELECT v.id, v.status, v.starts_at, v.listing_id FROM viewings v
+            WHERE v.agency_id = l.agency_id AND v.lead_id = l.id AND v.status = ANY($4)
+              AND v.starts_at >= $2 AND v.starts_at < $3
+            ORDER BY v.starts_at LIMIT 1) v ON TRUE
+         LEFT JOIN listings u ON u.id = COALESCE(v.listing_id, l.follow_up_listing_id) AND u.agency_id = l.agency_id AND ${Vis.units("u")}
         WHERE ${Vis.leads("l")} AND l.agency_id = $1
-          AND l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing'
-          AND l.stage NOT IN ('won', 'lost')
-          AND l.next_follow_up_at >= $2 AND l.next_follow_up_at < $3${scopeSql}
-        ORDER BY l.next_follow_up_at`,
+          AND (v.id IS NOT NULL
+               OR (l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing' AND l.stage NOT IN ('won', 'lost')
+                   AND l.next_follow_up_at >= $2 AND l.next_follow_up_at < $3
+                   AND NOT EXISTS (SELECT 1 FROM viewings o WHERE o.agency_id = l.agency_id AND o.lead_id = l.id AND o.status = ANY($4))))${scopeSql}
+        ORDER BY at`,
       params
     );
+    const split = { booked: 0, confirmed: 0, planned: 0 };
+    for (const r of rows) {
+      if (r.viewing_state === "planned") split.planned += 1;
+      else {
+        split.booked += 1;
+        if (r.viewing_state === "confirmed") split.confirmed += 1;
+      }
+    }
     const byBroker = new Map();
     for (const r of rows) {
       const k = r.broker_name || (en ? "Unassigned" : "بدون وسيط");
@@ -657,11 +695,16 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       byBroker.set(k, e);
     }
     const showBrokers = hasMultiBrokerScope(actor);
+    const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
     const locale = en ? "en-GB" : "ar-EG";
+    const lbl = en ? range.labelEn : range.labelAr;
+    const headline = en
+      ? `${rows.length} viewing(s) ${lbl} — ${split.booked} on the calendar${split.confirmed ? ` (${split.confirmed} confirmed by the client)` : ""} · ${split.planned} noted as follow-up only`
+      : `${rows.length} معاينة ${lbl} — ${split.booked} في الكالندر${split.confirmed ? ` (${split.confirmed} العميل أكّد)` : ""} · ${split.planned} متسجلة كمتابعة بس`;
     return {
       intent: "crm_viewings",
-      headline: en ? `${rows.length} viewing(s) scheduled · ${range.labelEn}` : `${rows.length} معاينة مجدولة · ${range.labelAr}`,
-      windowLabel: en ? range.labelEn : range.labelAr,
+      headline,
+      windowLabel: lbl,
       cards: [
         {
           kind: "metric_row",
@@ -681,23 +724,29 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
           ? [{
               kind: "stuck_leads",
               title: en ? "Scheduled viewings" : "المعاينات المجدولة",
-              queue: "viewings",
+              // No lead list holds exactly these (a viewing window is not a lead queue): the Calendar link opens them.
+              queue: null,
               total: rows.length,
+              split,
               recommendedBrokers: [],
               canAssign: false,
-              canNudge: false,
+              canNudge,
               items: rows.slice(0, 10).map((l) => {
-                const time = l.next_follow_up_at
-                  ? new Date(l.next_follow_up_at).toLocaleTimeString(locale, { timeZone: "Africa/Cairo", hour: "numeric", minute: "2-digit" })
-                  : "";
+                const at = new Date(l.at).toISOString();
+                const time = new Date(l.at).toLocaleTimeString(locale, { timeZone: "Africa/Cairo", hour: "numeric", minute: "2-digit" });
+                const ref = `L-${String(l.ref).padStart(4, "0")}`;
                 return {
-                  ref: `L-${String(l.ref).padStart(4, "0")}`,
+                  ref,
                   name: l.name || null,
                   stage: [time, l.unit_code, l.stage].filter(Boolean).join(" · "),
                   version: Number(l.version || 1),
                   assignee: l.broker_name || null,
                   assigneeId: l.assigned_broker_id || null,
-                  createdAt: l.next_follow_up_at ? new Date(l.next_follow_up_at).toISOString() : null
+                  createdAt: at,
+                  at,
+                  viewingState: l.viewing_state,
+                  lastAutoReminderAt: lastAutoReminderAt(l),
+                  ...(l.viewing_state === "planned" ? { action: { kind: "book_viewing", ref, at } } : {})
                 };
               })
             }]
@@ -1090,33 +1139,15 @@ async function runOpenedNoFollowup(pool, actor, en) {
   if (Authz.isDataEntry(actor)) {
     return { intent: "clarify", headline: en ? "Try unit filters instead." : "جرّب فلاتر الوحدات.", cards: [], actions: [], links: [], aiUsed: false };
   }
-  const args = [actor.agency_id];
-  const scope = [];
-  if (isTeamLead(actor) && !isManagerOrOwner(actor)) {
-    args.push(actor.id);
-    scope.push(`(l.assigned_broker_id = $${args.length} OR b.team_lead_id = $${args.length})`);
-  } else if (!isManagerOrOwner(actor)) {
-    args.push(actor.id);
-    scope.push(`l.assigned_broker_id = $${args.length}`);
+  // The same list the app opens on tap: GET /leads?queue=opened-no-followup (services/leads.js).
+  const { rows, total } = await Leads.listLeads(pool, actor, { queue: "opened-no-followup", limit: 10, offset: 0 });
+  const opened = new Map();
+  if (rows.length) {
+    (await pool.query(
+      "SELECT lead_id, MAX(last_opened_at) AS at FROM share_links WHERE agency_id = $1 AND lead_id = ANY($2::uuid[]) AND revoked_at IS NULL GROUP BY lead_id",
+      [actor.agency_id, rows.map((r) => r.id)]
+    )).rows.forEach((r) => opened.set(r.lead_id, r.at));
   }
-  const { rows } = await pool.query(
-    `SELECT l.id, l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name,
-            MAX(s.last_opened_at) AS last_opened_at, SUM(s.open_count)::int AS total_opens, count(*) OVER()::int AS total_n
-       FROM share_links s
-       JOIN listings u ON u.id = s.listing_id AND u.agency_id = s.agency_id
-       JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
-       LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
-      WHERE ${Vis.units("u")} AND ${Vis.leads("l")}
-        AND s.agency_id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
-        AND s.open_count > 0 AND l.stage NOT IN ('won', 'lost')
-        AND l.follow_up_status IS DISTINCT FROM 'open'
-        ${scope.length ? `AND ${scope.join(" AND ")}` : ""}
-      GROUP BY l.id, l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name
-      ORDER BY MAX(s.last_opened_at) DESC NULLS LAST
-      LIMIT 10`,
-    args
-  );
-  const total = rows[0]?.total_n ?? 0;
   const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
   const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
   const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, new Set()) : [];
@@ -1127,7 +1158,7 @@ async function runOpenedNoFollowup(pool, actor, en) {
     cards: [
       {
         kind: "stuck_leads",
-        queue: "no_next_step",
+        queue: "opened-no-followup",
         total,
         recommendedBrokers,
         canAssign,
@@ -1139,7 +1170,8 @@ async function runOpenedNoFollowup(pool, actor, en) {
           version: Number(l.version || 1),
           assignee: l.assignee_name || null,
           assigneeId: l.assigned_broker_id || null,
-          createdAt: l.last_opened_at ? new Date(l.last_opened_at).toISOString() : null
+          createdAt: opened.get(l.id) ? new Date(opened.get(l.id)).toISOString() : null,
+          lastAutoReminderAt: lastAutoReminderAt(l)
         }))
       }
     ],
@@ -1151,40 +1183,8 @@ async function runOpenedNoFollowup(pool, actor, en) {
 
 async function runApproachingSla(pool, actor, now, en) {
   const rules = await LeadRules.getRules(pool, actor.agency_id);
-  const args = [actor.agency_id];
-  let scopeSql = "";
-  if (isTeamLead(actor) && !isManagerOrOwner(actor)) {
-    args.push(actor.id);
-    scopeSql = ` AND (l.assigned_broker_id = $${args.length} OR b.team_lead_id = $${args.length})`;
-  } else if (!isManagerOrOwner(actor)) {
-    args.push(actor.id);
-    scopeSql = ` AND l.assigned_broker_id = $${args.length}`;
-  }
-  let rows;
-  if (rules.enabled) {
-    args.push(now.toISOString(), new Date(now.getTime() + 30 * 60 * 1000).toISOString());
-    rows = (await pool.query(
-      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.response_due_at AS ts, count(*) OVER()::int AS total_n
-         FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
-        WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage = 'new' AND l.last_contact_at IS NULL
-          AND l.response_due_at IS NOT NULL AND l.response_due_at > $${args.length - 1} AND l.response_due_at <= $${args.length}${scopeSql}
-        ORDER BY l.response_due_at ASC LIMIT 10`,
-      args
-    )).rows;
-  } else {
-    const min40 = new Date(now.getTime() - 40 * 60 * 1000).toISOString();
-    const min60 = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
-    args.push(min60, min40);
-    rows = (await pool.query(
-      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.created_at AS ts, count(*) OVER()::int AS total_n
-         FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
-        WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL
-          AND l.created_at > $${args.length - 1} AND l.created_at <= $${args.length}${scopeSql}
-        ORDER BY l.created_at ASC LIMIT 10`,
-      args
-    )).rows;
-  }
-  const total = rows[0]?.total_n ?? 0;
+  // The same list the app opens on tap: GET /leads?queue=approaching-sla (services/leads.js).
+  const { rows, total } = await Leads.listLeads(pool, actor, { queue: "approaching-sla", limit: 10, offset: 0 }, { now });
   const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
   const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
   const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, new Set()) : [];
@@ -1197,24 +1197,28 @@ async function runApproachingSla(pool, actor, now, en) {
     cards: [
       {
         kind: "stuck_leads",
-        queue: "waiting-over-1h",
+        queue: "approaching-sla",
         total,
         recommendedBrokers,
         canAssign,
         canNudge,
-        items: rows.map((l) => ({
-          ref: `L-${String(l.ref).padStart(4, "0")}`,
-          name: l.name || null,
-          stage: l.stage,
-          version: Number(l.version || 1),
-          assignee: l.assignee_name || null,
-          assigneeId: l.assigned_broker_id || null,
-          createdAt: l.ts ? new Date(l.ts).toISOString() : null
-        }))
+        items: rows.map((l) => {
+          const ts = rules.enabled ? l.response_due_at : l.created_at;
+          return {
+            ref: `L-${String(l.ref).padStart(4, "0")}`,
+            name: l.name || null,
+            stage: l.stage,
+            version: Number(l.version || 1),
+            assignee: l.assignee_name || null,
+            assigneeId: l.assigned_broker_id || null,
+            createdAt: ts ? new Date(ts).toISOString() : null,
+            lastAutoReminderAt: lastAutoReminderAt(l)
+          };
+        })
       }
     ],
     actions: [],
-    links: [{ label: en ? "Open Leads" : "صفحة العملاء", screen: "LeadsList", params: { queue: "waiting-over-1h" } }],
+    links: [{ label: en ? "Open Leads" : "صفحة العملاء", screen: "LeadsList", params: { queue: "approaching-sla" } }],
     aiUsed: false
   };
 }
@@ -1269,14 +1273,95 @@ async function runStuckBrokers(pool, actor, routeInfo, now, en) {
   };
 }
 
+/**
+ * "Which clients want X" (crm_client_matches): the open leads' saved requests (the Requests screen's data), scoped like the lead list.
+ * With a unit code: the clients whose request fits that unit. Otherwise a request counts when it names every kind / place / sale-or-rent
+ * the question names (bedroom and price ranges must overlap; an empty request range matches). Never returns phones.
+ */
+async function runClientMatches(pool, actor, routeInfo, text, en) {
+  const lang = en ? "en" : "ar";
+  const Card = require("../domain/leadCard");
+  const LeadRequests = require("./leadRequests");
+  const open = await require("./leadScope").open(pool, actor);
+  const { rows } = await pool.query(
+    `SELECT s.filters, l.id, l.ref, l.name, l.agency_id, l.assigned_broker_id, b.name AS broker_name, b.team_lead_id AS assignee_team_lead_id
+       FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
+       LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
+      WHERE ${Vis.leads("l")} AND s.agency_id = $1 AND s.fulfilled_at IS NULL AND l.stage NOT IN ('won', 'lost')
+      ORDER BY l.last_activity_at DESC, s.id LIMIT 300`,
+    [actor.agency_id]
+  );
+  const mine = rows.filter((r) => Authz.canViewLead(actor, r, open)).map((r) => ({ ...r, filters: SearchLink.sanitizeFilters(r.filters) }));
+  let fits = () => true;
+  let label = "";
+  let unit = null;
+  if (routeInfo.unitCode) {
+    const code = String(routeInfo.unitCode).replace(/-/g, "").toUpperCase();
+    unit = (await pool.query(`SELECT l.id, l.code FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND upper(replace(l.code, '-', '')) = $2 LIMIT 1`, [actor.agency_id, code])).rows[0] || null;
+    label = unit?.code || routeInfo.unitCode;
+    const Fx = require("./fx");
+    const fx = await Fx.loadRates(pool, actor.agency_id);
+    const ok = new Set();
+    if (unit) {
+      for (const r of mine) {
+        const { sql, params } = Search.buildSearchQuery(actor.agency_id, { filters: r.filters }, { onlyIds: [unit.id], limit: 1, fx });
+        if ((await pool.query(sql, params)).rows.length) ok.add(r);
+      }
+    }
+    fits = (r) => ok.has(r);
+  } else {
+    const want = Q.fallbackParse(require("../domain/franco").toArabic(text))?.filters || {};
+    const keys = (f) => (f.places || []).map((p) => `${p.kind}:${p.key}`);
+    // A range the request leaves empty is no constraint; the asked range and the request's range must overlap.
+    const overlap = (rMin, rMax, wMin, wMax) => (rMax ?? Infinity) >= (wMin ?? 0) && (rMin ?? 0) <= (wMax ?? Infinity);
+    const all = (need, have) => !need.length || need.some((k) => have.includes(k));
+    fits = (r) =>
+      all(want.property_types || [], r.filters.property_types || []) && all(keys(want), keys(r.filters)) && (!want.listing_type || r.filters.listing_type === want.listing_type)
+      && (!(want.property_types || []).length || (r.filters.property_types || []).length) && (!keys(want).length || keys(r.filters).length)
+      && overlap(r.filters.bedrooms_min, r.filters.bedrooms_max, want.bedrooms_min, want.bedrooms_max) && overlap(r.filters.price_min, r.filters.price_max, want.price_min, want.price_max);
+    label = Card.requestSummary(SearchLink.sanitizeFilters(want), lang);
+  }
+  const byLead = new Map();
+  for (const r of mine) if (fits(r) && !byLead.has(r.id)) byLead.set(r.id, r);
+  const hits = [...byLead.values()];
+  const items = [];
+  for (const r of hits.slice(0, 5)) {
+    items.push({
+      ref: Card.refLabel(r.ref),
+      name: r.name || null,
+      brokerName: r.broker_name || null,
+      brokerId: r.assigned_broker_id || null,
+      wants: Card.requestSummary(r.filters, lang),
+      matchCount: (await LeadRequests.currentMatches(pool, actor.agency_id, r.filters, { limit: 1 })).total
+    });
+  }
+  const total = hits.length;
+  const subject = unit || !routeInfo.unitCode ? label : routeInfo.unitCode;
+  return {
+    intent: "crm_client_matches",
+    headline: routeInfo.unitCode && !unit
+      ? (en ? `No unit with code ${routeInfo.unitCode}.` : `مفيش وحدة بالكود ${routeInfo.unitCode}.`)
+      : total
+        ? (routeInfo.unitCode ? (en ? `${total} client(s) whose request fits ${subject}` : `${total} عميل طلبهم يناسب ${subject}`) : (en ? `${total} client(s) want ${subject || "this"}` : `${total} عميل طالبين ${subject || "ده"}`))
+        : (en ? "No client has a saved request like that." : "مفيش عميل عنده طلب زي كده."),
+    windowLabel: en ? "Open client requests" : "طلبات العملاء المفتوحة",
+    understood: { job: "client_matches", market: null, appliedFilters: label ? [label] : [], exclusions: [], unsupportedFilters: [] },
+    cards: [{ kind: "client_matches", title: en ? "Clients who want this" : "العملاء اللي طالبين ده", total, queue: null, items }],
+    actions: [],
+    links: [{ label: en ? "Client requests" : "طلبات العملاء", screen: "ClientRequests", params: {} }],
+    aiUsed: false
+  };
+}
+
 async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
   const en = langOf(actor) === "en";
   const lang = en ? "en" : "ar";
   const safeMode = Router.MODES.includes(mode) ? mode : "auto";
-  const cleanText = String(text || "").trim().slice(0, 500);
+  const askedText = String(text || "").trim().slice(0, 500);
+  const cleanText = Router.splitForcePrefix(askedText).text; // "وحدات:" / "عملاء:" prefix cut off
   if (!cleanText) return { error: "empty" };
 
-  const routeInfo = Router.classifyAssistantQuery({ text: cleanText, mode: safeMode, now, previousContext });
+  const routeInfo = Router.classifyAssistantQuery({ text: askedText, mode: safeMode, now, previousContext });
   if (Authz.isDataEntry(actor) && routeInfo.route !== "unit_search" && routeInfo.route !== "crm_stale_units") {
     return {
       intent: "clarify",
@@ -1301,6 +1386,24 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
         cards: [],
         actions: [],
         links: [],
+        aiUsed: false
+      };
+    }
+    if (routeInfo.clarifyKind === "units_or_clients") {
+      return {
+        intent: "clarify",
+        clarifyKind: "units_or_clients",
+        modeUsed: safeMode,
+        headline: en ? "Do you want to find units, or see which clients want this?" : "تحب أدوّر على وحدات، ولا أعرض العملاء اللي طالبين ده؟",
+        windowLabel: en ? "Clarification needed" : "وضّح طلبك",
+        understood: { job: "clarify_units_or_clients", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
+        cards: [],
+        actions: [],
+        links: [],
+        suggestions: [
+          { label: en ? "Find units" : "دوّر على وحدات", q: `وحدات: ${cleanText}` },
+          { label: en ? "Show clients" : "اعرض العملاء", q: `عملاء: ${cleanText}` }
+        ],
         aiUsed: false
       };
     }
@@ -1382,6 +1485,9 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
   if (routeInfo.route === "crm_discipline" || routeInfo.route === "crm_broker" || routeInfo.route === "crm_team") {
     const r = await runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText);
     return { modeUsed: safeMode, ...withSummaries(r, en) };
+  }
+  if (routeInfo.route === "crm_client_matches") {
+    return { modeUsed: safeMode, ...(await runClientMatches(pool, actor, routeInfo, cleanText, en)) };
   }
   if (routeInfo.route === "crm_prices") {
     // Budget: stated in the question (local parser, no AI) or carried from the search before.
@@ -1647,7 +1753,7 @@ async function query(pool, params) {
     solo: !hasMultiBrokerScope(actor),
     context: r.nextContext
   });
-  return { ...r, suggestions };
+  return { ...r, suggestions: r.clarifyKind === "units_or_clients" ? r.suggestions : suggestions };
 }
 
 module.exports = { query, withAvatars };

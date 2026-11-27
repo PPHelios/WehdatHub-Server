@@ -94,7 +94,8 @@
       "resolveInterval": ["params"],
       "extractSourceFilter": ["q"],
       "findMatchingBrokers": ["brokers", "rawQuery"],
-      "classifyAssistantQuery": ["params"]
+      "classifyAssistantQuery": ["params"],
+      "splitForcePrefix": ["text"]
     },
     "domain/assistantSuggestions.js": {
       "suggestionsFor": ["params"],
@@ -2278,6 +2279,7 @@
     },
     "services/leads.js": {
       "nudgeLead": ["pool", "actor", "refOrId", "params"],
+      "nudgeBroker": ["pool", "actor", "brokerId", "params"],
       "restoreBrokerLeads": ["pool", "agencyId", "brokerId", "params"],
       "historyFor": ["pool", "actor", "key", "params"],
       "historyPeople": ["pool", "actor"],

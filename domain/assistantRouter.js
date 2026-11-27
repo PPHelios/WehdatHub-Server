@@ -165,7 +165,7 @@ function extractTimeWindow(raw, now = new Date()) {
   }
 
   // 5. Calendar named presets (check multi-word week/month phrases before single-day words; keep Arabic امس word-bounded so it never matches الخامس).
-  if (/\b(next week)\b|الاسبوع الجاي|الاسبوع القادم/.test(q)) {
+  if (/\b(next week)\b|(?:ال)?اسبوع (?:ال)?(?:جاي|قادم)/.test(q)) {
     return resolveRangeFromYmds("next_week", todayYmd, addCairoDaysYmd(todayYmd, 7), "Next 7 days", "الأسبوع الجاي", "calendar");
   }
   if (/\b(this week|weekly)\b|الاسبوع ده|هذا الاسبوع|اسبوعيا/.test(q)) {
@@ -282,7 +282,7 @@ const OPENED_NO_FU_RE = /(?:offer\s*links?|links?).*(?:opened|clicked|viewed).*(
 const APPROACHING_SLA_RE = /\bapproaching\s*sla\b|close\s*to\s*sla|near\s*sla|sla\s*soon|about\s*to\s*breach|almost\s*overdue|قربوا\s*(?:علي|يكسروا|يعدوا|يخلصوا|يتاخروا)\s*(?:sla|وقت\s*الرد|المهله)?/;
 const STUCK_BROKERS_RE = /\b(?:brokers?|agents?|leads?)\b.*(?:no|missing)\s*next\s*step|ranked\s*by\s*no\s*next\s*step|no\s*follow[ -]?up\s*scheduled|بدون\s*(?:خطوه\s*جايه|متابعه\s*جايه)|من\s*غير\s*خطوه|مفيش\s*خطوه\s*جايه/;
 const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest|who replied|who responded|speed to lead)\b|how fast.*(?:respond|reply)|وقت الرد|متوسط الرد|اول رد|اسرع (?:رد|واحد بيرد)|ابط[اأ] (?:رد|واحد بيرد)|سرعه الرد|بنرد.*قد ايه|مين رد/;
-const WIN_LOSS_RE = /\b(win\s*\/?\s*loss|win rate|conversion rate|closing rate|lost reasons?|why.*los(?:e|ing|t))\b|اسباب الخسار|ليه بنخسر|الصفقات اللي ضاعت|معدل القفل|نسبه القفل|نسبه النجاح|الخساير/;
+const WIN_LOSS_RE = /\b(win\s*\/?\s*loss|win rate|conversion rate|closing rate|lost reasons?|why.*los(?:e|ing|t))\b|اسباب الخسار|ليه بنخسر|ليه (?:ال)?عملاء (?:بتروح|بيروحوا|بيمشوا)|الصفقات اللي ضاعت|معدل القفل|نسبه القفل|نسبه النجاح|الخساير/;
 const SOURCES_RE = /\b(sources?|facebook|fb|meta|instagram|tiktok|google|olx|dubizzle|bayut|property finder|nawy|marketing|ad spend|cpl|cpd|campaigns?|best lead source|marketing roi)\b|where are leads coming from|مصادر|مصدر|احسن مصدر|افضل مصدر|العملاء جايين منين|فيسبوك|فيس بوك|انستجرام|تيك توك|جوجل|اوليكس|دوبيزل|بروبرتي|بيوت|نوي|تسويق|اعلانات/;
 const LEASES_RE = /\b(leases?|expiring|rent ending|renewals?)\b|عقود (?:ال)?ايجار|ايجارات (?:قربت|هت)تخلص|ايجارات|تجديد الايجار/;
 const BRIEF_RE = /\b(dashboard|executive brief|agency brief|daily brief|my stats|my summary|my performance|my activity|summary|overview|performance|stuck|activity|how are we doing|today'?s summary|what happened today)\b|ملخص(?:ي)?|احصائياتي|ادائي|شغلي|تقرير(?: اليوم)?|لوحه الشركه|اداء الشركه|حاله الشركه|وضع الشركه|اخبار الشركه|الوضع ايه/;
@@ -376,6 +376,32 @@ function isGenericAgencySubject(s) {
 // "prices in New Cairo" / "اسعار في التجمع": letters only, so "prices in X under 5m" stays a unit search.
 const PRICES_IN_RE = /^(?:(?:what(?:s| is| are)? )?(?:the )?(?:average )?prices? (?:in|of|for)|اسعار(?: الوحدات| الشقق)? (?:في|ب)) ([a-zء-ي]+(?: [a-zء-ي]+)?)$/;
 
+// "Which clients want X" (crm_client_matches) vs "my client wants X" (unit_search). Plural client words only; typos tolerated.
+const CLIENTS_PL_RE = /\b(?:cl(?:ie|ei|e)nts|leads|buyers|customers)\b|عملاء/;
+const WHO_WANTS_RE = new RegExp([
+  /\b(?:wh?ich|what|who(?:'s| is| are)?|show|list|any|find)\b.{0,25}\b(?:cl(?:ie|ei|e)nts?|leads?|buyers?|customers?)\b.{0,40}\b(?:wants?|needs?|looking|searching|interested|requests?|asked|waiting for|match(?:es|ing)?|fits?|suits?)\b/,
+  /\b(?:clients?|leads?|buyers?) (?:looking|searching|who (?:want|need|looking)|interested)\b/,
+  /\bclient requests?\b|\bmatching (?:clients?|leads?)\b|\bwho (?:wants?|needs?|is looking|looks?|is interested)\b/,
+  /مين من (?:ال)?عملاء|(?:ال)?عملاء (?:اللي |الي |ال)?(?:عايزين|عاوزين|محتاجين|بيدورو?ا?|طالبين|مهتمين)|طلبات (?:ال)?عملاء|مين (?:عايز|عاوز|محتاج|بيدور|مهتم)/
+].map((r) => r.source).join("|"));
+const MY_CLIENT_RE = /\bmy clients?\b|\b(?:a |one |the )?client (?:wants?|needs?|is looking|looking|budget|has a budget|asks?)\b|عندي عميل|عميلي|(?:عميل|زبون) (?:عايز|عاوز|محتاج|بيدور|ميزانيته|معاه|طالب)/;
+const READY_RE = /\bready(?: to)? move|move[- ]in\b|\bimmediate (?:delivery|handover)\b|استلام فوري|جاهز/;
+const FORCE_UNITS_RE = /^\s*(?:وحدات|units?)\s*[:：]\s*/i;
+const FORCE_CLIENTS_RE = /^\s*(?:عملاء|clients?|leads?)\s*[:：]\s*/i;
+
+/** "وحدات: ..." / "units: ..." and "عملاء: ..." / "clients: ..." force a route; the prefix is cut off. → { force: "units"|"clients"|null, text } */
+function splitForcePrefix(text) {
+  const t = String(text || "");
+  if (FORCE_UNITS_RE.test(t)) return { force: "units", text: t.replace(FORCE_UNITS_RE, "").trim() };
+  if (FORCE_CLIENTS_RE.test(t)) return { force: "clients", text: t.replace(FORCE_CLIENTS_RE, "").trim() };
+  return { force: null, text: t.trim() };
+}
+
+function clientMatchesRoute(q) {
+  const code = q.match(UNIT_CODE_RE);
+  return { route: "crm_client_matches", job: "client_matches", unitCode: code ? code[0].toUpperCase() : null, windowInfo: null };
+}
+
 function crmRoute(q, raw, now = new Date()) {
   const windowInfo = extractTimeWindow(q, now);
 
@@ -392,6 +418,8 @@ function crmRoute(q, raw, now = new Date()) {
   if (UNASSIGNED_RE.test(q)) return { route: "crm_leads", queueHint: "unassigned", windowInfo };
   if (OVERDUE_RE.test(q)) return { route: "crm_leads", queueHint: "overdue", windowInfo };
   if (UNCONTACTED_RE.test(q)) return { route: "crm_leads", queueHint: "uncontacted", windowInfo };
+  if (WHO_WANTS_RE.test(q)) return clientMatchesRoute(q);
+  if (CLIENTS_PL_RE.test(q) && UNIT_CODE_RE.test(q) && !MY_CLIENT_RE.test(q)) return clientMatchesRoute(q);
   if (RESPONSE_TIME_RE.test(q)) return { route: "crm_response_time", windowInfo };
   if (WIN_LOSS_RE.test(q)) return { route: "crm_win_loss", windowInfo };
   if (SOURCES_RE.test(q)) return { route: "crm_sources", sourceFilter: extractSourceFilter(q), windowInfo };
@@ -483,8 +511,14 @@ function detectFollowup(q) {
  */
 function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), previousContext = null } = {}) {
   const safeMode = MODES.includes(mode) ? mode : "auto";
-  const q = normalize(Franco.toArabic(text));
+  const pf = splitForcePrefix(text);
+  const q = normalize(Franco.toArabic(pf.text));
   if (!q) return { route: "clarify" };
+  if (pf.force === "clients") return clientMatchesRoute(q);
+  if (pf.force === "units") {
+    const forced = parseMarketSignals(q);
+    return { route: "unit_search", job: "find_units", market: forced.market, exclusions: forced.exclusions };
+  }
 
   const followup = detectFollowup(q);
   if (followup) {
@@ -562,6 +596,15 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), pr
 
   const crm = crmRoute(q, text, now);
   if (crm) return crm;
+
+  // "My client wants a ready unit": a resale search (ready-to-move is resale unless primary/new/developer is said).
+  if (MY_CLIENT_RE.test(q) && READY_RE.test(q) && !PRIMARY_EXPLICIT_RE.test(q) && !/جديد|new (?:project|launch)/.test(q)) {
+    return { route: "unit_search", job: "find_units", market: "resale", exclusions: signals.exclusions };
+  }
+  // Client words plus property words and no clear direction: ask which one is meant.
+  if (CLIENTS_PL_RE.test(q) && !MY_CLIENT_RE.test(q) && (UNIT_RE.test(q) || PROPERTY_EXTRA_RE.test(q))) {
+    return { route: "clarify", clarifyKind: "units_or_clients", market: null, exclusions: [], preservedText: text };
+  }
 
   if (INVENTORY_COUNT_RE.test(q) && !signals.hasPrimary) {
     return {
@@ -649,4 +692,4 @@ function findMatchingBrokers(brokers, rawQuery) {
   });
 }
 
-module.exports = { MODES, DAY_MS, MAX_RANGE_DAYS, normalize, addCairoDaysYmd, cairoMidnight, extractTimeWindow, resolveInterval, extractSourceFilter, findMatchingBrokers, classifyAssistantQuery };
+module.exports = { MODES, DAY_MS, MAX_RANGE_DAYS, normalize, addCairoDaysYmd, cairoMidnight, extractTimeWindow, resolveInterval, extractSourceFilter, findMatchingBrokers, classifyAssistantQuery, splitForcePrefix };
