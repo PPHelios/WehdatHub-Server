@@ -446,6 +446,9 @@ function parseBudgetAmount(raw) {
   return Math.round(num);
 }
 
+// "compare these" / "قارن" / "الأولى والتانية": units come from the last search (previousContext.unitCodes).
+const COMPARE_RE = /^(?:(?:please )?compare\b|قارن|مقارنه|(?:the )?(?:first|top) (?:two|2|three|3)(?: units?)?$|(?:these|those) (?:units?|two)$|الاولي و ?(?:ال)?تاني|اول (?:اتنين|وحدتين|تلاته)$)/;
+
 function detectFollowup(q) {
   const trimmed = String(q || "").trim().replace(/[؟?!.,]+$/g, "").trim();
   if (!trimmed) return null;
@@ -513,6 +516,10 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), pr
       }
       return { route: "clarify", clarifyKind: "missing_context", market: null, exclusions: [], preservedText: text };
     }
+  }
+
+  if (COMPARE_RE.test(q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim())) {
+    return { route: "compare", job: "compare", count: /\b(?:two|2)\b|اتنين|تانيه|وحدتين/.test(q) ? 2 : 3 };
   }
 
   const plain = q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim();

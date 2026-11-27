@@ -516,3 +516,60 @@ test("chart cards: win/loss share and prices-in-area price_range, no AI", async 
   const wl = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "win rate", mode: "auto" });
   expect(wl.body.cards.filter((c) => ["share", "bar_breakdown", "metric_row"].includes(c.kind)).length).toBeGreaterThan(0);
 });
+
+test("chart gaps: compare from unitCodes, deltas, budget marker, broker avatar keys", async () => {
+  AI.ask = () => { throw new Error("AI must not run"); };
+  const hdr = await auth("admin");
+  const ins = (code, price, area) => h.query(
+    `INSERT INTO listings (agency_id, broker_id, code, status, listing_type, price_value, area_value, compound, details)
+     VALUES ($1, $2, $3, 'active', 'sale', $4, $5, 'Gapville', '{}')`,
+    [h.AGENCY_A, h.BROKERS.admin.id, code, price, area]
+  );
+  for (const [i, p] of [1e6, 2e6, 3e6, 4e6].entries()) await ins(`GP${i}`, p, 100 + i);
+  const post = (body) => api().post("/api/v1/assistant/query").set(hdr).send({ mode: "auto", ...body });
+
+  // search carries codes -> "compare" uses them
+  const s = await post({ q: "Gapville", mode: "resale" });
+  expect(s.body.nextContext.unitCodes.length).toBeGreaterThanOrEqual(2);
+  const cmp = await post({ q: "compare", previousContext: s.body.nextContext });
+  expect(cmp.body.intent).toBe("compare");
+  expect(cmp.body.cards[0]).toMatchObject({ kind: "compare" });
+  expect(cmp.body.cards[0].columns.length).toBeGreaterThanOrEqual(2);
+  const two = await post({ q: "first two", previousContext: { job: "find_units", unitCodes: ["GP0", "GP1", "GP2"] } });
+  expect(two.body.cards[0].columns.map((c) => c.code)).toEqual(["GP0", "GP1"]);
+  const none = await post({ q: "قارن" });
+  expect(none.body.intent).toBe("clarify");
+  expect(none.body.suggestions.length).toBeGreaterThan(0);
+  // codes from another agency are not loaded
+  const alien = await post({ q: "compare", previousContext: { job: "find_units", unitCodes: ["NOPE1", "NOPE2"] } });
+  expect(alien.body.intent).toBe("clarify");
+
+  // budget marker: from previousContext.maxPrice
+  const pr = await post({ q: "prices in Gapville", previousContext: { job: "find_units", maxPrice: 3e6 } });
+  expect(pr.body.cards.find((c) => c.kind === "price_range").budget.value).toBe(3e6);
+  const nb = await post({ q: "prices in Gapville" });
+  expect(nb.body.cards.find((c) => c.kind === "price_range").budget).toBeUndefined();
+
+  // deltas: deals / brief / response time carry delta + deltaGood
+  const deals = await post({ q: "deals this month" });
+  const di = deals.body.cards.find((c) => c.kind === "metric_row").items[0];
+  expect(di).toMatchObject({ delta: expect.any(Number), deltaGood: expect.any(Boolean) });
+  const brief = await post({ q: "my activity today", mode: "reports" });
+  expect(brief.body.cards.find((c) => c.kind === "metric_row").items.every((i) => typeof i.delta === "number")).toBe(true);
+  const rt = await post({ q: "response time this month" });
+  if (rt.body.intent === "crm_response_time") {
+    const avg = rt.body.cards.find((c) => c.kind === "metric_row").items[0];
+    if (typeof avg.value === "number") expect(avg).toHaveProperty("deltaGood");
+  }
+
+  // viewings by broker: key is the broker id
+  const futureToday = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  await h.query(
+    `INSERT INTO leads (agency_id, ref, name, phone_e164, phones, lawful_basis, stage, assigned_broker_id, follow_up_status, follow_up_kind, next_follow_up_at, last_contact_at)
+     VALUES ($1, 902, 'Avatar Client', '+201022220098', ARRAY['+201022220098']::text[], 'client_request', 'viewing', $2, 'open', 'viewing', $3, now())`,
+    [h.AGENCY_A, h.BROKERS.broker.id, futureToday]
+  );
+  const v = await post({ q: "viewings today" });
+  const bar = v.body.cards.find((c) => c.kind === "bar_breakdown");
+  if (bar) expect(bar.rows[0].key).toBe(h.BROKERS.broker.id);
+});

@@ -26,6 +26,7 @@ const { formatInterpretation } = require("../lib/search");
 
 const Suggest = require("../domain/assistantSuggestions");
 const Charts = require("../domain/assistantCharts");
+const Q = require("../domain/searchQuery");
 const isManagerOrOwner = (b) => Authz.isManager(b);
 const isTeamLead = (b) => Authz.isTeamLead(b);
 const langOf = (b) => (b?.preferred_lang === "en" ? "en" : "ar");
@@ -188,6 +189,18 @@ function buildDisambiguateResponse({ queryText, rawBroker, matches, en }) {
   };
 }
 
+/** The equal-length window right before `range`, for metric deltas. */
+function prevRange(range) {
+  const span = range.until.getTime() - range.since.getTime();
+  return { since: new Date(range.since.getTime() - span), until: new Date(range.since.getTime()) };
+}
+/** Adds `delta` (now - before) and `deltaGood` (false when it moved the wrong way; `lowerBetter` flips it). */
+function withDelta(item, now, before, lowerBetter = false) {
+  if (typeof now !== "number" || typeof before !== "number") return item;
+  const delta = now - before;
+  return { ...item, delta, deltaGood: lowerBetter ? delta <= 0 : delta >= 0 };
+}
+
 /** Every bar_breakdown gets a text summary (accessibility + share). */
 function withSummaries(r, en) {
   if (!r?.cards) return r;
@@ -195,7 +208,7 @@ function withSummaries(r, en) {
 }
 
 /** "prices in <area>": histogram of the agency's active EGP sale prices there (units the actor may see). */
-async function runPrices(pool, actor, routeInfo, en) {
+async function runPrices(pool, actor, routeInfo, en, budget = null) {
   const place = String(routeInfo.areaQuery || "").trim();
   const { rows } = await pool.query(
     `SELECT price_value FROM listings
@@ -204,7 +217,7 @@ async function runPrices(pool, actor, routeInfo, en) {
         AND (compound ILIKE $2 OR district ILIKE $2 OR city ILIKE $2) LIMIT 2000`,
     [actor.agency_id, `%${place.replace(/[%_\\]/g, "")}%`]
   );
-  const card = Charts.priceRangeCard({ title: en ? `Prices in ${place}` : `الأسعار في ${place}`, place, prices: rows.map((r) => r.price_value), budget: routeInfo.budget, en, link: { screen: "Prices", params: {} } });
+  const card = Charts.priceRangeCard({ title: en ? `Prices in ${place}` : `الأسعار في ${place}`, place, prices: rows.map((r) => r.price_value), budget, en, link: { screen: "Prices", params: {} } });
   return {
     intent: "crm_prices",
     headline: card ? card.summary : (en ? `Not enough units in ${place} to draw a price range (need 3+).` : `مفيش وحدات كفاية في ${place} نرسم منها نطاق الأسعار (محتاج ٣ على الأقل).`),
@@ -212,6 +225,38 @@ async function runPrices(pool, actor, routeInfo, en) {
     cards: card ? [card] : [],
     actions: [],
     links: [{ label: en ? "Price insights" : "أسعار المتر", screen: "Prices", params: {} }],
+    aiUsed: false
+  };
+}
+
+/** "compare": the units of the last search (previousContext.unitCodes), side by side. Same visibility as unit search. */
+async function runCompare(pool, actor, previousContext, routeInfo, en) {
+  const codes = (Array.isArray(previousContext?.unitCodes) ? previousContext.unitCodes : []).map(String).slice(0, routeInfo.count || 3);
+  const { rows } = codes.length >= 2
+    ? await pool.query(`SELECT l.* FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.code = ANY($2::text[])`, [actor.agency_id, codes])
+    : { rows: [] };
+  const units = codes.map((c) => rows.find((r) => r.code === c)).filter(Boolean);
+  const card = Charts.compareCard({ units, en, link: { screen: "UnitsList", params: {} } });
+  if (!card) {
+    return {
+      intent: "clarify",
+      headline: en ? "Search for units first, then ask me to compare them." : "دور على وحدات الأول وبعدين اطلب مني أقارنهم.",
+      windowLabel: en ? "Need units to compare" : "محتاج وحدات للمقارنة",
+      cards: [],
+      actions: [],
+      links: [{ label: en ? "Units list" : "قائمة الوحدات", screen: "UnitsList", params: {} }],
+      nextContext: null,
+      aiUsed: false
+    };
+  }
+  return {
+    intent: "compare",
+    headline: card.summary,
+    windowLabel: en ? "Unit comparison" : "مقارنة الوحدات",
+    cards: [card],
+    actions: [],
+    links: [{ label: en ? "Open all units" : "كل الوحدات", screen: "UnitsList", params: {} }],
+    nextContext: { job: "find_units", unitCodes: units.map((u) => u.code) },
     aiUsed: false
   };
 }
@@ -479,6 +524,14 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       area: areaKey
     });
 
+    const prevDeals = await Deals.dealsSummary(pool, actor, {
+      from: prevRange(range).since,
+      to: prevRange(range).until,
+      brokerId,
+      brokerRole,
+      market: marketFilter,
+      area: areaKey
+    });
     const appliedFilters = [
       en ? `Window: ${range.labelEn}` : `الفترة: ${range.labelAr}`,
       ...(marketFilter ? [en ? `Market: ${marketFilter}` : `السوق: ${marketFilter === "resale" ? "ريسيل" : "برايمري"}`] : []),
@@ -512,8 +565,8 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         {
           kind: "metric_row",
           items: [
-            { label: en ? "Deals" : "الصفقات", value: summary.deals, tone: summary.deals ? "ok" : "neutral" },
-            { label: en ? "Recorded commission" : "عمولة الصفقة المسجلة", value: summary.commissionTotal, tone: "ok", unit: "EGP" },
+            withDelta({ label: en ? "Deals" : "الصفقات", value: summary.deals, tone: summary.deals ? "ok" : "neutral" }, summary.deals, prevDeals.deals),
+            withDelta({ label: en ? "Recorded commission" : "عمولة الصفقة المسجلة", value: summary.commissionTotal, tone: "ok", unit: "EGP" }, summary.commissionTotal, prevDeals.commissionTotal),
             ...(summary.brokerShareTotal != null ? [{ label: en ? "Broker share" : "نصيب البروكر", value: summary.brokerShareTotal, tone: "neutral", unit: "EGP" }] : []),
             { label: en ? "Deal volume" : "حجم المبيعات", value: summary.volume, tone: "neutral", unit: "EGP" }
           ]
@@ -584,7 +637,9 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     const byBroker = new Map();
     for (const r of rows) {
       const k = r.broker_name || (en ? "Unassigned" : "بدون وسيط");
-      byBroker.set(k, (byBroker.get(k) || 0) + 1);
+      const e = byBroker.get(k) || { id: r.assigned_broker_id || k, n: 0 };
+      e.n += 1;
+      byBroker.set(k, e);
     }
     const showBrokers = hasMultiBrokerScope(actor);
     const locale = en ? "en-GB" : "ar-EG";
@@ -604,7 +659,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
           ? [{
               kind: "bar_breakdown",
               title: en ? "By broker" : "حسب البروكر",
-              rows: [...byBroker.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ key: label, label, count }))
+              rows: [...byBroker.entries()].sort((a, b) => b[1].n - a[1].n).map(([label, e]) => ({ key: String(e.id), label, count: e.n }))
             }]
           : []),
         ...(rows.length
@@ -662,7 +717,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     const windowPred = activityMode
       ? `coalesce(fc.at, l.last_contact_at) >= $2 AND coalesce(fc.at, l.last_contact_at) < $3`
       : `l.created_at >= $2 AND l.created_at < $3 AND coalesce(fc.at, l.last_contact_at) >= l.created_at`;
-    const { rows: rawRows } = await pool.query(
+    const respSql = (
       `WITH base AS (
          SELECT l.assigned_broker_id AS broker_id, coalesce(b.name, '—') AS broker_name,
                 GREATEST(0, extract(epoch FROM (coalesce(fc.at, l.last_contact_at) - l.created_at)) / 60) AS mins
@@ -685,9 +740,12 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
               round(percentile_cont(0.5) WITHIN GROUP (ORDER BY mins))::int AS med_min
          FROM base
         GROUP BY broker_id, broker_name
-        ORDER BY sort_grp, avg_min ASC NULLS LAST`,
-      params
+        ORDER BY sort_grp, avg_min ASC NULLS LAST`
     );
+    const { rows: rawRows } = await pool.query(respSql, params);
+    const prev = prevRange(range);
+    const { rows: prevRows } = await pool.query(respSql, [params[0], prev.since.toISOString(), prev.until.toISOString(), ...params.slice(3)]);
+    const prevAvg = prevRows.find((r) => r.broker_id === null && r.broker_name === "__overall__")?.avg_min;
     const overallRow = rawRows.find((r) => r.broker_id === null && r.broker_name === "__overall__");
     const rows = rawRows.filter((r) => !(r.broker_id === null && r.broker_name === "__overall__"));
     const totalResp = Number(overallRow?.responded || 0);
@@ -704,7 +762,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         {
           kind: "metric_row",
           items: [
-            { label: en ? "Average (min)" : "المتوسط (د)", value: weightedAvg ?? "—", tone: weightedAvg != null && weightedAvg <= 30 ? "ok" : "warn" },
+            withDelta({ label: en ? "Average (min)" : "المتوسط (د)", value: weightedAvg ?? "—", tone: weightedAvg != null && weightedAvg <= 30 ? "ok" : "warn" }, weightedAvg, prevAvg == null ? null : Number(prevAvg), true),
             { label: en ? "Median (min)" : "الوسيط (د)", value: overallMed ?? "—", tone: "neutral" },
             { label: en ? "Contacted" : "اتكلموا", value: totalResp, tone: "neutral" }
           ]
@@ -921,18 +979,15 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
   const personal = !hasMultiBrokerScope(actor);
   const range = resolveRange(windowInfo, now, 30);
   if (windowInfo) {
-    const rows = await Dash.brokerActivity(pool, actor.agency_id, { since: range.since, until: range.until });
-    const scoped = rows.filter((b) => b.active !== false && (!personal || b.id === actor.id));
-    const agg = scoped.reduce(
-      (s, b) => ({
-        calls: s.calls + Number(b.calls || 0),
-        viewings: s.viewings + Number(b.viewings || 0),
-        updates: s.updates + Number(b.updates || 0),
-        leads: s.leads + Number(b.leads || 0),
-        deals: s.deals + Number(b.deals || 0)
-      }),
-      { calls: 0, viewings: 0, updates: 0, leads: 0, deals: 0 }
-    );
+    const sumActivity = async (r) =>
+      (await Dash.brokerActivity(pool, actor.agency_id, { since: r.since, until: r.until }))
+        .filter((b) => b.active !== false && (!personal || b.id === actor.id))
+        .reduce(
+          (t, b) => ({ calls: t.calls + Number(b.calls || 0), viewings: t.viewings + Number(b.viewings || 0), updates: t.updates + Number(b.updates || 0), leads: t.leads + Number(b.leads || 0), deals: t.deals + Number(b.deals || 0) }),
+          { calls: 0, viewings: 0, updates: 0, leads: 0, deals: 0 }
+        );
+    const prevAgg = await sumActivity(prevRange(range));
+    const agg = await sumActivity(range);
     return {
       intent: "crm_brief",
       headline: personal
@@ -943,11 +998,11 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         {
           kind: "metric_row",
           items: [
-            { label: en ? "Calls" : "مكالمات", value: agg.calls, tone: "neutral" },
-            { label: en ? "Viewings" : "معاينات", value: agg.viewings, tone: "neutral" },
-            { label: en ? "Updates" : "تحديثات", value: agg.updates, tone: "ok" },
-            { label: en ? "New leads" : "عملاء جدد", value: agg.leads, tone: "neutral" },
-            { label: en ? "Deals" : "صفقات", value: agg.deals, tone: agg.deals ? "ok" : "neutral" }
+            withDelta({ label: en ? "Calls" : "مكالمات", value: agg.calls, tone: "neutral" }, agg.calls, prevAgg.calls),
+            withDelta({ label: en ? "Viewings" : "معاينات", value: agg.viewings, tone: "neutral" }, agg.viewings, prevAgg.viewings),
+            withDelta({ label: en ? "Updates" : "تحديثات", value: agg.updates, tone: "ok" }, agg.updates, prevAgg.updates),
+            withDelta({ label: en ? "New leads" : "عملاء جدد", value: agg.leads, tone: "neutral" }, agg.leads, prevAgg.leads),
+            withDelta({ label: en ? "Deals" : "صفقات", value: agg.deals, tone: agg.deals ? "ok" : "neutral" }, agg.deals, prevAgg.deals)
           ]
         }
       ],
@@ -1281,7 +1336,12 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
     return { modeUsed: safeMode, ...withSummaries(r, en) };
   }
   if (routeInfo.route === "crm_prices") {
-    return { modeUsed: safeMode, ...(await runPrices(pool, actor, routeInfo, en)) };
+    // Budget: stated in the question (local parser, no AI) or carried from the search before.
+    const budget = Q.fallbackParse(cleanText)?.filters?.price_max || Number(previousContext?.maxPrice) || null;
+    return { modeUsed: safeMode, ...(await runPrices(pool, actor, routeInfo, en, budget)) };
+  }
+  if (routeInfo.route === "compare") {
+    return { modeUsed: safeMode, ...(await runCompare(pool, actor, previousContext, routeInfo, en)) };
   }
   if (routeInfo.route.startsWith("crm_")) {
     const r = await runExecutiveReport(pool, actor, routeInfo, now, en, cleanText);
@@ -1431,7 +1491,8 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
     market: effectiveMarketLock,
     maxPrice: effectiveMaxPrice,
     f,
-    originalQuery: searchText
+    originalQuery: searchText,
+    unitCodes: rows.slice(0, 5).map((r) => r.code).filter(Boolean)
   };
   const understood = {
     job: "find_units",
