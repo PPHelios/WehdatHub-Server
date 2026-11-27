@@ -16,6 +16,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
 | `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
 | `WHATSAPP_ALLOWED_NUMBER` | no | `01055881114` | The only number WhatsApp talks to (the CRM owner's; national or international form). Other senders get no reply, and nothing is sent on WhatsApp to any other number. Both checks are in `lib/waOwnerOnly.js`. |
+| `WHATSAPP_BUSINESS_PHONE` | no | `201099990000` | The business WhatsApp number shown on sign-up so a trial user can message it (used by `api/auth.js` and `services/trialSignup.js`). Empty hides the WhatsApp option. |
 | `TEST_SWITCH_PHONE` | no | (unset) | The test number that may switch its own role on the website (owner, manager, broker, data entry). Off unless `TEST_SWITCH_AGENCY_ID` is also set. The CRM admin number is never allowed. |
 | `TEST_SWITCH_AGENCY_ID` | no | (unset) | The ID of the test agency the role switch works in (the POC test agency). Off unless `TEST_SWITCH_PHONE` is also set. |
 | `TEST_SWITCH_VIEW_AGENCY_ID` | no | (unset) | Optional. The other agency (for example NCH) the test number may view on the website, read-only, with a switch. Nothing is written there, and Telegram and jobs stay on the test agency. |
@@ -312,6 +313,13 @@ If Meta blocks or restricts the bot's number:
 * Switch it on for an agency: **/app/owner** → **Market analytics** tab → "Turn on" beside the agency, or the agency's own page (**/app/owner/agencies/:id**) → Market analytics. Off by default. Once on, that agency's managers and owner (not brokers) get the **Market** page (`/app/market`) and a menu item; off removes both at once. The mobile app has no insights endpoint yet.
 * Export the aggregate tables as CSV from the same tab (`/app/owner/analytics/market_daily.csv`, `funnel_monthly.csv`, `search_daily.csv`).
 * Thresholds live in `domain/analyticsPrivacy.js` (5 agencies, 10 rows). Changing them only affects rows written from then on.
+
+## 7h. Ask assistant QA loop (local only)
+
+- **Seed:** `npm run qa:seed` (after `node --env-file=.env scripts/seed-ask.js seed`). Adds leads in every queue, viewings, deals, sources, lost reasons, leases and stale units, all tagged "QA " with fake `2010000xxxxx` phones; running it again replaces only its own rows. It refuses a database that is not localhost.
+- **Run:** `npm run qa:assistant` asks every question of `tests/fixtures/assistant-questions.json` as owner, manager and broker1, with no AI (`--ai` allows it; `--only <id>`, `--fixture <file>`, `--agency <id>`). Exit code 1 when anything fails. Counts only, no client names.
+- **Misses:** brokers' thumbs-down (`POST /api/v1/assistant/feedback`) and the automatic "didn't get that" are kept in `assistant_feedback` for 90 days (job `assistant_feedback_sweep`). Questions are scrubbed first (phones, emails and digit runs of 7+ become `#` / `@`, 200 characters). Read them with `node --env-file=.env scripts/assistant-misses.js [--days 7] [--agency <id>]`.
+- **Weekly loop:** read the misses, add the real ones to the fixture (with the expected route), run `npm run qa:assistant`, fix the router, run again.
 
 ## 8. Common problems
 

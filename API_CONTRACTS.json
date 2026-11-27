@@ -72,6 +72,36 @@
       "prompt": ["question", "blocks", "params"],
       "parseAnswer": ["text", "lang"]
     },
+    "domain/assistantCharts.js": {
+      "trendDirection": ["values"],
+      "trendCard": ["params"],
+      "shareCard": ["params"],
+      "priceRangeCard": ["params"],
+      "compareCard": ["params"],
+      "barSummary": ["title", "rows", "en"]
+    },
+    "domain/assistantFeedback.js": {
+      "scrubQuestion": ["text"]
+    },
+    "domain/assistantRouter.js": {
+      "MODES": "Array",
+      "DAY_MS": "Number",
+      "MAX_RANGE_DAYS": "Number",
+      "normalize": ["raw"],
+      "addCairoDaysYmd": ["ymd", "deltaDays"],
+      "cairoMidnight": ["ymd"],
+      "extractTimeWindow": ["raw", "now"],
+      "resolveInterval": ["params"],
+      "extractSourceFilter": ["q"],
+      "findMatchingBrokers": ["brokers", "rawQuery"],
+      "classifyAssistantQuery": ["params"]
+    },
+    "domain/assistantSuggestions.js": {
+      "suggestionsFor": ["params"],
+      "ROLES": "Array",
+      "NEXT": "Object",
+      "POOL": "Object"
+    },
     "domain/brand.js": {
       "BRAND": "Object",
       "cssTokens": []
@@ -89,38 +119,6 @@
       "linesFromText": ["input"],
       "mergeFacts": ["pages"],
       "highlightsFor": ["h", "lang"]
-    },
-    "domain/assistantCharts.js": {
-      "trendDirection": ["values"],
-      "trendCard": ["params"],
-      "shareCard": ["params"],
-      "priceRangeCard": ["params"],
-      "compareCard": ["params"],
-      "barSummary": ["title", "rows", "en"]
-    },
-    "domain/assistantSuggestions.js": {
-      "suggestionsFor": ["params"],
-      "ROLES": "Array",
-      "NEXT": "Object",
-      "POOL": "Object"
-    },
-    "domain/assistantRouter.js": {
-      "MODES": "Array",
-      "DAY_MS": "Number",
-      "MAX_RANGE_DAYS": "Number",
-      "normalize": ["raw"],
-      "addCairoDaysYmd": ["ymd", "deltaDays"],
-      "cairoMidnight": ["ymd"],
-      "extractTimeWindow": ["raw", "now"],
-      "resolveInterval": ["params"],
-      "extractSourceFilter": ["q"],
-      "findMatchingBrokers": ["brokers", "rawQuery"],
-      "classifyAssistantQuery": ["params"]
-    },
-    "domain/discipline.js": {
-      "UPDATE_EVENT_KINDS": "Array",
-      "classifyBroker": ["params"],
-      "summarizeBoard": ["board"]
     },
     "domain/catalogueUpdate.js": {
       "ACTIONS": "Array",
@@ -300,6 +298,11 @@
       "unreadable": ["colors"],
       "cssVars": ["colors", "shape"]
     },
+    "domain/discipline.js": {
+      "UPDATE_EVENT_KINDS": "Array",
+      "classifyBroker": ["params"],
+      "summarizeBoard": ["board"]
+    },
     "domain/features.js": {
       "FEATURES": "Array",
       "normalizeForMatch": ["text"],
@@ -332,6 +335,10 @@
       "MAX_TEXT": "Number",
       "firstName": ["name"],
       "template": ["params"]
+    },
+    "domain/franco.js": {
+      "LEXICON": "Object",
+      "toArabic": ["text"]
     },
     "domain/furnishingStatus.js": {
       "FURNISHING_STATUSES": "Array",
@@ -782,6 +789,11 @@
       "appendTo": ["where", "args", "list"],
       "OLD_AFTER_DAYS": "Number"
     },
+    "domain/urgency.js": {
+      "URGENCY": "Object",
+      "roleGroup": ["role"],
+      "buildPriorities": ["params"]
+    },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
       "vocabularyRows": [],
@@ -986,23 +998,14 @@
       "withCodeLock": ["pool", "agencyId", "code", "fn"],
       "FIELD_LABELS": "Object"
     },
-    "lib/failureInfo.js": {
-      "SEVERITIES": "Array",
-      "describe": ["operationType", "code"],
-      "SEVERITY_SQL": "String"
-    },
-    "lib/ownerAlerts.js": {
-      "CATEGORIES": "Array",
-      "SEVERITIES": "Array",
-      "SEVERITY_LABELS": "Object",
-      "DEFAULTS": "Object",
-      "KEY": "String",
-      "get": ["pool", "params"],
-      "save": ["pool", "input"],
-      "allowed": ["pool", "categoryId"],
-      "permits": ["settings", "categoryId"],
-      "clean": ["v"],
-      "invalidate": []
+    "lib/entitlements.js": {
+      "PATHS": "Object",
+      "featuresOf": ["surface", "path"],
+      "upgradeLine": ["lang", "params"],
+      "assertAllowed": ["pool", "broker", "feature"],
+      "inviteRoles": ["pool", "broker", "roles"],
+      "web": ["pool", "params"],
+      "api": ["pool"]
     },
     "lib/errorReports.js": {
       "capture": ["err", "params"],
@@ -1016,15 +1019,6 @@
       "RETENTION_DAYS": "Number",
       "REPORTS_PER_HOUR": "Number"
     },
-    "lib/entitlements.js": {
-      "PATHS": "Object",
-      "featuresOf": ["surface", "path"],
-      "upgradeLine": ["lang", "params"],
-      "assertAllowed": ["pool", "broker", "feature"],
-      "inviteRoles": ["pool", "broker", "roles"],
-      "web": ["pool", "params"],
-      "api": ["pool"]
-    },
     "lib/errorText.js": {
       "of": ["code", "lang"],
       "ofOrGeneric": ["code", "lang"],
@@ -1035,6 +1029,11 @@
       "buildMultiPlanWorkbook": ["params"],
       "buildRejectionWorkbook": ["params"],
       "sanitizeCellValue": ["val"]
+    },
+    "lib/failureInfo.js": {
+      "SEVERITIES": "Array",
+      "describe": ["operationType", "code"],
+      "SEVERITY_SQL": "String"
     },
     "lib/failureLog.js": {
       "middleware": ["pool", "params"],
@@ -1171,9 +1170,6 @@
       "assignCommand": ["broker", "params", "ctx"],
       "handleButton": ["broker", "id", "ctx"]
     },
-    "lib/memoCache.js": {
-      "createLru": ["params"]
-    },
     "lib/links.js": {
       "compareUrl": ["agencySlug", "token"],
       "viewingUrl": ["token"],
@@ -1264,6 +1260,9 @@
     "lib/media.js": {
       "download": ["id", "mimeHint"]
     },
+    "lib/memoCache.js": {
+      "createLru": ["params"]
+    },
     "lib/migrate.js": {
       "MIGRATIONS_DIR": "String",
       "listMigrations": ["dir"],
@@ -1341,6 +1340,19 @@
       "botDigits": ["raw"],
       "startLink": ["botPhone", "lang"],
       "startLines": ["plan", "botPhone"]
+    },
+    "lib/ownerAlerts.js": {
+      "CATEGORIES": "Array",
+      "SEVERITIES": "Array",
+      "SEVERITY_LABELS": "Object",
+      "DEFAULTS": "Object",
+      "KEY": "String",
+      "get": ["pool", "params"],
+      "save": ["pool", "input"],
+      "allowed": ["pool", "categoryId"],
+      "permits": ["settings", "categoryId"],
+      "clean": ["v"],
+      "invalidate": []
     },
     "lib/pdfPages.js": {
       "pageCount": ["buffer"],
@@ -2769,6 +2781,8 @@
       "build": ["pool", "viewer", "now"],
       "tasksOf": ["d"],
       "oldUnitsFor": ["pool", "viewer", "now"],
+      "oldUnits": ["pool", "v", "ids", "now", "limit", "offset"],
+      "scopeIds": ["pool", "v"],
       "home": ["pool", "viewer", "now"],
       "overduePage": ["pool", "viewer", "offset"],
       "OLD_AFTER_DAYS": "Number"
@@ -3232,11 +3246,6 @@
       "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"],
       "statusForm": ["code", "en", "csrf", "back", "inline"]
-    },
-    "domain/urgency.js": {
-      "URGENCY": "Object",
-      "roleGroup": ["role"],
-      "buildPriorities": ["params"]
     }
   },
   "invariant_variable_names": {

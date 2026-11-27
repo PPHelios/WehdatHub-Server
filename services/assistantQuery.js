@@ -153,6 +153,20 @@ function buildUnitAppliedFilters(filters, marketLock, en) {
   return out;
 }
 
+/** The understood filters as data (the app's "why it matches" chips); null = not asked. */
+function structuredUnitFilters(filters) {
+  const f = filters || {};
+  const n = (v) => (v == null ? null : v);
+  return {
+    bedrooms: { min: n(f.bedrooms_min), max: n(f.bedrooms_max) },
+    propertyTypes: Array.isArray(f.property_types) ? f.property_types : [],
+    finishing: Array.isArray(f.finishing) ? f.finishing : [],
+    places: Array.isArray(f.places) && f.places.length ? f.places.map((p) => p.key) : Array.isArray(f.place_terms) ? f.place_terms : [],
+    price: { min: n(f.price_min), max: n(f.price_max) },
+    delivery: { ready: typeof f.delivery_ready === "boolean" ? f.delivery_ready : null, byYear: n(f.delivery_by_year) }
+  };
+}
+
 function flexBrokerRegex(rawBroker) {
   const clean = String(rawBroker || "").replace(/[\u0640\u064b-\u065f]/g, "").trim();
   if (!clean) return null;
@@ -265,6 +279,7 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
   if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
     return {
       intent: "clarify",
+      notForRole: true,
       headline: en ? "Team performance is limited to managers and team leads." : "تقارير أداء الفريق متاحة للمديرين وقادة الفرق بس.",
       windowLabel: en ? "Access scope" : "الصلاحيات",
       cards: [],
@@ -312,7 +327,7 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
   if (route === "crm_team" && isManagerOrOwner(actor) && !isTeamLead(actor) && teamQuery) {
     const qTeam = Router.normalize(teamQuery);
     const { rows: tls } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND lower(role) = 'team_lead' AND is_active", [actor.agency_id]);
-    const hit = tls.find((t) => Router.normalize(t.name).includes(qTeam));
+    const hit = tls.find((t) => Router.normalize(t.name).includes(qTeam)) || Router.findMatchingBrokers(tls, teamQuery)[0];
     if (!hit) {
       return {
         intent: "clarify",
@@ -698,6 +713,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
       return {
         intent: "clarify",
+      notForRole: true,
         headline: en ? "Response time breakdowns are available to managers and team leads." : "تقارير وقت الرد متاحة للمديرين وقادة الفرق بس.",
         windowLabel: en ? "Role scope" : "الصلاحيات",
         cards: [],
@@ -781,9 +797,10 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     };
   }
 
-  if (!isManagerOrOwner(actor)) {
+  if (!isManagerOrOwner(actor) && route !== "crm_stale_units") {
     return {
       intent: "clarify",
+      notForRole: true,
       headline: en ? "Agency financial and marketing totals are available to managers only." : "تقارير العمولات والتسويق متاحة للمديرين وصاحب الشركة بس.",
       windowLabel: en ? "Role scope" : "الصلاحيات",
       cards: [],
@@ -822,6 +839,34 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       ],
       actions: [],
       links: [{ label: overdueOnly ? (en ? "Overdue commissions" : "العمولات المتأخرة") : (en ? "Open Commissions" : "افتح العمولات"), screen: "Commissions", params: { kind: "developers", ...(overdueOnly ? { overdue: true } : {}) } }],
+      aiUsed: false
+    };
+  }
+  if (route === "crm_stale_units") {
+    const Today = require("./today"); // same definition and scope as the Dashboard's "stale" count
+    const ids = Authz.isDataEntry(actor) ? [actor.id] : await Today.scopeIds(pool, actor);
+    const old = await Today.oldUnits(pool, actor, ids, now, 8);
+    const total = old?.total || 0;
+    const days = Today.OLD_AFTER_DAYS;
+    return {
+      intent: "crm_stale_units",
+      headline: total
+        ? (en ? `${total} unit(s) not confirmed for ${days}+ days` : `${total} وحدة محدّش أكدها من ${days} يوم أو أكتر`)
+        : (en ? "No stale units. Everything is up to date." : "مفيش وحدات قديمة. كله محدّث."),
+      windowLabel: en ? "Live" : "دلوقتي",
+      cards: [
+        { kind: "metric_row", items: [{ label: en ? "Stale units" : "وحدات قديمة", value: total, tone: total ? "warn" : "ok" }] },
+        ...(old?.items.length
+          ? [{
+              kind: "bar_breakdown",
+              title: en ? "Oldest first" : "الأقدم الأول",
+              rows: old.items.map((u) => ({ key: u.code, label: `${u.code} · ${u.line}`, count: u.days, valueLabel: en ? `${u.days} d` : `${u.days} يوم` })),
+              link: { screen: "UnitsList", params: {} }
+            }]
+          : [])
+      ],
+      actions: [],
+      links: [{ label: en ? "Open Units" : "افتح الوحدات", screen: "UnitsList", params: {} }],
       aiUsed: false
     };
   }
@@ -1056,7 +1101,7 @@ async function runOpenedNoFollowup(pool, actor, en) {
   }
   const { rows } = await pool.query(
     `SELECT l.id, l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name,
-            MAX(s.last_opened_at) AS last_opened_at, SUM(s.open_count)::int AS total_opens
+            MAX(s.last_opened_at) AS last_opened_at, SUM(s.open_count)::int AS total_opens, count(*) OVER()::int AS total_n
        FROM share_links s
        JOIN listings u ON u.id = s.listing_id AND u.agency_id = s.agency_id
        JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
@@ -1071,18 +1116,19 @@ async function runOpenedNoFollowup(pool, actor, en) {
       LIMIT 10`,
     args
   );
+  const total = rows[0]?.total_n ?? 0;
   const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
   const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
   const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, new Set()) : [];
   return {
     intent: "crm_opened_no_followup",
-    headline: en ? `Offer link opened · ${rows.length} without follow-up` : `اتفتح رابط العرض · ${rows.length} بدون متابعة`,
+    headline: en ? `Offer link opened · ${total} without follow-up` : `اتفتح رابط العرض · ${total} بدون متابعة`,
     windowLabel: en ? "Offer link opened (grouped by client)" : "فتح رابط العرض (مجمّع حسب العميل)",
     cards: [
       {
         kind: "stuck_leads",
         queue: "no_next_step",
-        total: rows.length,
+        total,
         recommendedBrokers,
         canAssign,
         canNudge,
@@ -1118,7 +1164,7 @@ async function runApproachingSla(pool, actor, now, en) {
   if (rules.enabled) {
     args.push(now.toISOString(), new Date(now.getTime() + 30 * 60 * 1000).toISOString());
     rows = (await pool.query(
-      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.response_due_at AS ts
+      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.response_due_at AS ts, count(*) OVER()::int AS total_n
          FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
         WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage = 'new' AND l.last_contact_at IS NULL
           AND l.response_due_at IS NOT NULL AND l.response_due_at > $${args.length - 1} AND l.response_due_at <= $${args.length}${scopeSql}
@@ -1130,7 +1176,7 @@ async function runApproachingSla(pool, actor, now, en) {
     const min60 = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
     args.push(min60, min40);
     rows = (await pool.query(
-      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.created_at AS ts
+      `SELECT l.ref, l.name, l.stage, l.version, l.assigned_broker_id, b.name AS assignee_name, l.created_at AS ts, count(*) OVER()::int AS total_n
          FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
         WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL
           AND l.created_at > $${args.length - 1} AND l.created_at <= $${args.length}${scopeSql}
@@ -1138,20 +1184,21 @@ async function runApproachingSla(pool, actor, now, en) {
       args
     )).rows;
   }
+  const total = rows[0]?.total_n ?? 0;
   const canAssign = (isManagerOrOwner(actor) || isTeamLead(actor)) && allowsFeature(actor, "assignLeads");
   const canNudge = (isManagerOrOwner(actor) || isTeamLead(actor)) && hasMultiBrokerScope(actor);
   const recommendedBrokers = canAssign ? await recommendedForAgency(pool, actor, new Set()) : [];
   return {
     intent: "crm_approaching_sla",
     headline: rules.enabled
-      ? (en ? `${rows.length} lead(s) approaching SLA deadline` : `${rows.length} عميل قربوا على حد الـSLA`)
-      : (en ? `${rows.length} lead(s) waiting 40–59 min (agency SLA off)` : `${rows.length} عميل مستنيين ٤٠–٥٩ دقيقة (SLA مقفول)`),
+      ? (en ? `${total} lead(s) approaching SLA deadline` : `${total} عميل قربوا على حد الـSLA`)
+      : (en ? `${total} lead(s) waiting 40–59 min (agency SLA off)` : `${total} عميل مستنيين ٤٠–٥٩ دقيقة (SLA مقفول)`),
     windowLabel: rules.enabled ? (en ? "Agency SLA deadline" : "حسب قاعدة SLA") : (en ? "Waiting 40–59 min" : "انتظار ٤٠–٥٩ دقيقة"),
     cards: [
       {
         kind: "stuck_leads",
         queue: "waiting-over-1h",
-        total: rows.length,
+        total,
         recommendedBrokers,
         canAssign,
         canNudge,
@@ -1176,6 +1223,7 @@ async function runStuckBrokers(pool, actor, routeInfo, now, en) {
   if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
     return {
       intent: "clarify",
+      notForRole: true,
       headline: en ? "Team next-step rankings are limited to managers and team leads." : "ترتيب الوسطاء متاح للمديرين وقادة الفرق بس.",
       windowLabel: en ? "Access scope" : "الصلاحيات",
       cards: [],
@@ -1229,7 +1277,7 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
   if (!cleanText) return { error: "empty" };
 
   const routeInfo = Router.classifyAssistantQuery({ text: cleanText, mode: safeMode, now, previousContext });
-  if (Authz.isDataEntry(actor) && routeInfo.route !== "unit_search") {
+  if (Authz.isDataEntry(actor) && routeInfo.route !== "unit_search" && routeInfo.route !== "crm_stale_units") {
     return {
       intent: "clarify",
       modeUsed: safeMode,
@@ -1381,6 +1429,7 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
         job: "inventory_count",
         market: found.parsed?.filters?.market || marketLock,
         appliedFilters,
+        filters: structuredUnitFilters(found.parsed?.filters),
         exclusions: routeInfo.exclusions || [],
         unsupportedFilters: unapplied
       },
@@ -1397,7 +1446,10 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
 
   if (routeInfo.route === "primary") {
     const data = await ProjectSearch.fromQuery(pool, actor, { q: cleanText }, { AI }).catch(() => null);
-    const out = await Assistant.ask(pool, actor, cleanText, { channel: "app", results: data }).catch((err) => ({ error: err?.code || "ai" }));
+    // 1-3 projects that all have priced unit offers: the code-built answer line says it all, so the AI call is skipped (cost).
+    const complete = Boolean(data) && data.total_projects >= 1 && data.total_projects <= 3 && data.projects?.length === data.total_projects
+      && data.projects.every((p) => p.offers_total > 0 && p.offers?.length > 0 && p.offers.every((o) => o.price > 0));
+    const out = complete ? {} : await Assistant.ask(pool, actor, cleanText, { channel: "app", results: data }).catch((err) => ({ error: err?.code || "ai" }));
     const local = data ? AnswerLine.line(data, lang) : "";
     const answerText = out.answer || local || (en ? "No matching project information found in your catalogue." : "مفيش معلومات مطابقة في كتالوج المشاريع.");
     const aiUsed = Boolean(out.answer && !out.error && out.question_id);
@@ -1498,6 +1550,7 @@ async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto",
     job: "find_units",
     market: effectiveMarketLock,
     appliedFilters,
+    filters: structuredUnitFilters(found.parsed?.filters),
     exclusions: routeInfo.exclusions || [],
     unsupportedFilters: unapplied
   };
@@ -1580,12 +1633,14 @@ async function withAvatars(pool, actor, answer) {
 
 /** Every answer carries follow-up chips (domain/assistantSuggestions), so no reply is a dead end. */
 async function query(pool, params) {
+  // The request language wins over the profile language for the answer text.
+  if (params.lang === "en" || params.lang === "ar") params = { ...params, actor: { ...params.actor, preferred_lang: params.lang } };
   const r = await withAvatars(pool, params.actor, await queryInner(pool, params));
   if (!r || r.error) return r;
   const actor = params.actor;
   const role = Authz.isDataEntry(actor) ? "data_entry" : isManagerOrOwner(actor) ? "manager" : isTeamLead(actor) ? "team_lead" : "broker";
   const suggestions = Suggest.suggestionsFor({
-    intent: r.intent,
+    intent: r.notForRole ? "not_for_role" : r.intent,
     kind: r.intent === "unit_search" && r.units?.status === "none" ? "none" : undefined,
     role,
     lang: langOf(actor),

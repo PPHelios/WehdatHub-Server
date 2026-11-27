@@ -314,4 +314,4 @@ async function overduePage(pool, viewer, offset) {
   return await oldUnits(pool, viewer, await scopeIds(pool, viewer), new Date(), 20, offset) || { total: 0, items: [] };
 }
 
-module.exports = { build, tasksOf, oldUnitsFor, home, overduePage, OLD_AFTER_DAYS };
+module.exports = { build, tasksOf, oldUnitsFor, oldUnits, scopeIds, home, overduePage, OLD_AFTER_DAYS };

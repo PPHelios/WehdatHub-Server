@@ -12,22 +12,22 @@ const { createPool } = require("../lib/db");
 const WebAuth = require("../lib/webAuth");
 
 const TEST_PROJECTS = [
-  { name: "جزيل ريزدنس", name_en: "JAZEEL RESIDENCE", district: "Obour", city: "Cairo", status: "active", notes: "🔥 يونت 110 م الدور الاول سعرها = 2,900,000 مقدم 10% = 290,000 قسط شهري على 8 سنين = 27,187\n🔥 يونت 153 م سعرها = 4,100,000 مقدم 10% = 410,000 قسط شهري = 21,000 تقسيط 10 سنين" },
-  { name: "ارابيسك نيو عبور", name_en: "Arabisk New Obour", district: "New Obour", city: "Cairo", status: "active", notes: "شقة 130 م سعرها = 3,900,000 مقدم 5% = 195,000 تقسيط 8 سنين\nشقة 3 غرف 150 م سعرها = 4,500,000 مقدم 5% = 225,000 تقسيط 8 سنين" },
-  { name: "PMC Mall", name_en: "PMC Mall", district: "Sheikh Zayed", city: "Giza", status: "active", notes: "مكتب 60 م سعرها = 6,000,000 مقدم 10% = 600,000 تقسيط 7 سنين" },
-  { name: "هايد بارك", name_en: "Hyde Park", district: "New Cairo", city: "Cairo", status: "active", notes: "شقة 3 غرف 180 م سعرها = 5,400,000 مقدم 10% = 540,000 قسط شهري = 30,000 على 6 سنين\nشقة 2 غرف 120 م سعرها = 3,800,000 مقدم 10% = 380,000 قسط شهري = 21,000" },
-  { name: "كابيتال جاردنز", name_en: "Capital Gardens", district: "New Capital", city: "Cairo", status: "active", notes: "شقة 95 م سعرها = 2,600,000 مقدم 15% = 390,000 تقسيط 7 سنين\nشقة 140 م سعرها = 3,700,000 مقدم 15% = 555,000 تقسيط 7 سنين" },
-  { name: "ميڤيدا", name_en: "Mivida", district: "New Cairo", city: "Cairo", status: "active", notes: "فيلا 320 م سعرها = 18,000,000 مقدم 20% = 3,600,000 تقسيط 8 سنين\nشقة 175 م سعرها = 6,200,000 مقدم 10% = 620,000 تقسيط 8 سنين" },
-  { name: "ماونتن فيو", name_en: "Mountain View iCity", district: "New Cairo", city: "Cairo", status: "active", notes: "شقة 130 م سعرها = 4,100,000 مقدم 10% = 410,000 قسط شهري = 25,000 على 7 سنين\nشقة 90 م سعرها = 2,900,000 مقدم 10% = 290,000 قسط شهري = 18,000" },
-  { name: "الكمبوند الجديد", name_en: "Sample Compound A", district: "Obour", city: "Cairo", status: "active", notes: "شقة سعرها = 2,500,000 مقدم 10% = 250,000 تقسيط 5 سنين" },
-  { name: "ريزيدنس تاون", name_en: "Town Residence", district: "Madinaty", city: "Cairo", status: "active", notes: "شقة 165 م سعرها = 4,900,000 مقدم 10% = 490,000 تقسيط 8 سنين\nشقة 2 غرف 110 م سعرها = 3,300,000 مقدم 10% = 330,000" },
-  { name: "سكاي لاين", name_en: "Skyline Towers", district: "6th of October", city: "Giza", status: "active", notes: "شقة 210 م سعرها = 7,800,000 مقدم 15% = 1,170,000 تقسيط 10 سنين" },
-  { name: "جرين بارك", name_en: "Green Park Villas", district: "Sheikh Zayed", city: "Giza", status: "active", notes: "فيلا مستقلة سعرها = 22,000,000 مقدم 20% = 4,400,000 تقسيط 9 سنين" },
-  { name: "نيو ليجاسي", name_en: "New Legacy", district: "New Cairo", city: "Cairo", status: "active", notes: "شقة 100 م سعرها = 3,000,000 مقدم 10% = 300,000 تقسيط 6 سنين\nشقة 150 م سعرها = 4,400,000 مقدم 10% = 440,000 تقسيط 6 سنين" },
-  { name: "بيفرلي هيلز", name_en: "Beverly Hills", district: "Sheikh Zayed", city: "Giza", status: "active", notes: "شقة 125 م سعرها = 4,000,000 مقدم 10% = 400,000 تقسيط 8 سنين" },
-  { name: "رويال ستي", name_en: "Royal City", district: "Sheikh Zayed", city: "Giza", status: "active", notes: "مكتب 45 م سعرها = 2,200,000 مقدم 10% = 220,000 تقسيط 5 سنين" },
+  { name: "جزيل ريزدنس", name_en: "JAZEEL RESIDENCE", district: "Obour", city: "Cairo", status: "selling", notes: "🔥 يونت 110 م الدور الاول سعرها = 2,900,000 مقدم 10% = 290,000 قسط شهري على 8 سنين = 27,187\n🔥 يونت 153 م سعرها = 4,100,000 مقدم 10% = 410,000 قسط شهري = 21,000 تقسيط 10 سنين" },
+  { name: "ارابيسك نيو عبور", name_en: "Arabisk New Obour", district: "New Obour", city: "Cairo", status: "selling", notes: "شقة 130 م سعرها = 3,900,000 مقدم 5% = 195,000 تقسيط 8 سنين\nشقة 3 غرف 150 م سعرها = 4,500,000 مقدم 5% = 225,000 تقسيط 8 سنين" },
+  { name: "PMC Mall", name_en: "PMC Mall", district: "Sheikh Zayed", city: "Giza", status: "selling", notes: "مكتب 60 م سعرها = 6,000,000 مقدم 10% = 600,000 تقسيط 7 سنين" },
+  { name: "هايد بارك", name_en: "Hyde Park", district: "New Cairo", city: "Cairo", status: "selling", notes: "شقة 3 غرف 180 م سعرها = 5,400,000 مقدم 10% = 540,000 قسط شهري = 30,000 على 6 سنين\nشقة 2 غرف 120 م سعرها = 3,800,000 مقدم 10% = 380,000 قسط شهري = 21,000" },
+  { name: "كابيتال جاردنز", name_en: "Capital Gardens", district: "New Capital", city: "Cairo", status: "selling", notes: "شقة 95 م سعرها = 2,600,000 مقدم 15% = 390,000 تقسيط 7 سنين\nشقة 140 م سعرها = 3,700,000 مقدم 15% = 555,000 تقسيط 7 سنين" },
+  { name: "ميڤيدا", name_en: "Mivida", district: "New Cairo", city: "Cairo", status: "selling", notes: "فيلا 320 م سعرها = 18,000,000 مقدم 20% = 3,600,000 تقسيط 8 سنين\nشقة 175 م سعرها = 6,200,000 مقدم 10% = 620,000 تقسيط 8 سنين" },
+  { name: "ماونتن فيو", name_en: "Mountain View iCity", district: "New Cairo", city: "Cairo", status: "selling", notes: "شقة 130 م سعرها = 4,100,000 مقدم 10% = 410,000 قسط شهري = 25,000 على 7 سنين\nشقة 90 م سعرها = 2,900,000 مقدم 10% = 290,000 قسط شهري = 18,000" },
+  { name: "الكمبوند الجديد", name_en: "Sample Compound A", district: "Obour", city: "Cairo", status: "selling", notes: "شقة سعرها = 2,500,000 مقدم 10% = 250,000 تقسيط 5 سنين" },
+  { name: "ريزيدنس تاون", name_en: "Town Residence", district: "Madinaty", city: "Cairo", status: "selling", notes: "شقة 165 م سعرها = 4,900,000 مقدم 10% = 490,000 تقسيط 8 سنين\nشقة 2 غرف 110 م سعرها = 3,300,000 مقدم 10% = 330,000" },
+  { name: "سكاي لاين", name_en: "Skyline Towers", district: "6th of October", city: "Giza", status: "selling", notes: "شقة 210 م سعرها = 7,800,000 مقدم 15% = 1,170,000 تقسيط 10 سنين" },
+  { name: "جرين بارك", name_en: "Green Park Villas", district: "Sheikh Zayed", city: "Giza", status: "selling", notes: "فيلا مستقلة سعرها = 22,000,000 مقدم 20% = 4,400,000 تقسيط 9 سنين" },
+  { name: "نيو ليجاسي", name_en: "New Legacy", district: "New Cairo", city: "Cairo", status: "selling", notes: "شقة 100 م سعرها = 3,000,000 مقدم 10% = 300,000 تقسيط 6 سنين\nشقة 150 م سعرها = 4,400,000 مقدم 10% = 440,000 تقسيط 6 سنين" },
+  { name: "بيفرلي هيلز", name_en: "Beverly Hills", district: "Sheikh Zayed", city: "Giza", status: "selling", notes: "شقة 125 م سعرها = 4,000,000 مقدم 10% = 400,000 تقسيط 8 سنين" },
+  { name: "رويال ستي", name_en: "Royal City", district: "Sheikh Zayed", city: "Giza", status: "selling", notes: "مكتب 45 م سعرها = 2,200,000 مقدم 10% = 220,000 تقسيط 5 سنين" },
   // Projects with offers that have no sizes written: Ask must say so instead of "no match".
-  { name: "كابيتال تاور", name_en: "Capital Tower", district: "Obour", city: "Cairo", status: "active", notes: "شقة سعرها = 3,100,000 مقدم 10% = 310,000 تقسيط 7 سنين" }
+  { name: "كابيتال تاور", name_en: "Capital Tower", district: "Obour", city: "Cairo", status: "selling", notes: "شقة سعرها = 3,100,000 مقدم 10% = 310,000 تقسيط 7 سنين" }
 ];
 
 const LOGIN_ROLES = {
@@ -69,7 +69,7 @@ async function seedSignIns(pool, agencyId) {
     if (key === "owner" || key === "manager") continue;
     const digits = "2" + r.phone;
     const found = await pool.query("SELECT id FROM brokers WHERE phone_normalized = $1", [digits]);
-    if (!found.rowCount) {
+    if (!found.rows.length) {
       await pool.query(
         "INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active) VALUES ($1, $2, $3, $4, $5, true)",
         [agencyId, digits, r.name, r.role, r.lang]
@@ -118,4 +118,4 @@ if (require.main === module) main().catch((err) => {
   process.exit(1);
 });
 
-module.exports = { TEST_PROJECTS, LOGIN_ROLES };
+module.exports = { TEST_PROJECTS, LOGIN_ROLES, agencyOf, seedSignIns };

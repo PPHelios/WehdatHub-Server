@@ -4,6 +4,7 @@
 
 const Stages = require("./leadStages");
 const Phone = require("./phone");
+const Franco = require("./franco");
 
 const MODES = Object.freeze(["auto", "resale", "primary", "reports"]);
 const DAY_MS = 24 * 3600 * 1000;
@@ -261,7 +262,8 @@ function stripWindowWords(raw) {
     .replace(/\b(?:since|from)\s+(?:yesterday|today|\d{4}-\d{2}-\d{2})\b|من\s+(?:امبارح|امس|النهارده|اليوم|\d{4}-\d{2}-\d{2})/gi, "")
     .replace(/\b(?:last|past)\s+\d+\s+(?:h(?:ours?|rs?)?|days?|weeks?)\b|(?:اخر|خلال)\s+\d+\s*(?:ساعه|ساعات|يوم|ايام|اسبوع|اسابيع|اسبوعين)/gi, "")
     .replace(/\b(today|tomorrow|yesterday|this week|last week|last 2 weeks|this month|last month|this morning|so far|past 7 days|last 7 days|weekly)\b/gi, "")
-    .replace(/الاسبوع ده|هذا الاسبوع|الاسبوع اللي فات|الاسبوع الماضي|اخر اسبوعين|اسبوعين|الشهر ده|هذا الشهر|الشهر اللي فات|الشهر الماضي|اخر 7 ايام|اسبوعيا/g, "")
+    .replace(/الاسبوع ده|هذا الاسبوع|الاسبوع اللي فات|الاسبوع الماضي|اخر اسبوعين|اسبوعين|الشهر ده|هذا الشهر|الشهر اللي فات|الشهر الماضي|اخر 7 ايام|اسبوعيا|الاسبوع الجاي|الاسبوع القادم|الاسبوع الجايه/g, "")
+    .replace(/\bnext week\b/gi, "")
     .replace(/(?:^|\s)(?:النهارده|اليوم|بكره|غدا|امبارح|امس)(?=\s|[؟?!.,]|$)/g, "")
     .replace(/\b(in|on|during|for|في|خلال)\s*$/i, "")
     .replace(/[؟?!.,]+$/g, "")
@@ -271,19 +273,22 @@ function stripWindowWords(raw) {
 
 const DISCIPLINE_RE = /\b(silent|discipline|updating|not updating|update rate|no updates|ghost|inactive brokers?|quiet brokers?|who isn'?t updating|who is not updating)\b|مش بيحدث|مبيحدثش|مبيحدثوش|تحديث التطبيق|الالتزام بالتحديث|التزام الفريق|تحديثات الوسطاء|(?:الوسطاء|البروكرز) (?:اللي مش بيردوا|الصامتين)|اللي مش بيردوا|مش بيردوا|مبيردوش|مش بيتابعوا|مبيتابعوش|مين مش (?:شغال|بيرد|بيتابع)|مين ساحب|مين نايم|مفيش تحديث/;
 const COMMISSIONS_RE = /\b(commissions?|claimable|developer commission|collected|pending commissions?)\b|عمولات|العموله|عمولاتي|عموله المطور|مستحقات المطورين|فلوس المطورين|مستحقه/;
-const WAITING_RE = /waiting.*(?:1\s*h|hour|contact|called)|over (?:an |1 )?hour|delayed (?:first|reply)|late first contact|no first contact|haven'?t been called|waiting\s*(?:for\s*)?(?:a\s*)?reply|مستن(?:ي|يين).*(?:ساعه|تواصل|حد يكلمهم)|مستن(?:ي|يين)\s*رد|اكتر من ساعه|عدي ساعه|تاخر اول تواصل|تاخير اول تواصل|ات[اأ]خر(?:وا)? في اول تواصل|ات[اأ]خرنا عليهم|محدش رد عليهم/;
-const UNASSIGNED_RE = /\bunassigned\b|\bunallocated\b|not assigned|no broker|without (?:a )?(?:broker|agent|owner)|need(?:s)? (?:a )?broker|(?:من غير|بدون) (?:وسيط|بروكر|سيلز|حد)|مش متوزع|لسه متوزعوش|مش متسلم|لسه متسلموش|مفيش حد مسكهم|محدش استلمهم|محدش مسكهم|ملهمش (?:وسيط|بروكر)/;
-const OVERDUE_RE = /\boverdue\b|(?:missed|late|pending) follow[ -]?ups?|(?:عملاء|العملاء|متابعات|المتابعات)\s*(?:ال)?متاخر(?:ين|ه)|متابعات (?:متاخره|فايته|عدت)|المتابعات اللي اتاخرت|عملاء عد[ىي] ميعادهم|مين متاخر في المتابعه/;
+const STALE_UNITS_RE = /\b(?:stale|outdated|old) (?:units?|listings?|inventory)\b|\b(?:units?|listings?) (?:not|never|haven'?t been) (?:updated|refreshed|confirmed)\b|\b(?:units?|listings?) (?:that )?need(?:s)? (?:an? )?(?:update|refresh)\b|(?:الوحدات|وحدات|الشقق) (?:اللي )?(?:متحدثتش|مت?حدثتش|مش متحدثه|محتاجه تحديث|قديمه)|وحدات قديمه|(?:الوحدات|وحدات) (?:القديمه )?(?:محتاجه|لازم) (?:تحديث|تتحدث)/;
+const WAITING_RE = /waiting.*(?:1\s*h|hour|contact|called)|over (?:an |1 )?hour|delayed (?:first|reply)|late first contact|no first contact|haven'?t been called|waiting\s*(?:for\s*)?(?:a\s*)?reply|مستن(?:ي|يين).*(?:ساعه|تواصل|حد يكلمهم)|مستن(?:ي|يين)\s*رد|اكتر من ساعه|عدي ساعه|تاخر اول تواصل|تاخير اول تواصل|ات[اأ]خر(?:وا)? في اول تواصل|ات[اأ]خرنا عليهم|ت?اخرنا (?:في )?اول|محدش رد عليهم/;
+const UNASSIGNED_RE = /\bunassigned\b|\bunallocated\b|not assigned|no broker|without (?:a )?(?:broker|agent|owner)|need(?:s)? (?:a )?broker|(?:من غير|بدون) (?:وسيط|بروكر|سيلز|حد)|مش متوزع|لسه متوزعوش|مش متسلم|لسه متسلموش|مفيش حد مسكهم|محدش استلمهم|محدش مسكهم|ملهمش (?:وسيط|بروكر|broker|حد|سيلز)|محدش (?:ماسك|مسك|متسلم)(?:هم|ها|ه)?|ماسكهم|مفيش (?:حد )?(?:ماسك|مسك)|غير (?:ال)?موزع(?:ين|ه)|مش موزع(?:ين|ه)/;
+const OVERDUE_RE = /\boverdue\b|(?:missed|late|pending) follow[ -]?ups?|(?:عملاء|العملاء|متابعات|المتابعات)\s*(?:ال)?متاخر(?:ين|ه)|متابعات (?:متاخره|فايته|عدت)|المتابعات اللي اتاخرت|عملاء عد[ىي] ميعادهم|مين (?:ال)?متاخر في (?:ال)?متابع|مين اتاخر في (?:ال)?متابع|(?:ال)?متابعات (?:اللي )?(?:فاتت|فاتتني|اتاخرت|عدت)|follow[ -]?ups? (?:i|we) (?:missed|forgot)|(?:late|behind) on follow[ -]?ups?|(?:late|missed) follow|follow[ -]?ups?.*(?:اتاخر|فاتت|متاخر)/;
 const UNCONTACTED_RE = /\buncontacted\b|not contacted|never contacted|no contact yet|not called yet|nobody called|haven'?t called|محدش كلم|لسه متكلموش|لسه محدش تواصل|محدش اتصل بيهم|لسه مفيش مكالمه/;
-const OPENED_NO_FU_RE = /(?:offer\s*links?|links?).*(?:opened|clicked|viewed).*(?:without|no)\s*follow|(?:opened|clicked|viewed)\s*(?:offer\s*)?links?.*(?:without|no)\s*follow|فتح(?:وا)?\s*(?:ال)?(?:لينك|الرابط|العرض).*(?:مفيش|بدون|محدش)\s*(?:متابع|كلم)|شافوا العرض ومحدش تابع/;
+const OPENED_NO_FU_RE = /(?:offer\s*links?|links?).*(?:opened|clicked|viewed).*(?:without|no)\s*follow|(?:opened|clicked|viewed)\s*(?:offer\s*)?links?.*(?:without|no)\s*follow|فتح(?:وا)?\s*(?:ال)?(?:لينك|الرابط|العرض).*(?:مفيش|بدون|محدش)\s*(?:متابع|كلم)|شافوا العرض ومحدش تابع|(?:viewed|opened|saw|seen) (?:the )?offers?.*(?:without|no)\s*follow/;
 const APPROACHING_SLA_RE = /\bapproaching\s*sla\b|close\s*to\s*sla|near\s*sla|sla\s*soon|about\s*to\s*breach|almost\s*overdue|قربوا\s*(?:علي|يكسروا|يعدوا|يخلصوا|يتاخروا)\s*(?:sla|وقت\s*الرد|المهله)?/;
 const STUCK_BROKERS_RE = /\b(?:brokers?|agents?|leads?)\b.*(?:no|missing)\s*next\s*step|ranked\s*by\s*no\s*next\s*step|no\s*follow[ -]?up\s*scheduled|بدون\s*(?:خطوه\s*جايه|متابعه\s*جايه)|من\s*غير\s*خطوه|مفيش\s*خطوه\s*جايه/;
-const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest|who replied|who responded|speed to lead)\b|how fast.*(?:respond|reply)|وقت الرد|متوسط الرد|اول رد|اسرع (?:رد|واحد بيرد)|ابط[اأ] (?:رد|واحد بيرد)|سرعه الرد|بنرد في قد ايه|مين رد/;
-const WIN_LOSS_RE = /\b(win\s*\/?\s*loss|win rate|conversion rate|closing rate|lost reasons?|why.*los(?:ing|t))\b|اسباب الخسار|ليه بنخسر|الصفقات اللي ضاعت|معدل القفل|نسبه القفل|نسبه النجاح|الخساير/;
-const SOURCES_RE = /\b(sources?|facebook|fb|meta|instagram|tiktok|google|olx|dubizzle|bayut|property finder|nawy|marketing|ad spend|cpl|cpd|campaigns?|best lead source|marketing roi)\b|where are leads coming from|مصادر|احسن مصدر|افضل مصدر|العملاء جايين منين|فيسبوك|فيس بوك|انستجرام|تيك توك|جوجل|اوليكس|دوبيزل|بروبرتي|بيوت|نوي|تسويق|اعلانات/;
+const RESPONSE_TIME_RE = /\b(response time|first response|reply time|avg response|average response|median response|fastest|slowest|who replied|who responded|speed to lead)\b|how fast.*(?:respond|reply)|وقت الرد|متوسط الرد|اول رد|اسرع (?:رد|واحد بيرد)|ابط[اأ] (?:رد|واحد بيرد)|سرعه الرد|بنرد.*قد ايه|مين رد/;
+const WIN_LOSS_RE = /\b(win\s*\/?\s*loss|win rate|conversion rate|closing rate|lost reasons?|why.*los(?:e|ing|t))\b|اسباب الخسار|ليه بنخسر|الصفقات اللي ضاعت|معدل القفل|نسبه القفل|نسبه النجاح|الخساير/;
+const SOURCES_RE = /\b(sources?|facebook|fb|meta|instagram|tiktok|google|olx|dubizzle|bayut|property finder|nawy|marketing|ad spend|cpl|cpd|campaigns?|best lead source|marketing roi)\b|where are leads coming from|مصادر|مصدر|احسن مصدر|افضل مصدر|العملاء جايين منين|فيسبوك|فيس بوك|انستجرام|تيك توك|جوجل|اوليكس|دوبيزل|بروبرتي|بيوت|نوي|تسويق|اعلانات/;
 const LEASES_RE = /\b(leases?|expiring|rent ending|renewals?)\b|عقود (?:ال)?ايجار|ايجارات (?:قربت|هت)تخلص|ايجارات|تجديد الايجار/;
 const BRIEF_RE = /\b(dashboard|executive brief|agency brief|daily brief|my stats|my summary|my performance|my activity|summary|overview|performance|stuck|activity|how are we doing|today'?s summary|what happened today)\b|ملخص(?:ي)?|احصائياتي|ادائي|شغلي|تقرير(?: اليوم)?|لوحه الشركه|اداء الشركه|حاله الشركه|وضع الشركه|اخبار الشركه|الوضع ايه/;
 
+const RANKING_RE = /\b(?:top|best|leaderboard|ranking|rankings|rank)\b.*\b(?:brokers?|agents?|sales(?:people)?|team)\b|\b(?:brokers?|agents?|salespeople)\b.*\b(?:leaderboard|ranking|ranked|top|best)\b|\bleaderboard\b|ترتيب (?:ال)?(?:بروكرز|بروكر|وسطاء|وسيط|سيلز|فريق|تيم)|(?:احسن|افضل|اشطر|اقوي) (?:بروكر|وسيط|سيلز|واحد في الفريق)|مين (?:احسن|افضل|اشطر|اقوي) (?:واحد|حد)/;
+const HOW_ARE_WE_RE = /(?:احنا|الشركه|الدنيا|الشغل|الشغل عندنا) عامل(?:ين|ه)? ايه|ماشي(?:ه)? ازاي|how (?:is|are) (?:the )?(?:business|everything|things|we)|ملخص (?:ال)?(?:شهر|اسبوع|يوم)/;
 // Viewings scheduled today / tomorrow at agency/team level (not past broker activity query).
 const SCHEDULED_VIEWINGS_RE = /\b(?:how many |what |list |any |upcoming |scheduled )?(?:viewings?|showings?) (?:do we have|are scheduled|we have|planned)? ?(?:today|tomorrow)?\b|\bwho has (?:a )?(?:showing|viewing)\b|عندنا (?:كام )?معاين|معاينات (?:النهارده|بكره|امتي)|مين عنده معاينه|جدول المعاينات/;
 
@@ -296,7 +301,7 @@ const BROKER_WORK_AR_RE = /^(.+?)\s+(?:عمل|عملت|سجل|سجلت|كلم|ك
 const AGENCY_DO_RE = /\b(?:what did (?:the )?(?:agency|we|everyone|team) do|how many (?:viewings?|calls?|updates?|leads?|deals?) (?:did )?(?:the )?(?:agency|we)|(?:agency|team) activity)\b|الشركه عملت ايه|عملنا ايه|كام (?:مكالمه|معاينه|تحديث|صفقه)/;
 
 const PRIMARY_EXPLICIT_RE = /\b(primary|off[- ]plan|developer|developers|projects?|launch(?:es)?)\b|برايمر[ي]|اولي|مطور(?:ين)?|مشروع|مشاريع/;
-const PRIMARY_WEAK_RE = /\b(payment plan|installments?|delivery|deliver|handover)\b|انظمه سداد|تسهيلات|استلام|توصيل|اقساط|قسط|مقدم/;
+const PRIMARY_WEAK_RE = /\b(payment plan|installments?|delivery|deliver|handover)\b|انظمه (?:ال)?سداد|تسهيلات|استلام|توصيل|اقساط|قسط|مقدم/;
 const PRIMARY_RE = new RegExp(`${PRIMARY_EXPLICIT_RE.source}|${PRIMARY_WEAK_RE.source}`);
 const AMBIGUOUS_FINANCE_RE = /\b(down ?payment|installments?|monthly)\b|مقدم|قسط|اقساط|تقسيط/;
 const RESALE_EXPLICIT_RE = /\bresale\b|ريسيل|اعاده البيع/;
@@ -304,10 +309,12 @@ const EXCLUDE_PRIMARY_RE = /(?:^|\s)(?:no|not|exclude|without)\s+(?:primary|deve
 const EXCLUDE_RESALE_RE = /(?:^|\s)(?:no|not|exclude|without)\s+resale\b|مفيش\s+ريسيل|بدون\s+ريسيل|مش\s+ريسيل|غير\s+ريسيل/;
 const UNIT_RE = /\b(apartment|villa|townhouse|twin|duplex|penthouse|studio|chalet|resale|rent|sale|sqm|m2|bedroom|beds?|bath)\b|شقه|شقق|فيلا|فلل|دوبلكس|ستوديو|ريسيل|غرف|متر|مليون|تجمع|زايد|اكتوبر|مدينتي|رحاب|مراسي/;
 const UNIT_CODE_RE = /\b[a-z]{1,4}-?\d{2,}\b/i;
-const INVENTORY_COUNT_RE = /^(?:how many|count|total)\s+(?:available\s+)?(?:apartments?|villas?|units?|listings?|properties|studios?|duplex(?:es)?|townhouses?|penthouses?|chalets?)\b|^(?:كام|كم|عدد)\s+(?:شقه|شقق|فيلا|فلل|وحده|وحدات|دوبلكس|ستوديو|تاون|توين|بنتهاوس|شاليه)/;
+const INVENTORY_COUNT_RE = /^(?:how many|count|total)\s+(?:available\s+)?(?:apartments?|villas?|units?|listings?|properties|studios?|duplex(?:es)?|townhouses?|penthouses?|chalets?)\b|^(?:كام|كم|عدد)\s+(?:ال)?(?:شقه|شقق|فيلا|فلل|وحده|وحدات|دوبلكس|ستوديو|تاون|توين|بنتهاوس|شاليه)/;
 // Clearly not real estate. Guarded by UNIT_RE/PRIMARY_EXPLICIT_RE so "شقة قريبة من النادي" or a Zamalek flat still search.
-const OFF_TOPIC_RE = /\b(?:weather|forecast|temperature outside|football|soccer|match scores?|who won the (?:match|game)|world cup|premier league|jokes?|recipes?|how to cook|prayer times?|adhan|azan|(?:latest|breaking|today'?s) news|news headlines)\b|الطقس|درجه الحراره|الجو (?:ايه|عامل|حر|برد)|هتمطر|ماتش|كوره|نتيجه (?:الماتش|المباراه)|مباراه|(?:^|\s)(?:نكته|نكت)(?:\s|$)|اضحكني|وصفه|طريقه (?:عمل|تحضير|طبخ)|مواقيت الصلاه|مواعيد الصلاه|الاذان|اخبار (?:مصر|العالم|السياسه|الكوره|الفن)|نشره الاخبار/;
+const OFF_TOPIC_RE = /\b(?:weather|forecast|temperature outside|football|soccer|match scores?|who won the (?:match|game)|world cup|premier league|jokes?|recipes?|how to cook|prayer times?|adhan|azan|(?:latest|breaking|today'?s) news|news headlines)\b|الطقس|درجه الحراره|الجو (?:ايه|عامل|حر|برد)|هتمطر|ماتش|كوره|نتيجه (?:الماتش|المباراه)|مباراه|(?:^|\s)(?:نكته|نكت)(?:\s|$)|اضحكني|وصفه|طريقه (?:عمل|تحضير|طبخ)|مواقيت الصلاه|مواعيد الصلاه|الاذان|اخبار (?:مصر|العالم|السياسه|الكوره|الفن)|نشره الاخبار|سياسه|السياسه|انتخابات|الحكومه|الرئيس|politic|election|president|government/;
 const GREETING_RE = /^(?:hi|hello|hey|hola|good (?:morning|evening)|how are you|thanks|thank you|ازيك|ازايك|اخبارك|عامل ايه|عامله ايه|صباح الخير|مساء الخير|السلام عليكم|اهلا|اهلا وسهلا|مرحبا|هاي|شكرا|تسلم)(?:\s+(?:ايه|there|bot|assistant|team|all|everyone|باشا|ورحمه الله|يا\s+\S+))*$/;
+const CRM_VOCAB_RE = /\b(?:clients?|leads?|follow[ -]?ups?|brokers?|agents?|sales(?:people)?|team|reports?|summary|deals?|commissions?|sources?|kpi|pipeline|performance|viewings?)\b|عميل|عملاء|ليدز|ليد|متابع|بروكر|وسيط|وسطاء|سيلز|فريق|تيم|تقرير|ملخص|صفقه|صفقات|عموله|عمولات|مصدر|مصادر|معاين|ادا[ءي]/;
+const PROPERTY_EXTRA_RE = /\b(?:house|land|shop|office|building|room|rooms|flat|property|properties|unit|units|million)\b|\d(?:\.?\d*)?\s?(?:m|k)\b|بيت|ارض|محل|مكتب|عماره|اوض|اوضه|وحده|وحدات/;
 const DEALS_RE = /\bdeals?\b|صفقات|صفقه/;
 
 function parseMarketSignals(q) {
@@ -380,6 +387,7 @@ function crmRoute(q, raw, now = new Date()) {
   if (APPROACHING_SLA_RE.test(q)) return { route: "crm_approaching_sla", windowInfo };
   if (STUCK_BROKERS_RE.test(q)) return { route: "crm_stuck_brokers", windowInfo };
   if (COMMISSIONS_RE.test(q)) return { route: "crm_commissions", windowInfo };
+  if (STALE_UNITS_RE.test(q)) return { route: "crm_stale_units", windowInfo: null };
   if (WAITING_RE.test(q)) return { route: "crm_leads", queueHint: "waiting-over-1h", windowInfo };
   if (UNASSIGNED_RE.test(q)) return { route: "crm_leads", queueHint: "unassigned", windowInfo };
   if (OVERDUE_RE.test(q)) return { route: "crm_leads", queueHint: "overdue", windowInfo };
@@ -387,6 +395,8 @@ function crmRoute(q, raw, now = new Date()) {
   if (RESPONSE_TIME_RE.test(q)) return { route: "crm_response_time", windowInfo };
   if (WIN_LOSS_RE.test(q)) return { route: "crm_win_loss", windowInfo };
   if (SOURCES_RE.test(q)) return { route: "crm_sources", sourceFilter: extractSourceFilter(q), windowInfo };
+  if (RANKING_RE.test(q)) return { route: "crm_team", teamQuery: "", windowInfo };
+  if (HOW_ARE_WE_RE.test(q)) return { route: "crm_brief", windowInfo };
   if (DEALS_RE.test(q)) return parseDealQuery(q, raw, now);
   if (LEASES_RE.test(q)) return { route: "crm_leases", windowInfo };
 
@@ -405,8 +415,8 @@ function crmRoute(q, raw, now = new Date()) {
   }
 
   // Scheduled viewings today / tomorrow (only when NOT naming a specific broker and not a past-week activity summary).
-  const isTodayOrTomorrow = windowInfo?.key === "today" || windowInfo?.key === "tomorrow";
-  if (/\b(?:viewings?|showings?)\b|معاين/.test(q) && !/\b(?:did|does|do)\b|\bby\b|عملها|عملت/.test(q) && !(/عنده|عندها/.test(q) && !/^(?:مين|من)\s+(?:عنده|عندها)/.test(q)) && (isTodayOrTomorrow || (SCHEDULED_VIEWINGS_RE.test(q) && (!windowInfo || !/\bhow many\b|كام|كم/.test(q))))) {
+  const isTodayOrTomorrow = ["today", "tomorrow", "next_week"].includes(windowInfo?.key);
+  if (/\b(?:viewings?|showings?)\b|معاين/.test(q) && !/\b(?:did|does)\b|\bdo(?! we have)\b|\bby\b|عملها|عملت/.test(q) && !(/عنده|عندها/.test(q) && !/^(?:مين|من)\s+(?:عنده|عندها)/.test(q)) && (isTodayOrTomorrow || (SCHEDULED_VIEWINGS_RE.test(q) && (!windowInfo || !/\bhow many\b|كام|كم/.test(q))))) {
     return { route: "crm_viewings", windowInfo: windowInfo || extractTimeWindow("today", now) };
   }
 
@@ -473,7 +483,7 @@ function detectFollowup(q) {
  */
 function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), previousContext = null } = {}) {
   const safeMode = MODES.includes(mode) ? mode : "auto";
-  const q = normalize(text);
+  const q = normalize(Franco.toArabic(text));
   if (!q) return { route: "clarify" };
 
   const followup = detectFollowup(q);
@@ -587,6 +597,10 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), pr
   }
   if (signals.market === "primary" || PRIMARY_RE.test(q)) {
     return { route: "primary", job: "project_info", market: "primary", exclusions: signals.exclusions };
+  }
+  // A CRM/report question that matched no report route must not turn into a property list (looks like an answer, is wrong).
+  if (CRM_VOCAB_RE.test(q) && !UNIT_RE.test(q) && !UNIT_CODE_RE.test(q) && !PROPERTY_EXTRA_RE.test(q)) {
+    return { route: "clarify", clarifyKind: "unknown_question", market: null, exclusions: [], preservedText: text };
   }
   if (UNIT_RE.test(q) || UNIT_CODE_RE.test(q)) {
     return { route: "unit_search", job: "find_units", market: null, exclusions: signals.exclusions };

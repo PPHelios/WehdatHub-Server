@@ -1,0 +1,546 @@
+{
+ "version": 1,
+ "intents": [
+  {
+   "id": "unassigned",
+   "expect": {
+    "route": "crm_leads",
+    "queueHint": "unassigned"
+   },
+   "questions": [
+    "unassigned leads",
+    "which clients have no broker",
+    "leads without a broker",
+    "العملاء اللي محدش ماسكهم",
+    "مين العملاء اللي ملهمش حد",
+    "العملاء غير الموزعين على وسيط",
+    "العملاء بدون وسيط",
+    "العملاء اللي مش متوزعين",
+    "3omala mlhomsh broker",
+    "العملا اللي محدش ماسكهم",
+    "بقولك ايه هو انا عندي عملاء كتير محدش ماسكهم ممكن تقولي مين فيهم"
+   ]
+  },
+  {
+   "id": "overdue",
+   "expect": {
+    "route": "crm_leads",
+    "queueHint": "overdue"
+   },
+   "questions": [
+    "overdue follow ups",
+    "follow ups i missed",
+    "who is late on follow ups",
+    "مين اتأخر في المتابعة",
+    "المتابعات اللي فاتت",
+    "المتابعات المتأخرة",
+    "العملاء المتأخرين",
+    "fein el follow ups el et2akharet",
+    "المتابعات اللى اتاخرت",
+    "متابعات متاخره",
+    "بقولك ايه هو انا عندي متابعات فاتت ومش عارف مين فيهم"
+   ]
+  },
+  {
+   "id": "uncontacted",
+   "expect": {
+    "route": "crm_leads",
+    "queueHint": "uncontacted"
+   },
+   "questions": [
+    "uncontacted leads",
+    "leads nobody called",
+    "clients not contacted yet",
+    "العملاء اللي لسه متكلموش",
+    "محدش كلم العملاء دول",
+    "لسه محدش تواصل مع العملاء",
+    "العملاء اللي محدش اتصل بيهم",
+    "3omala lesa matkalemoosh",
+    "بقولك ايه هو انا عندي عملاء جداد محدش كلمهم",
+    "عملاء لسه مفيش مكالمه"
+   ]
+  },
+  {
+   "id": "waiting",
+   "expect": {
+    "route": "crm_leads",
+    "queueHint": "waiting-over-1h"
+   },
+   "questions": [
+    "leads waiting over 1 hour",
+    "clients waiting for a reply",
+    "leads waiting over an hour for first contact",
+    "العملاء المستنيين اكتر من ساعة",
+    "عملاء مستنيين رد",
+    "العملاء اللي محدش رد عليهم",
+    "تأخرنا في اول تواصل",
+    "العملا المستنيين اكتر من ساعه",
+    "بقولك ايه هو انا عندي عملاء مستنيين اكتر من ساعة مين فيهم"
+   ]
+  },
+  {
+   "id": "viewings_today",
+   "expect": {
+    "route": "crm_viewings",
+    "windowKey": "today"
+   },
+   "questions": [
+    "viewings today",
+    "how many viewings do we have today",
+    "what showings are scheduled today",
+    "معاينات النهارده",
+    "جدول المعاينات النهاردة",
+    "mo3aynat el naharda",
+    "عندنا كام معاينه النهارده",
+    "المعاينات اللي النهارده",
+    "مين عنده معاينة النهارده",
+    "بقولك ايه هو انا عندي معاينات النهارده ولا لأ"
+   ]
+  },
+  {
+   "id": "viewings_tomorrow",
+   "expect": {
+    "route": "crm_viewings",
+    "windowKey": "tomorrow"
+   },
+   "questions": [
+    "viewings tomorrow",
+    "showings scheduled tomorrow",
+    "معاينات بكرة",
+    "جدول المعاينات بكره",
+    "mo3aynat bokra",
+    "مين عنده معاينة بكرة",
+    "المعاينات اللي بكره",
+    "معاينات غدا"
+   ]
+  },
+  {
+   "id": "brief",
+   "expect": {
+    "route": "crm_brief"
+   },
+   "questions": [
+    "how are we doing this month",
+    "agency overview",
+    "give me the executive brief",
+    "احنا عاملين ايه الشهر ده",
+    "ملخص الشهر",
+    "el donia 3amla eh",
+    "ملخص الشركة",
+    "وضع الشركه ايه",
+    "حاله الشركه",
+    "اداء الشركه الشهر ده",
+    "بقولك ايه هو انا عايز اعرف الشركه ماشيه ازاي واحنا عاملين ايه"
+   ]
+  },
+  {
+   "id": "ranking",
+   "expect": {
+    "route": "crm_team"
+   },
+   "questions": [
+    "who is the top broker this month",
+    "best agent this month",
+    "broker leaderboard",
+    "مين أحسن بروكر الشهر ده؟",
+    "ترتيب البروكرز",
+    "ترتيب الوسطاء",
+    "افضل وسيط الشهر ده",
+    "a7san broker el shahr da",
+    "مين اشطر بروكر",
+    "احسن سيلز عندنا",
+    "بقولك ايه هو انا عايز اعرف مين احسن بروكر عندنا الشهر ده"
+   ]
+  },
+  {
+   "id": "sources",
+   "expect": {
+    "route": "crm_sources"
+   },
+   "questions": [
+    "which source brings more leads",
+    "best lead source",
+    "where are leads coming from",
+    "انهي مصدر بيجيب عملاء أكتر",
+    "احسن مصدر للعملاء",
+    "العملاء جايين منين",
+    "مصادر العملاء",
+    "masdar 3omala",
+    "اي مصدر بيجيب عملاء اكتر",
+    "اعلانات فيسبوك جابت كام عميل",
+    "بقولك ايه هو انا عايز اعرف انهي مصدر بيجيبلنا عملاء اكتر"
+   ]
+  },
+  {
+   "id": "deals",
+   "expect": {
+    "route": "crm_deals"
+   },
+   "questions": [
+    "deals this month",
+    "how many deals did we close",
+    "closed deals last week",
+    "صفقات الشهر ده",
+    "الصفقات اللي اتقفلت",
+    "كام صفقة قفلنا",
+    "صفقات الاسبوع اللي فات",
+    "saf2at el shahr da",
+    "بقولك ايه هو انا عايز اعرف قفلنا كام صفقه الشهر ده"
+   ]
+  },
+  {
+   "id": "commissions",
+   "expect": {
+    "route": "crm_commissions"
+   },
+   "questions": [
+    "pending commissions",
+    "overdue developer commissions",
+    "commissions collected",
+    "عمولاتي",
+    "عمولات المطورين المتأخرة",
+    "مستحقات المطورين",
+    "العموله المستحقه",
+    "3amolat el mo6awreen",
+    "بقولك ايه هو انا عندي عمولات لسه مستنياها"
+   ]
+  },
+  {
+   "id": "win_loss",
+   "expect": {
+    "route": "crm_win_loss"
+   },
+   "questions": [
+    "win rate",
+    "why are we losing deals",
+    "lost reasons",
+    "conversion rate",
+    "اسباب الخسارة",
+    "ليه بنخسر الصفقات",
+    "نسبة القفل",
+    "معدل القفل",
+    "بقولك ايه هو انا عايز اعرف ليه بنخسر عملاء",
+    "why do we lose leads",
+    "why do we lose clients",
+    "why do we lose deals",
+    "ليه بنخسر العملاء",
+    "ليه بنخسر العملا",
+    "why are we losing leads"
+   ]
+  },
+  {
+   "id": "leases",
+   "expect": {
+    "route": "crm_leases"
+   },
+   "questions": [
+    "expiring leases",
+    "lease renewals",
+    "rent ending soon",
+    "عقود الايجار اللي هتخلص",
+    "تجديد الايجار",
+    "ايجارات قربت تخلص",
+    "ايجارات",
+    "3o2od el egar"
+   ]
+  },
+  {
+   "id": "response_time",
+   "expect": {
+    "route": "crm_response_time"
+   },
+   "questions": [
+    "average response time",
+    "who replied fastest",
+    "first response time",
+    "متوسط الرد",
+    "وقت الرد",
+    "اسرع رد",
+    "سرعة الرد",
+    "اول رد بياخد قد ايه",
+    "بقولك ايه هو انا عايز اعرف بنرد على العملاء في قد ايه"
+   ]
+  },
+  {
+   "id": "discipline",
+   "expect": {
+    "route": "crm_discipline"
+   },
+   "questions": [
+    "who is not updating",
+    "inactive brokers",
+    "team discipline",
+    "مين مش بيحدث",
+    "الالتزام بالتحديث",
+    "مين نايم في الشغل",
+    "الوسطاء مش بيردوا",
+    "مفيش تحديث من الفريق"
+   ]
+  },
+  {
+   "id": "stuck_brokers",
+   "expect": {
+    "route": "crm_stuck_brokers"
+   },
+   "questions": [
+    "brokers with no next step",
+    "leads with no next step ranked by broker",
+    "بدون خطوة جاية",
+    "مفيش خطوه جايه",
+    "من غير خطوه جايه",
+    "brokers no next step"
+   ]
+  },
+  {
+   "id": "approaching_sla",
+   "expect": {
+    "route": "crm_approaching_sla"
+   },
+   "questions": [
+    "leads approaching sla",
+    "close to sla",
+    "about to breach",
+    "قربوا يتأخروا",
+    "قربوا علي sla",
+    "near sla"
+   ]
+  },
+  {
+   "id": "opened_no_followup",
+   "expect": {
+    "route": "crm_opened_no_followup"
+   },
+   "questions": [
+    "offer links opened without follow up",
+    "clients who viewed the offer with no follow-up",
+    "شافوا العرض ومحدش تابع",
+    "فتحوا اللينك مفيش متابعه",
+    "opened link without followup"
+   ]
+  },
+  {
+   "id": "inventory_count",
+   "expect": {
+    "route": "inventory_count"
+   },
+   "questions": [
+    "how many apartments do we have",
+    "count villas",
+    "كام شقة متاحة",
+    "عدد الفلل",
+    "كام وحدة عندنا",
+    "كم شقه عندنا",
+    "how many units",
+    "total listings"
+   ]
+  },
+  {
+   "id": "primary",
+   "expect": {
+    "route": "primary"
+   },
+   "questions": [
+    "off plan projects",
+    "developer payment plans",
+    "primary projects launch",
+    "مشاريع المطورين",
+    "مشروع برايمري",
+    "انظمة السداد",
+    "project delivery date",
+    "اقساط المشروع"
+   ]
+  },
+  {
+   "id": "broker",
+   "expect": {
+    "route": "crm_broker"
+   },
+   "questions": [
+    "what did Sara do today",
+    "how many viewings did Omar do this week",
+    "اخبار سارة",
+    "شغل عمر النهارده",
+    "ايه اخبار احمد",
+    "performance of Ali",
+    "stats for Mona"
+   ]
+  },
+  {
+   "id": "team",
+   "expect": {
+    "route": "crm_team"
+   },
+   "questions": [
+    "Omar's team this week",
+    "فريق احمد",
+    "اداء فريق سارة",
+    "how did Sara's team do",
+    "شغل تيم محمد"
+   ]
+  },
+  {
+   "id": "prices",
+   "expect": {
+    "route": "crm_prices"
+   },
+   "questions": [
+    "prices in New Cairo",
+    "average prices in Zayed",
+    "اسعار في التجمع",
+    "اسعار الشقق في زايد"
+   ]
+  },
+  {
+   "id": "viewings_next_week",
+   "expect": {
+    "route": "crm_viewings",
+    "windowKey": "next_week"
+   },
+   "questions": [
+    "viewings next week",
+    "showings next week",
+    "how many viewings do we have next week",
+    "معاينات الاسبوع الجاي",
+    "المعاينات اللي الاسبوع الجاي",
+    "معاينات الاسبوع القادم",
+    "عندنا كام معاينه الاسبوع الجاي"
+   ]
+  },
+  {
+   "id": "stale_units",
+   "expect": {
+    "route": "crm_stale_units"
+   },
+   "questions": [
+    "stale units",
+    "units not updated",
+    "units that need an update",
+    "outdated listings",
+    "الوحدات اللي متحدثتش",
+    "وحدات قديمة محتاجة تحديث",
+    "الشقق اللي متحدثتش"
+   ]
+  }
+ ],
+ "unitSearches": [
+  {
+   "q": "شقة 3 غرف في التجمع تحت 9 مليون",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "شقة ٣ غرف في التجمع تحت ٩ مليون",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "apartment 3 bedrooms in new cairo under 9m",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "apartment 3 bedrooms new cairo under 9M",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "3 bedroom apartment under 9 million egp",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "sha2a 3 owad fel tagamo3 ta7t 9 million",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "sha2a 3 owad fel tagamo3 ta7t 9m",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "شقه 2 غرف تحت 5 م",
+   "expect": {
+    "bedrooms_min": 2,
+    "price_max": 5000000
+   }
+  },
+  {
+   "q": "شقة ٢ غرفة بأقل من ٥ مليون",
+   "expect": {
+    "bedrooms_min": 2,
+    "price_max": 5000000
+   }
+  },
+  {
+   "q": "فيلا 4 غرف في زايد تحت 20 مليون",
+   "expect": {
+    "bedrooms_min": 4,
+    "price_max": 20000000
+   }
+  },
+  {
+   "q": "villa 4 bedrooms in zayed max 20 million",
+   "expect": {
+    "bedrooms_min": 4,
+    "price_max": 20000000
+   }
+  },
+  {
+   "q": "بقولك ايه انا عايز شقة 3 غرف في التجمع بحد اقصى 9 مليون",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  },
+  {
+   "q": "شقة اوضتين تحت 3 مليون",
+   "expect": {
+    "bedrooms_min": 2,
+    "price_max": 3000000
+   }
+  },
+  {
+   "q": "duplex 5 bedrooms under 15m",
+   "expect": {
+    "bedrooms_min": 5,
+    "price_max": 15000000
+   }
+  },
+  {
+   "q": "شقه 3 غرف تحت 9 مليون",
+   "expect": {
+    "bedrooms_min": 3,
+    "price_max": 9000000
+   }
+  }
+ ],
+ "offTopic": [
+  "hello",
+  "thanks",
+  "شكرا يا باشا",
+  "صباح الخير",
+  "هتمطر النهارده؟",
+  "what's the weather like",
+  "قولي نكتة",
+  "tell me a joke",
+  "مين كسب الماتش",
+  "رأيك في الانتخابات",
+  "who will win the election",
+  "السياسة في مصر عاملة ايه"
+ ]
+}

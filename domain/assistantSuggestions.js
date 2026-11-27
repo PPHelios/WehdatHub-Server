@@ -14,6 +14,7 @@ const POOL = {
   waiting: ["عملاء مستنين أكتر من ساعة", "عملاء مستنين أكتر من ساعة", "Leads waiting 1h+", "leads waiting over 1h", ""],
   overdue: ["متابعات متأخرة", "متابعات متأخرة", "Overdue follow-ups", "overdue follow-ups", ""],
   unassigned: ["عملاء من غير وسيط", "عملاء من غير وسيط", "Unassigned leads", "unassigned leads", "t"],
+  mystats: ["إحصائياتي الشهر ده", "إحصائياتي الشهر ده", "My stats this month", "my stats this month", ""],
   viewings: ["معاينات النهارده", "معاينات النهارده", "Viewings today", "viewings today", ""],
   stuck: ["عملاء من غير خطوة جاية", "عملاء من غير خطوة جاية", "No next step", "leads with no next step", "t"],
   slowest: ["مين أبطأ بروكر؟", "مين أبطأ واحد بيرد", "Slowest broker?", "slowest response time", "t"],
@@ -23,6 +24,7 @@ const POOL = {
   sources: ["أحسن مصدر للعملاء", "أحسن مصدر للعملاء", "Best lead source", "best lead source", ""],
   winloss: ["ليه بنخسر؟", "ليه بنخسر الصفقات", "Why do we lose?", "win rate", ""],
   commissions: ["العمولات", "عمولات المطورين", "Commissions", "developer commissions", ""],
+  stale: ["وحدات محتاجة تحديث", "الوحدات اللي متحدثتش", "Stale units", "stale units", ""],
   leases: ["إيجارات هتخلص", "ايجارات هتخلص", "Leases ending", "leases ending soon", ""]
 };
 
@@ -39,12 +41,14 @@ const NEXT = {
   crm_discipline: ["slowest", "stuck", "waiting"],
   crm_broker: ["lastMonth", "slowest", "deals"],
   crm_team: ["lastMonth", "slowest", "deals"],
-  crm_brief: ["waiting", "deals", "sources"],
+  crm_brief: ["waiting", "stale", "deals"],
+  crm_stale_units: ["units", "nophoto", "brief"],
   crm_deals: ["lastMonth", "commissions", "winloss"],
   crm_commissions: ["deals", "lastMonth", "winloss"],
   crm_win_loss: ["sources", "lastMonth", "deals"],
   crm_sources: ["winloss", "deals", "lastMonth"],
   crm_leases: ["brief", "deals", "viewings"],
+  not_for_role: ["mystats", "waiting", "viewings"],
   crm_viewings: ["waiting", "overdue", "brief"]
 };
 const DEFAULTS = {

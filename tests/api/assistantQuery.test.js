@@ -573,3 +573,66 @@ test("chart gaps: compare from unitCodes, deltas, budget marker, broker avatar k
   const bar = v.body.cards.find((c) => c.kind === "bar_breakdown");
   if (bar) expect(bar.rows[0].key).toBe(h.BROKERS.broker.id);
 });
+
+test("stale units answer: count equals the Dashboard stale count; a broker sees only their own; wordings route to it", async () => {
+  const old = new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString();
+  await h.insertListing({ code: "ST-1", broker_id: h.BROKERS.broker.id });
+  await h.insertListing({ code: "ST-2", broker_id: h.BROKERS.colleague.id });
+  await h.insertListing({ code: "ST-NEW", broker_id: h.BROKERS.broker.id });
+  await h.query("UPDATE listings SET confirmed_at = $2, updated_at = $2 WHERE agency_id = $1 AND code IN ('ST-1', 'ST-2')", [h.AGENCY_A, old]);
+  const admin = await auth("admin");
+  const dash = (await api().get("/api/v1/dashboard").set(admin)).body.units.stale;
+  expect(dash).toBeGreaterThanOrEqual(2);
+  for (const q of ["stale units", "الوحدات اللي متحدثتش"]) {
+    const r = await api().post("/api/v1/assistant/query").set(admin).send({ q, mode: "auto" });
+    expect(r.body).toMatchObject({ intent: "crm_stale_units", aiUsed: false });
+    expect(r.body.cards[0].items[0].value).toBe(dash);
+    expect(r.body.suggestions.length).toBeGreaterThan(0);
+  }
+  const mine = await api().post("/api/v1/assistant/query").set(await auth("broker")).send({ q: "stale units", mode: "auto" });
+  expect(mine.body.cards[0].items[0].value).toBe(1);
+  expect(JSON.stringify(mine.body.cards)).not.toContain("ST-2");
+});
+
+test("unit search returns the understood filters as structured fields", async () => {
+  const hdr = await auth("admin");
+  const r = await api().post("/api/v1/assistant/query").set(hdr).send({ q: "3 bedroom apartment in New Cairo under 9M ready to move fully finished", mode: "auto" });
+  expect(r.status).toBe(200);
+  expect(r.body.understood.filters).toMatchObject({
+    bedrooms: { min: 3, max: null },
+    propertyTypes: expect.arrayContaining(["apartment"]),
+    price: { min: null, max: 9000000 },
+    delivery: { ready: true, byYear: null }
+  });
+  expect(r.body.understood.filters.places.length).toBeGreaterThan(0);
+  expect(r.body.understood.filters.finishing.length).toBeGreaterThan(0);
+});
+
+test("primary: 1-3 projects with priced offers are answered from the code-built line, the AI is not called", async () => {
+  const Assistant = require("../../services/assistant");
+  const AssistantQuery = require("../../services/assistantQuery");
+  const spy = jest.spyOn(Assistant, "ask").mockRejectedValue(new Error("AI must not run"));
+  try {
+    const p = (await h.query("INSERT INTO projects (agency_id, name, name_en, district, city, status) VALUES ($1, 'ميڤيدا', 'Mivida', 'New Cairo', 'Cairo', 'selling') RETURNING id", [h.AGENCY_A]))[0];
+    await h.query("INSERT INTO project_offers (agency_id, project_id, area, bedrooms, price, down, years) VALUES ($1, $2, 175, 3, 6200000, 620000, 8)", [h.AGENCY_A, p.id]);
+    await h.query("UPDATE projects SET notes = $2 WHERE id = $1", [p.id, "شقة 175 م سعرها = 6,200,000 مقدم 10% = 620,000 تقسيط 8 سنين"]);
+    const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
+    const r = await AssistantQuery.query(h.pool, { AI, actor: admin, text: "Mivida payment plan", mode: "primary", lang: "en" });
+    expect(r.intent).toBe("primary");
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.cards[0].source).toBe("local");
+    expect(r.cards[0].answer).toMatch(/6,200,000/);
+    expect(r.headline).toBe("Primary & Developer Projects"); // request lang wins over the profile language
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("role-limited reports answer with a role message and the broker's own shortcuts, never a dead end", async () => {
+  const AssistantQuery = require("../../services/assistantQuery");
+  const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  const r = await AssistantQuery.query(h.pool, { AI, actor: broker, text: "broker ranking this month", mode: "auto", lang: "en" });
+  expect(r.notForRole).toBe(true);
+  expect(r.headline).toMatch(/managers/i);
+  expect(r.suggestions.map((s) => s.q)).toContain("my stats this month");
+});

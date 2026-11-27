@@ -2049,12 +2049,27 @@ CREATE TABLE IF NOT EXISTS public.trial_funnel (
   granted_credits integer
 );
 
+CREATE TABLE IF NOT EXISTS public.assistant_feedback (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid,
+  role text,
+  lang text,
+  intent text,
+  route text,
+  verdict text NOT NULL,
+  reason text,
+  question text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE admin_board_snapshots ADD CONSTRAINT admin_board_snapshots_pkey PRIMARY KEY (tab, period_days);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE analytics_meta ADD CONSTRAINT analytics_meta_pkey PRIMARY KEY (key);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
 ALTER TABLE areas ADD CONSTRAINT areas_pkey PRIMARY KEY (id);
+ALTER TABLE assistant_feedback ADD CONSTRAINT assistant_feedback_pkey PRIMARY KEY (id);
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_pkey PRIMARY KEY (id);
@@ -2199,6 +2214,8 @@ ALTER TABLE areas ADD CONSTRAINT areas_lng_check CHECK (((lng IS NULL) OR ((lng 
 ALTER TABLE areas ADD CONSTRAINT areas_place_type_check CHECK (((place_type IS NULL) OR (place_type = ANY (ARRAY['city_or_district'::text, 'sub_area_or_sector'::text, 'neighborhood_or_zone'::text, 'road_or_corridor'::text, 'phase'::text]))));
 ALTER TABLE areas ADD CONSTRAINT areas_source_check CHECK ((source = ANY (ARRAY['seed'::text, 'manual'::text, 'broker'::text])));
 ALTER TABLE areas ADD CONSTRAINT areas_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
+ALTER TABLE assistant_feedback ADD CONSTRAINT assistant_feedback_reason_check CHECK (((reason IS NULL) OR (reason = ANY (ARRAY['wrong'::text, 'not_asked'::text, 'other'::text]))));
+ALTER TABLE assistant_feedback ADD CONSTRAINT assistant_feedback_verdict_check CHECK ((verdict = ANY (ARRAY['down'::text, 'clarify'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_answer_source_check CHECK (((answer_source IS NULL) OR (answer_source = ANY (ARRAY['ai'::text, 'local'::text]))));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'telegram'::text, 'whatsapp'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_check CHECK ((length(question) <= 600));
@@ -2435,6 +2452,8 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (update
 ALTER TABLE agencies ADD CONSTRAINT agencies_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE analytics_funnel_monthly ADD CONSTRAINT analytics_funnel_monthly_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE areas ADD CONSTRAINT areas_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES areas(id) ON DELETE RESTRICT;
+ALTER TABLE assistant_feedback ADD CONSTRAINT assistant_feedback_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE assistant_feedback ADD CONSTRAINT assistant_feedback_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_search_log_id_fkey FOREIGN KEY (search_log_id) REFERENCES search_log(id) ON DELETE SET NULL;
@@ -2634,6 +2653,7 @@ CREATE UNIQUE INDEX analytics_search_daily_cell ON public.analytics_search_daily
 CREATE INDEX areas_parent ON public.areas USING btree (parent_id) WHERE (parent_id IS NOT NULL);
 CREATE UNIQUE INDEX areas_parent_key ON public.areas USING btree (COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid), name_key);
 CREATE INDEX areas_status ON public.areas USING btree (status);
+CREATE INDEX assistant_feedback_agency_idx ON public.assistant_feedback USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_assistant_questions_agency ON public.assistant_questions USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_audit_logs_action ON public.audit_logs USING btree (agency_id, action, created_at DESC);
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);

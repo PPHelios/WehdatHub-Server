@@ -4,6 +4,8 @@
   "description": "Real estate inventory, leads and CRM for brokers",
   "main": "server.js",
   "scripts": {
+    "qa:seed": "node --env-file=.env scripts/seed-assistant-qa.js seed",
+    "qa:assistant": "node --env-file=.env scripts/assistant-eval.js",
     "start": "node server.js",
     "audit:schema": "node scripts/audit-db-schema.js",
     "test:pipeline": "node --env-file=.env tests/test_search_pipeline.js",
