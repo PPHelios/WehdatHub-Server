@@ -33,7 +33,9 @@ const ask = (q, lang = "en") =>
     .send({ q, mode: "auto", lang });
 
 test("end-to-end answers: viewings list clients, Khaled showings returns Khaled scorecard, Egyptian Arabic phrases work, unknown questions clarify", async () => {
-  const futureToday = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  // Halfway between now and Cairo's next midnight: still later today at any hour (now + 30 min failed after 23:30).
+  const nextMidnight = require("../../lib/period").startOfCairoDay(new Date(Date.now() + 24 * 3600 * 1000)).getTime();
+  const futureToday = new Date(Date.now() + (nextMidnight - Date.now()) / 2).toISOString();
   await h.query(
     `INSERT INTO leads (agency_id, ref, name, phone_e164, phones, lawful_basis, stage, assigned_broker_id, follow_up_status, follow_up_kind, next_follow_up_at, last_contact_at)
      VALUES ($1, 901, 'Karim Mansour', '+201022220099', ARRAY['+201022220099']::text[], 'client_request', 'viewing', $2, 'open', 'viewing', $3, now())`,

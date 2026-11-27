@@ -201,6 +201,28 @@ test("team_lead new-leads priority keeps scoped uncontacted leads under 1h and e
   expect(gatedHome.priorities.map((p) => p.id)).not.toContain("intake");
 });
 
+test("the two unit switches hide missing photos and stale units from managers and owners too, never from brokers", async () => {
+  const broker = await row("broker");
+  const old = new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString();
+  await h.insertListing({ code: "SW-STALE", broker_id: broker.id });
+  await h.query("UPDATE listings SET confirmed_at = $2, updated_at = $2 WHERE agency_id = $1 AND code = 'SW-STALE'", [h.AGENCY_A, old]);
+  const home = async (who) => (await request(h.app.app).get("/api/v1/today/home").set({ Authorization: `Bearer ${await token(who)}` })).body;
+  const ids = (b) => b.priorities.map((p) => p.id);
+  const on = await home("admin");
+  expect(on.missingPhotos).toBeGreaterThan(0);
+  expect(ids(on)).toContain("stale-units");
+  await h.query("UPDATE agencies SET data_entry_missing_photos = false, data_entry_overdue_units = false WHERE id = $1", [h.AGENCY_A]);
+  try {
+    const off = await home("admin");
+    expect(off.missingPhotos).toBe(0);
+    expect(ids(off)).not.toContain("stale-units");
+    expect(ids(off)).not.toContain("missing-photos");
+    expect(ids(await home("broker"))).toContain("stale-units");
+  } finally {
+    await h.query("UPDATE agencies SET data_entry_missing_photos = true, data_entry_overdue_units = true WHERE id = $1", [h.AGENCY_A]);
+  }
+});
+
 test("home adds stale units and stuck leads with why and a decisions summary", async () => {
   const broker = await row("broker");
   const old = new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString();

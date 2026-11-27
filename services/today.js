@@ -275,11 +275,13 @@ async function home(pool, viewer, now = new Date()) {
 
   const manager = Authz.isManager(viewer);
   const sourcesAllowed = manager && (!viewer.workspace || Segments.allows(viewer.workspace, "sources"));
+  // The agency's two unit-housekeeping switches cover managers and owners too, not only data entry.
+  const sw = manager ? await dataEntrySwitches(pool, viewer.agency_id) : { missingPhotos: true, overdueUnits: true };
   const [personal, ops, sla, missingPhotos, approvals, leasesSoonList, intakeChannels, progress, nextDay, staleUnits, stuckLeads] = await Promise.all([
     Digest.briefData(pool, viewer, now),
     opsCard(pool, viewer, now),
     leadSlaCounts(pool, viewer, ids, now),
-    missingPhotosCount(pool, viewer, ids),
+    sw.missingPhotos ? missingPhotosCount(pool, viewer, ids) : 0,
     approvalsCard(pool, viewer),
     Leases.list(pool, viewer, { soon: true, now }).catch(() => []),
     sourcesAllowed ? Intake.listForAgency(pool, viewer.agency_id).catch(() => []) : [],
@@ -304,7 +306,7 @@ async function home(pool, viewer, now = new Date()) {
           AND l.next_follow_up_at >= $3 AND l.next_follow_up_at < $4`,
       [viewer.agency_id, ids, tomorrow, Stages.cairoDayAt(now, 2, 0).toISOString()]
     ) : null,
-    staleUnitsCount(pool, viewer, ids, now),
+    sw.overdueUnits ? staleUnitsCount(pool, viewer, ids, now) : 0,
     manager ? 0 : stuckLeadsCount(pool, viewer, ids, now)
   ]);
   const nextViewing = tasksOf({ ...personal, overdue: [] }).find((task) => task.kind === "viewing" && task.at && new Date(task.at) >= now) || null;

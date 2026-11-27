@@ -3147,8 +3147,8 @@
       "safeNext": ["next"]
     },
     "web/todayCards.js": {
-      "render": ["cards", "en", "csrf"],
-      "oldUnitsCard": ["c", "en", "csrf", "back", "inline"]
+      "render": ["cards", "en"],
+      "oldUnitsCard": ["c", "en", "csrf", "back"]
     },
     "web/uploads.js": {
       "MB": "Number",
@@ -3247,7 +3247,7 @@
       "stripMarkdown": ["s"],
       "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"],
-      "statusForm": ["code", "en", "csrf", "back", "inline"]
+      "statusForm": ["code", "en", "csrf", "back"]
     }
   },
   "invariant_variable_names": {

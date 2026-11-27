@@ -9,9 +9,9 @@ const Delivery = require("../../domain/delivery");
 /** The unit status buttons: [value, Arabic, English]. Same labels as the app. */
 const UNIT_STATUS_BUTTONS = [["active", "متاحة", "Available"], ["sold", "اتباعت", "Sold"], ["archived", "أرشيف", "Archived"]];
 /** The three status buttons as a form that posts one status (back = the page to return to). */
-function statusForm(code, en, csrf, back = "", inline = false) {
+function statusForm(code, en, csrf, back = "") {
   const href = `/app/units/${encodeURIComponent(code)}`;
-  return html`<form method="post" action="${href}/status" class="uc-actions"${inline ? html` hx-post="${href}/status" hx-target="#today-old-units" hx-select="#today-old-units" hx-swap="outerHTML" hx-sync="#today-old-units:drop" data-no-lock` : ""} data-unit-status-row><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="back" value="${back}">${UNIT_STATUS_BUTTONS.map(([v, ar, enLabel]) => html`<button type="submit" name="status" value="${v}" class="secondary small" data-set-status="${v}">${en ? enLabel : ar}</button>`)}</form>`;
+  return html`<form method="post" action="${href}/status" class="uc-actions" data-unit-status-row><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="back" value="${back}">${UNIT_STATUS_BUTTONS.map(([v, ar, enLabel]) => html`<button type="submit" name="status" value="${v}" class="secondary small" data-set-status="${v}">${en ? enLabel : ar}</button>`)}</form>`;
 }
 const stripMarkdown = (s) => String(s || "").replace(/[*`_]/g, "");
 
