@@ -135,6 +135,12 @@ test("one unit by code: another agency's unit is a 404 and no owner or commissio
   expect((await api().get("/api/v1/units/B-1").set(auth(token))).status).toBe(404);
   const one = await api().get("/api/v1/units/A-1").set(auth(token));
   expect(one.status).toBe(200);
-  expect(one.body).toMatchObject({ code: "A-1", compound: "Mivida", bedrooms: 3, price: 9000000, mine: true });
+  expect(one.body).toMatchObject({ code: "A-1", compound: "Mivida", bedrooms: 3, price: 9000000, currency: "EGP", rentPeriod: null, mine: true });
   expect(Object.keys(one.body).join(" ")).not.toMatch(/owner|commission|phone|lat|lng|details/i);
+  await h.insertListing({ code: "A-USD", compound: "Mivida", listing_type: "rent", price_value: 2500, details: { currency: "USD", rent_period: "monthly" } });
+  const listRes = await api().get("/api/v1/units").set(auth(token));
+  expect(listRes.body.items.find((u) => u.code === "A-USD")).toMatchObject({ currency: "USD", rentPeriod: "monthly" });
+  const oneUsd = await api().get("/api/v1/units/A-USD").set(auth(token));
+  expect(oneUsd.status).toBe(200);
+  expect(oneUsd.body).toMatchObject({ code: "A-USD", currency: "USD", rentPeriod: "monthly" });
 });

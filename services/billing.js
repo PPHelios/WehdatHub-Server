@@ -87,11 +87,13 @@ function effectivePlan(agency, now = new Date()) {
     return { plan: own && own.seats >= office.seats ? own : office, source: "pilot", until: null };
   }
   if (agency.paid_until && new Date(agency.paid_until) > now) return { plan: Plans.planById(agency.plan) || Plans.FREE, source: "paid", until: new Date(agency.paid_until) };
-  if (agency.trial_ends_at && new Date(agency.trial_ends_at) > now) return { plan: Plans.planById(Plans.TRIAL.plan), source: "trial", until: new Date(agency.trial_ends_at) };
+  const baseTrial = Plans.planById(Plans.isTrialPlan(agency.plan) ? agency.plan : Plans.TRIAL.plan);
+  const trialPlan = agency.trial_ai_credits == null ? baseTrial : { ...baseTrial, credits: agency.trial_ai_credits };
+  if (agency.trial_ends_at && new Date(agency.trial_ends_at) > now) return { plan: trialPlan, source: "trial", until: new Date(agency.trial_ends_at) };
   // The Free plan is retired for an agency that ever had a trial or paid period; one with neither keeps it.
   const l = ladderOf(agency, now);
   if (!l) return { plan: Plans.FREE, source: "free", until: null };
-  const plan = (l.kind === "trial" ? Plans.planById(Plans.TRIAL.plan) : Plans.planById(agency.plan)) || Plans.FREE;
+  const plan = (l.kind === "trial" ? trialPlan : Plans.planById(agency.plan)) || Plans.FREE;
   const info = { kind: l.kind, end: l.end, readonlyStarts: l.graceEnd, blockedStarts: l.readonlyEnd, paused: l.paused };
   if (l.phase === "trial") return { plan, source: "trial", until: l.end, ...info };
   return { plan, source: l.phase, until: l.phase === "grace" ? l.graceEnd : l.phase === "readonly" ? l.readonlyEnd : null, ...info };
@@ -104,6 +106,7 @@ async function agencyRow(db, agencyId) {
   const { rows } = await db.query(
     `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.grace_extra_until, a.signed_up_at, a.created_at,
             a.extra_seats, a.locked_prices, a.lock_until, a.founding_partner,
+            a.manager_can_renew_plan, a.manager_can_buy_credits, a.trial_ai_credits,
             (SELECT p.months FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'confirmed'
               ORDER BY p.confirmed_at DESC NULLS LAST LIMIT 1) AS last_months,
             (SELECT min(p.created_at) FROM payments p WHERE p.agency_id = a.id AND p.kind = 'plan' AND p.status = 'pending') AS pending_plan_at
@@ -142,7 +145,7 @@ async function creditState(db, agency, eff, { now = new Date() } = {}) {
   if (source === "readonly" || source === "blocked") return { used: 0, total: 0, plan: 0, bundles: 0, grants: 0 };
   const [used, pool] = await Promise.all([
     source === "trial" ? Credits.usedThisMonth(db, agency.id, { now, since: trialStart(agency) }) : Credits.usedThisMonth(db, agency.id, { now }),
-    Credits.poolFor(db, agency.id, plan.id, { now })
+    Credits.poolFor(db, agency.id, plan.id, { now, baseCredits: source === "trial" ? agency.trial_ai_credits : undefined })
   ]);
   return { used, total: pool.total, plan: pool.plan, bundles: pool.bundles, grants: pool.grants };
 }
@@ -331,6 +334,11 @@ async function payTo(db) {
   return { instapay: String(v.instapay || ""), bank: String(v.bank || "") };
 }
 
+async function paymentChannels(db) {
+  const value = await getSetting(db, "payment_channels", {});
+  return { sms: value?.sms === true, telegram: value?.telegram === true };
+}
+
 async function savePayTo(db, { instapay, bank }) {
   await setSetting(db, "pay_to", { instapay: String(instapay || "").trim().slice(0, 120), bank: String(bank || "").trim().slice(0, 300) });
 }
@@ -438,7 +446,9 @@ function upgradeQuotes(agency, now = new Date()) {
  * upgrade_pending, amount (see planChangeError and quoteUpgrade).
  */
 async function requestPayment(db, manager, input = {}, { now = new Date() } = {}) {
-  if (!isAgencyOwner(manager)) return { error: "forbidden" };
+  const isOwner = isAgencyOwner(manager);
+  const isMgr = isManager(manager);
+  if (!isOwner && !isMgr) return { error: "forbidden" };
   const kind = input.kind === "credit_bundle" ? "credit_bundle" : input.kind === "upgrade" ? "upgrade" : "plan";
   const months = kind === "plan" ? Number(input.months) : 1;
   const plan = kind === "plan" || kind === "upgrade" ? String(input.plan || "") : null;
@@ -446,6 +456,14 @@ async function requestPayment(db, manager, input = {}, { now = new Date() } = {}
   if (kind !== "upgrade" && !priceOf({ kind, plan, months, bundle })) return { error: "plan" };
   const agency = await agencyRow(db, manager.agency_id);
   if (!agency || agency.approval !== "approved") return { error: "forbidden" };
+  if (!isOwner) {
+    if ((kind === "plan" || kind === "upgrade") && !agency.manager_can_renew_plan) {
+      return { error: "owner_only" };
+    }
+    if (kind === "credit_bundle" && !agency.manager_can_buy_credits) {
+      return { error: "owner_only" };
+    }
+  }
   const eff = effectivePlan(agency, now);
   // Top-ups (and extra seats) need an active plan: not in grace, read-only or blocked. A plan payment is always allowed.
   if (kind === "credit_bundle" && LAPSED.includes(eff.source)) return { error: "lapsed" };
@@ -483,6 +501,34 @@ async function requestPayment(db, manager, input = {}, { now = new Date() } = {}
     }
   }
   throw new Error("Could not allocate a payment reference");
+}
+
+/** The agency owner toggles whether managers can renew the plan or purchase credits. */
+async function updateBillingPermissions(db, owner, agencyId, { managerCanRenewPlan, managerCanBuyCredits }) {
+  if (!isAgencyOwner(owner) || owner.agency_id !== agencyId) return { error: "forbidden" };
+  const sets = [];
+  const args = [agencyId];
+  if (typeof managerCanRenewPlan === "boolean") {
+    args.push(managerCanRenewPlan);
+    sets.push(`manager_can_renew_plan = $${args.length}`);
+  }
+  if (typeof managerCanBuyCredits === "boolean") {
+    args.push(managerCanBuyCredits);
+    sets.push(`manager_can_buy_credits = $${args.length}`);
+  }
+  if (!sets.length) return { ok: true };
+  const { rows } = await db.query(
+    `UPDATE agencies SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1 RETURNING manager_can_renew_plan, manager_can_buy_credits`,
+    args
+  );
+  forgetPlanState(agencyId);
+  return {
+    ok: true,
+    permissions: {
+      managerCanRenewPlan: Boolean(rows[0]?.manager_can_renew_plan),
+      managerCanBuyCredits: Boolean(rows[0]?.manager_can_buy_credits)
+    }
+  };
 }
 
 /**
@@ -783,6 +829,7 @@ module.exports = {
   UNIT_HINT_LEVELS,
   getSetting,
   setSetting,
+  paymentChannels,
   payTo,
   savePayTo,
   priceOf,
@@ -792,6 +839,7 @@ module.exports = {
   upgradeQuotes,
   addExtraSeats,
   requestPayment,
+  updateBillingPermissions,
   paymentsOf,
   publicAllowance,
   publicPayment,

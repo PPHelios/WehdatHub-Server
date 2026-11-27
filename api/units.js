@@ -25,7 +25,7 @@ const ReadCaps = require("../lib/readCaps");
 const STATUSES = ["active", "sold", "archived"];
 const MAX_LIMIT = 50;
 const COLS = `listings.id, listings.code, listings.status, listings.title, listings.property_type, listings.listing_type, listings.price_value,
-  listings.price_display, listings.area_value, listings.bedrooms, listings.bathrooms, listings.compound, listings.district, listings.city,
+  listings.price_display, listings.details, listings.area_value, listings.bedrooms, listings.bathrooms, listings.compound, listings.district, listings.city,
   listings.finishing, listings.furnishing, listings.floor_level, listings.is_ready, listings.delivery_year, listings.delivery_quarter,
   listings.down_payment_value, listings.installment_years, listings.installment_value, listings.confirmed_at, listings.updated_at, listings.created_at,
   listings.broker_id, ${PHASE_NAME_COLS}`;
@@ -45,6 +45,8 @@ function unitView(r) {
     dealType: r.listing_type,
     price: r.price_value === null ? null : Number(r.price_value),
     priceText: r.price_display,
+    currency: r.details?.currency || "EGP",
+    rentPeriod: r.listing_type === "rent" ? (r.details?.rent_period || null) : null,
     area: r.area_value === null ? null : Number(r.area_value),
     bedrooms: r.bedrooms,
     bathrooms: r.bathrooms,
@@ -82,6 +84,9 @@ function register(api, { pool }) {
     // Filters: one reader for the website and the app (domain/unitFilters.js).
     const f = UnitFilters.read(q, { isOwner: Authz.isAgencyOwner(broker), status });
     UnitFilters.appendTo(where, args, UnitFilters.conditions(f, { brokerId: broker.id, alias: "listings", compound: q.compound ? String(q.compound).slice(0, 120) : "" }));
+    if (q.missingPhotos === "true" || q.missingPhotos === "1") {
+      where.push("NOT EXISTS (SELECT 1 FROM listing_images i WHERE i.listing_id = listings.id AND i.agency_id = listings.agency_id AND (i.role IS NULL OR i.role NOT IN ('document', 'unrelated')))");
+    }
     // The three status counts use every filter except the status itself, so the tabs show their numbers from the start.
     const byStatus = (await pool.query(`SELECT listings.status AS s, count(*)::int AS n FROM listings WHERE ${Vis.units("listings")} AND ${where.join(" AND ")} AND listings.status IN ('active', 'sold', 'archived') GROUP BY listings.status`, args)).rows;
     const counts = { active: 0, sold: 0, archived: 0 };
@@ -170,6 +175,18 @@ function register(api, { pool }) {
     return res.json({ codes: out, max_photos: 15, ai_cost: Credits.costOf("chat_post") });
   });
 
+  api.get("/units/:code/matching-leads", async (req, res) => {
+    const { broker } = req.session;
+    if (!(await RateLimit.apiGate(pool, res, `reverse-match:broker:${broker.id}`, { limit: 5, windowSec: 60 }))) return;
+    const found = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!found) return res.status(404).json({ error: "not_found" });
+    const { whoWants } = require("../services/leadRequests");
+    const { refLabel } = require("../domain/leadCard");
+    const result = await whoWants(pool, broker, found, { cap: 50, lang: broker.preferred_lang === "en" ? "en" : "ar" });
+    return res.json({ partial: Boolean(result.partial), items: result.leads.map((lead) => ({
+      ref: refLabel(lead.ref), name: lead.name, reason: lead.reason
+    })) });
+  });
   api.get("/units/:code", async (req, res) => {
     const { broker } = req.session;
     // findByCode carries the visibility rule: a private unit is a 404 for everyone but the agency owner.
@@ -181,11 +198,15 @@ function register(api, { pool }) {
       pool.query(`SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2${docsToo ? "" : " AND (role IS NULL OR role NOT IN ('document', 'unrelated'))"} ORDER BY position`, [found.id, broker.agency_id]),
       Authz.canEdit(broker, found) && Rights.mayWrite(pool, broker)
     ]);
+    const canEditColleague = Authz.canEditSharedUnit(broker, found) && await Rights.mayWrite(pool, broker);
     return res.json({
       ...unitView(found),
       ...(await phaseOf(pool, found.subzone_id)),
       mine: found.broker_id === broker.id,
       canEdit: Boolean(mayWrite),
+      canDelete: Authz.canDeleteUnit(broker, found),
+      canEditColleague,
+      ...(canEditColleague ? { colleagueEdit: { version: found.version, description: found.description || "" } } : {}),
       features: found.feature_keys || [],
       images: images.map((i) => ({ id: i.id, url: Storage.photoUrl(i.url), position: i.position }))
     });

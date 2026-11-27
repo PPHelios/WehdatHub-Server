@@ -167,22 +167,74 @@ async function pageCommissions(db, actor, opts = {}) {
   await syncAgency(db, actor.agency_id);
   const ids = await scopeIds(db, actor, opts);
   const q = commissionQuery(actor, opts, ids);
+  // Summary totals stay unfiltered by status/overdue so "Claimable vs Overdue" KPIs remain accurate when viewing one chip.
+  const sumQ = commissionQuery(actor, { developerId: opts.developerId, from: opts.from, to: opts.to, now: opts.now }, ids);
   const size = Math.floor(opts.size || PAGE_SIZE);
   const offset = (Math.max(0, Math.floor(Number(opts.page)) || 0)) * size;
-  const t = await db.query(
-    `SELECT count(*) FILTER (WHERE c.status <> 'cancelled')::int AS count, count(*)::int AS listed,
-            COALESCE(SUM(c.expected_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS expected,
-            COALESCE(SUM(c.paid_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS paid,
-            COALESCE(SUM(c.expected_amount - c.paid_amount) FILTER (WHERE c.status IN ('claimed', 'partly_paid')), 0)::numeric AS claimed,
-            COALESCE(SUM(GREATEST(c.expected_amount - c.paid_amount, 0)) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS outstanding,
-            count(*) FILTER (WHERE c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date)::int AS overdue
-       FROM commissions c JOIN deals d ON d.id = c.deal_id WHERE ${q.where}`,
-    q.params
-  );
+  const [t, listedRes] = await Promise.all([
+    db.query(
+      `SELECT count(*) FILTER (WHERE c.status <> 'cancelled')::int AS count,
+              COALESCE(SUM(c.expected_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS expected,
+              COALESCE(SUM(c.paid_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS paid,
+              COALESCE(SUM(c.expected_amount) FILTER (WHERE c.status = 'claimable'), 0)::numeric AS claimable,
+              count(*) FILTER (WHERE c.status = 'claimable')::int AS claimable_count,
+              COALESCE(SUM(c.expected_amount - c.paid_amount) FILTER (WHERE c.status IN ('claimed', 'partly_paid')), 0)::numeric AS claimed,
+              COALESCE(SUM(GREATEST(c.expected_amount - c.paid_amount, 0)) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS outstanding,
+              count(*) FILTER (WHERE c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date)::int AS overdue,
+              COALESCE(SUM(GREATEST(c.expected_amount - c.paid_amount, 0)) FILTER (WHERE c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date), 0)::numeric AS overdue_amount
+         FROM commissions c JOIN deals d ON d.id = c.deal_id WHERE ${sumQ.where}`,
+      sumQ.params
+    ),
+    db.query(`SELECT count(*)::int AS listed FROM commissions c JOIN deals d ON d.id = c.deal_id WHERE ${q.where}`, q.params)
+  ]);
   const sum = t.rows[0];
-  const totals = { count: sum.count, expected: Number(sum.expected), claimed: Number(sum.claimed), paid: Number(sum.paid), outstanding: Number(sum.outstanding), overdue: sum.overdue };
+  const listedTotal = listedRes.rows[0].listed;
+  const totals = {
+    count: sum.count,
+    expected: Number(sum.expected),
+    claimable: Number(sum.claimable),
+    claimableCount: sum.claimable_count,
+    claimed: Number(sum.claimed),
+    paid: Number(sum.paid),
+    outstanding: Number(sum.outstanding),
+    overdue: sum.overdue,
+    overdueAmount: Number(sum.overdue_amount)
+  };
+  let byDeveloper = [];
+  if (isManager(actor)) {
+    const devParams = [actor.agency_id, actor.id, null, q.day];
+    let devDateSql = "";
+    if (opts.from && opts.to) {
+      devParams.push(opts.from, opts.to);
+      devDateSql = ` AND d.closed_at >= $5 AND d.closed_at < $6`;
+    }
+    const devSql = `SELECT c.developer_id AS developer_id, coalesce(v.name, '—') AS developer_name,
+            COALESCE(SUM(c.expected_amount) FILTER (WHERE c.status = 'claimable'), 0)::numeric AS claimable,
+            count(*) FILTER (WHERE c.status = 'claimable')::int AS claimable_count,
+            COALESCE(SUM(c.expected_amount - c.paid_amount) FILTER (WHERE c.status IN ('claimed', 'partly_paid')), 0)::numeric AS claimed,
+            COALESCE(SUM(c.paid_amount) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS paid,
+            COALESCE(SUM(GREATEST(c.expected_amount - c.paid_amount, 0)) FILTER (WHERE c.status <> 'cancelled'), 0)::numeric AS outstanding,
+            count(*) FILTER (WHERE c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date)::int AS overdue_count,
+            COALESCE(SUM(GREATEST(c.expected_amount - c.paid_amount, 0)) FILTER (WHERE c.status IN ('claimed', 'partly_paid') AND c.due_on < $4::date), 0)::numeric AS overdue_amount
+       FROM commissions c JOIN deals d ON d.id = c.deal_id LEFT JOIN developers v ON v.id = c.developer_id
+      WHERE c.agency_id = $1 AND $2::uuid IS NOT NULL AND $3::uuid[] IS NULL AND $4::date IS NOT NULL AND c.status <> 'cancelled' AND c.developer_id IS NOT NULL${devDateSql}
+      GROUP BY 1, 2
+      ORDER BY overdue_amount DESC, claimable DESC, developer_name`;
+    const devRows = (await db.query(devSql, devParams)).rows;
+    byDeveloper = devRows.map((r) => ({
+      developerId: r.developer_id,
+      developerName: r.developer_name,
+      claimable: Number(r.claimable),
+      claimableCount: Number(r.claimable_count),
+      claimed: Number(r.claimed),
+      paid: Number(r.paid),
+      outstanding: Number(r.outstanding),
+      overdueCount: Number(r.overdue_count),
+      overdueAmount: Number(r.overdue_amount)
+    }));
+  }
   const { rows } = await db.query(`${LIST_SQL} WHERE ${q.where} ORDER BY c.due_on NULLS LAST, d.closed_at DESC LIMIT ${size} OFFSET ${offset}`, q.params);
-  return { rows: rows.map((r) => shape(r, actor, q.day)), total: sum.listed, totals };
+  return { rows: rows.map((r) => shape(r, actor, q.day)), total: listedTotal, totals, byDeveloper };
 }
 
 function shape(r, actor, day) {

@@ -112,26 +112,27 @@ async function removeRequest(pool, actor, leadKey, requestId) {
  * search, on this unit only). The count is the agency's; the leads listed are only those the broker may see.
  * @returns {Promise<{ total, leads: [{ id, ref, name, phone_e164 }], others }>}
  */
-async function whoWants(pool, actor, listing) {
+async function whoWants(pool, actor, listing, { cap = null, lang = null } = {}) {
   if (!listing?.id || listing.agency_id !== actor.agency_id) return { total: 0, leads: [], others: 0 };
   const { rows } = await pool.query(
-    `SELECT s.filters, l.id, l.ref, l.name, l.phone_e164, l.agency_id, l.assigned_broker_id
+    `SELECT s.filters, l.id, l.ref, l.name, l.phone_e164, l.agency_id, l.assigned_broker_id, b.team_lead_id AS assignee_team_lead_id
        FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
+       LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
       WHERE ${Vis.leads("l")} AND s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')
-      ORDER BY l.last_activity_at DESC`,
-    [actor.agency_id]
+      ORDER BY l.last_activity_at DESC, s.id LIMIT $2`,
+    [actor.agency_id, cap === null ? null : cap + 1]
   );
   const fx = await Fx.loadRates(pool, actor.agency_id);
   const fits = new Map();
-  for (const r of rows) {
+  for (const r of cap === null ? rows : rows.slice(0, cap)) {
     if (fits.has(r.id)) continue;
     const { sql, params } = Search.buildSearchQuery(actor.agency_id, { filters: SearchLink.sanitizeFilters(r.filters) }, { onlyIds: [listing.id], limit: 1, fx });
     if ((await pool.query(sql, params)).rows.length) fits.set(r.id, r);
   }
   const all = [...fits.values()];
   const open = await require("./leadScope").open(pool, actor);
-  const visible = all.filter((l) => Authz.canViewLead(actor, l, open)).map(({ id, ref, name, phone_e164 }) => ({ id, ref, name, phone_e164 }));
-  return { total: all.length, leads: visible, others: all.length - visible.length };
+  const visible = all.filter((l) => Authz.canViewLead(actor, l, open)).map(({ id, ref, name, phone_e164, filters }) => ({ id, ref, name, phone_e164, ...(lang ? { reason: Card.requestSummary(SearchLink.sanitizeFilters(filters), lang) } : {}) }));
+  return { total: all.length, leads: visible, others: all.length - visible.length, ...(cap === null ? {} : { partial: rows.length > cap }) };
 }
 
 /**

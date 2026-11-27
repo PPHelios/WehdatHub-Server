@@ -8,7 +8,7 @@ const Phone = require("../../domain/phone");
 const { isManager, isAgencyOwner, isDataEntry } = require("../../lib/authz");
 const Portfolio = require("../../services/privatePortfolio");
 const Vis = require("../../lib/visibility");
-const { html, escapeHtml, phoneLtr } = require("../html");
+const { html, phoneLtr, phoneOrText } = require("../html");
 
 const { L } = require("../../lib/copy");
 const { phoneHelp } = require("../views/phoneHelp");
@@ -22,7 +22,7 @@ const eventLine = (e, lang) => {
     case "created":
       return L(lang, "🆕 اتسجل", "🆕 Added");
     case "edited":
-      return L(lang, `✏️ الاسم: ${d.name || ""}`, `✏️ Name: ${d.name || ""}`);
+      return html`${L(lang, "✏️ الاسم:", "✏️ Name:")} ${phoneOrText(d.name || "")}`;
     case "note":
       return `📝 ${d.text || L(lang, "(اتمسحت الملاحظة)", "(note cleared)")}`;
     case "flag":
@@ -46,13 +46,13 @@ async function unitOwnerBlock(pool, viewer, listing, lang, csrf, notice = null) 
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/owner" class="stack" data-owner-move><input type="hidden" name="_csrf" value="${csrf}">
     <label>${L(lang, "كود العميل اللي اشتراها (L-0042)", "Lead who bought it (L-0042)")}<input name="lead" dir="ltr" placeholder="L-0042"></label>
     <p class="muted small">${L(lang, "أو مالك جديد:", "or a new owner:")}</p>
-    <label>${L(lang, "الاسم", "Name")}<input name="name" maxlength="120"></label>
+    <label>${L(lang, "الاسم", "Name")}<input name="name" dir="auto" maxlength="120"></label>
     <label>${L(lang, "الموبايل", "Mobile")}<input name="phone" inputmode="tel" dir="ltr">${phoneHelp(lang)}</label>
     <button type="submit" class="secondary">${L(lang, "انقل", "Move")}</button>
   </form></details>`
     : "";
   if (!owner && !move) return "";
-  return html`<p data-unit-owner>${notice || ""}${owner ? html`👤 ${L(lang, "المالك", "Owner")}: <a href="/app/owners/${owner.id}">${/^[+\d\s().-]+$/.test(owner.name || "") ? phoneLtr(owner.name) : owner.name || L(lang, "بدون اسم", "No name")}</a>` : ""}</p>${move}`;
+  return html`<p data-unit-owner>${notice || ""}${owner ? html`👤 ${L(lang, "المالك", "Owner")}: <a href="/app/owners/${owner.id}">${phoneOrText(owner.name) || L(lang, "بدون اسم", "No name")}</a>` : ""}</p>${move}`;
 }
 
 function register(web, { pool, page }) {
@@ -71,12 +71,12 @@ function register(web, { pool, page }) {
       title: L(lang, "المُلّاك", "Owners"),
       nav: "units",
       body: html`<h1>👤 ${L(lang, "المُلّاك", "Owners")}</h1>
-<form method="get" action="/app/owners" class="row"><input id="owner-q" hx-preserve="true" hx-get="/app/owners" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="innerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${q}" placeholder="${L(lang, "اسم أو موبايل", "Name or mobile")}" aria-label="${L(lang, "بحث", "Search")}"><button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button></form>
+<form method="get" action="/app/owners" class="row"><input id="owner-q" hx-preserve="true" hx-get="/app/owners" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="outerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${q}" placeholder="${L(lang, "اسم أو موبايل", "Name or mobile")}" aria-label="${L(lang, "بحث", "Search")}"><button type="submit" class="secondary">${L(lang, "بحث", "Search")}</button></form>
 ${isAgencyOwner(broker) ? html`<form method="post" action="/app/owners/data-entry" class="row" data-data-entry-owners><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="on" value="${dataEntryOn ? "0" : "1"}"><button type="submit" class="secondary">${dataEntryOn ? L(lang, "🔒 قفل: مدخل البيانات مش هيشوف المُلّاك", "🔒 Turn off: data entry cannot see owners") : L(lang, "🔓 فتح: مدخل البيانات يشوف ويعدّل المُلّاك (ما عدا VIP)", "🔓 Turn on: data entry sees and edits owners (not VIP)")}</button></form>` : ""}
 ${pendingCount ? html`<p><a class="pill-link" href="/app/owners/requests">📝 ${L(lang, "طلبات الأسماء", "Name requests")} (${pendingCount})</a></p>` : ""}
 ${isAgencyOwner(broker) ? html`<p><a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/owners?private=${onlyPrivate ? "" : "1"}">⭐ ${L(lang, "VIP", "VIP")}</a></p>` : ""}
 ${list.rows.length
-  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${o.name || L(lang, "بدون اسم", "No name")}</b></a> <span class="chip" dir="ltr">${o.code || ""}</span> <span class="muted small" dir="ltr">${(o.phones || []).map((p) => Phone.maskPhone(p)).join(" · ")}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">⚠️ ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
+  ? html`<ul class="stack" data-owners>${list.rows.map((o) => html`<li class="card" data-owner="${o.id}"><a href="/app/owners/${o.id}"><b>${phoneOrText(o.name) || L(lang, "بدون اسم", "No name")}</b></a> <span class="chip" dir="ltr">${o.code || ""}</span> <span class="muted small" dir="ltr">${phoneLtr((o.phones || []).map((p) => Phone.maskPhone(p)).join(" · "))}</span> <span class="chip">${o.unit_count} ${L(lang, "وحدة", "unit(s)")}</span>${o.flag ? html` <span class="badge">⚠️ ${o.flag}</span>` : ""}${o.is_private ? html` <span class="badge">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</li>`)}</ul>`
   : html`<p class="muted">${L(lang, "مفيش مُلّاك لسه.", "No owners yet.")}</p>`}
 <p class="row">${n > 0 ? html`<a href="/app/owners?page=${n - 1}&q=${encodeURIComponent(q)}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${list.more ? html`<a href="/app/owners?page=${n + 1}&q=${encodeURIComponent(q)}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
     });
@@ -137,9 +137,9 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
       nav: "units",
       body: html`<article class="card stack owner-card" data-owner-profile="${owner.id}">
   ${req.query.saved ? html`<p class="notice ok">✅ ${L(lang, "اتحفظ", "Saved")}</p>` : ""}
-  <div class="unit-head"><h1>👤 ${owner.name || L(lang, "بدون اسم", "No name")}</h1><span class="unit-pill" dir="ltr">${owner.code || ""}</span>${owner.is_private ? html`<span class="unit-pill">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</div>
+  <div class="unit-head"><h1>👤 ${phoneOrText(owner.name) || L(lang, "بدون اسم", "No name")}</h1><span class="unit-pill" dir="ltr">${owner.code || ""}</span>${owner.is_private ? html`<span class="unit-pill">⭐ ${L(lang, "VIP", "VIP")}</span>` : ""}</div>
   ${req.query.requested ? html`<p class="notice ok">📝 ${L(lang, "طلب تعديل الاسم اتبعت للموافقة", "Name change sent for approval")}</p>` : ""}
-  <div class="contact-chips">${(owner.phones || []).map((p) => html`<a class="btn secondary phone" href="${Phone.telUrl(`+${p}`)}" dir="ltr">📞 ${Phone.displayPhone(`+${p}`)}</a>`)}</div>
+  <div class="contact-chips">${(owner.phones || []).map((p) => html`<a class="btn secondary phone" href="${Phone.telUrl(`+${p}`)}" dir="ltr">📞 ${phoneLtr(Phone.displayPhone(`+${p}`))}</a>`)}</div>
   ${owner.flag ? html`<p class="card notice warn">⚠️ ${owner.flag}</p>` : ""}
   ${owner.notes ? html`<p>${owner.notes}</p>` : ""}
   ${lead && !isDataEntry(broker) ? html`<p data-owner-lead>🔗 ${L(lang, "هو كمان عميل", "Also a lead")}: <a href="/app/leads/L-${String(lead.ref).padStart(4, "0")}">L-${String(lead.ref).padStart(4, "0")}</a></p>` : ""}
@@ -153,7 +153,7 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
   ${owner.canEdit
     ? html`<details class="acc"><summary>${L(lang, "تعديل", "Edit")}</summary><div class="acc-body">
   <form method="post" action="/app/owners/${owner.id}" class="stack" data-owner-edit><input type="hidden" name="_csrf" value="${req.session.csrf}">
-    <label>${L(lang, "الاسم", "Name")}<input name="name" maxlength="120" value="${owner.name || ""}"></label>
+    <label>${L(lang, "الاسم", "Name")}<input name="name" dir="auto" maxlength="120" value="${owner.name || ""}"></label>
     <label>${L(lang, "الموبايل", "Phone")}<input name="phone" dir="ltr" inputmode="tel" value="${(owner.phones || [])[0] || ""}"></label>
     <p class="muted small">${L(lang, "التنبيه: سطر واحد بيظهر في القايمة وفوق في صفحة المالك (مثلاً: «بيرد بعد يومين»). الملاحظات: تفاصيل أطول، بتظهر في صفحة المالك تحت التنبيه، ومش بتظهر في القايمة.", "Alert: one line that shows in the owners list and at the top of the owner's page (for example: 'answers slowly'). Notes: longer details, shown on the owner's page below the alert but not in the list.")}</p>
     <label>${L(lang, "تنبيه (سطر واحد)", "Alert (one line)")}<input name="flag" maxlength="200" value="${owner.flag || ""}"></label>
@@ -174,7 +174,7 @@ ${rows.length ? html`<ul class="stack" data-owner-requests>${rows.map((r) => htm
     const r = await Owners.edit(pool, req.session.broker, req.params.id, req.body);
     const lang = langOf(req);
     if (r.error === "forbidden") return res.status(403).send(L(lang, "مش مسموحلك تعدّل ده.", "You cannot edit this owner."));
-    if (r.error === "duplicate") return res.status(409).type("html").send(`<p>${L(lang, "الموبايل ده موجود على مالك تاني:", "This phone already belongs to another owner:")} <a href="/app/owners/${r.existingId}">${escapeHtml(r.existingName || L(lang, "بدون اسم", "No name"))}</a></p>`);
+    if (r.error === "duplicate") return res.status(409).type("html").send(String(html`<p>${L(lang, "الموبايل ده موجود على مالك تاني:", "This phone already belongs to another owner:")} <a href="/app/owners/${r.existingId}">${phoneOrText(r.existingName) || L(lang, "بدون اسم", "No name")}</a></p>`));
     if (r.error === "bad_phone") return res.status(422).type("text").send(L(lang, "الموبايل مش صح.", "The phone is not valid."));
     if (r.error) return next();
     return res.redirect(303, `/app/owners/${req.params.id}?${r.name_requested ? "requested=1" : "saved=1"}`);

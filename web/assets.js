@@ -73,7 +73,41 @@ const FILES = {
   "icons/icon-512.png": path.join(STATIC_DIR, "icons", "icon-512.png"),
   "icons/maskable-512.png": path.join(STATIC_DIR, "icons", "maskable-512.png"),
   // F12: a sample developer price sheet to download from the project page.
-  "samples/price-sheet-sample.csv": path.join(STATIC_DIR, "samples", "price-sheet-sample.csv")
+  "samples/price-sheet-sample.csv": path.join(STATIC_DIR, "samples", "price-sheet-sample.csv"),
+  // Guide screenshots for /app/guide
+  "guide/add-unit-01-place-features.png": path.join(STATIC_DIR, "guide", "add-unit-01-place-features.png"),
+  "guide/add-unit-01b-new-compound.png": path.join(STATIC_DIR, "guide", "add-unit-01b-new-compound.png"),
+  "guide/add-unit-02-size-price.png": path.join(STATIC_DIR, "guide", "add-unit-02-size-price.png"),
+  "guide/add-unit-03-delivery-payment.png": path.join(STATIC_DIR, "guide", "add-unit-03-delivery-payment.png"),
+  "guide/add-unit-04-owner.png": path.join(STATIC_DIR, "guide", "add-unit-04-owner.png"),
+  "guide/add-unit-05-photos-review.png": path.join(STATIC_DIR, "guide", "add-unit-05-photos-review.png"),
+  "guide/edit-unit-01-place-features.png": path.join(STATIC_DIR, "guide", "edit-unit-01-place-features.png"),
+  "guide/edit-unit-02-size-price.png": path.join(STATIC_DIR, "guide", "edit-unit-02-size-price.png"),
+  "guide/edit-unit-03-owner.png": path.join(STATIC_DIR, "guide", "edit-unit-03-owner.png"),
+  "guide/edit-unit-04-photos-gallery.png": path.join(STATIC_DIR, "guide", "edit-unit-04-photos-gallery.png"),
+  "guide/edit-unit-05-review-summary.png": path.join(STATIC_DIR, "guide", "edit-unit-05-review-summary.png"),
+  "guide/search-01-results.png": path.join(STATIC_DIR, "guide", "search-01-results.png"),
+  "guide/search-02-refine-filters.png": path.join(STATIC_DIR, "guide", "search-02-refine-filters.png"),
+  // R1: Excel Import
+  "guide/import-excel-01-upload-sheets.png": path.join(STATIC_DIR, "guide", "import-excel-01-upload-sheets.png"),
+  "guide/import-excel-02-mapping-headers.png": path.join(STATIC_DIR, "guide", "import-excel-02-mapping-headers.png"),
+  "guide/import-excel-03-diff-preview.png": path.join(STATIC_DIR, "guide", "import-excel-03-diff-preview.png"),
+  "guide/import-excel-04-rules-dedup.png": path.join(STATIC_DIR, "guide", "import-excel-04-rules-dedup.png"),
+  // R2: WhatsApp Chat Intake
+  "guide/import-chat-01-upload-filters.png": path.join(STATIC_DIR, "guide", "import-chat-01-upload-filters.png"),
+  "guide/import-chat-02-parse-extract.png": path.join(STATIC_DIR, "guide", "import-chat-02-parse-extract.png"),
+  "guide/import-chat-03-photos-matching.png": path.join(STATIC_DIR, "guide", "import-chat-03-photos-matching.png"),
+  "guide/import-chat-04-conflict-assign.png": path.join(STATIC_DIR, "guide", "import-chat-04-conflict-assign.png"),
+  // R3: Broker & Team Lead Lead Intake
+  "guide/lead-intake-01-create-normalize.png": path.join(STATIC_DIR, "guide", "lead-intake-01-create-normalize.png"),
+  "guide/lead-intake-02-duplicate-guard.png": path.join(STATIC_DIR, "guide", "lead-intake-02-duplicate-guard.png"),
+  "guide/lead-intake-03-undo-stack.png": path.join(STATIC_DIR, "guide", "lead-intake-03-undo-stack.png"),
+  "guide/lead-intake-04-team-lead-pod.png": path.join(STATIC_DIR, "guide", "lead-intake-04-team-lead-pod.png"),
+  // R4: Manager Lead Management
+  "guide/lead-manager-01-pipeline-board.png": path.join(STATIC_DIR, "guide", "lead-manager-01-pipeline-board.png"),
+  "guide/lead-manager-02-rules-schedule.png": path.join(STATIC_DIR, "guide", "lead-manager-02-rules-schedule.png"),
+  "guide/lead-manager-03-broker-away.png": path.join(STATIC_DIR, "guide", "lead-manager-03-broker-away.png"),
+  "guide/lead-manager-04-pdpl-governance.png": path.join(STATIC_DIR, "guide", "lead-manager-04-pdpl-governance.png")
 };
 
 // Fetched when the Map page opens, not with every install of the app.
@@ -112,7 +146,7 @@ function loadAssets() {
   const swSource = fs
     .readFileSync(path.join(STATIC_DIR, "sw.js"), "utf8")
     .replace('"__VERSION__"', JSON.stringify(version))
-    .replace("= __ASSETS__;", `= ${JSON.stringify(Object.keys(files).filter((n) => !LAZY.has(n)).map(url))};`);
+    .replace("= __ASSETS__;", `= ${JSON.stringify(Object.keys(files).filter((n) => !LAZY.has(n) && !n.startsWith("guide/")).map(url))};`);
   return { files, version, url, swSource };
 }
 

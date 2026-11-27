@@ -25,12 +25,12 @@ const Intake = require("../../domain/leadIntake");
 const Phone = require("../../domain/phone");
 const SearchLink = require("../../domain/searchLink");
 const Q = require("../../domain/searchQuery");
-const { isManager, isAgencyOwner, canEditLead } = require("../../lib/authz");
+const { isManager, isAgencyOwner, isTeamLead, isCrmOwner, canEditLead, canReassignLead } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const ErrorText = require("../../lib/errorText");
-const { html, phoneLtr } = require("../html");
+const { html, phoneLtr, phoneOrText } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
@@ -43,6 +43,10 @@ const Vis = require("../../lib/visibility");
 const { L } = require("../../lib/copy");
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const PAGE = 20;
+const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+const BULK_LEAD = /^(L-\d{4,7}):(\d+)$/;
+const mayBulkAssign = (broker) => !isCrmOwner(broker) && (isManager(broker) || isTeamLead(broker)) &&
+  (!broker.workspace || require("../../domain/segments").allows(broker.workspace, "assignLeads"));
 /** The ⓘ beside a WhatsApp send: the message with {placeholders} for what it fills in (in the client's language). */
 const tip = (text, lang) => html`<details class="tip"><summary aria-label="${L(lang, "شكل الرسالة", "What the message looks like")}">ⓘ</summary><p>${text}</p></details>`;
 const clientLangOf = (lead, lang) => (lead.lang === "en" || lead.lang === "ar" ? lead.lang : lang);
@@ -90,7 +94,7 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang, pickedAt =
 }
 
 async function activeBrokers(pool, agencyId) {
-  const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId]);
+  const { rows } = await pool.query("SELECT id, name, team_lead_id FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId]);
   return rows;
 }
 
@@ -116,7 +120,7 @@ async function duplicateNotice(pool, broker, body, lang) {
     if (!e164) return html`<p class="notice bad">⚠️ ${lang === "en" ? html`"${phoneLtr(raw)}" isn't a valid number.` : html`الرقم «${phoneLtr(raw)}» مش مظبوط.`}</p>`;
     const found = await Leads.findByPhone(pool, broker, e164);
     if (found.lead) {
-      return html`<p class="notice">📇 ${L(lang, "الرقم ده متسجل بالفعل:", "This number is already saved:")} <a href="${V.leadPath(found.lead)}">${Card.refLabel(found.lead.ref)} · ${Card.displayName(found.lead, lang)}</a>. ${L(lang, "الحفظ هيضيف للعميل ده.", "Saving adds to that lead.")}</p>`;
+      return html`<p class="notice">📇 ${L(lang, "الرقم ده متسجل بالفعل:", "This number is already saved:")} <a href="${V.leadPath(found.lead)}">${Card.refLabel(found.lead.ref)} · ${phoneOrText(Card.displayName(found.lead, lang))}</a>. ${L(lang, "الحفظ هيضيف للعميل ده.", "Saving adds to that lead.")}</p>`;
     }
     if (found.elsewhere) return html`<p class="notice bad">👥 ${L(lang, "الرقم ده عميل مع زميل. لو حفظت، مديرك هيتبلّغ.", "This number is a colleague's client. If you save, your manager is told.")}</p>`;
     if (await Leads.wasErased(pool, broker, e164)) return html`<p class="notice bad">🔒 ${L(lang, "العميل ده طلب قبل كده إن بياناته تتمسح.", "This client asked earlier for their data to be deleted.")}</p>`;
@@ -136,6 +140,38 @@ function register(web, { pool, page }) {
   /* The list                                                            */
   /* ------------------------------------------------------------------ */
 
+  web.get("/calendar", async (req, res) => {
+    const { broker } = req.session;
+    const lang = langOf(req);
+    if (isCrmOwner(broker) || require("../../lib/authz").isDataEntry(broker)) return res.sendStatus(403);
+    const tomorrow = req.query.tomorrow === "1";
+    const now = new Date();
+    const from = Stages.cairoDayAt(now, tomorrow ? 1 : 0, 0);
+    const to = Stages.cairoDayAt(now, tomorrow ? 2 : 60, 0);
+    const rows = await Viewings.listForBroker(pool, broker, { from, to });
+    const locale = lang === "en" ? "en-GB" : "ar-EG";
+    const day = new Intl.DateTimeFormat(locale, { timeZone: "Africa/Cairo", dateStyle: "full" });
+    const time = new Intl.DateTimeFormat(locale, { timeZone: "Africa/Cairo", timeStyle: "short" });
+    const groups = new Map();
+    for (const row of rows) {
+      const key = day.format(new Date(row.starts_at));
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    const title = L(lang, "التقويم والمعاينات", "Calendar & viewings");
+    const status = {
+      proposed: L(lang, "مستني التأكيد", "Awaiting confirmation"),
+      confirmed: L(lang, "اتأكدت", "Confirmed"),
+      reschedule: L(lang, "محتاج ميعاد تاني", "Reschedule requested")
+    };
+    return page(req, res, {
+      title, nav: "leads",
+      body: html`<h1>${title}</h1>
+<nav class="seg" aria-label="${title}"><a href="/app/calendar"${!tomorrow ? html` aria-current="page"` : ""}>${L(lang, "المعاينات الجاية", "Upcoming")}</a><a href="/app/calendar?tomorrow=1"${tomorrow ? html` aria-current="page"` : ""}>${L(lang, "بكرة", "Tomorrow")}</a></nav>
+${groups.size ? [...groups].map(([label, entries]) => html`<section class="card"><h2>${label}</h2><ul class="rows">${entries.map((row) => html`<li><a class="listrow" href="${V.leadPath(row)}"><b class="calendar-time">${time.format(new Date(row.starts_at))}</b><span>${row.name || Card.refLabel(row.ref)} <span class="muted" dir="ltr">${row.name ? Card.refLabel(row.ref) : ""}</span>${row.place || row.code ? html`<span class="muted calendar-place">${[row.place, row.code].filter(Boolean).join(" · ")}</span>` : ""}</span><span class="chip">${status[row.status]}</span></a></li>`)}</ul></section>`) : html`<p class="card empty">${L(lang, "مفيش معاينات في الفترة دي.", "No viewings in this period.")}</p>`}`
+    });
+  });
+
   /* The lead board: one column per stage, swipe across; drag a card (or pick a stage) to move it. */
   web.get("/leads/board", async (req, res) => {
     const flags = await Leads.flagCount(pool, req.session.broker);
@@ -148,7 +184,7 @@ function register(web, { pool, page }) {
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const moved = /^L-\d{4,6}$/.test(String(req.query.moved || "")) ? req.query.moved : null;
     const card = (l) => html`<li class="bcard" data-lead="${Card.refLabel(l.ref)}" draggable="true">
-      <a href="${V.leadPath(l)}"><strong>${Card.displayName(l, lang)}</strong> <span class="muted small" dir="ltr">${Card.refLabel(l.ref)}</span></a>
+      <a href="${V.leadPath(l)}"><strong>${phoneOrText(Card.displayName(l, lang))}</strong> <span class="muted small" dir="ltr">${Card.refLabel(l.ref)}</span></a>
       <span class="muted small">${l.follow_up_status === "open" ? `⏰ ${V.when(l.next_follow_up_at, lang)}` : L(lang, "مفيش خطوة جاية", "No next step")}${manager ? ` · ${l.assignee_name || L(lang, "مش متسلم", "Unassigned")}` : ""}</span>
       <form method="post" action="${V.leadPath(l, "/stage")}" class="bmove"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${l.version}"><input type="hidden" name="back" value="board">
         <select name="stage" aria-label="${L(lang, "انقل لـ", "Move to")}">${open.concat("won").map((s) => html`<option value="${s}"${s === l.stage ? html` selected` : ""}>${Stages.stageLabel(s, lang)}</option>`)}</select><button type="submit" class="secondary small">${L(lang, "انقل", "Move")}</button></form>
@@ -162,13 +198,14 @@ ${manager
   ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "عملائي", "Assigned to me")}</option>` : ""}<option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId && req.query.broker !== "me" ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
   : ""}
 <p class="muted small">${L(lang, "اسحب العميل لعمود تاني، أو اختار المرحلة واضغط «انقل». «ضاع» من صفحة العميل عشان سبب الضياع.", "Drag a lead to another column, or pick a stage and tap Move. Mark Lost from the lead page (it needs a reason).")}</p>
+<nav class="chipbar pipeline-summary" aria-label="${L(lang, "ملخص المراحل", "Stage summary")}">${cols.map(([stage, result]) => html`<a href="#col-${stage}">${Stages.stageLabel(stage, lang)} <b>${result.rows.length}${result.more ? "+" : ""}</b></a>`)}</nav>
 <div class="board-wrap"><button type="button" class="board-nav" data-board-step="-1" aria-label="${L(lang, "العمود اللي قبله", "Previous column")}">‹</button><div class="board-cols" data-board>${cols.map(([s, r]) => html`<section class="bcol" id="col-${s}" data-stage="${s}"><h2>${Stages.stageLabel(s, lang)} <b>${r.rows.length}${r.more ? "+" : ""}</b></h2><ol>${r.rows.map(card)}</ol></section>`)}</div><button type="button" class="board-nav" data-board-step="1" aria-label="${L(lang, "العمود اللي بعده", "Next column")}">›</button></div>`
     });
   });
 
   const ownerLine = async (lead, broker, lang) => {
     const owner = await UnitOwners.forLead(pool, broker, lead);
-    return owner ? html`<p class="muted" data-lead-owner>🏠 ${L(lang, "هو كمان مالك وحدات", "Also a unit owner")}: <a href="/app/owners/${owner.id}">${owner.name || ""}</a> (${owner.units.length})</p>` : "";
+    return owner ? html`<p class="muted" data-lead-owner>🏠 ${L(lang, "هو كمان مالك وحدات", "Also a unit owner")}: <a href="/app/owners/${owner.id}">${phoneOrText(owner.name) || ""}</a> (${owner.units.length})</p>` : "";
   };
   const flagButton = (n, lang) => (n === null ? "" : html`<a class="btn secondary small" href="/app/leads/needs-action" data-flag-count="${n}">🙋 ${n}<span class="sr-only"> ${L(lang, "محتاجين مدير", "Needs my action")}</span></a>`);
   // The lead's open requests (one per broker). Anyone who can see them sees them; "Mark done" only for those addressed to them.
@@ -198,6 +235,27 @@ ${rows.length
     });
   });
 
+  web.post("/leads/bulk-assign", async (req, res) => {
+    const { broker } = req.session;
+    if (!mayBulkAssign(broker)) return res.sendStatus(403);
+    const selected = [].concat(req.body.lead || []);
+    const target = req.body.broker;
+    if (!selected.length || selected.length > PAGE || typeof target !== "string" || !UUID.test(target)) {
+      return res.redirect(303, "/app/leads?bulk=invalid");
+    }
+    const entries = selected.map((value) => typeof value === "string" && value.match(BULK_LEAD));
+    if (entries.some((entry) => !entry || !Card.parseRef(entry[1]) || !Number.isSafeInteger(Number(entry[2]))) ||
+        new Set(entries.map((entry) => Card.parseRef(entry[1]))).size !== entries.length) {
+      return res.redirect(303, "/app/leads?bulk=invalid");
+    }
+    let ok = 0;
+    for (const [, ref, version] of entries) {
+      const result = await Leads.assignLead(pool, broker, Card.parseRef(ref), target, { version: Number(version) });
+      if (result.ok || result.unchanged) ok++;
+    }
+    return res.redirect(303, `/app/leads?bulk=${ok},${entries.length - ok}`);
+  });
+
   web.get("/leads", async (req, res) => {
     const flags = await Leads.flagCount(pool, req.session.broker);
     const lang = langOf(req);
@@ -224,6 +282,10 @@ ${rows.length
     const portalHtml = tab === "portal" ? await Portal.panel(pool, broker, lang, { notice: Portal.noticeFor(lang, req.query) }) : "";
     const pipe = manager ? await Leads.pipeline(pool, broker) : null;
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
+    const bulk = rows.length > 0 && mayBulkAssign(broker);
+    const targets = bulk ? (manager ? brokers : (await activeBrokers(pool, broker.agency_id))
+      .filter((person) => person.id === broker.id || person.team_lead_id === broker.id)) : [];
+    const outcome = /^(\d{1,2}),(\d{1,2})$/.exec(String(req.query.bulk || ""));
     const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
     const qs = (over) => {
       const p = new URLSearchParams();
@@ -233,15 +295,16 @@ ${rows.length
       return `/app/leads${s ? `?${s}` : ""}`;
     };
     const tabLabel = (t) =>
-      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "⭐ VIP", "⭐ VIP") : t === "portal" ? L(lang, "📩 استفسارات البوابات", "📩 Portal enquiries") : Stages.stageLabel(t, lang);
+      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "⭐ VIP", "⭐ VIP") : t === "portal" ? L(lang, "📩 ليدز جدد", "📩 New Leads") : Stages.stageLabel(t, lang);
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
       body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row">${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "تحميل من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
 ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
+${outcome ? html`<p class="notice ${outcome[2] === "0" ? "ok" : "warn"}" role="status">${L(lang, `تمت معالجة ${outcome[1]}، وتعذّر تحديث ${outcome[2]}.`, `${outcome[1]} processed, ${outcome[2]} could not be updated.`)}</p>` : req.query.bulk === "invalid" ? html`<p class="notice warn" role="alert">${L(lang, "اختار عملاء وبروكر من القايمة.", "Select leads and an assignee from the list.")}</p>` : ""}
 ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">
-  <div class="searchbox">${icon("search", 20)}<input id="lead-q" hx-preserve="true" hx-get="/app/leads" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="innerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${f.q}" aria-label="${L(lang, "بحث في العملاء", "Search leads")}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
+  <div class="searchbox">${icon("search", 20)}<input id="lead-q" hx-preserve="true" hx-get="/app/leads" hx-include="closest form" hx-select="main" hx-target="main" hx-swap="outerHTML" hx-trigger="input changed delay:300ms" hx-push-url="true" name="q" value="${f.q}" aria-label="${L(lang, "بحث في العملاء", "Search leads")}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
   <details class="card sheet"${req.query.kind || f.source || f.mine || (manager && req.query.broker) ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length ? html` <span class="chip">${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length}</span>` : ""}</summary>
   <div class="grid two">
   <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
@@ -255,7 +318,7 @@ ${tab === "portal" ? "" : html`<form method="get" action="/app/leads" class="sta
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
   </details>
 </form>`}
-${pipe ? html`<nav class="special-cards" aria-label="${L(lang, "استفسارات مميزة", "Highlights")}">${isAgencyOwner(broker) ? html`<a class="scard vip${tab === "private" ? " on" : ""}" href="${qs({ tab: "private", page: "" })}"${tab === "private" ? html` aria-current="page"` : ""}><span>⭐ ${L(lang, "VIP", "VIP")}</span><b>${pipe.vip}</b></a>` : ""}${manager ? html`<a class="scard portal${tab === "portal" ? " on" : ""}" href="${qs({ tab: "portal", page: "" })}"${tab === "portal" ? html` aria-current="page"` : ""}><span>📩 ${L(lang, "استفسارات البوابات (لسه محدش أخدها)", "Portal enquiries (not taken yet)")}</span><b>${pipe.portal}</b></a>` : ""}</nav>` : ""}
+${pipe ? html`<nav class="special-cards" aria-label="${L(lang, "استفسارات مميزة", "Highlights")}">${isAgencyOwner(broker) ? html`<a class="scard vip${tab === "private" ? " on" : ""}" href="${qs({ tab: "private", page: "" })}"${tab === "private" ? html` aria-current="page"` : ""}><span>⭐ ${L(lang, "VIP", "VIP")}</span><b>${pipe.vip}</b></a>` : ""}${manager ? html`<a class="scard portal${tab === "portal" ? " on" : ""}" href="${qs({ tab: "portal", page: "" })}"${tab === "portal" ? html` aria-current="page"` : ""}><span>📩 ${L(lang, "ليدز جدد", "New Leads")}</span><b>${pipe.portal}</b></a>` : ""}</nav>` : ""}
 <ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.filter((t) => t !== "private" && t !== "portal").map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
 ${pipe && pipe.overdue.length
   ? html`<details class="card notice warn"><summary>${L(lang, "متابعات متأخرة لكل بروكر", "Overdue follow-ups per broker")}: ${pipe.overdue.reduce((a, o) => a + Number(o.n), 0)}</summary><ul class="rows">${pipe.overdue.map(
@@ -263,7 +326,8 @@ ${pipe && pipe.overdue.length
     )}</ul></details>`
   : ""}
 ${tab === "portal" ? portalHtml : rows.length
-  ? html`<ol class="results">${rows.map((r) => V.leadRow(r, lang, { manager }))}</ol>
+  ? html`<ol class="results">${rows.map((r) => V.leadRow(r, lang, { manager, selectable: bulk && canReassignLead(broker, r, broker.id, broker.id) }))}</ol>
+${bulk ? html`<form method="post" action="/app/leads/bulk-assign" id="lead-bulk" class="bulkbar lead-bulk"><label>${L(lang, "تسليم العملاء المختارين", "Assign selected leads")} <select name="broker" required><option value="" disabled selected>${L(lang, "اختار بروكر", "Choose a broker")}</option>${targets.map((person) => html`<option value="${person.id}">${person.name}</option>`)}</select></label><button type="submit" class="secondary">${L(lang, "سلّم", "Assign")}</button></form>` : ""}
 <p class="row between">${n > 0 ? html`<a class="btn secondary" href="${qs({ page: n - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${more ? html`<a class="btn secondary" href="${qs({ page: n + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>`
   : html`<div class="card empty"><p>${f.q || tab !== "all"
       ? L(lang, "مفيش عملاء بالشروط دي.", "No leads match.")
@@ -408,6 +472,7 @@ ${tab === "portal" ? portalHtml : rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
+${require("../../lib/authz").canClaimLead(broker, lead) ? html`<form method="post" action="${path}/claim">${hidden}<button>${L(lang, "استلم العميل", "Take lead")}</button></form>` : ""}
 ${flagBox(lead, broker, await Leads.openRequestsOn(pool, broker, lead.id), lang, req.session.csrf, path)}
 ${await ownerLine(lead, broker, lang)}
 <details class="card lead-extra"><summary>⚙️ ${L(lang, "خيارات تانية", "More options")}</summary>
@@ -719,6 +784,7 @@ ${h.rows.length ? "" : html`<p class="muted">${L(lang, "مفيش حاجة بال
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
   write("contacted", (req, lead, version) => Leads.markContacted(pool, actor(req), lead.id, { version }), "contacted");
   write("assign", (req, lead, version) => Leads.assignLead(pool, actor(req), lead.id, req.body.broker || null, { version }), "assigned");
+  write("claim", (req, lead, version) => Leads.claimLead(pool, actor(req), lead.id, { version }), "assigned");
   // PDPL (Q9): managers export a client's data (zip, 10 an hour) and erase a client (the last 4 digits).
   web.get("/leads/:ref/export", async (req, res, next) => {
     const { broker } = req.session;

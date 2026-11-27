@@ -19,8 +19,4 @@ function seg(label, items, current) {
   return html`<nav class="seg" aria-label="${label}">${items.map(([href, text]) => html`<a href="${href}"${href === current ? html` aria-current="page"` : ""}>${text}</a>`)}</nav>`;
 }
 
-/** Deals and developer commissions are one place with two views. */
-const dealsSwitch = (lang, current) =>
-  seg(lang === "en" ? "Deals" : "الصفقات", [["/app/deals", lang === "en" ? "Deals" : "الصفقات"], ["/app/commissions", lang === "en" ? "Commissions" : "العمولات"]], current);
-
-module.exports = { tabs, seg, dealsSwitch };
+module.exports = { tabs, seg };

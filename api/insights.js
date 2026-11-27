@@ -5,17 +5,33 @@ const Dash = require("../services/dashboards");
 const Insights = require("../services/priceInsights");
 const WinLoss = require("../services/winLoss");
 const ErrorReports = require("../lib/errorReports");
+const { resolveInterval } = require("../domain/assistantRouter");
 
 function register(api, { pool }) {
   api.get("/dashboard", async (req, res) => {
-    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null, teamLeadId: String(req.query.team || "") || null });
-    return d ? res.json(d) : res.status(403).json({ error: "forbidden" });
+    const brokerId = String(req.query.broker || "") || null;
+    const teamLeadId = String(req.query.team || "") || null;
+    const from = String(req.query.from || "") || null;
+    const to = String(req.query.to || "") || null;
+    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, from, to, brokerId, teamLeadId });
+    if (!d) return res.status(403).json({ error: "forbidden" });
+    if (req.query.strictScope === "1" &&
+        ((brokerId && d.brokerId !== brokerId) || (teamLeadId && d.teamLeadId !== teamLeadId))) {
+      return res.status(422).json({ error: "invalid_scope" });
+    }
+    return res.json(d);
   });
 
   api.get("/insights/prices", async (req, res) => res.json({ minUnits: Insights.MIN_UNITS, items: await Insights.byPlace(pool, req.session.broker.agency_id) }));
 
   api.get("/insights/winloss", async (req, res) => {
-    const r = await WinLoss.report(pool, req.session.broker, { days: req.query.days });
+    const from = String(req.query.from || "") || null;
+    const to = String(req.query.to || "") || null;
+    const interval = (from || to) ? resolveInterval({ from, to, days: Number(req.query.days) || 30, maxDays: 366 }) : null;
+    const r = await WinLoss.report(pool, req.session.broker, {
+      days: req.query.days,
+      ...(interval ? { since: interval.since, until: interval.until } : {})
+    });
     return r ? res.json(r) : res.status(403).json({ error: "forbidden" });
   });
 

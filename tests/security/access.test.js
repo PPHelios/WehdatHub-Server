@@ -117,6 +117,7 @@ test("agency A's owner reads and changes nothing of agency B through the app API
   let limited = 0;
   for (const r of Routes.apiRoutes()) {
     if (/^\/(auth|devices)\b/.test(r.path) || r.path === "/client-error") continue;
+    await h.query("DELETE FROM web_rate_limits WHERE bucket = $1", [`api_read:broker:${h.BROKERS.owner.id}`]);
     const list = r.path.includes(":") ? keys : [keys[0]];
     for (const key of list) {
       const call = api()[r.method.toLowerCase()](`/api/v1${fill(r.path, key)}`).set(auth);

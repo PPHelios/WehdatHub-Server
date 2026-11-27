@@ -64,7 +64,7 @@ function importEditor({ cells = {}, areas = [], place = null, lang = "ar", missi
       ${input("down_payment_value", L(lang, "المقدم", "Down payment"))}
       ${input("remaining_amount", L(lang, "المتبقي", "Remaining"))}
       ${input("installment_value", L(lang, "القسط", "Installment"))}
-      ${input("owner_name", L(lang, "اسم المالك", "Owner name"))}
+      ${input("owner_name", L(lang, "اسم المالك", "Owner name"), { dir: "auto" })}
       ${input("owner_phone", L(lang, "تليفون المالك", "Owner phone"), { star: true, dir: "ltr", extra: ' inputmode="tel" placeholder="01012345678"', help: phoneHelp(lang) })}
     </div></details>
 </div>`;

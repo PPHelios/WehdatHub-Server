@@ -7,6 +7,7 @@ process.env.SEARCH_AI_FIRST = "false";
 
 const Q = require("../../domain/searchQuery");
 const Search = require("../../services/search");
+beforeEach(() => Search.parseCache.clear());
 
 const fakeAI = (answer) => {
   const calls = [];

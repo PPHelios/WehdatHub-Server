@@ -100,7 +100,7 @@ test("invite roles: broker and manager below agency; team lead and data entry on
   expect(await Ent.inviteRoles(null, mk({ tier: "agency", members: 3, keep: [] }), roles)).toEqual(roles);
 });
 
-test("team style: only the agency owner may flip it, and the workspace memo is dropped", async () => {
+test("team style: only the agency owner on a team tier may flip it, and the workspace memo is dropped", async () => {
   const Team = require("../../services/team");
   const Workspace = require("../../lib/workspace");
   const queries = [];
@@ -109,10 +109,14 @@ test("team style: only the agency owner may flip it, and the workspace memo is d
   expect(await Team.setTeamStyle(pool, { role: "broker", agency_id: "a" }, "structured")).toEqual({ error: "forbidden" });
   expect(queries).toHaveLength(0);
   expect(await Team.setTeamStyle(pool, { role: "owner", agency_id: "a" }, "bogus")).toEqual({ error: "style" });
+  const wsSpy = jest.spyOn(Workspace, "stateOf").mockResolvedValue({ tier: "solo", mode: "solo", members: 1, keep: [] });
+  expect(await Team.setTeamStyle(pool, { role: "owner", agency_id: "a" }, "structured")).toEqual({ error: "plan_feature" });
+  wsSpy.mockResolvedValue({ tier: "team", mode: "team", members: 3, keep: [] });
   const spy = jest.spyOn(Workspace, "forget");
   expect(await Team.setTeamStyle(pool, { role: "owner", agency_id: "a" }, "structured")).toEqual({ ok: true, style: "structured" });
   expect(spy).toHaveBeenCalledWith("a");
   spy.mockRestore();
+  wsSpy.mockRestore();
 });
 
 test("services refuse by plan: team lead role, lead rules, invite of data entry on the team tier", async () => {

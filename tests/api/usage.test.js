@@ -28,10 +28,25 @@ async function login(who) {
 }
 
 test("cleanBatch keeps allowlisted events and drops text meta", () => {
-  const out = UsageLog.cleanBatch({ events: [{ event: "ask", ms: 1200.4, meta: { screen: "Ask", phone: "0101", count: 3 } }, { event: "nope" }, { event: "flyer_make", ok: false }] });
+  const out = UsageLog.cleanBatch({ events: [{ event: "ask", ms: 1200.4, meta: { screen: "Ask", phone: "0101", detail: "client name", count: 3 } }, { event: "nope" }, { event: "flyer_make", ok: false }] });
   expect(out).toEqual([
     { event: "ask", ok: true, ms: 1200, meta: { screen: "Ask", count: 3 } },
     { event: "flyer_make", ok: false, ms: null, meta: null }
+  ]);
+});
+
+test("Wave 3 Task 3: search_corrected, route_override, voice_edited allow safe enum meta and strip query/PII keys", () => {
+  const out = UsageLog.cleanBatch({
+    events: [
+      { event: "search_corrected", ok: true, meta: { action: "change_search", mode: "resale", q: "apartment sara", query: "villa", name: "Sara", phone: "0101234" } },
+      { event: "route_override", ok: true, meta: { action: "view_all_markets", mode: "resale", to_mode: "primary", q: "raw" } },
+      { event: "voice_edited", ok: true, meta: { edited: true, mode: "auto", query: "transcript", phone: "011" } }
+    ]
+  });
+  expect(out).toEqual([
+    { event: "search_corrected", ok: true, ms: null, meta: { action: "change_search", mode: "resale" } },
+    { event: "route_override", ok: true, ms: null, meta: { mode: "resale", action: "view_all_markets", to_mode: "primary" } },
+    { event: "voice_edited", ok: true, ms: null, meta: { mode: "auto", edited: true } }
   ]);
 });
 
@@ -50,8 +65,10 @@ test("rollUp turns rows older than 90 days into daily totals and deletes the det
   const old = new Date(Date.now() - 100 * 86400000).toISOString();
   for (const ms of [100, 300]) await h.query("INSERT INTO usage_events (created_at, agency_id, broker_id, channel, event, ms) VALUES ($1, $2, $3, 'app', 'ask', $4)", [old, b.agency_id, b.id, ms]);
   await h.query("INSERT INTO usage_events (agency_id, broker_id, channel, event, ms) VALUES ($1, $2, 'app', 'ask', 50)", [b.agency_id, b.id]);
+  await h.query("INSERT INTO operation_logs (created_at, agency_id, broker_id, operation_type, status) VALUES ($1, $2, $3, 'web_failed', 'error')", [old, b.agency_id, b.id]);
   const out = await rollUp(h.pool);
   expect(out.rolled_usage_events).toBe(2);
+  expect(await h.query("SELECT id FROM operation_logs WHERE operation_type = 'web_failed'")).toHaveLength(1);
   const sum = await h.query("SELECT n, ok_n, ms_avg, ms_max FROM log_daily_summary WHERE source = 'usage_events' AND name = 'ask'");
   expect(sum).toEqual([{ n: 2, ok_n: 2, ms_avg: 200, ms_max: 300 }]);
   expect((await h.query("SELECT count(*)::int AS n FROM usage_events"))[0].n).toBe(1);

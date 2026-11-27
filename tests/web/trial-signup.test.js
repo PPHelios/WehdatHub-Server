@@ -13,6 +13,7 @@ const { createHarness, closeHarness } = require("../harness/app");
 const { signIn } = require("../harness/web");
 const { resetConfig } = require("../../config");
 const WebAuth = require("../../lib/webAuth");
+const Credits = require("../../services/credits");
 const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
@@ -83,12 +84,95 @@ test("happy path: form -> Telegram link -> own contact -> approved trial agency,
   expect(Number(b.telegram_chat_id)).toBe(8801);
   expect(await h.query("SELECT phone_e164, telegram_id::int AS tg FROM trial_claims")).toEqual([{ phone_e164: "+201055556666", tg: 8801 }]);
   expect(await Billing.allowance(h.pool, a.id)).toMatchObject({ source: "trial", seats: { limit: 1 }, units: { limit: 50 }, credits: { limit: 80 } });
+  await TrialSignup.purge(h.pool);
+  expect(await h.query("SELECT id FROM trial_signups")).toEqual([]);
+  expect(await h.query("SELECT tier, offered_days, offered_credits, granted_days, granted_credits, telegram_opened_at, verified_at, agency_id FROM trial_funnel"))
+    .toEqual([{ tier: "solo", offered_days: 14, offered_credits: 80, granted_days: 14, granted_credits: 80,
+      telegram_opened_at: expect.any(Date), verified_at: expect.any(Date), agency_id: a.id }]);
   // the start link works once
   expect(texts(await botStart(8802, token))).toMatch(/invalid or expired/);
   // a web login link from the Telegram message signs the new owner in
   const url = texts(out).match(/\/app\/login\/confirm\?t=([A-Za-z0-9_-]+)/);
   const me = request.agent(h.app.app);
   expect((await me.get(`/app/login/confirm?t=${url[1]}`)).status).toBe(200);
+});
+
+test("Team trial keeps its plan after hydration and offers four teammate seats", async () => {
+  await Credits.refresh(h.pool);
+  expect(Plans.PLANS.map((plan) => plan.id)).not.toContain("trial_team");
+  const invalid = await submit({ tier: "team", consent: "" });
+  expect(invalid.res.text).toContain('value="team" checked');
+  const { token } = await submit({ tier: "team" });
+  await botStart(8812, token);
+  await h.tg(8812, contact("+201055556666", 8812));
+  const [agency] = await h.query("SELECT id, plan, trial_ends_at FROM agencies WHERE name = 'Delta Homes'");
+  expect(agency.plan).toBe("trial_team");
+  expect(await Billing.allowance(h.pool, agency.id)).toMatchObject({
+    source: "trial", seats: { limit: 5 }, units: { limit: 50 }, credits: { limit: 200 }
+  });
+  const [owner] = await h.query("SELECT id, agency_id FROM brokers WHERE agency_id = $1", [agency.id]);
+  const { agent, csrf } = await signIn(h, owner);
+  const invite = (i) => agent.post("/app/team/invite").type("form").send({
+    _csrf: csrf, name: 'Colleague', phone: '0109988776' + i, role: "broker"
+  });
+  for (let i = 0; i < 3; i++) expect((await invite(i)).status).toBe(200);
+  const lastSeat = await Promise.all([invite(3), invite(4)]);
+  expect(lastSeat.map((res) => res.status).sort()).toEqual([200, 402]);
+
+  const end = new Date(agency.trial_ends_at);
+  const pending = { ...agency, pending_plan_at: new Date(end.getTime() - DAY) };
+  expect(Billing.effectivePlan(pending, new Date(end.getTime() + DAY))).toMatchObject({
+    source: "readonly", plan: { id: "trial_team" }, paused: true
+  });
+  expect(Billing.effectivePlan(agency, new Date(end.getTime() + 8 * DAY))).toMatchObject({
+    source: "blocked", plan: { id: "trial_team" }
+  });
+  expect(Billing.effectivePlan({ ...agency, plan: "team" })).toMatchObject({ source: "trial", plan: { id: "trial" } });
+  expect(Billing.effectivePlan({ ...agency, plan: "team", paid_until: new Date(end.getTime() + 30 * DAY) })).toMatchObject({
+    source: "paid", plan: { id: "team" }
+  });
+});
+
+test("owner settings control new tier offers, verification and the granted allowance", async () => {
+  const pending = await submit({ tier: "solo", phone: "01155556666" });
+  await botStart(8813, pending.token);
+  process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+  resetConfig();
+  const admin = await signIn(h, "admin");
+  try {
+    const options = { _csrf: admin.csrf, trial_settings: "1", open: "1", solo_days: "14", solo_credits: "80", team_enabled: "1", team_days: "9", team_credits: "175" };
+    const save = (over = {}) => admin.agent.post("/app/owner/signup").type("form").send({ ...options, ...over });
+    expect((await save({ team_days: "0" })).status).toBe(422);
+    expect((await save()).status).toBe(200);
+    const landing = (await anon.get("/?lang=en")).text;
+    expect(landing).toContain("9-day free trial · 175 AI credits");
+    expect(landing).not.toContain("tier=solo");
+    const page = (await anon.get("/app/signup?lang=en")).text;
+    expect(page).not.toContain('name="tier" value="solo"');
+    expect(page).toContain('name="tier" value="team" checked');
+    expect((await submit({ tier: "solo" })).res.status).toBe(403);
+    expect(texts(await h.tg(8813, contact("+201155556666", 8813)))).toMatch(/trial is closed/);
+    const { token } = await submit({ tier: "team" });
+    await botStart(8814, token);
+    expect(texts(await h.tg(8814, contact("+201055556666", 8814)))).toMatch(/9-day free trial/);
+    const [a] = await h.query("SELECT id, signed_up_at, trial_ends_at FROM agencies WHERE plan = 'trial_team'");
+    expect(new Date(a.trial_ends_at) - new Date(a.signed_up_at)).toBe(9 * DAY);
+    expect((await save({ team_credits: "0", team_days: "3", team_enabled: "" })).status).toBe(200);
+    expect((await anon.get("/app/signup?lang=en")).text).toMatch(/closed for now/);
+    expect(await Billing.allowance(h.pool, a.id)).toMatchObject({ plan: { credits: 175 }, credits: { limit: 175 } });
+    expect((await save({ solo_enabled: "1", solo_days: "4", solo_credits: "0", team_enabled: "" })).status).toBe(200);
+    const soloPage = (await anon.get("/app/signup?lang=en")).text;
+    expect(soloPage).toContain('name="tier" value="solo" checked');
+    expect(soloPage).not.toContain('name="tier" value="team"');
+    const solo = await submit({ phone: "01255556666" });
+    await botStart(8815, solo.token);
+    expect(texts(await h.tg(8815, contact("+201255556666", 8815)))).toMatch(/4-day free trial/);
+    const [soloAgency] = await h.query("SELECT id FROM agencies WHERE plan = 'trial' AND trial_ai_credits = 0");
+    expect(await Billing.allowance(h.pool, soloAgency.id)).toMatchObject({ plan: { credits: 0 }, credits: { limit: 0 } });
+  } finally {
+    delete process.env.OWNER_BROKER_IDS;
+    resetConfig();
+  }
 });
 
 test("a wrong number is refused and counts an attempt; the right one still works", async () => {
@@ -118,7 +202,7 @@ test("one trial per phone ever: reuse is refused with a plans/contact message, a
   await botStart(8805, token);
   await h.tg(8805, contact("+201055556666", 8805));
   const [a] = await h.query("SELECT id FROM agencies WHERE name = 'Delta Homes'");
-  const again = await submit({ agency: "Second Try", name: "Omar" });
+  const again = await submit({ agency: "Second Try", name: "Omar", tier: "team" });
   expect(again.res.status).toBe(400);
   expect(again.res.text).toMatch(/already used its free trial/);
   expect(again.res.text).toContain("#plans");
@@ -142,7 +226,7 @@ test("one trial per Telegram account ever: the same Telegram id with another num
   await h.tg(8806, contact("+201055556666", 8806));
   const [a] = await h.query("SELECT id FROM agencies WHERE name = 'Delta Homes'");
   await h.query("UPDATE brokers SET is_active = false, telegram_user_id = NULL WHERE agency_id = $1", [a.id]); // deactivated and unlinked
-  const second = await submit({ agency: "Other Co", phone: "01166667777" });
+  const second = await submit({ agency: "Other Co", phone: "01166667777", tier: "team" });
   expect(second.res.status).toBe(200); // the phone itself is new
   const out = await botStart(8806, second.token);
   expect(texts(out)).toMatch(/already used its free trial/);

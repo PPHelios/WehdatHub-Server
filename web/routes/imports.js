@@ -22,7 +22,7 @@ const Decisions = require("../../services/chatDecisions");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
 const { uploads } = require("../uploads");
-const { html, raw, phoneLtr } = require("../html");
+const { html, raw, phoneLtr, phoneOrText } = require("../html");
 const { tabs } = require("../views/tabs");
 const { importEditor, cellsFromForm } = require("../views/importEditor");
 const { stripMarkdown } = require("../views/units");
@@ -84,6 +84,8 @@ const APPLY_GRACE_MS = 2500; // how long Apply waits for a small import before s
 const PAGE_SIZE = 50;
 const PAGED_FROM = 30; // Excel plans with more rows than this are shown one kind and one page at a time
 const KIND_ORDER = ["invalid", "review", "new", "changed", "unchanged", "forbidden"];
+const contactValue = (field, value) => /(?:^|\.)owner_phone$/.test(field) ? phoneLtr(value) : /(?:^|\.)owner_name$/.test(field) ? phoneOrText(value) : value;
+
 const CELL_LABEL = {
   listing_type: ["بيع / إيجار", "Sale or rent"],
   compound: ["الكمبوند", "Compound"],
@@ -289,7 +291,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   ];
   const UC_LABEL = { district: ["المنطقة", "District"], floor: ["الدور", "Floor"], finishing: ["التشطيب", "Finishing"], delivery: ["التسليم", "Delivery"], bathrooms: ["الحمامات", "Bathrooms"], remaining_amount: ["المتبقي", "Remaining"], installment_value: ["القسط", "Installment"], installment_frequency: ["دورية القسط", "Frequency"], features: ["المميزات", "Features"] };
   const ucLabel = (k) => (UC_LABEL[k] || CELL_LABEL[k] || Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0];
-  const ucValue = (k, v) => (k === "listing_type" ? (v === "rent" ? L(lang, "إيجار", "Rent") : v === "sale" ? L(lang, "بيع", "Sale") : v) : v);
+  const ucValue = (k, v) => (k === "listing_type" ? (v === "rent" ? L(lang, "إيجار", "Rent") : v === "sale" ? L(lang, "بيع", "Sale") : v) : contactValue(k, v));
   // Discard: this unit is thrown out of the review (kept in the plan, never saved, brought back from the bar above the list).
   const discardBtn = (i) => (chat && !applied ? html`<button type="submit" class="secondary small" formaction="/app/import/${imp.id}/discard" formmethod="post" name="row" value="${i.row}" data-discard="${i.row}">🗑 ${L(lang, "استبعد", "Leave out")}</button>` : "");
   const chatCard = (i) => {
@@ -320,10 +322,10 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   })}</dl></section>`)}</div>
   ${originalBox(i, false)}
   ${i.kind === "new" && i.warnings?.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}
-  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul class="diff">${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+  ${i.kind === "changed" ? html`<details open><summary>${L(lang, "هيتغير في الوحدة الحالية", "Changes to the current unit")}</summary><ul class="diff">${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${contactValue(c.field, c.from)}</del> ${L(lang, "←", "→")} <ins>${contactValue(c.field, c.to)}</ins></li>`)}</ul></details>` : ""}
   ${i.kind === "review"
     ? html`<div class="stack" data-review-note><p class="muted" data-not-ticked>${L(lang, "مش متعلّمة: اختار تدمجها ولا تضيفها بكود جديد وبعدين علّمها.", "Not ticked: choose merge or a new code, then tick it.")}</p><p class="warn">${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
-    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul class="diff">${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul class="diff">${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${contactValue(c.field, c.from)}</del> ${L(lang, "←", "→")} <ins>${contactValue(c.field, c.to)}</ins></li>`)}</ul></details>` : ""}
     <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
     <input name="code_${i.row}" form="apply-form" aria-label="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div></div>`
     : ""}
@@ -443,7 +445,7 @@ function excelPlanPage(imp, lang, query = {}, extra = {}) {
   <h2>📞 ${L(lang, "الشيت مفيهوش عمود تليفون المالك", "The sheet has no owner phone column")}</h2>
   <p>${L(lang, "من غير تليفون المالك الوحدة مبتتسجلش. اكتب رقم واحد لكل الصفوف، أو صلّح كل صف لوحده.", "A unit cannot be saved without the owner's phone. Type one phone for all rows, or fix each row on its own.")}</p>
   ${extra.dataEntry ? "" : html`<form method="post" action="/app/import/${imp.id}/batch" class="stack" data-batch-form="owner_phone"><input type="hidden" name="action" value="owner_phone"><input type="hidden" name="_csrf" value="${extra.csrf || ""}">
-  <label>${L(lang, "رقم تليفون المالك", "Owner phone")}<input name="value" type="tel" inputmode="tel" autocomplete="off" maxlength="40" required placeholder="01012345678">${phoneHelp(lang)}</label>
+  <label>${L(lang, "رقم تليفون المالك", "Owner phone")}<input name="value" type="tel" inputmode="tel" dir="ltr" autocomplete="off" maxlength="40" required placeholder="01012345678">${phoneHelp(lang)}</label>
   <div class="row"><button name="scope" value="missing">${L(lang, "استخدمه للصفوف اللي من غير رقم", "Use it for rows with no phone")}</button><button name="scope" value="all" class="secondary">${L(lang, "استخدمه لكل الصفوف", "Use it for all rows")}</button></div></form>`}
 </section>`
       : "";
@@ -471,7 +473,7 @@ ${!applied ? html`<p class="row" data-pick-all><button type="button" class="seco
 ${section("review", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
   (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}
     <p class="warn" data-review-note>${i.code_taken ? L(lang, `الكود ${i.merge.code} موجود على وحدة تانية:`, `The code ${i.merge.code} is already on another unit:`) : L(lang, `شكلها نفس الوحدة ${i.dup_code}:`, `Looks like the same unit as ${i.dup_code}:`)} <span class="muted">${i.existing_line}</span></p>
-    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul class="diff">${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul></details>` : ""}
+    ${i.merge.changes.length ? html`<details><summary>${L(lang, "لو دمجتها، هيتغير:", "If merged, this changes:")}</summary><ul class="diff">${i.merge.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${contactValue(c.field, c.from)}</del> ${L(lang, "←", "→")} <ins>${contactValue(c.field, c.to)}</ins></li>`)}</ul></details>` : ""}
     <div class="row"><select name="res_${i.row}" form="apply-form" aria-label="${L(lang, "اختار", "Choose")}"><option value="new">${L(lang, "ضيفها كوحدة جديدة بكود جديد", "Add as a new unit with a new code")}</option><option value="merge">${L(lang, `ادمجها في ${i.merge.code} (تحديث وإضافة صور)`, `Merge into ${i.merge.code} (update and add photos)`)}</option></select>
     <input name="code_${i.row}" form="apply-form" aria-label="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" placeholder="${L(lang, "كود جديد (سيبه فاضي = تلقائي)", "New code (empty = automatic)")}" maxlength="30"></div>
     ${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
@@ -480,7 +482,7 @@ ${section("new", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></
   (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => chat ? chatList(rows) : html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul class="diff">${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ${L(lang, "←", "→")} <ins>${c.to}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
+  (i) => html`<tr data-row="${i.row}" data-card-kind="${i.kind}"><td>${box(i)}</td><td>${i.tab ? where(i) : i.row}</td><td>${i.code}</td><td><ul class="diff">${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${contactValue(c.field, c.from)}</del> ${L(lang, "←", "→")} <ins>${contactValue(c.field, c.to)}</ins></li>`)}</ul>${notesOf(i)}${photosOf(i)}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("invalid", (rows) => chat ? chatList(rows) : html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${where(i)}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${unitLine(i)}${notesOf(i)}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code} ${discardBtn(i)}</li>`)}</ul>`)}

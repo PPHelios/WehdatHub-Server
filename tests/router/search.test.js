@@ -142,7 +142,9 @@ describe("Filters", () => {
   test("features, delivery and payment are language-neutral filters", async () => {
     await seedInventory();
     await h.insertListing({ code: "RS-1", compound: "Hyde Park", remaining_amount: 5e6, down_payment_value: 3e6, installment_value: 200000, price_value: 8e6 });
-    const ids = async (filters, msg = "x") => {
+    // Each call gets its own text: the AI parse is cached per message text (services cache, 3b330c1).
+    let n = 0;
+    const ids = async (filters, msg = `x${++n}`) => {
       h.AI.respond(() => ({ intent: "search", filters }));
       return codesIn(textOf(await h.text("broker", msg)));
     };

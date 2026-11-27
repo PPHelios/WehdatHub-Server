@@ -28,7 +28,7 @@ const uploadGallery = uploads([GALLERY_DOC], { maxMb: 25 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = { forbidden: 403, not_found: 404, duplicate: 409 };
-const fail = (res, r) => res.status(CODE[r.error] || 422).json({ error: r.error || "failed" });
+const fail = (res, r, status) => res.status(CODE[r.error] || status || 422).json({ error: r.error || "failed" });
 
 function register(api, { pool }) {
   const managers = (req, res, next) => (isManager(req.session.broker) ? next() : res.status(403).json({ error: "forbidden" }));
@@ -138,10 +138,46 @@ function register(api, { pool }) {
   api.get("/plan", async (req, res) => {
     const b = req.session.broker;
     if (!isManager(b)) return res.status(403).json({ error: "forbidden" }); // the plan and its payments are for managers and the agency owner
-    const [allowance, payTo, limits] = await Promise.all([Billing.allowance(pool, b.agency_id), Billing.payTo(pool), Billing.planLimits(pool)]);
+    const [allowance, payTo, limits, agency] = await Promise.all([Billing.allowance(pool, b.agency_id), Billing.payTo(pool), Billing.planLimits(pool), Billing.agencyRow(pool, b.agency_id)]);
     const manager = isManager(b);
     const [payments, requests, referral] = manager ? await Promise.all([Billing.paymentsOf(pool, b.agency_id), Credits.requestsOf(pool, b.agency_id), Referrals.summary(pool, b.agency_id)]) : [[], [], null];
-    res.json({ allowance: Billing.publicAllowance(allowance), payTo, limits, payments: payments.map(Billing.publicPayment), requests, referral, canPay: isAgencyOwner(b) });
+    const isOwner = isAgencyOwner(b);
+    const Plans = require("../domain/plans");
+    const canPay = isOwner || Boolean(agency?.manager_can_renew_plan);
+    const canBuyCredits = isOwner || Boolean(agency?.manager_can_buy_credits);
+    const running = allowance.source === "paid";
+    const { id: activePlanId } = allowance.plan || {};
+    const currentTier = Plans.tierOf(activePlanId);
+    const upgrades = Billing.upgradeQuotes(agency);
+    const paymentChoices = [];
+    if (canPay) for (const p of Plans.PLANS) {
+      const pid = p.id;
+      const tier = Plans.tierOf(pid);
+      if (running && currentTier >= 0 && tier !== currentTier) {
+        if (upgrades[pid]) paymentChoices.push({ kind: "upgrade", plan: pid, name: p.name, amount: upgrades[pid].amount });
+        continue;
+      }
+      for (const months of Plans.periodsOf(p)) {
+        if (running && agency.last_months && months !== Number(agency.last_months)) continue;
+        paymentChoices.push({ kind: "plan", plan: pid, months, name: p.name, amount: Billing.priceAt(agency, pid, months)?.amount ?? Plans.priceFor(p, months) });
+      }
+    }
+    if (canBuyCredits && !allowance.ladder) for (const bundle of Plans.BUNDLES) {
+      paymentChoices.push({ kind: "credit_bundle", bundle: bundle.id, name: bundle.name, amount: bundle.priceEgp });
+    }
+    res.json({
+      allowance: Billing.publicAllowance(allowance),
+      payTo,
+      limits,
+      payments: payments.map(Billing.publicPayment),
+      requests,
+      referral,
+      canPay,
+      canBuyCredits,
+      paymentChoices,
+      managerCanRenewPlan: Boolean(agency?.manager_can_renew_plan),
+      managerCanBuyCredits: Boolean(agency?.manager_can_buy_credits)
+    });
   });
 
   api.post("/plan/credit-request", agencyOwner, async (req, res) => {
@@ -149,9 +185,39 @@ function register(api, { pool }) {
     return r.error ? fail(res, r) : res.json({ ok: true });
   });
 
-  api.post("/plan/pay", agencyOwner, async (req, res) => {
-    const r = await Billing.requestPayment(pool, req.session.broker, { kind: req.body?.kind, plan: req.body?.plan, months: req.body?.months, bundle: req.body?.bundle });
-    return r.error ? fail(res, r) : res.json({ ok: true, payment: Billing.publicPayment(r.payment) });
+  api.post("/plan/pay", async (req, res) => {
+    const b = req.session.broker;
+    if (!isManager(b)) return res.status(403).json({ error: "forbidden" });
+    const r = await Billing.requestPayment(pool, b, { kind: req.body?.kind, plan: req.body?.plan, months: req.body?.months, bundle: req.body?.bundle });
+    if (r.error) {
+      const status = r.error === "forbidden" || r.error === "owner_only" ? 403 : 400;
+      return fail(res, r, status);
+    }
+    const BillingNotices = require("../services/billingNotices");
+    BillingNotices.paymentRequested(r.payment, r.agency, b, pool);
+    return res.json({ ok: true, payment: Billing.publicPayment(r.payment) });
+  });
+
+  api.post("/agency/billing-permissions", agencyOwner, async (req, res) => {
+    const r = await Billing.updateBillingPermissions(pool, req.session.broker, req.session.broker.agency_id, {
+      managerCanRenewPlan: req.body?.managerCanRenewPlan,
+      managerCanBuyCredits: req.body?.managerCanBuyCredits
+    });
+    return r.error ? fail(res, r) : res.json(r);
+  });
+
+  api.get("/search/credits", async (req, res) => {
+    const broker = req.session.broker;
+    const canSeeAgency = isManager(broker);
+    const [standing, allowance] = await Promise.all([
+      require("../services/aiUserLimits").standing(pool, broker.agency_id, broker.id),
+      canSeeAgency ? Billing.allowance(pool, broker.agency_id) : null
+    ]);
+    const credits = allowance?.credits;
+    return res.json({
+      personal: { used: standing.used, limit: standing.allowance, remaining: standing.remaining },
+      ...(credits ? { agency: { used: credits.used, limit: credits.limit, remaining: Math.max(0, credits.limit - credits.used) } } : {})
+    });
   });
 
   api.get("/usage", async (req, res) => {
@@ -164,8 +230,35 @@ function register(api, { pool }) {
   api.get("/platform", platform, async (req, res) => {
     const b = req.session.broker;
     const per = Period.parse(req.query.period);
-    const [dashboard, period, agencies, signupOpen] = await Promise.all([Dash.ownerDashboard(pool, b), Dash.ownerPeriod(pool, b, per), OwnerAgencies.list(pool), Signup.isOpen(pool)]);
-    res.json({ dashboard, period, agencies, signupOpen });
+    const [dashboard, period, agencies, signupOpen, pendingPayments] = await Promise.all([
+      Dash.ownerDashboard(pool, b),
+      Dash.ownerPeriod(pool, b, per),
+      OwnerAgencies.list(pool),
+      Signup.isOpen(pool),
+      Billing.pendingPayments(pool)
+    ]);
+    res.json({ dashboard, period, agencies, signupOpen, pendingPayments, paymentChannels: await Billing.paymentChannels(pool) });
+  });
+
+  api.post("/platform/payment-channels", platform, async (req, res) => {
+    const { sms, telegram } = req.body || {};
+    if (typeof sms !== "boolean" || typeof telegram !== "boolean") return res.status(422).json({ error: "invalid_channels" });
+    await Billing.setSetting(pool, "payment_channels", { sms, telegram });
+    return res.json({ ok: true });
+  });
+
+  api.post("/platform/payments/:id/confirm", platform, async (req, res) => {
+    const r = await Billing.confirmPayment(pool, req.params.id);
+    if (r.error) return fail(res, r, r.error === "upgrade_stale" || r.error === "not_allowed" ? 409 : 400);
+    const BillingNotices = require("../services/billingNotices");
+    await BillingNotices.paymentConfirmed(pool, r).catch((e) => console.warn("Payment notice failed:", e.message));
+    return res.json({ ok: true, payment: Billing.publicPayment(r.payment) });
+  });
+
+  api.post("/platform/payments/:id/cancel", platform, async (req, res) => {
+    const r = await Billing.cancelPayment(pool, req.params.id);
+    if (r.error) return fail(res, r, 400);
+    return res.json({ ok: true, payment: Billing.publicPayment(r.payment) });
   });
 
   api.get("/platform/agencies/:id", platform, async (req, res) => {

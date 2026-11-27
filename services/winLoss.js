@@ -10,10 +10,11 @@ const Vis = require("../lib/visibility");
 const PERIODS = [30, 90, 365];
 const NONE = "__none__";
 
-async function report(db, manager, { days = 90, now = new Date() } = {}) {
+async function report(db, manager, { days = 90, since: sinceOpt = null, until: untilOpt = null, now = new Date() } = {}) {
   if (!isManager(manager)) return null;
   const d = PERIODS.includes(Number(days)) ? Number(days) : 90;
-  const since = new Date(now.getTime() - d * 24 * 3600 * 1000);
+  const since = sinceOpt ? new Date(sinceOpt) : new Date(now.getTime() - d * 24 * 3600 * 1000);
+  const until = untilOpt ? new Date(untilOpt) : new Date(now);
   const { rows } = await db.query(
     `SELECT l.id, l.stage, l.lost_reason, l.source, b.id AS broker_id, b.name AS broker_name, c.closed_at
        FROM leads l
@@ -21,8 +22,8 @@ async function report(db, manager, { days = 90, now = new Date() } = {}) {
                       WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND e.undone_at IS NULL
                         AND (e.kind = 'deal' OR (e.kind = 'stage' AND e.data->>'to' = l.stage))) c ON true
        LEFT JOIN brokers b ON b.id = l.assigned_broker_id
-      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage IN ('won', 'lost') AND c.closed_at >= $2 AND c.closed_at <= $3`,
-    [manager.agency_id, since.toISOString(), now.toISOString()]
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage IN ('won', 'lost') AND c.closed_at >= $2 AND c.closed_at < $3`,
+    [manager.agency_id, since.toISOString(), until.toISOString()]
   );
   const reasons = {};
   const group = (map, key, name, r) => {

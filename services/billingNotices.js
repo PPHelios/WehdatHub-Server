@@ -22,9 +22,16 @@ async function toManagers(pool, agencyId, { dedupeKey, title, body, now = new Da
   return n;
 }
 
-function paymentRequested(payment, agency, manager, pool = null) {
+async function paymentRequested(payment, agency, manager, pool = null) {
+  const channels = pool ? await require("./billing").paymentChannels(pool).catch(() => null) : null;
   const what = payment.kind === "credit_bundle" ? `credit bundle (${Plans.bundleById(payment.bundle_id)?.credits ?? "?"} credits)` : payment.kind === "voice_pack" ? "voice pack (old)" : payment.kind === "upgrade" ? `upgrade ${payment.detail?.from || ""} to ${payment.plan} (${payment.detail?.remainingDays ?? "?"} days left)` : `${payment.plan} × ${payment.months} month(s)`;
-  return ErrorReports.alertOwner([`💳 Payment announced ${payment.reference}`, `${agency.name} · ${manager.name || ""}`, `${what} · ${payment.amount_egp} EGP`, "Confirm on /app/owner once it arrives."].join("\n"), { category: "payments", pool }).catch(() => {});
+  const keyboard = [
+    [
+      { text: "✅ تأكيد واستعادة", callback_data: `pay_ok:${payment.id}` },
+      { text: "❌ إلغاء", callback_data: `pay_cancel:${payment.id}` }
+    ]
+  ];
+  return ErrorReports.alertOwner([`💳 Payment announced ${payment.reference}`, `${agency.name} · ${manager.name || ""}`, `${what} · ${payment.amount_egp} EGP`, "Confirm once the money arrives."].join("\n"), { category: "payments", pool, keyboard: channels?.telegram ? keyboard : null }).catch(() => {});
 }
 
 function signupRequested(agency, broker, referrer = null, pool = null) {

@@ -83,3 +83,20 @@ test("unconfirmed for a month: the job never changes the status; Still available
 test("the job is registered", () => {
   expect(require("../../lib/jobs").buildJobs().map((j) => j.name)).toContain("unit_checks");
 });
+
+test("disabling agency reminders leaves stale units reviewable and eligible again after re-enabling", async () => {
+  const u = await unit("MUTED", 25);
+  const set = (on) => h.query("UPDATE agencies SET notify_policy = $2::jsonb WHERE id = $1", [h.AGENCY_A, JSON.stringify({ unit_check: { on } })]);
+  await set(false);
+  const broker = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  const policy = require("../../lib/notificationPolicy");
+  expect(policy.resolve({ unit_check: { on: false } }, { on: true }, "unit_check").enabled).toBe(false);
+  expect((await UC.askStale(h.pool, { now: NOW })).asked).toBe(0);
+  expect(await notes("broker")).toHaveLength(0);
+  expect((await h.query("SELECT stale_asked_at FROM listings WHERE id = $1", [u.id]))[0].stale_asked_at).toBeNull();
+  const review = await require("../../services/today").oldUnitsFor(h.pool, broker, NOW);
+  expect(review.items.map((item) => item.code)).toContain("MUTED");
+  await set(true);
+  expect((await UC.askStale(h.pool, { now: NOW })).asked).toBe(1);
+  expect(await notes("broker")).toHaveLength(1);
+});

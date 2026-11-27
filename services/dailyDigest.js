@@ -96,9 +96,10 @@ async function opsFor(pool, person, now) {
   const role = String(person.role || "").toLowerCase();
   if (role === "broker" || role === "owner") return null;
   const team = role === "team_lead" ? person.id : null;
-  const dayStart = Stages.cairoDayAt(now, 0, 0);
+  // Overdue = due before now, the same line as the Leads screen "overdue" queue (not "before today").
+  const dayStart = now;
   const args = team ? [person.agency_id, team, dayStart.toISOString(), new Date(now.getTime() - 24 * 3600 * 1000).toISOString()] : [person.agency_id, dayStart.toISOString(), new Date(now.getTime() - 24 * 3600 * 1000).toISOString()];
-  const scope = team ? "AND l.assigned_broker_id IN (SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $2)" : "";
+  const scope = team ? "AND (l.assigned_broker_id = $2 OR l.assigned_broker_id IN (SELECT id FROM brokers WHERE agency_id = $1 AND team_lead_id = $2))" : ""; // same scope as the Leads screen: own leads + the team
   const d = team ? "$3" : "$2";
   const u = team ? "$4" : "$3";
   const { rows } = await pool.query(

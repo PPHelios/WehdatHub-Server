@@ -16,6 +16,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
 | `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
 | `WHATSAPP_ALLOWED_NUMBER` | no | `01055881114` | The only number WhatsApp talks to (the CRM owner's; national or international form). Other senders get no reply, and nothing is sent on WhatsApp to any other number. Both checks are in `lib/waOwnerOnly.js`. |
+| `WHATSAPP_BUSINESS_PHONE` | no | `201099990000` | The business WhatsApp number shown on sign-up so a trial user can message it (used by `api/auth.js` and `services/trialSignup.js`). Empty hides the WhatsApp option. |
 | `TEST_SWITCH_PHONE` | no | (unset) | The test number that may switch its own role on the website (owner, manager, broker, data entry). Off unless `TEST_SWITCH_AGENCY_ID` is also set. The CRM admin number is never allowed. |
 | `TEST_SWITCH_AGENCY_ID` | no | (unset) | The ID of the test agency the role switch works in (the POC test agency). Off unless `TEST_SWITCH_PHONE` is also set. |
 | `TEST_SWITCH_VIEW_AGENCY_ID` | no | (unset) | Optional. The other agency (for example NCH) the test number may view on the website, read-only, with a switch. Nothing is written there, and Telegram and jobs stay on the test agency. |
@@ -55,22 +56,25 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `BOT_PHONE` | no | — | The bot's WhatsApp number with country code. Only `npm run onboard` reads it, to print each broker's start link (a `bot_phone` in the agency file wins). |
 | `TELEGRAM_BOT_TOKEN` | no | — | The Telegram bot's token (@BotFather). Error alerts and bug reports are sent to the owner through it. Keep it only in Render. |
 | `ALERT_TELEGRAM_CHAT_ID` | no | — | The owner's Telegram chat id: where error alerts and bug reports go. Unset = no alerts (errors are still stored in `error_events`). See §6b for how to find it. |
+| `BANK_WEBHOOK_SECRET` | for SMS verification | — | Dedicated secret for the trusted bank SMS relay. Send it in `X-Bank-Webhook-Secret` to `POST /api/v1/webhooks/bank-sms`. Enable Bank SMS verification in the platform owner Payments section. Incoming messages go to the owner’s Telegram chat. Enable Manual Telegram approval separately and use a linked platform-owner Telegram account for the buttons. |
 | `ALERT_EVERY_MIN` | no | `60` | At most one alert per distinct error (fingerprint) in this many minutes. Bug reports always alert. |
 | `STORAGE_CLEANUP_DELETE` | no | off | The weekly storage check only reports unused photo files (the owner gets a system alert). Set to `true` to let it delete them (files older than a week, 200 per run). |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
-| `DEMO_LOGIN_ENABLED` | no | off | `true` turns on the store-review demo sign-in. Off unless set to exactly `true`. Turn it off after the review. |
+| `DEMO_LOGIN_ENABLED` | no | off | `true` turns on the store-review demo sign-in. Off unless set to exactly `true`. Turn it off after the review. While on, the demo broker's AI calls are refused (`AI_OFF`, `lib/ai.js`), so it uses the manual forms and never spends credits. |
 | `DEMO_LOGIN_PHONE` | with demo on | — | Normalised phone of the one demo broker (e.g. `201044556666`). The fixed code works for this number only. |
 | `DEMO_LOGIN_CODE` | with demo on | — | The fixed six-digit code for the demo broker. Keep it only in Render, never in the repo. |
 | `DEMO_LOGIN_AGENCY_ID` | with demo on | — | The one agency the demo broker belongs to. The code is refused in any other agency. |
 | `MAP_TILES_URL` | no | empty | Public address of the `.pmtiles` map file (Cloudflare R2, `https://….pmtiles`). Empty = the Map page says it is not set up. The bucket needs a CORS rule that allows `GET` and the `Range` header from the app's address, or the map stays blank. |
 | `FIREBASE_SERVICE_ACCOUNT` | no | empty | The Firebase service account key (the whole JSON, one line) for alerts to the mobile app. Empty = app alerts are off; web push and Telegram are unaffected. Keep it only in Render. |
 | `FIREBASE_CLIENT_CONFIG` | no | empty | The phone apps' public Firebase identifiers, one line: `{"android":{"apiKey":"…","appId":"…","projectId":"…","messagingSenderId":"…"},"ios":{…}}`. The app reads them from `/api/v1/config` and switches alerts and crash reports on; empty = both stay off. Not secret, but keep it in Render with the key above. |
+| `WEB_ANALYTICS_ID` | no | empty | GA4 web stream measurement ID (`G-…`). Enables explicit product events on signed-in web screens. Disable Enhanced Measurement on the stream and leave advertising integrations off. |
 | `GOOGLE_MAPS_API_KEY` | no | empty | Google key (Geocoding API only, restricted, daily quota capped) used by the owner's "Find missing pins" page as a fallback and check next to OpenStreetMap. Empty = OpenStreetMap only. |
 | `GOOGLE_MAPS_BROWSER_KEY` | no | empty | A second, public Google key for the owner's pin review pages: it shows a satellite picture of the pins (Static Maps API only, limited to this website, with a quota cap). Empty = no satellite picture. Never reuse the server key above. |
 | `SEARCH_SHADOW_AI` | no | off | `true` makes the AI read every search the quick reader answered alone, quietly after the answer, for the nightly check and word learning (POC). It uses no agency credits. |
 | `SEARCH_AI_FIRST` | no | on | During the POC the AI reads every search and the quick reader runs beside it; the differences are kept in the search log. It uses no agency credits (the read has no broker in its context). `false` goes back to the quick reader first (AI only when it is unsure or asked). |
+| `SEARCH_AI_FIRST_MIN_CONFIDENCE` | no | `3` | With AI-first on, the AI read is skipped when the quick reader already understood this many of: place, property type, budget (0-3). `4` never skips. Parsed AI reads are also cached 10 min per agency/role/query; counts (local/ai/cache) are logged every 100 parses. |
 | `SEARCH_AI_FIRST_DAILY_MAX` | no | `2000` | Most AI-first reads per day across all agencies; past it, searches use the quick reader first until the next day. |
 | `SEARCH_SHADOW_DAILY_MAX` | no | `300` | Most quiet AI reads per day (the POC budget). |
 | `SUPPORT_WHATSAPP` / `SUPPORT_TELEGRAM` | no | off | The owner's WhatsApp number (digits, with country code) and/or Telegram username. When set, every signed-in page footer shows "Talk to a person" (WhatsApp first, else Telegram). |
@@ -141,6 +145,13 @@ Web sign-in has no shared secret to rotate: tokens and sessions are random and s
 * Kill a client share link: `UPDATE share_links SET revoked_at = NOW() WHERE listing_id = '<listing id>';` (all links of that unit).
 
 ## 6. Reading `operation_logs`
+
+`operation_logs` is append-only. The privacy job rolls up usage and search details after 90 days. The failure digest reads the previous 24 hours without changing audit records.
+
+The owner board Overview shows unique enabled brokers and agencies using Search, web/mobile unit saves, web import apply, mobile WhatsApp import saves, and lead creation. Repeat brokers used the same feature in the selected period and the preceding period of the same length. These counts use first-party records.
+
+Mobile product analytics uses the existing Firebase SDK when enabled for the app's Firebase project. Selected share/contact events go directly to Google Analytics with a server fallback when the SDK is unavailable. The in-product import report still uses server events. Verify Android and iOS in Firebase DebugView, and verify crash delivery from signed release builds separately. The optional web stream sends a fixed page location and screen labels. Confirm the outgoing parameters in DebugView before enabling it in production. Product events use fixed event names, codes and counts. Keep client details and free text out of Analytics.
+
 
 Every operation writes one row (success or failure): `agency_id`, `broker_id`, `listing_code`, `operation_type`, `status`, `error_code`, timings (`total_duration_ms`, `gemini_ms`, `db_ms`, …), tokens, `model_used`, `estimated_cost_usd`, `metadata` (JSON), `created_at`. **Never delete or truncate it**; it is the audit trail and the AI quota reads it.
 
@@ -302,6 +313,13 @@ If Meta blocks or restricts the bot's number:
 * Switch it on for an agency: **/app/owner** → **Market analytics** tab → "Turn on" beside the agency, or the agency's own page (**/app/owner/agencies/:id**) → Market analytics. Off by default. Once on, that agency's managers and owner (not brokers) get the **Market** page (`/app/market`) and a menu item; off removes both at once. The mobile app has no insights endpoint yet.
 * Export the aggregate tables as CSV from the same tab (`/app/owner/analytics/market_daily.csv`, `funnel_monthly.csv`, `search_daily.csv`).
 * Thresholds live in `domain/analyticsPrivacy.js` (5 agencies, 10 rows). Changing them only affects rows written from then on.
+
+## 7h. Ask assistant QA loop (local only)
+
+- **Seed:** `npm run qa:seed` (after `node --env-file=.env scripts/seed-ask.js seed`). Adds leads in every queue, viewings, deals, sources, lost reasons, leases and stale units, all tagged "QA " with fake `2010000xxxxx` phones; running it again replaces only its own rows. It refuses a database that is not localhost.
+- **Run:** `npm run qa:assistant` asks every question of `tests/fixtures/assistant-questions.json` as owner, manager and broker1, with no AI (`--ai` allows it; `--only <id>`, `--fixture <file>`, `--agency <id>`). Exit code 1 when anything fails. Counts only, no client names.
+- **Misses:** brokers' thumbs-down (`POST /api/v1/assistant/feedback`) and the automatic "didn't get that" are kept in `assistant_feedback` for 90 days (job `assistant_feedback_sweep`). Questions are scrubbed first (phones, emails and digit runs of 7+ become `#` / `@`, 200 characters). Read them with `node --env-file=.env scripts/assistant-misses.js [--days 7] [--agency <id>]`.
+- **Weekly loop:** read the misses, add the real ones to the fixture (with the expected route), run `npm run qa:assistant`, fix the router, run again.
 
 ## 8. Common problems
 

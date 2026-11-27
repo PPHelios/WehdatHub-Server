@@ -15,6 +15,7 @@ const OpenedLinks = require("../services/openedLinks");
 const C = require("../domain/commissionTracker");
 const P = require("../domain/commissionPeriod");
 const Authz = require("../lib/authz");
+const Router = require("../domain/assistantRouter");
 const { isId } = require("../lib/dealScope");
 
 const PAGE = 20;
@@ -27,9 +28,30 @@ function register(api, { pool }) {
   api.get("/deals", async (req, res) => {
     const n = Math.max(0, parseInt(req.query.page, 10) || 0);
     const b = req.session.broker;
-    const [list, totals] = await Promise.all([Deals.listDeals(pool, b, { status: req.query.status, offset: n * PAGE }), Deals.monthlyTotals(pool, b)]);
+    const report = ["recent", "last"].includes(req.query.report) ? req.query.report : null;
+    const week = /^[0-4]$/.test(String(req.query.week ?? "")) ? Number(req.query.week) : null;
+    let from = null;
+    let to = null;
+    if (req.query.from || req.query.to) {
+      const interval = Router.resolveInterval({ from: req.query.from, to: req.query.to });
+      if (interval.error) return res.status(422).json({ error: interval.error });
+      from = interval.from;
+      to = interval.to;
+    }
+    const brokerId = Authz.isManager(b) && isId(req.query.broker) ? req.query.broker : null;
+    const brokerRole = req.query.brokerRole === "participant" ? "participant" : "closer";
+    const market = ["resale", "primary", "unknown"].includes(req.query.market) ? req.query.market : null;
+    const area = typeof req.query.area === "string" && req.query.area.trim() ? req.query.area.trim().slice(0, 80) : null;
+    const filterOpts = { status: req.query.status, from, to, brokerId, brokerRole, market, area };
+    const wantSummary = req.query.summary === "1" || Boolean(from || brokerId || market || area);
+    const excludeCancelled = wantSummary && req.query.status !== "cancelled";
+    const [list, totals, dealSummary] = await Promise.all([
+      Deals.listDeals(pool, b, { ...filterOpts, excludeCancelled, offset: n * PAGE, report, week }),
+      report || (from && to) ? [] : Deals.monthlyTotals(pool, b),
+      wantSummary ? Deals.dealsSummary(pool, b, filterOpts) : null
+    ]);
     // `allowed`: the statuses this person may choose for each deal now (forward, or cancel before paid; managers may reopen with a confirmation).
-    res.json({ items: list.rows.map((r) => ({ ...r, allowed: Deals.allowedStatuses(b, r.status) })), more: list.more, totals, statuses: Deals.STATUSES });
+    return res.json({ items: list.rows.map((r) => ({ ...r, allowed: Deals.allowedStatuses(b, r.status) })), more: list.more, totals, summary: list.summary, ...(dealSummary ? { dealSummary } : {}), statuses: Deals.STATUSES });
   });
 
   api.get("/deals/:ref", async (req, res) => {
@@ -77,13 +99,14 @@ function register(api, { pool }) {
     const manager = Authz.isManager(actor);
     const lead = Authz.isTeamLead(actor);
     const kind = req.query.kind === "developers" ? "developers" : "resale";
-    const range = P.periodRange(req.query.period, req.query.at);
+    const range = P.periodRange(req.query.period || (kind === "developers" ? "all" : undefined), req.query.at);
     const brokerId = (manager || lead) && isId(req.query.broker) ? req.query.broker : null;
     const teamLeadId = manager && !brokerId && isId(req.query.team) ? req.query.team : null;
     const status = kind === "developers" && C.STATUSES.includes(req.query.status) ? req.query.status : null;
+    const developerId = kind === "developers" && isId(req.query.developer) ? req.query.developer : null;
     const scope = { brokerId, teamLeadId, from: range.from, to: range.to, page: Math.max(0, parseInt(req.query.page, 10) || 0), size: PAGE };
-    const out = kind === "resale" ? await Deals.resaleCommissions(pool, actor, scope) : await Commissions.pageCommissions(pool, actor, { status, overdue: req.query.overdue === "1", ...scope });
-    res.json({ kind, period: range.period, items: out.rows, total: out.total, totals: out.totals, statuses: C.STATUSES });
+    const out = kind === "resale" ? await Deals.resaleCommissions(pool, actor, scope) : await Commissions.pageCommissions(pool, actor, { status, developerId, overdue: req.query.overdue === "1", ...scope });
+    res.json({ kind, period: range.period, items: out.rows, total: out.total, totals: out.totals, byDeveloper: out.byDeveloper || [], statuses: C.STATUSES });
   });
 
   api.get("/commissions/:id", managers, async (req, res) => {
@@ -97,7 +120,7 @@ function register(api, { pool }) {
   });
 
   api.get("/sources", managers, async (req, res) => {
-    const r = await Sources.report(pool, req.session.broker, { month: req.query.month });
+    const r = await Sources.report(pool, req.session.broker, { month: req.query.month, signedOnly: req.query.signed === "1" });
     return r ? res.json(r) : res.status(403).json({ error: "forbidden" });
   });
 
@@ -161,6 +184,12 @@ function register(api, { pool }) {
       days: req.query.days,
       page: req.query.page
     };
+    if (req.query.leadRef !== undefined) {
+      const lead = await require("../services/leads").getLead(pool, b, String(req.query.leadRef));
+      if (!lead) return res.status(404).json({ error: "not_found" });
+      f.leadId = lead.id;
+      f.mine = true;
+    }
     res.json(await OpenedLinks.list(pool, b, f));
   });
 }

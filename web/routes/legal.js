@@ -17,13 +17,13 @@ const TERMS = {
   sections: [
     {
       h: ["١. قبول الشروط", "1. Acceptance of Terms"],
-      ar: ["إنشاء حساب أو تسجيل الدخول أو استخدام تطبيق «وحدات هَب» (Wehdat Hub)، سواء عبر تطبيق الهاتف أو لوحة التحكم أو البوتات المرتبطة (مجتمعةً «المنصة»)، يعني موافقتك على هذه الشروط. إذا كنت تسجل نيابةً عن شركة عقارية أو وساطة أو جهة اعتبارية («الشركة»)، فإنك تُقر بأن لديك الصلاحية القانونية لإلزامها بهذه الشروط."],
-      en: ["By creating an account, accessing, or using the Wehdat Hub mobile application, web dashboard, or linked bots (together, the \"Platform\"), you agree to these Terms. If you register on behalf of a real estate agency, brokerage or other entity (the \"Agency\"), you confirm that you have the legal authority to bind the Agency to these Terms."]
+      ar: ["إنشاء حساب أو تسجيل الدخول أو استخدام تطبيق «وحدات هَب» (WehdatHub)، سواء عبر تطبيق الهاتف أو لوحة التحكم أو البوتات المرتبطة (مجتمعةً «المنصة»)، يعني موافقتك على هذه الشروط. إذا كنت تسجل نيابةً عن شركة عقارية أو وساطة أو جهة اعتبارية («الشركة»)، فإنك تُقر بأن لديك الصلاحية القانونية لإلزامها بهذه الشروط."],
+      en: ["By creating an account, accessing, or using the WehdatHub mobile application, web dashboard, or linked bots (together, the \"Platform\"), you agree to these Terms. If you register on behalf of a real estate agency, brokerage or other entity (the \"Agency\"), you confirm that you have the legal authority to bind the Agency to these Terms."]
     },
     {
       h: ["٢. طبيعة الخدمة وإخلاء المسؤولية", "2. Description of the Service and Disclaimer"],
       ar: ["تقدم «وحدات هَب» برمجيات للشركات العقارية لإدارة مخزون الوحدات، وإدارة علاقات العملاء (CRM)، ومتابعة مراحل الصفقات، وأتمتة الرسائل.", "«وحدات هَب» منصة تقنية فقط. ليست وسيطًا عقاريًا مرخصًا، ولا جهة تقييم أو ضمان، ولا طرفًا في أي صفقة عقارية. لا تتحقق المنصة من صحة أي عقار أو سعر أو ملكية أو اتفاق عمولة يتم عبرها، ولا تضمنها."],
-      en: ["Wehdat Hub provides business software for real estate agencies to manage unit inventory, customer relationships (CRM), deal stages and message automation.", "Wehdat Hub is a technology provider only. It is not a licensed real estate broker, appraiser, escrow agent or party to any property transaction. It does not inspect, verify or guarantee any listing, price, ownership claim or commission agreement made through the Platform."]
+      en: ["WehdatHub provides business software for real estate agencies to manage unit inventory, customer relationships (CRM), deal stages and message automation.", "WehdatHub is a technology provider only. It is not a licensed real estate broker, appraiser, escrow agent or party to any property transaction. It does not inspect, verify or guarantee any listing, price, ownership claim or commission agreement made through the Platform."]
     },
     {
       h: ["٣. الحسابات والأمان", "3. Accounts and Security"],
@@ -33,12 +33,12 @@ const TERMS = {
     {
       h: ["٤. الوحدات ومحتوى الشركة", "4. Listings and Agency Content"],
       ar: ["ملكية المحتوى: تحتفظ الشركة بملكيتها الكاملة لمخزون الوحدات وقوائم العملاء وأرقام التواصل والصور وملاحظات الصفقات المرفوعة على المنصة («محتوى الشركة»).", "صحة المحتوى: الشركة وحدها مسؤولة عن التحقق من صحة الوحدات والأسعار وأرقام الملاك، وعن امتلاكها الحق في عرضها.", "سرية العملاء: تعامل «وحدات هَب» محتوى الشركة كبيانات سرية، ولا تبيع قوائم العملاء المحتملين ولا تشاركها مع مكاتب منافسة أو جهات غير مصرح لها."],
-      en: ["Content ownership: the Agency keeps full ownership of its unit inventory, client lists, phone numbers, photos and deal notes uploaded to the Platform (\"Agency Content\").", "Content accuracy: the Agency alone is responsible for verifying the accuracy and legal right to market every unit, price and owner contact it uploads.", "Client confidentiality: Wehdat Hub treats Agency Content as confidential and will not sell or disclose lead lists to competing brokerages or unauthorised third parties."]
+      en: ["Content ownership: the Agency keeps full ownership of its unit inventory, client lists, phone numbers, photos and deal notes uploaded to the Platform (\"Agency Content\").", "Content accuracy: the Agency alone is responsible for verifying the accuracy and legal right to market every unit, price and owner contact it uploads.", "Client confidentiality: WehdatHub treats Agency Content as confidential and will not sell or disclose lead lists to competing brokerages or unauthorised third parties."]
     },
     {
       h: ["٥. قنوات الرسائل الخارجية", "5. Third-Party Messaging Channels"],
       ar: ["تتيح المنصة الربط مع خدمات طرف ثالث مثل Meta (واتساب للأعمال) وتيليجرام.", "يجب أن تلتزم الشركة بقوانين مكافحة الرسائل المزعجة وشروط الخدمة الخاصة بتلك الجهات. لا يجوز إرسال رسائل ترويجية غير مطلوبة، أو محتوى مسيء، أو رسائل غير قانونية.", "لا تتحمل «وحدات هَب» مسؤولية أي حظر أو قيود أو عقوبات تفرضها Meta أو تيليجرام أو غيرهما على الشركة بسبب طريقة استخدامها لهذه القنوات."],
-      en: ["The Platform integrates with third-party services including Meta (WhatsApp Cloud API) and Telegram.", "The Agency must comply with anti-spam laws and those providers' terms. It may not send unsolicited marketing, abusive content or illegal messages.", "Wehdat Hub is not liable for blocks, bans, rate limits or penalties imposed on the Agency by Meta, Telegram or other providers because of how the Agency uses those channels."]
+      en: ["The Platform integrates with third-party services including Meta (WhatsApp Cloud API) and Telegram.", "The Agency must comply with anti-spam laws and those providers' terms. It may not send unsolicited marketing, abusive content or illegal messages.", "WehdatHub is not liable for blocks, bans, rate limits or penalties imposed on the Agency by Meta, Telegram or other providers because of how the Agency uses those channels."]
     },
     {
       h: ["٦. الاشتراكات والفوترة", "6. Subscriptions and Billing"],
@@ -48,17 +48,17 @@ const TERMS = {
     {
       h: ["٧. الملكية الفكرية", "7. Intellectual Property"],
       ar: ["كل حقوق الملكية والعلامات التجارية والبرمجيات وتصميم الواجهات والخوارزميات والشعارات الخاصة بـ«وحدات هَب» ملك حصري لها. يُمنح المستخدم ترخيصًا محدودًا وقابلًا للإلغاء وغير حصري لاستخدام المنصة في العمليات الداخلية للشركة فقط."],
-      en: ["All rights in Wehdat Hub's trademarks, software, interface designs, algorithms and logos belong exclusively to Wehdat Hub. Users receive a limited, revocable, non-exclusive licence to use the Platform for the Agency's internal business only."]
+      en: ["All rights in WehdatHub's trademarks, software, interface designs, algorithms and logos belong exclusively to WehdatHub. Users receive a limited, revocable, non-exclusive licence to use the Platform for the Agency's internal business only."]
     },
     {
       h: ["٨. توافر الخدمة وحدود المسؤولية", "8. Service Availability and Limitation of Liability"],
       ar: ["تُقدم المنصة «كما هي» و«حسب التوافر»، دون ضمان لعدم انقطاع الخدمة أو خلوها من الأخطاء.", "إلى أقصى حد يسمح به القانون، لا تتحمل «وحدات هَب» أي أضرار غير مباشرة أو تبعية، بما في ذلك فوات الأرباح أو الصفقات أو فقد البيانات."],
-      en: ["The Platform is provided \"as is\" and \"as available\", without warranty of uninterrupted service or error-free operation.", "To the maximum extent permitted by law, Wehdat Hub is not liable for indirect, incidental or consequential damages, including lost profits, unfinished deals or data loss."]
+      en: ["The Platform is provided \"as is\" and \"as available\", without warranty of uninterrupted service or error-free operation.", "To the maximum extent permitted by law, WehdatHub is not liable for indirect, incidental or consequential damages, including lost profits, unfinished deals or data loss."]
     },
     {
       h: ["٩. إنهاء الاستخدام", "9. Termination"],
       ar: ["يحق لـ«وحدات هَب» تعليق أو إغلاق أي حساب ينتهك هذه الشروط، أو يكشط البيانات، أو يحاول اختراق الأنظمة، أو لا يسدد الرسوم المستحقة. عند الإنهاء، يحق للشركة طلب تصدير بياناتها وفق سياسة الخصوصية."],
-      en: ["Wehdat Hub may suspend or close any account that breaches these Terms, scrapes data, attempts to breach the systems, or does not pay fees due. On termination, the Agency may request an export of its data as described in the Privacy Policy."]
+      en: ["WehdatHub may suspend or close any account that breaches these Terms, scrapes data, attempts to breach the systems, or does not pay fees due. On termination, the Agency may request an export of its data as described in the Privacy Policy."]
     },
     {
       h: ["١٠. القانون والاختصاص القضائي", "10. Governing Law and Jurisdiction"],
@@ -68,7 +68,7 @@ const TERMS = {
     {
       h: ["١١. إحصاءات السوق المجمّعة", "11. Aggregated Market Statistics"],
       ar: ["تنشئ «وحدات هَب» إحصاءات مجمّعة ومجهولة من النشاط داخل المنصة (الوحدات وأسعارها وعمليات البحث وأعداد العملاء والصفقات)، بلا أي بيانات شخصية وبلا ذكر لاسم أي شركة. لا نعرض رقمًا إلا إذا كان وراءه عدد كافٍ من الشركات والسجلات (حد أدنى للمجموعة).", "نستخدم هذه الإحصاءات لتحسين الخدمة ولتقديم تقارير السوق للشركات. تبقى بيانات شركتك الخاصة سرّية عنك وحدك، ولا يراها غيرك إلا ضمن رقم مجمّع. لا نبيع البيانات الشخصية. بالاستمرار في استخدام المنصة توافق على هذا الاستخدام."],
-      en: ["Wehdat Hub creates anonymised aggregate statistics from activity in the Platform (listings and their prices, searches, and counts of leads and deals), with no personal data and no agency identity. We show a figure only when enough agencies and records stand behind it (a minimum group size).", "We use these statistics to improve the service and to offer market reports to agencies. Your agency's own data stays private to you and is seen by others only inside an aggregate figure. We do not sell personal data. By continuing to use the Platform you accept this use."]
+      en: ["WehdatHub creates anonymised aggregate statistics from activity in the Platform (listings and their prices, searches, and counts of leads and deals), with no personal data and no agency identity. We show a figure only when enough agencies and records stand behind it (a minimum group size).", "We use these statistics to improve the service and to offer market reports to agencies. Your agency's own data stays private to you and is seen by others only inside an aggregate figure. We do not sell personal data. By continuing to use the Platform you accept this use."]
     },
     {
       h: ["١٢. التواصل", "12. Contact"],
@@ -86,12 +86,12 @@ const PRIVACY = {
     {
       h: ["١. المقدمة ونطاق التطبيق", "1. Introduction and Scope"],
       ar: ["«وحدات هَب» منصة سحابية لإدارة علاقات العملاء وإدارة مخزون الوحدات وأدوات الأتمتة للشركات والوسطاء العقاريين في مصر.", "توضح هذه السياسة كيف نجمع البيانات ونعالجها ونحميها عند استخدام تطبيق الهاتف ولوحة التحكم وبوتات تيليجرام المرتبطة («المنصة»)."],
-      en: ["Wehdat Hub is a cloud CRM, unit inventory and automation platform for real estate agencies, brokers and consultants in Egypt.", "This Privacy Policy explains how we collect, process and protect information when you use the mobile app, the web dashboard and the linked Telegram bots (together, the \"Platform\")."]
+      en: ["WehdatHub is a cloud CRM, unit inventory and automation platform for real estate agencies, brokers and consultants in Egypt.", "This Privacy Policy explains how we collect, process and protect information when you use the mobile app, the web dashboard and the linked Telegram bots (together, the \"Platform\")."]
     },
     {
       h: ["٢. المتحكم والمعالج", "2. Controller and Processor"],
       ar: ["«وحدات هَب» متحكم في بيانات الحسابات المسجلة للمستخدمين (الوسطاء، المديرين، مسؤولي الشركات) لإدارة الاشتراكات والحماية وتقديم الدعم.", "عندما ترفع الشركة بيانات العملاء وأرقام المشترين المحتملين وتفاصيل الوحدات وأرقام الملاك («محتوى الشركة»)، تكون الشركة هي المتحكم في هذه البيانات، و«وحدات هَب» تعالجها وفق تعليماتها فقط. الشركة مسؤولة عن الحصول على الموافقات اللازمة من الملاك والعملاء."],
-      en: ["Wehdat Hub is the controller of the account data of its users (brokers, team leads, agency managers), used to manage subscriptions, keep the Platform secure and provide support.", "When an Agency uploads client records, prospective buyers' details, unit listings and owner contact details (\"Agency Content\"), the Agency is the controller of that data. Wehdat Hub processes it only on the Agency's instructions. The Agency is responsible for obtaining the consents required from owners and clients."]
+      en: ["WehdatHub is the controller of the account data of its users (brokers, team leads, agency managers), used to manage subscriptions, keep the Platform secure and provide support.", "When an Agency uploads client records, prospective buyers' details, unit listings and owner contact details (\"Agency Content\"), the Agency is the controller of that data. WehdatHub processes it only on the Agency's instructions. The Agency is responsible for obtaining the consents required from owners and clients."]
     },
     {
       h: ["٣. البيانات التي نجمعها", "3. Information We Collect"],
@@ -110,8 +110,8 @@ const PRIVACY = {
     },
     {
       h: ["٦. مزودو الخدمة", "6. Service Providers"],
-      ar: ["نشارك البيانات فقط مع مزودين يشغّلون الخدمة:", "الاستضافة: Render.", "قاعدة البيانات والتخزين: Supabase (PostgreSQL مع صلاحيات على مستوى الصف وتخزين مشفّر).", "الخرائط وتخزين الملفات: Cloudflare R2.", "الرسائل: Telegram Bot API وMeta WhatsApp Cloud API.", "الإشعارات وتقارير الأعطال: Google Firebase (Cloud Messaging وCrashlytics).", "الأتمتة (اختياري): Make.com، فقط إذا فعّلته الشركة.", "الذكاء الاصطناعي: Google Gemini (انظر القسم ٥)."],
-      en: ["We share data only with providers that run the service:", "Hosting: Render.", "Database and storage: Supabase (PostgreSQL with row-level security and encrypted storage).", "Map tiles and file storage: Cloudflare R2.", "Messaging: Telegram Bot API and Meta WhatsApp Cloud API.", "Notifications and crash reports: Google Firebase (Cloud Messaging and Crashlytics).", "Automation (optional): Make.com, only if the Agency turns it on.", "AI: Google Gemini (see section 5)."]
+      ar: ["نشارك البيانات فقط مع مزودين يشغّلون الخدمة:", "الاستضافة: Render.", "قاعدة البيانات والتخزين: Supabase (PostgreSQL مع صلاحيات على مستوى الصف وتخزين مشفّر).", "الخرائط وتخزين الملفات: Cloudflare R2.", "الرسائل: Telegram Bot API وMeta WhatsApp Cloud API.", "الإشعارات وتقارير الأعطال واستخدام المميزات: Google Firebase وGoogle Analytics (عند التفعيل).", "الأتمتة (اختياري): Make.com، فقط إذا فعّلته الشركة.", "الذكاء الاصطناعي: Google Gemini (انظر القسم ٥)."],
+      en: ["We share data only with providers that run the service:", "Hosting: Render.", "Database and storage: Supabase (PostgreSQL with row-level security and encrypted storage).", "Map tiles and file storage: Cloudflare R2.", "Messaging: Telegram Bot API and Meta WhatsApp Cloud API.", "Notifications, crash reports and feature usage: Google Firebase and Google Analytics (where enabled).", "Automation (optional): Make.com, only if the Agency turns it on.", "AI: Google Gemini (see section 5)."]
     },
     {
       h: ["٧. الأمان ونقل البيانات", "7. Security and Data Location"],
@@ -126,7 +126,7 @@ const PRIVACY = {
     {
       h: ["٩. حذف الحساب والبيانات", "9. Deleting Your Account and Data"],
       ar: ["يحق لأي مستخدم أو شركة طلب الحذف النهائي للحساب وكل البيانات المرتبطة به، دون الحاجة إلى فتح التطبيق أو إعادة تثبيته.", "طريقة الطلب: اضغط زر «طلب حذف الحساب» أدناه، أو أرسل بريدًا إلى " + CONTACT + " من البريد المسجل في حسابك، بعنوان «طلب حذف الحساب - وحدات هَب»، واذكر اسمك ورقم الهاتف المسجل واسم الشركة.", "المدة: نتحقق من الطلب ونحذف بيانات الحساب ومعرّفات الأجهزة خلال ٣٠ يومًا، ونؤكد الحذف بالبريد الإلكتروني.", "محتوى الشركة: الوحدات وقوائم العملاء المملوكة للشركة تبقى تحت إدارة مالك الشركة، ولا تُحذف إلا إذا طلب مالك الشركة حذف المؤسسة كاملة."],
-      en: ["Any user or agency may request permanent deletion of their account and all personal data linked to it, without needing to open or reinstall the app.", "How to request: tap the \"Request account deletion\" button below, or email " + CONTACT + " from the address on your account with the subject \"Account Deletion Request - Wehdat Hub\", and include your full name, the registered phone number and the agency name.", "Timing: we verify the request and delete the account data and device tokens within 30 days, then confirm by email.", "Agency content: units and client lists owned by the Agency stay under the Agency owner's control, and are removed only if the Agency owner asks for the whole organisation to be deleted."]
+      en: ["Any user or agency may request permanent deletion of their account and all personal data linked to it, without needing to open or reinstall the app.", "How to request: tap the \"Request account deletion\" button below, or email " + CONTACT + " from the address on your account with the subject \"Account Deletion Request - WehdatHub\", and include your full name, the registered phone number and the agency name.", "Timing: we verify the request and delete the account data and device tokens within 30 days, then confirm by email.", "Agency content: units and client lists owned by the Agency stay under the Agency owner's control, and are removed only if the Agency owner asks for the whole organisation to be deleted."]
     },
     {
       h: ["١٠. حقوقك", "10. Your Rights"],
@@ -136,7 +136,7 @@ const PRIVACY = {
     {
       h: ["١١. الأطفال", "11. Children"],
       ar: ["«وحدات هَب» موجهة للمهنيين من سن ١٨ عامًا فأكثر. لا نجمع عن قصد بيانات من الأطفال."],
-      en: ["Wehdat Hub is for professionals aged 18 and over. We do not knowingly collect data from children."]
+      en: ["WehdatHub is for professionals aged 18 and over. We do not knowingly collect data from children."]
     },
     {
       h: ["١٢. الإحصاءات المجمّعة", "12. Aggregated Statistics"],
@@ -151,7 +151,7 @@ const PRIVACY = {
   ]
 };
 
-const DELETE_SUBJECT = { ar: "طلب حذف الحساب - وحدات هَب", en: "Account Deletion Request - Wehdat Hub" };
+const DELETE_SUBJECT = { ar: "طلب حذف الحساب - وحدات هَب", en: "Account Deletion Request - WehdatHub" };
 
 function pageBody(doc, lang, other) {
   const base = doc.path;

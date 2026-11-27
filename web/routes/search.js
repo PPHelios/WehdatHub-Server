@@ -115,7 +115,7 @@ function askCard({ ask, filters, q, lang, understood, logId }) {
 </div>`;
 }
 
-function resultsSection({ covers = new Map(), res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null, st = "active", switcher = "", restorable = new Set() }) {
+function resultsSection({ brokerId, covers = new Map(), res, filters, token, page, lang, savedId = null, asks = new Map(), understood = "", sl = null, st = "active", switcher = "", restorable = new Set() }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
@@ -137,7 +137,7 @@ ${filters.code || st !== "active" || isDataEntry(Vis.viewer()) ? "" : html`<p><a
     <label class="check"><input type="checkbox" name="alerts" value="1" data-alerts> ${L(lang, "نبهني لما وحدة جديدة تناسب (طلب عميل، بحد أقصى 30)", "Alert me when a new unit fits (a client request, 30 at most)")}</label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { thumb: covers.get(r.id), ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { thumb: covers.get(r.id), mine: Boolean(brokerId && r.broker_id === brokerId), ask: asks.get(r.id) || null, restore: restorable.has(r.code), badge: st === "active" ? "" : L(lang, STATUS_LABEL[st][0], STATUS_LABEL[st][1]), back: `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${page > 1 ? `&page=${page}` : ""}${sl ? `&sl=${sl}` : ""}` }))}</ol>
   ${pager(token, page, res.total, lang, sl, st)}
 </section>`;
 }
@@ -234,7 +234,7 @@ function register(web, { pool, page }) {
       const [covers, asks] = out.ask ? [] : await Promise.all([Store.coverImages(pool, broker.agency_id, out.rows), Privacy.askStates(pool, broker, out.rows)]);
       results = out.ask
         ? askCard({ ask: out.ask, filters, q, lang, understood, logId })
-        : resultsSection({ covers, res: out, filters, token, page: pageNo, lang, asks, understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
+        : resultsSection({ brokerId: broker.id, covers, res: out, filters, token, page: pageNo, lang, asks, understood, sl: logId, st, switcher, restorable: new Set(st === "active" ? [] : out.rows.filter((r) => canEdit(broker, r)).map((r) => r.code)) });
       searchUrl = `/app/search?f=${token}${st !== "active" ? `&st=${st}` : ""}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${logId ? `&sl=${logId}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,
@@ -333,12 +333,12 @@ ${items.length
     const rows = [saved];
     const filters = saved.filters;
     const out = await runFilters(pool, broker.agency_id, filters, 1);
-    await Saved.markSeen(pool, saved.id, out.ids);
+    const [covers] = await Promise.all([Store.coverImages(pool, broker.agency_id, out.rows || []), Saved.markSeen(pool, saved.id, out.ids)]);
     const token = SearchLink.encodeFilters(filters);
     return page(req, res, {
       title: rows[0].name,
       nav: "search",
-      body: html`<h1>⭐ ${rows[0].name}</h1>${resultsSection({ res: out, filters, token, page: 1, lang, savedId: rows[0].id })}${refineForm(filters, lang)}`
+      body: html`<h1>⭐ ${rows[0].name}</h1>${resultsSection({ brokerId: broker.id, covers, res: out, filters, token, page: 1, lang, savedId: rows[0].id })}${refineForm(filters, lang)}`
     });
   });
 

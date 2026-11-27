@@ -190,15 +190,24 @@ function nudgeMessage(broker, leads) {
   };
 }
 
-/** One nudge per new lead still uncontacted 24 hours after it arrived (and with no follow-up planned). */
+/** One nudge per new lead still uncontacted 24 hours after it arrived (replaced when agency round-robin SLA is active or broker updated). */
 async function nudgeUntouched(pool, { now = new Date(), limit = BATCH } = {}) {
+  const { UPDATE_EVENT_KINDS } = require("../domain/discipline");
   const claimed = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
-      `SELECT id FROM leads
-        WHERE ${Vis.leads("leads")} AND stage = 'new' AND last_contact_at IS NULL AND nudged_at IS NULL AND assigned_broker_id IS NOT NULL
-          AND follow_up_status IS DISTINCT FROM 'open' AND created_at <= $1 AND created_at > $2
-        ORDER BY created_at, id LIMIT $3 FOR UPDATE SKIP LOCKED`,
-      [new Date(now.getTime() - NUDGE_AFTER_MS).toISOString(), new Date(now.getTime() - NUDGE_WINDOW_MS).toISOString(), limit]
+      `SELECT l.id FROM leads l
+        WHERE ${Vis.leads("l")} AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.nudged_at IS NULL AND l.assigned_broker_id IS NOT NULL
+          AND l.follow_up_status IS DISTINCT FROM 'open'
+          AND l.response_due_at IS NULL
+          AND coalesce(l.response_jumps, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM lead_events e
+             WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND e.broker_id IS NOT NULL
+               AND e.undone_at IS NULL AND e.kind = ANY($4::text[])
+          )
+          AND l.created_at <= $1 AND l.created_at > $2
+        ORDER BY l.created_at, l.id LIMIT $3 FOR UPDATE OF l SKIP LOCKED`,
+      [new Date(now.getTime() - NUDGE_AFTER_MS).toISOString(), new Date(now.getTime() - NUDGE_WINDOW_MS).toISOString(), limit, UPDATE_EVENT_KINDS]
     );
     if (!rows.length) return [];
     const upd = await client.query("UPDATE leads SET nudged_at = $2 WHERE id = ANY($1::uuid[]) RETURNING *", [rows.map((r) => r.id), now.toISOString()]);
@@ -258,6 +267,135 @@ async function nudgeInterested(pool, { now = new Date(), limit = BATCH } = {}) {
   return { nudged: claimed.length, brokers };
 }
 
+const POST_VIEWING_AFTER_MS = 2 * 3600 * 1000;
+const POST_VIEWING_WINDOW_MS = 48 * 3600 * 1000;
+const LINK_SILENCE_AFTER_MS = 2 * 3600 * 1000;
+const LINK_SILENCE_WINDOW_MS = 24 * 3600 * 1000;
+
+function postViewingMessage(broker, leads) {
+  const lang = en(broker) ? "en" : "ar";
+  if (leads.length === 1) {
+    const lead = leads[0];
+    const ref = Card.refLabel(lead.ref);
+    const who = `${Card.displayName(lead, lang)} (${ref})`;
+    return {
+      title: L(broker, `🏠 إيه نتيجة معاينة ${who}؟`, `🏠 How did ${who}'s viewing go?`),
+      body: L(broker, "اختار المرحلة الجاية (وبعدها تقدر تضيف ملاحظة لو حابب):", "Pick the next stage (you can add a status note right after):"),
+      url: `/app/leads/${ref}`,
+      leadId: lead.id,
+      buttons: [
+        { id: `ld:st:${ref}:interested`, title: L(broker, "👍 مهتم", "👍 Interested") },
+        { id: `ld:st:${ref}:negotiation`, title: L(broker, "🤝 تفاوض", "🤝 Negotiation") },
+        { id: `ld:fu:${ref}`, title: L(broker, "📅 متابعة", "📅 Follow-up") },
+        { id: `ld:st:${ref}:lost`, title: L(broker, "❌ مش مناسب", "❌ Not fit") }
+      ]
+    };
+  }
+  const lines = leads.slice(0, LINES).map((l) => `• ${Card.refLabel(l.ref)} ${Card.displayName(l, lang)}`);
+  if (leads.length > LINES) lines.push(L(broker, `…و${leads.length - LINES} كمان`, `…and ${leads.length - LINES} more`));
+  return {
+    title: L(broker, `🏠 ${leads.length} معاينات خلصت ولسه متسجّلش نتيجتها`, `🏠 ${leads.length} viewings waiting for an outcome update`),
+    body: lines.join("\n"),
+    url: "/app/leads?tab=overdue",
+    buttons: null
+  };
+}
+
+/**
+ * 2h post-viewing outcome check-in (Phase 4): replaces generic quiet-day reminders for viewings where the broker
+ * has not logged any update/note/stage change after `next_follow_up_at`.
+ */
+async function nudgePostViewing(pool, { now = new Date(), limit = BATCH } = {}) {
+  const claimed = await withTransaction(pool, async (client) => {
+    const { rows } = await client.query(
+      `SELECT id FROM leads
+        WHERE ${Vis.leads("leads")}
+          AND follow_up_status = 'open'
+          AND follow_up_kind = 'viewing'
+          AND assigned_broker_id IS NOT NULL
+          AND stage NOT IN ('won', 'lost')
+          AND post_viewing_nudged_at IS NULL
+          AND next_follow_up_at <= $1
+          AND next_follow_up_at > $2
+          AND (last_activity_at IS NULL OR last_activity_at <= next_follow_up_at)
+        ORDER BY next_follow_up_at, id LIMIT $3 FOR UPDATE SKIP LOCKED`,
+      [new Date(now.getTime() - POST_VIEWING_AFTER_MS).toISOString(), new Date(now.getTime() - POST_VIEWING_WINDOW_MS).toISOString(), limit]
+    );
+    if (!rows.length) return [];
+    // Also stamp interest_nudged_at so nudgeInterested does not double-notify after a viewing.
+    const upd = await client.query(
+      "UPDATE leads SET post_viewing_nudged_at = $2, interest_nudged_at = GREATEST(coalesce(interest_nudged_at, $2), $2) WHERE id = ANY($1::uuid[]) RETURNING *",
+      [rows.map((r) => r.id), now.toISOString()]
+    );
+    return upd.rows.sort((a, b) => new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at));
+  });
+  if (!claimed.length) return { nudged: 0, brokers: 0 };
+  const brokers = await tellBrokers(pool, groupByBroker(claimed), postViewingMessage, "post_view", "post_viewing_nudged_at", now);
+  return { nudged: claimed.length, brokers };
+}
+
+function linkSilenceMessage(broker, leads) {
+  const lang = en(broker) ? "en" : "ar";
+  if (leads.length === 1) {
+    const lead = leads[0];
+    const ref = Card.refLabel(lead.ref);
+    const who = `${Card.displayName(lead, lang)} (${ref})`;
+    return {
+      title: L(broker, `👀 ${who} فتح عرضك من ساعتين`, `👀 ${who} opened your unit link 2h ago`),
+      body: L(broker, "لسه مفيش تحديث بعد فتح اللينك — كلمه أو حط متابعة:", "No follow-up logged since they opened — reach out or set next step:"),
+      url: `/app/leads/${ref}`,
+      leadId: lead.id,
+      buttons: [
+        { id: `ld:called:${ref}`, title: L(broker, "📞 كلمته", "📞 Called") },
+        { id: `ld:fu:${ref}`, title: L(broker, "📅 متابعة", "📅 Follow-up") },
+        { id: `ld:stage:${ref}`, title: L(broker, "🔄 المرحلة", "🔄 Stage") }
+      ]
+    };
+  }
+  const lines = leads.slice(0, LINES).map((l) => `• ${Card.refLabel(l.ref)} ${Card.displayName(l, lang)}`);
+  if (leads.length > LINES) lines.push(L(broker, `…و${leads.length - LINES} كمان`, `…and ${leads.length - LINES} more`));
+  return {
+    title: L(broker, `👀 ${leads.length} عملاء فتحوا عروضك ومفيش تحديث`, `👀 ${leads.length} clients opened links with no update`),
+    body: lines.join("\n"),
+    url: "/app/leads",
+    buttons: null
+  };
+}
+
+/**
+ * 2h opened-link silence check (Phase 4): reminds once when a client opened a unit link >= 2h ago and no activity
+ * occurred since, skipping leads that already got a recent hot-client alert within 4h.
+ */
+async function nudgeLinkSilence(pool, { now = new Date(), limit = BATCH } = {}) {
+  const after = new Date(now.getTime() - LINK_SILENCE_AFTER_MS).toISOString();
+  const winStart = new Date(now.getTime() - LINK_SILENCE_WINDOW_MS).toISOString();
+  const hotCooldown = new Date(now.getTime() - 4 * 3600 * 1000).toISOString();
+  const claimed = await withTransaction(pool, async (client) => {
+    const { rows } = await client.query(
+      `SELECT l.id FROM leads l
+         JOIN LATERAL (
+           SELECT max(e.created_at) AS opened_at FROM lead_events e
+            WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND e.kind = 'share_opened'
+              AND e.created_at <= $1 AND e.created_at > $2
+         ) so ON so.opened_at IS NOT NULL
+        WHERE ${Vis.leads("l")}
+          AND l.assigned_broker_id IS NOT NULL
+          AND l.stage NOT IN ('won', 'lost')
+          AND (l.link_silence_nudged_at IS NULL OR l.link_silence_nudged_at < so.opened_at)
+          AND (l.last_activity_at IS NULL OR l.last_activity_at < so.opened_at)
+          AND (l.hot_at IS NULL OR l.hot_at < $3)
+        ORDER BY so.opened_at, l.id LIMIT $4 FOR UPDATE OF l SKIP LOCKED`,
+      [after, winStart, hotCooldown, limit]
+    );
+    if (!rows.length) return [];
+    const upd = await client.query("UPDATE leads SET link_silence_nudged_at = $2 WHERE id = ANY($1::uuid[]) RETURNING *", [rows.map((r) => r.id), now.toISOString()]);
+    return upd.rows.sort((a, b) => a.ref - b.ref);
+  });
+  if (!claimed.length) return { nudged: 0, brokers: 0 };
+  const brokers = await tellBrokers(pool, groupByBroker(claimed), linkSilenceMessage, "link_silence", "link_silence_nudged_at", now);
+  return { nudged: claimed.length, brokers };
+}
+
 /** The scheduler job entry (lib/jobs.js). */
 const reminderJob = () => ({
   name: "follow_up_reminders",
@@ -266,8 +404,10 @@ const reminderJob = () => ({
     const r = await remindDue(pool, { now });
     const n = await nudgeUntouched(pool, { now });
     const i = await nudgeInterested(pool, { now });
-    return { counts: { reminded: r.reminded, nudged: n.nudged, interest: i.nudged, brokers: r.brokers + n.brokers + i.brokers } };
+    const pv = await nudgePostViewing(pool, { now });
+    const ls = await nudgeLinkSilence(pool, { now });
+    return { counts: { reminded: r.reminded, nudged: n.nudged, interest: i.nudged, postViewing: pv.nudged, linkSilence: ls.nudged, brokers: r.brokers + n.brokers + i.brokers + pv.brokers + ls.brokers } };
   }
 });
 
-module.exports = { remindDue, nudgeUntouched, nudgeInterested, reminderMessage, nudgeMessage, interestMessage, reminderJob };
+module.exports = { remindDue, nudgeUntouched, nudgeInterested, nudgePostViewing, nudgeLinkSilence, reminderMessage, nudgeMessage, interestMessage, postViewingMessage, linkSilenceMessage, reminderJob };

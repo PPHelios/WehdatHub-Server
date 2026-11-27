@@ -103,3 +103,203 @@ test("lead counts can be limited to one broker (managers)", async () => {
   const other = await call("manager", "get", `/leads/counts?broker=${h.BROKERS.colleague.id}`);
   expect(other.body.counts.all).toBe(0);
 });
+test("latest assignment filters counts and list to the same Cairo calendar month", async () => {
+  const older = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Prior assignment" })).body.lead;
+  await call("broker", "post", "/leads", { phone1: "01112345678", name: "Current assignment" });
+  await h.pool.query(
+    "UPDATE leads SET assigned_at = ((date_trunc('month', now() AT TIME ZONE 'Africa/Cairo') - interval '1 day') AT TIME ZONE 'Africa/Cairo') WHERE agency_id = $1 AND ref = $2",
+    [h.BROKERS.broker.agency_id, Number(older.ref.slice(2))]
+  );
+  const listing = await call("broker", "get", "/leads?assigned=last");
+  const counts = await call("broker", "get", "/leads/counts?assigned=last");
+  expect(listing.body.items.map((lead) => lead.ref)).toEqual([older.ref]);
+  expect(counts.body.counts.all).toBe(listing.body.total);
+  expect(counts.body.counts.new).toBe(1);
+  expect((await call("colleague", "get", "/leads?assigned=last")).body.total).toBe(0);
+});
+
+test("confirmed stage and note update atomically and a retry cannot append the note twice", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01112345678", name: "Previewed lead" })).body.lead;
+  const url = `/leads/${lead.ref}/update`;
+  const change = { version: lead.version, stage: "viewing", note: "Confirmed note" };
+  expect((await call("colleague", "post", url, change)).status).toBe(404);
+  expect((await call("broker", "post", url, { ...change, stage: "lost" })).status).toBe(422);
+  expect((await call("broker", "get", `/leads/${lead.ref}`)).body.lead.stage).toBe("new");
+  expect((await call("broker", "post", url, change)).body.lead.stage).toBe("viewing");
+  expect((await call("broker", "post", url, change)).status).toBe(409);
+  const details = (await call("broker", "get", `/leads/${lead.ref}`)).body;
+  expect(details.timeline.filter((event) => event.text === change.note)).toHaveLength(1);
+});
+
+test("uncontacted, pending late first response, and overdue follow-up remain distinct queues", async () => {
+  const created = await call("broker", "post", "/leads", { phone1: "01012345678", name: "Queue fixture" });
+  const ref = created.body.lead.ref;
+  expect((await call("broker", "get", "/leads?queue=uncontacted")).body.total).toBe(1);
+  expect((await call("broker", "get", "/leads?queue=late-response")).body.total).toBe(0);
+  await h.pool.query("UPDATE leads SET response_due_at = now() - interval '1 minute' WHERE agency_id = $1", [h.BROKERS.broker.agency_id]);
+  expect((await call("broker", "get", "/leads/counts?queue=late-response")).body.counts.all).toBe(1);
+  expect((await call("broker", "get", "/leads?queue=late-response")).body.items[0].ref).toBe(ref);
+  expect((await call("broker", "get", "/leads?queue=overdue")).body.total).toBe(0);
+  expect((await call("colleague", "get", "/leads?queue=late-response")).body.total).toBe(0);
+});
+
+test("matching uses a visible lead's saved requests and does not expose another broker's lead", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Matching fixture" })).body.lead;
+  const actor = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0];
+  await h.insertListing({ code: "MATCH-01", property_type: "apartment" });
+  const service = require("../../services/leadRequests");
+  expect((await service.saveRequest(h.pool, actor, lead.ref, { property_types: ["apartment"] })).ok).toBe(true);
+  const matches = await call("broker", "get", `/leads/${lead.ref}/matches`);
+  expect(matches.status).toBe(200);
+  expect(matches.body.requests[0].items).toEqual([expect.objectContaining({ code: "MATCH-01" })]);
+  const requestId = matches.body.requests[0].id;
+  const adjusted = await call("broker", "get", `/leads/${lead.ref}/matches?requestId=${requestId}&price_max=1000`);
+  expect(adjusted.status).toBe(200);
+  expect(adjusted.body.requests[0].criteria.price_max).toBe(1000);
+  expect(adjusted.body.requests[0].items).toEqual([]);
+  expect((await call("broker", "get", `/leads/${lead.ref}/matches`)).body.requests[0].criteria.price_max).toBeNull();
+  expect((await call("colleague", "get", `/leads/${lead.ref}/matches`)).status).toBe(404);
+  const reverse = await call("broker", "get", "/units/MATCH-01/matching-leads");
+  expect(reverse.status).toBe(200);
+  expect(reverse.body.items).toEqual([expect.objectContaining({ ref: lead.ref })]);
+  const another = await call("colleague", "get", "/units/MATCH-01/matching-leads");
+  expect(another.body.items).toEqual([]);
+  expect((await call("rival", "get", "/units/MATCH-01/matching-leads")).status).toBe(404);
+});
+
+test("follow-up completion is versioned and removes the lead from its follow-up queue", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01112345678", name: "Follow-up fixture" })).body.lead;
+  const path = `/leads/${lead.ref}/follow-up`;
+  const scheduled = await call("broker", "post", path, { at: new Date(Date.now() + 3600000).toISOString(), kind: "call" });
+  expect(scheduled.status).toBe(200);
+  expect((await call("broker", "post", path + "/complete", { version: lead.version })).status).toBe(409);
+  const completed = await call("broker", "post", path + "/complete", { version: scheduled.body.lead.version });
+  expect(completed.status).toBe(200);
+  expect(completed.body.lead.followUpKind).toBeNull();
+});
+
+test("the missing-photo unit list uses the same filter for rows and status counts", async () => {
+  const withImage = await h.insertListing({ code: "QA-WITH" });
+  await h.insertListing({ code: "QA-WITHOUT" });
+  await h.pool.query("INSERT INTO listing_images (agency_id, listing_id, url, position) VALUES ($1, $2, $3, 0)",
+    [withImage.agency_id, withImage.id, "fixture/photo.jpg"]);
+  const result = await call("broker", "get", "/units?missingPhotos=true");
+  expect(result.status).toBe(200);
+  expect(result.body.items.map((unit) => unit.code)).toEqual(["QA-WITHOUT"]);
+  expect(result.body.counts.active).toBe(1);
+});
+
+test("sent offers filter on the selected lead, even when two leads share a name", async () => {
+  await h.insertListing({ code: "OFFER-A" });
+  await h.insertListing({ code: "OFFER-B" });
+  const a = (await call("broker", "post", "/leads", { phone1: "01012345678", name: "Sara" })).body.lead;
+  const b = (await call("broker", "post", "/leads", { phone1: "01112345678", name: "Sara" })).body.lead;
+  expect((await call("broker", "post", `/leads/${a.ref}/send`, { code: "OFFER-A" })).status).toBe(200);
+  expect((await call("broker", "post", `/leads/${b.ref}/send`, { code: "OFFER-B" })).status).toBe(200);
+  const selected = await call("broker", "get", `/opened-links?leadRef=${b.ref}`);
+  expect(selected.body.rows.map((row) => row.unit_code)).toEqual(["OFFER-B"]);
+  expect((await call("colleague", "get", `/opened-links?leadRef=${b.ref}`)).status).toBe(404);
+});
+
+test("waiting-over-1h queue returns assigned new leads uncontacted for over an hour within scope", async () => {
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const oldLead = (await call("broker", "post", "/leads", { phone1: "01022223333", name: "Waiting 2h" })).body.lead;
+  const freshLead = (await call("broker", "post", "/leads", { phone1: "01022224444", name: "Fresh 10m" })).body.lead;
+  await h.query("UPDATE leads SET created_at = $2 WHERE agency_id = $1 AND ref = $3", [h.AGENCY_A, twoHoursAgo, Number(oldLead.ref.replace(/\D/g, ""))]);
+  await h.query("UPDATE leads SET created_at = $2 WHERE agency_id = $1 AND ref = $3", [h.AGENCY_A, tenMinAgo, Number(freshLead.ref.replace(/\D/g, ""))]);
+
+  const own = await call("broker", "get", "/leads?queue=waiting-over-1h");
+  expect(own.status).toBe(200);
+  expect(own.body.items.map((x) => x.ref)).toEqual([oldLead.ref]);
+
+  const admin = await call("admin", "get", "/leads?queue=waiting-over-1h");
+  expect(admin.status).toBe(200);
+  expect(admin.body.items.map((x) => x.ref)).toEqual([oldLead.ref]);
+
+  const colleague = await call("colleague", "get", "/leads?queue=waiting-over-1h");
+  expect(colleague.body.items).toEqual([]);
+});
+
+test("manual lead nudge notifies assigned broker with 1-tap buttons, enforces team scope and 2h cooldown", async () => {
+  const lead = (await call("broker", "post", "/leads", { phone1: "01077771111", name: "Nudge Me" })).body.lead;
+  expect((await call("broker", "post", `/leads/${lead.ref}/nudge`)).status).toBe(403);
+  expect((await call("colleague", "post", `/leads/${lead.ref}/nudge`)).status).toBe(403);
+
+  await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [h.BROKERS.colleague.id]);
+  expect((await call("colleague", "post", `/leads/${lead.ref}/nudge`)).status).toBe(404);
+
+  const notifySpy = jest.spyOn(require("../../lib/notifications"), "notifyBroker");
+  const mgrRes = await call("admin", "post", `/leads/${lead.ref}/nudge`);
+  expect(mgrRes.status).toBe(200);
+  expect(mgrRes.body).toEqual({ ok: true });
+  const nudgeCall = notifySpy.mock.calls.find(([, , opts]) => String(opts?.dedupeKey || "").startsWith("lead_nudge:"));
+  notifySpy.mockRestore();
+  expect(nudgeCall[2].buttons.map((b) => b.id)).toEqual([
+    `ld:called:${lead.ref}`,
+    `ld:fu:${lead.ref}`,
+    `ld:note:${lead.ref}`
+  ]);
+  const notes = await h.query("SELECT * FROM notifications WHERE broker_id = $1 AND dedupe_key LIKE 'lead_nudge:%'", [h.BROKERS.broker.id]);
+  expect(notes).toHaveLength(1);
+
+  const repeat = await call("admin", "post", `/leads/${lead.ref}/nudge`);
+  expect(repeat.status).toBe(429);
+  expect(repeat.body.error).toBe("too_many");
+
+  const unassigned = (await call("admin", "post", "/leads", { phone1: "01077772222", name: "No Broker", assignTo: null })).body.lead;
+  expect((await call("admin", "post", `/leads/${unassigned.ref}/nudge`)).status).toBe(422);
+});
+
+test("broker nudge: manager or the broker's team lead only, 204, counts in the message without names, 1 per broker per 2h, 404 outside scope", async () => {
+  const brokerId = h.BROKERS.broker.id;
+  const lead = (await call("broker", "post", "/leads", { phone1: "01077773333", name: "Secret Client" })).body.lead;
+  await h.query("UPDATE leads SET created_at = now() - interval '3 hours' WHERE ref = $1 AND agency_id = $2", [Number(lead.ref.replace(/[^0-9]/g, "")), h.AGENCY_A]);
+  expect((await call("broker", "post", `/brokers/${brokerId}/nudge`)).status).toBe(403);
+  expect((await request(h.app.app).post(`/api/v1/brokers/${brokerId}/nudge`)).status).toBe(401);
+  expect((await call("admin", "post", "/brokers/00000000-0000-4000-8000-000000000000/nudge")).status).toBe(404);
+  expect((await call("admin", "post", "/brokers/nope/nudge")).status).toBe(404);
+
+  // A team lead of another team cannot reach the broker; the broker's own team lead can.
+  await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [h.BROKERS.colleague.id]);
+  expect((await call("colleague", "post", `/brokers/${brokerId}/nudge`)).status).toBe(404);
+  await h.query("UPDATE brokers SET team_lead_id = $1 WHERE id = $2", [h.BROKERS.colleague.id, brokerId]);
+
+  const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+  const ok = await call("colleague", "post", `/brokers/${brokerId}/nudge`);
+  logSpy.mockRestore();
+  expect(ok.status).toBe(204);
+  const [note] = await h.query("SELECT title, body FROM notifications WHERE broker_id = $1 AND dedupe_key LIKE 'broker_nudge:%'", [brokerId]);
+  expect(note.body).toMatch(/1/);
+  expect(note.body + note.title).not.toContain("Secret Client");
+  const ops = await h.query("SELECT metadata FROM operation_logs WHERE operation_type = 'broker_nudge'");
+  expect(JSON.stringify(ops)).not.toContain("Secret Client");
+
+  const again = await call("admin", "post", `/brokers/${brokerId}/nudge`);
+  expect(again.status).toBe(429);
+  expect(again.body).toMatchObject({ error: "rate_limited" });
+});
+
+test("manager can filter waiting-over-1h, uncontacted, and overdue leads by team parameter", async () => {
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  await h.query("UPDATE brokers SET role = 'team_lead' WHERE id = $1", [h.BROKERS.colleague.id]);
+  await h.query("UPDATE brokers SET team_lead_id = $1 WHERE id = $2", [h.BROKERS.colleague.id, h.BROKERS.broker.id]);
+
+  const teamLeadLead = (await call("colleague", "post", "/leads", { phone1: "01033331111", name: "Team Old" })).body.lead;
+  const outsiderLead = (await call("admin", "post", "/leads", { phone1: "01033332222", name: "Outside Team" })).body.lead;
+
+  await h.query("UPDATE leads SET created_at = $2 WHERE agency_id = $1 AND ref IN ($3, $4)", [
+    h.AGENCY_A, twoHoursAgo,
+    Number(teamLeadLead.ref.replace(/\D/g, "")),
+    Number(outsiderLead.ref.replace(/\D/g, ""))
+  ]);
+
+  const res = await call("admin", "get", `/leads?queue=waiting-over-1h&team=${h.BROKERS.colleague.id}`);
+  expect(res.status).toBe(200);
+  expect(res.body.items.map((x) => x.ref)).toEqual([teamLeadLead.ref]);
+
+  const uncontacted = await call("admin", "get", `/leads?queue=uncontacted&team=${h.BROKERS.colleague.id}`);
+  expect(uncontacted.status).toBe(200);
+  expect(uncontacted.body.items.some((x) => x.ref === teamLeadLead.ref)).toBe(true);
+  expect(uncontacted.body.items.some((x) => x.ref === outsiderLead.ref)).toBe(false);
+});

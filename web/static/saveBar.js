@@ -7,8 +7,16 @@
   var initial = new WeakMap();
 
   function snap(form) {
+    // busy.js disables all controls during any plain form POST; exclude those temporary locks from the dirty snapshot.
+    var re = [];
+    if (document.documentElement.hasAttribute("data-busy")) {
+      Array.prototype.forEach.call(form.elements, function (el) {
+        if (el.disabled && el.getAttribute("data-busy-off") === "d") { el.disabled = false; re.push(el); }
+      });
+    }
     var parts = [];
     new FormData(form).forEach(function (v, k) { parts.push(k + "=" + (typeof v === "string" ? v : "[file]")); });
+    for (var i = 0; i < re.length; i++) re[i].disabled = true;
     return parts.join("&");
   }
   function isDirty(form) { return snap(form) !== initial.get(form); }

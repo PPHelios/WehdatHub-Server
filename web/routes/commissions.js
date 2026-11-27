@@ -15,7 +15,6 @@ const P = require("../../domain/commissionPeriod");
 const { isManager, isTeamLead } = require("../../lib/authz");
 const { isId, teamIds } = require("../../lib/dealScope");
 const { html } = require("../html");
-const { dealsSwitch } = require("../views/tabs");
 
 const PAGE = 20;
 const { L } = require("../../lib/copy");
@@ -191,7 +190,6 @@ ${manager && shown.length ? html`<p class="muted">${L(lang, "كشف حساب:", 
       title: L(lang, "العمولات", "Commissions"),
       nav: "deals",
       body: html`<h1>💸 ${L(lang, "العمولات", "Commissions")}</h1>
-${dealsSwitch(lang, "/app/commissions")}
 ${kindNav}
 ${periodNav}
 ${filters}

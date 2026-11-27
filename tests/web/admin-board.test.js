@@ -80,6 +80,29 @@ test("fixed costs are added and deleted from the Money tab, and the cash-flow fi
   expect(await AdminBoard.listFixedCosts(h.pool)).toHaveLength(0);
 });
 
+test("performance counts error and failed statuses separately from HTTP refusals", async () => {
+  await h.query(`INSERT INTO operation_logs (operation_type, status, error_code) VALUES
+    ('app_failed', 'error', 'http_500'), ('app_failed', 'failed', 'upstream'),
+    ('app_failed', 'error', 'http_402')`);
+  await AdminBoard.computeTab(h.pool, "performance");
+  const snapshot = await AdminBoard.readTab(h.pool, "performance", 7);
+  expect(snapshot.data.byAction.find((x) => x.action === "app_failed")).toMatchObject({ calls: 3, failed: 2, refused: 1 });
+});
+
+test("adoption counts a broker once and recognizes use in the preceding period", async () => {
+  const b = await h.seedBroker("broker");
+  const now = new Date();
+  const day = 86400000;
+  for (const age of [2, 3, 9]) {
+    await h.query(`INSERT INTO operation_logs (agency_id, broker_id, operation_type, status, created_at)
+      VALUES ($1, $2, 'app_unit_create', 'success', $3)`, [b.agency_id, b.id, new Date(now.getTime() - age * day)]);
+  }
+  await AdminBoard.computeTab(h.pool, "overview", now);
+  const snapshot = await AdminBoard.readTab(h.pool, "overview", 7);
+  expect(snapshot.data.adoption.features.find((r) => r.feature === "unit_saved"))
+    .toMatchObject({ brokers: 1, agencies: 1, returned: 1 });
+});
+
 test("the nightly job computes every tab for every period", async () => {
   const job = AdminBoard.adminBoardJob();
   expect(job.name).toBe("admin_board_nightly");
@@ -88,6 +111,45 @@ test("the nightly job computes every tab for every period", async () => {
   const overview = await AdminBoard.readTab(h.pool, "overview", 7);
   expect(overview).not.toBeNull();
   expect(typeof overview.data.aiCalls).toBe("number");
+});
+
+test("trial cohorts count drop-off, first use, eligible day-seven activity, teammates and paid subscriptions", async () => {
+  const now = new Date();
+  const ago = (days) => new Date(now.getTime() - days * 86400000).toISOString();
+  await h.seedBroker("broker");
+  await h.query("UPDATE agencies SET plan = 'team' WHERE id = $1", [h.AGENCY_A]);
+  await h.query(
+    `INSERT INTO trial_funnel (signup_id, tier, offered_days, offered_credits, started_at, telegram_opened_at, verified_at, agency_id, granted_days, granted_credits)
+     VALUES (1, 'team', 14, 200, $2, $2, $3, $1, 14, 200), (2, 'team', 14, 200, $3, NULL, NULL, NULL, NULL, NULL),
+            (3, 'solo', 4, 80, $4, $4, $4, NULL, 4, 80)`,
+    [h.AGENCY_A, ago(10), ago(9), ago(2)]
+  );
+  await h.query(
+    `INSERT INTO usage_events (agency_id, broker_id, channel, event, ok, created_at) VALUES
+       ($1, NULL, 'app', 'open_unit', true, $3),
+       ($1, $2, 'app', 'search', true, $4),
+       ($1, $2, 'app', 'search', false, $4),
+       ($1, $2, 'app', 'search', true, $5)`,
+    [h.AGENCY_A, h.BROKERS.broker.id, ago(8), ago(2.5), ago(0.5)]
+  );
+  await h.query(
+    `INSERT INTO payments (agency_id, kind, plan, months, amount_egp, reference, status, confirmed_at) VALUES
+       ($1, 'plan', 'team', 1, 599, 'WH-TRIAL-PAID', 'confirmed', $2),
+       ($1, 'plan', 'team', 1, 599, 'WH-TRIAL-SECOND', 'confirmed', $2)`,
+    [h.AGENCY_A, ago(1)]
+  );
+  await AdminBoard.computeTab(h.pool, "health", now);
+  const { data } = await AdminBoard.readTab(h.pool, "health", 30);
+  expect(data.trials.cohorts).toEqual([
+    { tier: "solo", offered_days: 4, offered_credits: 80, started: 1, opened: 1, verified: 1, activated: 0, day7_eligible: 0, day7: 0, teammate: 0, paid: 0 },
+    { tier: "team", offered_days: 14, offered_credits: 200, started: 2, opened: 1, verified: 1, activated: 1, day7_eligible: 1, day7: 1, teammate: 1, paid: 1 }
+  ]);
+  expect(data.trials.features).toContainEqual({ tier: "team", event: "search", agencies: 1, uses: 2, failed: 1 });
+  const crm = await signIn(h, "admin");
+  const page = await crm.agent.get("/app/owner/board?tab=health&days=30");
+  expect(page.text).toContain("Trial funnel");
+  expect(page.text).toContain("Feature use during the trial");
+  expect(page.text).toContain("1 / 2 (50%)");
 });
 
 function round(n) {

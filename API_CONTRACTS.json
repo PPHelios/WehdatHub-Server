@@ -1,5 +1,8 @@
 {
   "libraries": {
+    "api/assistant.js": {
+      "register": ["api", "params"]
+    },
     "api/clientError.js": {
       "register": ["api", "params"]
     },
@@ -68,6 +71,37 @@
       "scopesOf": ["question"],
       "prompt": ["question", "blocks", "params"],
       "parseAnswer": ["text", "lang"]
+    },
+    "domain/assistantCharts.js": {
+      "trendDirection": ["values"],
+      "trendCard": ["params"],
+      "shareCard": ["params"],
+      "priceRangeCard": ["params"],
+      "compareCard": ["params"],
+      "barSummary": ["title", "rows", "en"]
+    },
+    "domain/assistantFeedback.js": {
+      "scrubQuestion": ["text"]
+    },
+    "domain/assistantRouter.js": {
+      "MODES": "Array",
+      "DAY_MS": "Number",
+      "MAX_RANGE_DAYS": "Number",
+      "normalize": ["raw"],
+      "addCairoDaysYmd": ["ymd", "deltaDays"],
+      "cairoMidnight": ["ymd"],
+      "extractTimeWindow": ["raw", "now"],
+      "resolveInterval": ["params"],
+      "extractSourceFilter": ["q"],
+      "findMatchingBrokers": ["brokers", "rawQuery"],
+      "classifyAssistantQuery": ["params"],
+      "splitForcePrefix": ["text"]
+    },
+    "domain/assistantSuggestions.js": {
+      "suggestionsFor": ["params"],
+      "ROLES": "Array",
+      "NEXT": "Object",
+      "POOL": "Object"
     },
     "domain/brand.js": {
       "BRAND": "Object",
@@ -265,6 +299,11 @@
       "unreadable": ["colors"],
       "cssVars": ["colors", "shape"]
     },
+    "domain/discipline.js": {
+      "UPDATE_EVENT_KINDS": "Array",
+      "classifyBroker": ["params"],
+      "summarizeBoard": ["board"]
+    },
     "domain/features.js": {
       "FEATURES": "Array",
       "normalizeForMatch": ["text"],
@@ -297,6 +336,10 @@
       "MAX_TEXT": "Number",
       "firstName": ["name"],
       "template": ["params"]
+    },
+    "domain/franco.js": {
+      "LEXICON": "Object",
+      "toArabic": ["text"]
     },
     "domain/furnishingStatus.js": {
       "FURNISHING_STATUSES": "Array",
@@ -387,6 +430,7 @@
       "rulesFields": ["input"],
       "inWorkHours": ["rules", "at"],
       "dueAt": ["rules", "from"],
+      "workMinutesBetween": ["rules", "from", "to"],
       "awayNow": ["broker", "now"],
       "minutesBetween": ["from", "to"],
       "cairo": ["at"]
@@ -532,6 +576,7 @@
       "formInput": ["p"]
     },
     "domain/plans.js": {
+      "isTrialPlan": ["id"],
       "TRIAL_TEAM_SEATS": "Number",
       "TRIAL_PHOTO_CAP": "Number",
       "UNLIMITED": "Number",
@@ -745,6 +790,11 @@
       "appendTo": ["where", "args", "list"],
       "OLD_AFTER_DAYS": "Number"
     },
+    "domain/urgency.js": {
+      "URGENCY": "Object",
+      "roleGroup": ["role"],
+      "buildPriorities": ["params"]
+    },
     "domain/vocabulary.js": {
       "TYPE_TERMS": "Object",
       "vocabularyRows": [],
@@ -794,8 +844,12 @@
       "isTeamLead": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],
+      "canEditSharedUnit": ["broker", "listing"],
+      "canDeleteUnit": ["broker", "listing"],
       "canViewLead": ["broker", "lead", "agencyOpen"],
       "canEditLead": ["broker", "lead"],
+      "canCollaborateLead": ["broker", "lead"],
+      "canClaimLead": ["broker", "lead"],
       "canReassignLead": ["broker", "lead", "targetTeamLeadId", "targetBrokerId"],
       "canManageLeads": ["broker"],
       "canViewDeal": ["broker", "deal"],
@@ -945,23 +999,14 @@
       "withCodeLock": ["pool", "agencyId", "code", "fn"],
       "FIELD_LABELS": "Object"
     },
-    "lib/failureInfo.js": {
-      "SEVERITIES": "Array",
-      "describe": ["operationType", "code"],
-      "SEVERITY_SQL": "String"
-    },
-    "lib/ownerAlerts.js": {
-      "CATEGORIES": "Array",
-      "SEVERITIES": "Array",
-      "SEVERITY_LABELS": "Object",
-      "DEFAULTS": "Object",
-      "KEY": "String",
-      "get": ["pool", "params"],
-      "save": ["pool", "input"],
-      "allowed": ["pool", "categoryId"],
-      "permits": ["settings", "categoryId"],
-      "clean": ["v"],
-      "invalidate": []
+    "lib/entitlements.js": {
+      "PATHS": "Object",
+      "featuresOf": ["surface", "path"],
+      "upgradeLine": ["lang", "params"],
+      "assertAllowed": ["pool", "broker", "feature"],
+      "inviteRoles": ["pool", "broker", "roles"],
+      "web": ["pool", "params"],
+      "api": ["pool"]
     },
     "lib/errorReports.js": {
       "capture": ["err", "params"],
@@ -975,15 +1020,6 @@
       "RETENTION_DAYS": "Number",
       "REPORTS_PER_HOUR": "Number"
     },
-    "lib/entitlements.js": {
-      "PATHS": "Object",
-      "featuresOf": ["surface", "path"],
-      "upgradeLine": ["lang", "params"],
-      "assertAllowed": ["pool", "broker", "feature"],
-      "inviteRoles": ["pool", "broker", "roles"],
-      "web": ["pool", "params"],
-      "api": ["pool"]
-    },
     "lib/errorText.js": {
       "of": ["code", "lang"],
       "ofOrGeneric": ["code", "lang"],
@@ -994,6 +1030,11 @@
       "buildMultiPlanWorkbook": ["params"],
       "buildRejectionWorkbook": ["params"],
       "sanitizeCellValue": ["val"]
+    },
+    "lib/failureInfo.js": {
+      "SEVERITIES": "Array",
+      "describe": ["operationType", "code"],
+      "SEVERITY_SQL": "String"
     },
     "lib/failureLog.js": {
       "middleware": ["pool", "params"],
@@ -1090,7 +1131,8 @@
     "lib/images.js": {
       "MAX_PHOTOS": "Number",
       "normalizeImageBuffer": ["rawBuffer"],
-      "makeThumbBuffer": ["rawBuffer"]
+      "makeThumbBuffer": ["rawBuffer"],
+      "makeAvatarBuffer": ["rawBuffer"]
     },
     "lib/importFailed.js": {
       "failedRowsWorkbook": ["payload", "params"],
@@ -1189,7 +1231,8 @@
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
       "reorderPhotos": ["db", "listing", "imageIds", "params"],
-      "applyListingPatch": ["db", "broker", "params"],
+      "applyListingPatch": ["db", "broker", "opts"],
+      "editColleagueUnit": ["pool", "actor", "listing", "params"],
       "INSERT_COLUMNS": "Array",
       "PATCH_COLUMNS": "Array"
     },
@@ -1217,6 +1260,9 @@
     },
     "lib/media.js": {
       "download": ["id", "mimeHint"]
+    },
+    "lib/memoCache.js": {
+      "createLru": ["params"]
     },
     "lib/migrate.js": {
       "MIGRATIONS_DIR": "String",
@@ -1295,6 +1341,19 @@
       "botDigits": ["raw"],
       "startLink": ["botPhone", "lang"],
       "startLines": ["plan", "botPhone"]
+    },
+    "lib/ownerAlerts.js": {
+      "CATEGORIES": "Array",
+      "SEVERITIES": "Array",
+      "SEVERITY_LABELS": "Object",
+      "DEFAULTS": "Object",
+      "KEY": "String",
+      "get": ["pool", "params"],
+      "save": ["pool", "input"],
+      "allowed": ["pool", "categoryId"],
+      "permits": ["settings", "categoryId"],
+      "clean": ["v"],
+      "invalidate": []
     },
     "lib/pdfPages.js": {
       "pageCount": ["buffer"],
@@ -1505,7 +1564,8 @@
       "setViewing": ["sid", "on"],
       "isViewing": ["sid"],
       "config": ["env"],
-      "homeAgencyOf": ["broker"]
+      "homeAgencyOf": ["broker"],
+      "isDemoBroker": ["env", "broker"]
     },
     "lib/text.js": {
       "normalizeDigits": ["str"],
@@ -1629,6 +1689,8 @@
       "inboundAllowed": ["message"],
       "outboundAllowed": ["to"],
       "isOwnerNumber": ["raw"],
+      "extractTrialVerifyToken": ["message"],
+      "allowTrialReply": ["to", "ttlMs"],
       "HELP": "Object"
     },
     "lib/webAuth.js": {
@@ -1790,6 +1852,10 @@
       "datesLine": ["dates", "lang"],
       "unanswered": ["pool", "manager", "params"]
     },
+    "services/assistantQuery.js": {
+      "query": ["pool", "params"],
+      "withAvatars": ["pool", "actor", "answer"]
+    },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",
       "withClient": ["req", "_res", "next"],
@@ -1801,6 +1867,9 @@
       "auditWrites": ["pool", "pathPattern", "params"],
       "cleanup": ["pool"],
       "cleanupJob": []
+    },
+    "services/bankSmsParser.js": {
+      "parseBankSms": ["text"]
     },
     "services/billing.js": {
       "GRACE_EXTEND_DAYS": "Array",
@@ -1832,6 +1901,7 @@
       "UNIT_HINT_LEVELS": "Array",
       "getSetting": ["db", "key", "fallback"],
       "setSetting": ["db", "key", "value"],
+      "paymentChannels": ["db"],
       "payTo": ["db"],
       "savePayTo": ["db", "params"],
       "priceOf": ["params"],
@@ -1841,6 +1911,7 @@
       "upgradeQuotes": ["agency", "now"],
       "addExtraSeats": ["pool", "owner", "agencyId", "seats", "params"],
       "requestPayment": ["db", "manager", "input", "params"],
+      "updateBillingPermissions": ["db", "owner", "agencyId", "params"],
       "paymentsOf": ["db", "agencyId", "params"],
       "publicAllowance": ["a"],
       "publicPayment": ["p"],
@@ -2045,13 +2116,13 @@
       "createDeal": ["pool", "actor", "input", "params"],
       "getDeal": ["pool", "actor", "key"],
       "listDeals": ["pool", "actor", "params"],
+      "dealsSummary": ["pool", "actor", "opts"],
       "resaleCommissions": ["pool", "actor", "params"],
       "monthlyTotals": ["pool", "actor", "params"],
       "updateDeal": ["pool", "actor", "key", "change", "params"]
     },
     "services/failures.js": {
       "TYPES": "Array",
-      "KEEP_DAYS": "Number",
       "PAGE": "Number",
       "list": ["pool", "params"],
       "filters": ["pool"],
@@ -2065,9 +2136,13 @@
       "remindDue": ["pool", "params"],
       "nudgeUntouched": ["pool", "params"],
       "nudgeInterested": ["pool", "params"],
+      "nudgePostViewing": ["pool", "params"],
+      "nudgeLinkSilence": ["pool", "params"],
       "reminderMessage": ["broker", "leads"],
       "nudgeMessage": ["broker", "leads"],
       "interestMessage": ["broker", "leads"],
+      "postViewingMessage": ["broker", "leads"],
+      "linkSilenceMessage": ["broker", "leads"],
       "reminderJob": []
     },
     "services/fx.js": {
@@ -2166,7 +2241,7 @@
       "currentMatches": ["pool", "agencyId", "filters", "params"],
       "saveRequest": ["pool", "actor", "leadKey", "rawFilters", "params"],
       "removeRequest": ["pool", "actor", "leadKey", "requestId"],
-      "whoWants": ["pool", "actor", "listing"],
+      "whoWants": ["pool", "actor", "listing", "params"],
       "sendToClient": ["pool", "actor", "leadKey", "listing", "params"]
     },
     "services/leadRules.js": {
@@ -2182,6 +2257,7 @@
       "routingOf": ["db", "agencyId"],
       "saveRouting": ["pool", "manager", "params"],
       "routingList": ["db", "agencyId"],
+      "warnMidwaySla": ["pool", "params"],
       "moveOverdue": ["pool", "params"],
       "responseJob": [],
       "unassignedDigest": ["pool", "params"],
@@ -2202,6 +2278,8 @@
       "saveSpend": ["pool", "actor", "params"]
     },
     "services/leads.js": {
+      "nudgeLead": ["pool", "actor", "refOrId", "params"],
+      "nudgeBroker": ["pool", "actor", "brokerId", "params"],
       "restoreBrokerLeads": ["pool", "agencyId", "brokerId", "params"],
       "historyFor": ["pool", "actor", "key", "params"],
       "historyPeople": ["pool", "actor"],
@@ -2212,6 +2290,7 @@
       "normalizePhones": ["raw"],
       "captureLead": ["pool", "actor", "input", "params"],
       "assignLead": ["pool", "actor", "key", "toBrokerId", "params"],
+      "claimLead": ["pool", "actor", "key", "params"],
       "setStage": ["pool", "actor", "key", "params"],
       "addNote": ["pool", "actor", "key", "text", "params"],
       "flagForManager": ["pool", "actor", "key", "text", "params"],
@@ -2569,6 +2648,9 @@
       "SNAPSHOT_MAX": "Number",
       "SEARCH_PROMPT": ["featureList"],
       "parseRequest": ["AI", "params"],
+      "parseStats": [],
+      "normalizeQuery": ["text"],
+      "parseCache": "Object",
       "SEARCH_STATUSES": "Array",
       "buildSearchQuery": ["agencyId", "parsedOrFilters", "params"],
       "countByStatus": ["pool", "agencyId", "parsed", "status", "fx"],
@@ -2648,6 +2730,8 @@
       "fetchCsv": ["sync", "params"]
     },
     "services/signup.js": {
+      "trialSettings": ["db"],
+      "saveTrialSettings": ["db", "body"],
       "isOpen": ["db"],
       "setOpen": ["db", "enabled"],
       "submit": ["pool", "input", "params"],
@@ -2679,6 +2763,7 @@
     },
     "services/team.js": {
       "setTeamStyle": ["pool", "owner", "style"],
+      "setCollaboration": ["pool", "owner", "changes"],
       "INVITE_ROLES": "Array",
       "ADD_ROLES": "Array",
       "listTeam": ["pool", "manager"],
@@ -2698,6 +2783,10 @@
       "build": ["pool", "viewer", "now"],
       "tasksOf": ["d"],
       "oldUnitsFor": ["pool", "viewer", "now"],
+      "oldUnits": ["pool", "v", "ids", "now", "limit", "offset"],
+      "scopeIds": ["pool", "v"],
+      "home": ["pool", "viewer", "now"],
+      "overduePage": ["pool", "viewer", "offset"],
       "OLD_AFTER_DAYS": "Number"
     },
     "services/trialSignup.js": {
@@ -2711,6 +2800,7 @@
       "begin": ["pool", "token", "ids", "params"],
       "pendingFor": ["pool", "userId"],
       "verifyContact": ["pool", "contact", "ids", "params"],
+      "verifyWhatsApp": ["pool", "token", "senderPhone", "params"],
       "purge": ["pool"]
     },
     "services/unitChecks.js": {
@@ -2784,6 +2874,7 @@
     },
     "services/viewings.js": {
       "OPEN": "Array",
+      "listForBroker": ["pool", "broker", "params"],
       "whenLabel": ["at", "lang"],
       "unitLabel": ["listing", "lang"],
       "clientMessage": ["params"],
@@ -2825,6 +2916,7 @@
       "html": ["strings", "values"],
       "raw": ["text"],
       "phoneLtr": ["value"],
+      "phoneOrText": ["value"],
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],
@@ -3034,7 +3126,8 @@
     "web/security.js": {
       "CSP": "String",
       "securityHeaders": ["_req", "res", "next"],
-      "sameOrigin": []
+      "sameOrigin": [],
+      "allowWebAnalytics": ["res"]
     },
     "web/session.js": {
       "SESSION_COOKIE": [],
@@ -3054,7 +3147,7 @@
       "safeNext": ["next"]
     },
     "web/todayCards.js": {
-      "render": ["cards", "en", "csrf"],
+      "render": ["cards", "en"],
       "oldUnitsCard": ["c", "en", "csrf", "back"]
     },
     "web/uploads.js": {
@@ -3137,8 +3230,7 @@
     },
     "web/views/tabs.js": {
       "tabs": ["name", "panels", "params"],
-      "seg": ["label", "items", "current"],
-      "dealsSwitch": ["lang", "current"]
+      "seg": ["label", "items", "current"]
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],

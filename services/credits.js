@@ -5,6 +5,7 @@
 const Plans = require("../domain/plans");
 const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const ErrorReports = require("../lib/errorReports");
+const { withTransaction } = require("../lib/db");
 
 const FX_KEY = "planning_fx_egp_per_usd";
 const FX_DEFAULT = 60;
@@ -92,11 +93,11 @@ async function usedThisMonth(db, agencyId, { now = new Date(), brokerId = null, 
  * 30 days, and owner grants. A bundle lasts 30 days from its confirmation, so one bought late in a month carries into the
  * next, less what the agency used above its plan's credits in the month it was bought.
  */
-async function poolFor(db, agencyId, planId, { now = new Date() } = {}) {
+async function poolFor(db, agencyId, planId, { now = new Date(), baseCredits } = {}) {
   const plan = (await planById(db, planId)) || (await planById(db, "free"));
   // Each extra seat the platform owner added (agencies.extra_seats) brings its own credits to the monthly pool.
   const { rows: ex } = await db.query("SELECT extra_seats FROM agencies WHERE id = $1", [agencyId]);
-  const base = (plan ? plan.credits : 0) + Plans.EXTRA_SEAT.credits * Number(ex[0]?.extra_seats || 0);
+  const base = (baseCredits ?? plan?.credits ?? 0) + Plans.EXTRA_SEAT.credits * Number(ex[0]?.extra_seats || 0);
   const since = new Date(now.getTime() - 30 * 86400000).toISOString();
   const { rows } = await db.query(
     `SELECT COALESCE(sum(b.credits), 0)::int AS credits, min(p.confirmed_at) AS first
@@ -163,15 +164,17 @@ async function grant(db, agencyId, credits, { note = null, now = new Date() } = 
 
 /** The owner answers a request: approve (optionally a different amount) grants the credits for this month. */
 async function decideRequest(db, id, { approve, credits = null, now = new Date() } = {}) {
-  const { rows } = await db.query("SELECT * FROM credit_requests WHERE id = $1 AND status = 'pending'", [id]);
-  const r = rows[0];
-  if (!r) return { error: "not_pending" };
-  if (approve) {
-    const g = await grant(db, r.agency_id, credits || r.credits, { note: `request #${id}`, now });
-    if (g.error) return g;
-  }
-  await db.query("UPDATE credit_requests SET status = $2, decided_at = $3 WHERE id = $1", [id, approve ? "approved" : "declined", now.toISOString()]);
-  return { ok: true, request: { ...r, status: approve ? "approved" : "declined" } };
+  return withTransaction(db, async (client) => {
+    const { rows } = await client.query("SELECT * FROM credit_requests WHERE id = $1 AND status = 'pending' FOR UPDATE", [id]);
+    const r = rows[0];
+    if (!r) return { error: "not_pending" };
+    if (approve) {
+      const g = await grant(client, r.agency_id, credits || r.credits, { note: `request #${id}`, now });
+      if (g.error) return g;
+    }
+    await client.query("UPDATE credit_requests SET status = $2, decided_at = $3 WHERE id = $1", [id, approve ? "approved" : "declined", now.toISOString()]);
+    return { ok: true, request: { ...r, status: approve ? "approved" : "declined" } };
+  });
 }
 
 
@@ -228,88 +231,113 @@ function parsePrices(v) {
 /** The table as the form shows it. */
 const pricesText = (prices) => Object.entries(prices || {}).sort((a, b) => a[0] - b[0]).map(([m, n]) => `${m}:${n}`).join(", ");
 
+class InvalidCreditForm extends Error {
+  constructor(error, id) {
+    super(error);
+    this.result = id === undefined ? { error } : { error, id };
+  }
+}
+
+async function saveCreditForm(db, write) {
+  try {
+    return await withTransaction(db, write);
+  } catch (err) {
+    if (err instanceof InvalidCreditForm) return err.result;
+    throw err;
+  }
+}
+
 /** Saves the plans form (p_<id>_<field>) and an optional new plan (new_*): { ok } | { error }. */
 async function savePlans(db, body = {}) {
-  for (const p of await plans(db)) {
-    const k = (f) => body[`p_${p.id}_${f}`];
-    const price = intIn(k("price"), 0, 1000000);
-    const seats = intIn(k("seats"), 1, 1000);
-    const units = intIn(k("units"), 1, 1000000);
-    const credits = intIn(k("credits"), 0, 10000000);
-    const name_ar = text(k("name_ar"));
-    const name_en = text(k("name_en"));
-    // The period prices: a form without the field keeps the table; the field present (even empty) replaces it. Free and trial are never sold.
-    const prices = k("prices") === undefined ? undefined : p.id === "free" || p.id === "trial" ? {} : parsePrices(k("prices"));
-    if ([price, seats, units, credits].includes(null) || !name_ar || !name_en || prices === null) return { error: "plan", id: p.id };
-    await db.query(
-      "UPDATE credit_plans SET name_ar = $2, name_en = $3, price_egp = $4, seats = $5, units = $6, credits = $7, active = $8, prices = COALESCE($9::jsonb, prices), updated_at = NOW() WHERE id = $1",
-      [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : p.id === "trial" ? false : k("active") === "on", prices === undefined ? null : JSON.stringify(prices)]
-    );
-  }
-  if (text(body.new_id)) {
-    const id = text(body.new_id, 20).toLowerCase();
-    const price = intIn(body.new_price, 0, 1000000);
-    const seats = intIn(body.new_seats, 1, 1000);
-    const units = intIn(body.new_units, 1, 1000000);
-    const credits = intIn(body.new_credits, 0, 10000000);
-    const name_ar = text(body.new_name_ar);
-    const name_en = text(body.new_name_en);
-    const newPrices = parsePrices(body.new_prices);
-    if (!ID_RE.test(id) || [price, seats, units, credits].includes(null) || !name_ar || !name_en || newPrices === null) return { error: "new_plan" };
-    const { rows: taken } = await db.query("SELECT 1 FROM credit_plans WHERE id = $1", [id]);
-    if (taken.length) return { error: "new_plan" };
-    await db.query(
-      "INSERT INTO credit_plans (id, name_ar, name_en, price_egp, seats, units, credits, sort, prices) VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_plans), $8::jsonb)",
-      [id, name_ar, name_en, price, seats, units, credits, JSON.stringify(newPrices)]
-    );
-  }
-  await refresh(db);
-  return { ok: true };
+  const result = await saveCreditForm(db, async (client) => {
+    for (const p of await plans(client)) {
+      const k = (f) => body[`p_${p.id}_${f}`];
+      const price = intIn(k("price"), 0, 1000000);
+      const seats = intIn(k("seats"), 1, 1000);
+      const units = intIn(k("units"), 1, 1000000);
+      const credits = intIn(k("credits"), 0, 10000000);
+      const name_ar = text(k("name_ar"));
+      const name_en = text(k("name_en"));
+      // The period prices: a form without the field keeps the table; the field present (even empty) replaces it. Free and trial are never sold.
+      const prices = k("prices") === undefined ? undefined : p.id === "free" || Plans.isTrialPlan(p.id) ? {} : parsePrices(k("prices"));
+      if ([price, seats, units, credits].includes(null) || !name_ar || !name_en || prices === null) throw new InvalidCreditForm("plan", p.id);
+      await client.query(
+        "UPDATE credit_plans SET name_ar = $2, name_en = $3, price_egp = $4, seats = $5, units = $6, credits = $7, active = $8, prices = COALESCE($9::jsonb, prices), updated_at = NOW() WHERE id = $1",
+        [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : Plans.isTrialPlan(p.id) ? false : k("active") === "on", prices === undefined ? null : JSON.stringify(prices)]
+      );
+    }
+    if (text(body.new_id)) {
+      const id = text(body.new_id, 20).toLowerCase();
+      const price = intIn(body.new_price, 0, 1000000);
+      const seats = intIn(body.new_seats, 1, 1000);
+      const units = intIn(body.new_units, 1, 1000000);
+      const credits = intIn(body.new_credits, 0, 10000000);
+      const name_ar = text(body.new_name_ar);
+      const name_en = text(body.new_name_en);
+      const newPrices = parsePrices(body.new_prices);
+      if (!ID_RE.test(id) || [price, seats, units, credits].includes(null) || !name_ar || !name_en || newPrices === null) throw new InvalidCreditForm("new_plan");
+      const { rows: taken } = await client.query("SELECT 1 FROM credit_plans WHERE id = $1", [id]);
+      if (taken.length) throw new InvalidCreditForm("new_plan");
+      await client.query(
+        "INSERT INTO credit_plans (id, name_ar, name_en, price_egp, seats, units, credits, sort, prices) VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_plans), $8::jsonb)",
+        [id, name_ar, name_en, price, seats, units, credits, JSON.stringify(newPrices)]
+      );
+    }
+    return { ok: true };
+  });
+  if (result.ok) await refresh(db);
+  return result;
 }
 
 /** Saves the bundles form (b_<id>_<field>) and an optional new bundle. */
 async function saveBundles(db, body = {}) {
-  const { rows } = await db.query("SELECT id FROM credit_bundles");
-  for (const { id } of rows) {
-    const k = (f) => body[`b_${id}_${f}`];
-    const price = intIn(k("price"), 1, 1000000);
-    const credits = intIn(k("credits"), 1, 10000000);
-    const name_ar = text(k("name_ar"));
-    const name_en = text(k("name_en"));
-    if ([price, credits].includes(null) || !name_ar || !name_en) return { error: "bundle", id };
-    await db.query("UPDATE credit_bundles SET name_ar = $2, name_en = $3, price_egp = $4, credits = $5, active = $6, updated_at = NOW() WHERE id = $1", [id, name_ar, name_en, price, credits, k("active") === "on"]);
-  }
-  if (text(body.new_bundle_id)) {
-    const id = text(body.new_bundle_id, 20).toLowerCase();
-    const price = intIn(body.new_bundle_price, 1, 1000000);
-    const credits = intIn(body.new_bundle_credits, 1, 10000000);
-    const name_ar = text(body.new_bundle_name_ar);
-    const name_en = text(body.new_bundle_name_en);
-    if (!ID_RE.test(id) || [price, credits].includes(null) || !name_ar || !name_en) return { error: "new_bundle" };
-    const { rows: taken } = await db.query("SELECT 1 FROM credit_bundles WHERE id = $1", [id]);
-    if (taken.length) return { error: "new_bundle" };
-    await db.query("INSERT INTO credit_bundles (id, name_ar, name_en, price_egp, credits, sort) VALUES ($1, $2, $3, $4, $5, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_bundles))", [id, name_ar, name_en, price, credits]);
-  }
-  await refresh(db);
-  return { ok: true };
+  const result = await saveCreditForm(db, async (client) => {
+    const { rows } = await client.query("SELECT id FROM credit_bundles");
+    for (const { id } of rows) {
+      const k = (f) => body[`b_${id}_${f}`];
+      const price = intIn(k("price"), 1, 1000000);
+      const credits = intIn(k("credits"), 1, 10000000);
+      const name_ar = text(k("name_ar"));
+      const name_en = text(k("name_en"));
+      if ([price, credits].includes(null) || !name_ar || !name_en) throw new InvalidCreditForm("bundle", id);
+      await client.query("UPDATE credit_bundles SET name_ar = $2, name_en = $3, price_egp = $4, credits = $5, active = $6, updated_at = NOW() WHERE id = $1", [id, name_ar, name_en, price, credits, k("active") === "on"]);
+    }
+    if (text(body.new_bundle_id)) {
+      const id = text(body.new_bundle_id, 20).toLowerCase();
+      const price = intIn(body.new_bundle_price, 1, 1000000);
+      const credits = intIn(body.new_bundle_credits, 1, 10000000);
+      const name_ar = text(body.new_bundle_name_ar);
+      const name_en = text(body.new_bundle_name_en);
+      if (!ID_RE.test(id) || [price, credits].includes(null) || !name_ar || !name_en) throw new InvalidCreditForm("new_bundle");
+      const { rows: taken } = await client.query("SELECT 1 FROM credit_bundles WHERE id = $1", [id]);
+      if (taken.length) throw new InvalidCreditForm("new_bundle");
+      await client.query("INSERT INTO credit_bundles (id, name_ar, name_en, price_egp, credits, sort) VALUES ($1, $2, $3, $4, $5, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_bundles))", [id, name_ar, name_en, price, credits]);
+    }
+    return { ok: true };
+  });
+  if (result.ok) await refresh(db);
+  return result;
 }
 
 /** Saves the credits each action uses (a_<action>) and the planning rates (fx, cost_usd). */
 async function saveActionsAndRates(db, body = {}) {
-  for (const a of await actions(db)) {
-    const n = intIn(body[`a_${a.action}`], 0, 1000);
-    if (n === null) return { error: "action", id: a.action };
-    await db.query("UPDATE credit_actions SET credits = $2, updated_at = NOW() WHERE action = $1", [a.action, n]);
-  }
-  const fx = Number(body.fx);
-  const cost = Number(body.cost_usd);
-  if (!(fx >= 1 && fx <= 1000) || !(cost > 0 && cost <= 1)) return { error: "rates" };
-  await putSetting(db, FX_KEY, fx);
-  await putSetting(db, COST_KEY, cost);
-  return { ok: true };
+  return saveCreditForm(db, async (client) => {
+    for (const a of await actions(client)) {
+      const n = intIn(body[`a_${a.action}`], 0, 1000);
+      if (n === null) throw new InvalidCreditForm("action", a.action);
+      await client.query("UPDATE credit_actions SET credits = $2, updated_at = NOW() WHERE action = $1", [a.action, n]);
+    }
+    const fx = Number(body.fx);
+    const cost = Number(body.cost_usd);
+    if (!(fx >= 1 && fx <= 1000) || !(cost > 0 && cost <= 1)) throw new InvalidCreditForm("rates");
+    await putSetting(client, FX_KEY, fx);
+    await putSetting(client, COST_KEY, cost);
+    return { ok: true };
+  });
 }
 
 let loadedAt = 0;
+let refreshPromise = null;
 const TTL_MS = 60 * 1000;
 
 /** Loads plans and bundles from the database into domain/plans.js. A database that cannot be read keeps the last values. */
@@ -317,16 +345,23 @@ const TTL_MS = 60 * 1000;
 let costs = { text: 1, voice: 3, flyer: 3, page: 10, chat_post: 1, assistant: 2 };
 const costOf = (action) => costs[action] ?? 0;
 
-async function refresh(db) {
-  costs = { ...costs, ...(await actionMap(db)) };
-  const [p, b] = await Promise.all([plans(db), db.query("SELECT id, name_ar, name_en, price_egp, credits, sort FROM credit_bundles WHERE active ORDER BY sort, price_egp")]);
-  Plans.hydrate({ plans: p, bundles: b.rows });
-  loadedAt = Date.now();
+function refresh(db) {
+  // A post-save refresh must read again after any older refresh finishes.
+  const pending = (refreshPromise?.catch(() => {}) ?? Promise.resolve()).then(async () => {
+    const [nextCosts, p, b] = await Promise.all([actionMap(db), plans(db), bundles(db)]);
+    Plans.hydrate({ plans: p, bundles: b });
+    costs = { ...costs, ...nextCosts };
+    loadedAt = Date.now();
+  }).finally(() => {
+    if (refreshPromise === pending) refreshPromise = null;
+  });
+  refreshPromise = pending;
+  return pending;
 }
 
 /** refresh, at most once a minute (the owner page forces one after each save); never throws. */
 async function ensureFresh(db) {
-  if (Date.now() - loadedAt < TTL_MS) return;
+  if (refreshPromise || Date.now() - loadedAt < TTL_MS) return;
   loadedAt = Date.now();
   try {
     await refresh(db);

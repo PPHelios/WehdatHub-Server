@@ -38,9 +38,16 @@ test("the chain: the broker, then their team lead, then back to the managers (un
   const t0 = new Date("2026-11-02T10:00:00Z");
   const r = await Leads.captureLead(h.pool, admin, { phones: "01012345678", name: "Sara", assignTo: h.BROKERS.broker.id }, { now: t0 });
 
-  // 30 minutes: no contact, so it moves to the team lead.
+  // 30 minutes: no contact, so it moves to the team lead with 1-tap Called / Follow-up Telegram buttons.
+  const spy = jest.spyOn(require("../../lib/notifications"), "notifyBroker");
   expect(await LeadRules.moveOverdue(h.pool, { now: new Date(t0.getTime() + 31 * MIN) })).toEqual({ moved: 1, stopped: 0 });
   expect(await leadRow(r.lead.id)).toMatchObject({ assigned_broker_id: h.BROKERS.colleague.id });
+  const assignedCall = spy.mock.calls.find(([, , opts]) => String(opts?.dedupeKey || "").startsWith("lead_assigned:"));
+  spy.mockRestore();
+  expect(assignedCall[2].buttons.map((b) => b.id)).toEqual([
+    expect.stringMatching(/^ld:called:L-\d+$/),
+    expect.stringMatching(/^ld:fu:L-\d+$/)
+  ]);
 
   // Another 30 minutes: the team lead does nothing, so it goes back to the managers, unassigned.
   expect(await LeadRules.moveOverdue(h.pool, { now: new Date(t0.getTime() + 63 * MIN) })).toEqual({ moved: 0, stopped: 1 });

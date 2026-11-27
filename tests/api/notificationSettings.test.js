@@ -57,3 +57,23 @@ test("values outside the allowed lists are ignored", async () => {
   expect(r.body.kinds.follow_up.channel).not.toBe("fax");
   expect(r.body.kinds.follow_up.frequency).not.toBe("weekly");
 });
+
+test("agency overdue reminders are editable by owners and managers only", async () => {
+  await h.seedBroker("owner");
+  const broker = auth(await login("broker"));
+  const manager = auth(await login("admin"));
+  const owner = auth(await login("owner"));
+  const path = "/api/v1/notification-settings";
+  const before = await api().get(path).set(manager);
+  expect(before.body.agencyUnitChecks).toEqual({ enabled: true, locked: false });
+  expect((await api().get(path).set(broker)).body.agencyUnitChecks).toBeUndefined();
+  expect((await api().put(path).set(broker).send({ agencyUnitChecks: false })).status).toBe(403);
+  const disabled = await api().put(path).set(manager).send({ agencyUnitChecks: false, quiet: before.body.quiet });
+  expect(disabled.status).toBe(200);
+  expect(disabled.body.agencyUnitChecks).toEqual({ enabled: false, locked: false });
+  await h.query("UPDATE agencies SET notify_policy = notify_policy || $2::jsonb WHERE id = $1", [h.AGENCY_A, JSON.stringify({ unit_check: { lock: "owner", on: false } })]);
+  expect((await api().put(path).set(manager).send({ agencyUnitChecks: true })).status).toBe(403);
+  const enabled = await api().put(path).set(owner).send({ agencyUnitChecks: true });
+  expect(enabled.status).toBe(200);
+  expect(enabled.body.agencyUnitChecks.enabled).toBe(true);
+});

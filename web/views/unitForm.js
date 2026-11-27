@@ -212,7 +212,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   <section class="card uf-card" data-step="4" id="uf-4">${head(4, steps[3])}
     <p class="uf-private">${ICON.lock} ${L(lang, "بيانات المالك والعمولة والملاحظات مش بتظهر للعميل.", "Owner, commission and notes are never shown to clients.")}</p>
     <div class="grid">
-    ${input("owner_name", L(lang, "المالك *", "Owner *"), v.owner_name)}
+    ${input("owner_name", L(lang, "المالك *", "Owner *"), v.owner_name, { dir: "auto" })}
     ${input("owner_phone", L(lang, "تليفون المالك *", "Owner phone *"), v.owner_phone, { type: "tel", dir: "ltr" })}
     <label class="check"><input type="checkbox" name="owner_name_from_phone" value="1"${chk(v.owner_name_from_phone)}>${L(lang, "مفيش اسم: استخدم التليفون كاسم", "No name: use the phone as the name")}</label>
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}

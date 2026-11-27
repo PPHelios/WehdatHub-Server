@@ -51,23 +51,21 @@ function notifyRow(k, policy, broker, lang, tgOn) {
   const eff = Policy.resolve(policy, Notifications.ownChoiceOf(broker, k), k);
   const urgent = Policy.isUrgent(k);
   const by = eff.locked === "owner" ? L(lang, "المالك", "the owner") : L(lang, "المدير", "your manager");
-  // A person who has not chosen a channel sees the default their notifications use (Telegram and website when linked).
-  const shownChannel = eff.channel || Notifications.prefsOf(broker, { telegramLinked: Boolean(broker.telegram_chat_id) }).channels[k];
+  const telegramLinked = tgOn && Boolean(broker.telegram_chat_id);
+  const shownChannel = eff.channel || Notifications.prefsOf(broker, { telegramLinked }).channels[k];
   const lockNote = eff.locked ? html` <span class="muted small" data-locked-by="${eff.locked}">🔒 ${L(lang, `اتقفلت من ${by}`, `set by ${by}`)}</span>` : "";
   const fixed = (f) => eff.lockedFields.includes(f);
-  // The channels are check boxes: Telegram, website, phone app. "both" is stored when Telegram is on with the website or the app.
-  // Delivery (lib/notifications.js deliverRows) sends the website push and the phone app push together, so a push channel shows both boxes on.
-  const chosen = new Set(shownChannel === "both" ? ["telegram", "web", "app"] : shownChannel === "web" || shownChannel === "app" ? ["web", "app"] : [shownChannel]);
+  // With no linked Telegram, its saved choices fall back to push until the broker reconnects.
+  const pushChannel = !telegramLinked || shownChannel === "app" ? shownChannel : "web";
   const chOpts = [
-    ["telegram", L(lang, "تليجرام", "Telegram"), tgOn],
-    ["web", L(lang, "الموقع", "Website"), true],
-    ["app", L(lang, "التطبيق", "Phone app"), true]
+    ["both", L(lang, "تيليجرام وإشعارات الموقع والتطبيق", "Telegram, website and app push"), telegramLinked],
+    ["telegram", L(lang, "تيليجرام بس", "Telegram only"), telegramLinked],
+    [pushChannel, L(lang, "إشعارات الموقع والتطبيق", "Website and app push"), true]
   ].filter(([, , show]) => show);
-  // A kind that is off shows every control off; the person's own channels come back when they turn it on again.
   const chFixed = fixed("channel");
   return html`<div class="notify-row" data-notify="${k}"><label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${lockNote}</label>
   ${urgent ? html`<p class="muted small">${L(lang, "دايماً شغّال وفوري", "Always on and immediate")}</p>` : html`${switchField({ name: `on_${k}`, value: "1", send0: true, on: eff.enabled, lang, disabled: fixed("on"), label: L(lang, "تشغيل", "On"), sentence: L(lang, "شغّله عشان توصلك التنبيهات دي.", "Turn on to get these alerts.") })}`}
-  <fieldset class="choice" data-channels="${k}"><legend>${L(lang, "القناة", "Channel")}</legend><div class="row">${chOpts.map(([v, text]) => html`<label class="check"><input type="checkbox" name="ch_${k}" value="${v}" data-kind="${k}"${chFixed ? html` data-fixed` : ""}${eff.enabled && chosen.has(v) ? html` checked` : ""}${chFixed || !eff.enabled ? html` disabled` : ""}${eff.enabled ? "" : chosen.has(v) ? html` data-was` : ""}> ${text}</label>`)}</div></fieldset>
+  <label>${L(lang, "القناة", "Channel")} <select name="ch_${k}" data-kind="${k}"${chFixed ? html` data-fixed` : ""}${chFixed || !eff.enabled ? html` disabled` : ""}>${chOpts.map(([v, text]) => html`<option value="${v}"${shownChannel === v ? html` selected` : ""}>${text}</option>`)}</select></label>
   ${urgent ? "" : html`<label>${L(lang, "التكرار", "How often")} <select name="fq_${k}" data-kind="${k}"${fixed("frequency") ? html` data-fixed` : ""}${fixed("frequency") || !eff.enabled ? html` disabled` : ""}>${[["immediate", L(lang, "فوري", "Immediately")], ["hourly", L(lang, "كل ساعة (ملخص)", "Hourly (summary)")], ["daily", L(lang, "يومياً ٩ الصبح (ملخص)", "Daily at 9 (summary)")]].map(([v, text]) => html`<option value="${v}"${eff.frequency === v ? html` selected` : ""}>${text}</option>`)}</select></label>`}
 </div>`;
 }
@@ -118,7 +116,7 @@ async function agencySection({ pool, req, broker, lang, brandHtml }) {
   const { privacySection, brokerEditSection, leadScopeSection } = require("./dashboard");
   const owner = isAgencyOwner(broker);
   const [ag, scope, brokersWrite, seeAllLeads] = await Promise.all([
-    pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id]).then((r) => r.rows[0] || {}),
+    pool.query("SELECT name, code_prefix, crm_settings, manager_can_renew_plan, manager_can_buy_credits FROM agencies WHERE id = $1", [broker.agency_id]).then((r) => r.rows[0] || {}),
     Privacy.scopeOf(pool, broker.agency_id),
     Rights.brokersMayWrite(pool, broker.agency_id),
     require("../../services/leadScope").brokersSeeAll(pool, broker.agency_id)
@@ -133,7 +131,20 @@ async function agencySection({ pool, req, broker, lang, brandHtml }) {
   ${owner ? brandHtml : ""}
   ${capsForm({ lang, codePrefix, ret: "settings", id: "agency-caps", bad: codeBad })}
   ${fxForm({ lang, rates, bad: req.query.fx === "bad", ret: "settings", id: "fx" })}
-  ${owner ? html`${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
+  ${owner ? html`<form method="post" action="/app/settings/billing-permissions" class="card stack" id="billing-permissions">
+    <h2>💳 ${L(lang, "صلاحيات المديرين في الباقة والرصيد", "Manager permissions for plan and credits")}</h2>
+    <p class="muted">${L(lang, "حدد إيه اللي يقدر المديرين يعفلوه في الباقة والرصيد.", "Control what managers can do regarding the plan and credits.")}</p>
+    <label class="check">
+      <input type="checkbox" name="renew_plan" value="1"${ag.manager_can_renew_plan ? html` checked` : ""}>
+      ${L(lang, "السماح للمديرين بتجديد الباقة والترقية", "Allow managers to renew the plan and upgrade")}
+    </label>
+    <label class="check">
+      <input type="checkbox" name="buy_credits" value="1"${ag.manager_can_buy_credits ? html` checked` : ""}>
+      ${L(lang, "السماح للمديرين بشراء باقات رصيد الذكاء الاصطناعي", "Allow managers to buy AI credit bundles")}
+    </label>
+    <div><button type="submit" class="button">${L(lang, "حفظ", "Save")}</button></div>
+  </form>
+  ${privacySection(scope, lang, csrf, req.query.saved === "1" ? "saved" : null, owner, "settings")}
   ${brokerEditSection(brokersWrite, lang, csrf, owner, "settings")}
   ${leadScopeSection(seeAllLeads, lang, csrf, owner, "settings")}` : ""}
   <section class="card stack" id="agency-links">
@@ -161,6 +172,14 @@ async function planSection({ pool, broker, lang }) {
 }
 
 function register(web, { pool, page }) {
+  web.post("/settings/client-language", (req, res) => {
+    const lang = req.body.lang;
+    if (lang !== "ar" && lang !== "en") return res.sendStatus(400);
+    if (isCrmOwner(req.session.broker) || isDataEntry(req.session.broker)) return res.sendStatus(403);
+    res.cookie("aq_client_lang", lang, { path: "/app", maxAge: 365 * 24 * 3600 * 1000, sameSite: "lax", secure: Boolean(getConfig().isProd), httpOnly: true });
+    return res.redirect(303, "/app/settings?clientLanguageSaved=1#client-language");
+  });
+
   web.get("/settings", async (req, res) => {
     const lang = langOf(req);
     const broker = await loadBroker(pool, req.session.broker);
@@ -197,6 +216,7 @@ ${pushed === "ok" ? html`<p class="card notice ok" role="status">🔔 ${L(lang, 
 ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "الإشعارات مش مفعلة على أي جهاز لسه.", "Notifications aren't on in any browser yet.")}</p>` : ""}
 <section id="me" class="sect stack" data-settings-section="me">
 <h1 class="sect-title">🙋 ${L(lang, "أنا", "Me")}</h1>
+${!dataEntry ? html`<form class="card row" id="client-language" method="post" action="/app/settings/client-language"><label>${L(lang, "لغة مشاركة الوحدات", "Default unit sharing language")} <select name="lang"><option value="ar">العربية</option><option value="en"${req.cookies.aq_client_lang === "en" ? html` selected` : ""}>English</option></select></label><button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>${req.query.clientLanguageSaved === "1" ? html`<span role="status">${L(lang, "اتحفظت.", "Saved.")}</span>` : ""}</form>` : ""}
 <div class="fold" data-fold>
 <form method="post" action="/app/settings" class="card stack" data-savebar data-savebar-text="${L(lang, "في تغييرات لسه ما اتحفظتش", "Unsaved changes")}" data-savebar-save="${L(lang, "حفظ", "Save")}" data-savebar-discard="${L(lang, "تراجع", "Discard")}" data-savebar-leave="${L(lang, "في تغييرات ما اتحفظتش. تسيب الصفحة وتضيعها؟", "You have unsaved changes. Leave and lose them?")}">
   <h2>🌐 ${L(lang, "اللغة", "Language")}</h2>
@@ -261,7 +281,7 @@ ${planHtml}`
   web.post("/settings", async (req, res) => {
     const { broker } = req.session;
     const channels = {};
-    // Check boxes (telegram, web, app) become the stored single value; nothing ticked (or locked) keeps the old choice.
+    // Accept the old checkbox payload too, for settings pages opened before the update.
     for (const k of Notifications.kindsFor(broker)) {
       const v = new Set([].concat(req.body[`ch_${k}`] ?? []).map(String));
       const tg = v.has("telegram") || v.has("both");
@@ -306,6 +326,17 @@ ${planHtml}`
     const { broker } = req.session;
     await pool.query("UPDATE brokers SET quiet_line = $3 WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id, req.body.on === "1"]);
     return res.redirect(303, "/app/settings?saved=1#quiet-line");
+  });
+
+  web.post("/settings/billing-permissions", async (req, res) => {
+    const broker = req.session.broker;
+    if (!isAgencyOwner(broker)) return res.status(403).send("Agency owner only");
+    const Billing = require("../../services/billing");
+    await Billing.updateBillingPermissions(pool, broker, broker.agency_id, {
+      managerCanRenewPlan: req.body?.renew_plan === "1",
+      managerCanBuyCredits: req.body?.buy_credits === "1"
+    });
+    return res.redirect(303, "/app/settings?saved=1#agency");
   });
 
   web.post("/settings/logo", uploadLogo, async (req, res) => {

@@ -39,7 +39,7 @@ Limits worth knowing: `asking_vs_closed_pct` uses the price at the moment the un
 
 1. Lawful basis for creating anonymised statistics from the service's operational data: legitimate purpose of improving the service, or consent through the Terms. Confirm which one to rely on, and whether anonymisation itself is a processing step that needs a basis.
 2. Is the output really anonymous? Confirm the thresholds (5 agencies, 10 rows), whether to round counts, and that "agency's own funnel next to the market median" cannot single out a competitor.
-3. Controller and processor roles: the Privacy Policy says agencies are controllers of their client data and Wehdat Hub is a processor. Using that data for statistics may make Wehdat Hub a controller for that step. Decide and word the Terms accordingly (Terms 11 and Privacy 12 are drafts).
+3. Controller and processor roles: the Privacy Policy says agencies are controllers of their client data and WehdatHub is a processor. Using that data for statistics may make WehdatHub a controller for that step. Decide and word the Terms accordingly (Terms 11 and Privacy 12 are drafts).
 4. Notice: Terms and Privacy pages now mention aggregated statistics and the minimum group size; confirm wording, the Arabic text, and whether existing agencies must be notified or must re-accept the Terms.
 5. Opt-out: there is none for agencies' contribution to the aggregates today. Decide whether one is needed (the switch only controls whether an agency can read reports).
 6. Search text: the search count never stores the text, only the filters the search used. Confirm that the fixed bands are acceptable.

@@ -38,6 +38,15 @@ function cspWithMap() {
   return CSP.replace("connect-src 'self'", `connect-src 'self' ${[...new Set(origins)].join(" ")}`);
 }
 
+/** Applied only to signed-in pages that render the optional analytics tag. */
+function allowWebAnalytics(res) {
+  const googleTag = " https://www.googletagmanager.com";
+  const analytics = " https://*.google-analytics.com";
+  res.set("Content-Security-Policy", cspWithMap()
+    .replace("script-src 'self'", `script-src 'self'${googleTag}`)
+    .replace("connect-src 'self'", `connect-src 'self'${googleTag}${analytics} https://*.google.com`));
+}
+
 /** Security headers for HTML pages and static files of the web app and the public pages. */
 function securityHeaders(_req, res, next) {
   // HSTS only in production (a plain-http dev server must not pin the browser to https).
@@ -68,4 +77,4 @@ function sameOrigin() {
   };
 }
 
-module.exports = { CSP, securityHeaders, sameOrigin };
+module.exports = { CSP, securityHeaders, sameOrigin, allowWebAnalytics };

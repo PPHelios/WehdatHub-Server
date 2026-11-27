@@ -66,7 +66,7 @@ test("a person sees a setting the owner locked as locked, and cannot change it",
   const b = await signIn(h, "broker");
   const page = (await b.agent.get("/app/settings?lang=en")).text;
   expect(page).toMatch(/data-locked-by="owner"/);
-  expect(page).toMatch(/<input type="checkbox" name="ch_match" value="web" data-kind="match" data-fixed checked disabled>/);
+  expect(page).toContain('<select name="ch_match" data-kind="match" data-fixed disabled><option value="web" selected>Website and app push</option>');
 });
 
 test("the per-person notification panel is gone from the team card", async () => {

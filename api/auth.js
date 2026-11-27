@@ -20,7 +20,7 @@ const phoneOf = (v) => Onboarding.normalizeEgyptMobile(v) || String(v || "").rep
 const BROKER_BY_PHONE = `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang
    FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`;
 
-const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar" });
+const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar", avatarUrl: require("../lib/supabase").photoUrl(b.avatar_path) });
 const agencyView = (a) => ({ id: a.id, name: a.name, slug: a.slug, logoUrl: a.logo_url || null });
 
 /** True only for the demo broker (demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true"). */
@@ -32,7 +32,59 @@ function isDemoBroker(env, broker) {
   return String(broker.agency_id) === String(env.DEMO_LOGIN_AGENCY_ID || "").trim();
 }
 
+async function onboardingOf(pool, b) {
+  if (!b?.agency_id) return { hasUnit: false, hasSharedLink: false, telegramConnected: false, hasAsked: false, hasPhotos: false };
+  const [unitRow, linkRow, tgRow, askRow, photoRow] = await Promise.all([
+    pool.query("SELECT EXISTS (SELECT 1 FROM listings WHERE agency_id = $1) AS ok", [b.agency_id]),
+    pool.query("SELECT EXISTS (SELECT 1 FROM share_links WHERE agency_id = $1) AS ok", [b.agency_id]),
+    pool.query("SELECT telegram_user_id IS NOT NULL AS ok FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id]),
+    // Asked = any search or assistant question by this broker (search_log, or the app's usage events).
+    pool.query(
+      `SELECT (EXISTS (SELECT 1 FROM search_log WHERE agency_id = $1 AND broker_id = $2)
+         OR EXISTS (SELECT 1 FROM usage_events WHERE agency_id = $1 AND broker_id = $2 AND event IN ('ask','search','voice_search','assistant_query_run'))) AS ok`,
+      [b.agency_id, b.id]
+    ),
+    pool.query("SELECT EXISTS (SELECT 1 FROM listing_images WHERE agency_id = $1) AS ok", [b.agency_id])
+  ]);
+  return {
+    hasUnit: Boolean(unitRow.rows[0]?.ok),
+    hasSharedLink: Boolean(linkRow.rows[0]?.ok),
+    telegramConnected: Boolean(tgRow.rows[0]?.ok),
+    hasAsked: Boolean(askRow.rows[0]?.ok),
+    hasPhotos: Boolean(photoRow.rows[0]?.ok)
+  };
+}
+
 function register(api, { pool }) {
+  api.get("/auth/trial-options", async (_req, res) => {
+    const Signup = require("../services/signup");
+    const settings = await Signup.trialSettings(pool);
+    const waAvailable = Boolean(Phone.normalizePhone(process.env.WHATSAPP_BUSINESS_PHONE || ""));
+    return res.json({ ...settings, waAvailable });
+  });
+
+  api.post("/auth/signup", async (req, res) => {
+    const TrialSignup = require("../services/trialSignup");
+    const ipGate = await RateLimit.hit(pool, `signup:ip:${req.ip}`, TrialSignup.LIMITS.ip);
+    if (!ipGate.allowed) return res.set("Retry-After", String(ipGate.retryAfterSec)).status(429).json({ error: "too_many" });
+    const body = req.body || {};
+    const digits = Phone.normalizePhone(body.phone);
+    if (digits) {
+      const phoneGate = await RateLimit.hit(pool, `signup:phone:${digits}`, TrialSignup.LIMITS.phone);
+      if (!phoneGate.allowed) return res.set("Retry-After", String(phoneGate.retryAfterSec)).status(429).json({ error: "too_many" });
+    }
+    const tier = body.tier === "team" ? "team" : "solo";
+    const name = String(body.name || "").trim().slice(0, 80);
+    const agency = String(body.agency || "").trim().slice(0, 120) || (tier === "solo" ? name : "");
+    const channel = body.channel === "whatsapp" ? "whatsapp" : "telegram";
+    const r = await TrialSignup.start(pool, { agency, name, phone: body.phone, lang: body.lang, tier, referral: body.referral, channel });
+    if (r.error) {
+      const status = r.error === "closed" ? 403 : r.error === "phone_taken" || r.error === "trial_used" ? 409 : r.error === "telegram_off" || r.error === "whatsapp_off" ? 503 : 422;
+      return res.status(status).json({ error: r.error });
+    }
+    return res.json({ ok: true, channel: r.channel, verifyUrl: r.url, phone: r.phone, codeMinutes: WebAuth.LOGIN_CODE_TTL_MINUTES });
+  });
+
   api.post("/auth/code/request", async (req, res) => {
     const ipGate = await RateLimit.hit(pool, `login_request:ip:${req.ip}`, RateLimit.LIMITS.loginRequestIp);
     if (!ipGate.allowed) return res.set("Retry-After", String(ipGate.retryAfterSec)).status(429).json({ error: "too_many" });
@@ -88,6 +140,18 @@ function register(api, { pool }) {
     return res.json({ ok: true, lang });
   });
 
+  // One-time t.me start link; the bot's /start <token> handler (lib/tgLink.linkByToken) does the linking.
+  api.post("/me/telegram-link", async (req, res) => {
+    if (!req.session) return res.status(401).json({ error: "unauthorized" });
+    const b = req.session.broker;
+    const gate = await RateLimit.hit(pool, `tg_link:broker:${b.id}`, { limit: 10, windowSec: 3600 });
+    if (!gate.allowed) return res.set("Retry-After", String(gate.retryAfterSec)).status(429).json({ error: "too_many" });
+    const TgLink = require("../lib/tgLink");
+    const username = require("../config").getConfig().telegram.botUsername;
+    if (!TgLink.startLink(username, "x")) return res.status(503).json({ error: "no_bot" });
+    return res.json({ url: TgLink.startLink(username, await TgLink.issueLinkToken(pool, b)) });
+  });
+
   api.get("/me", async (req, res) => {
     if (!req.session) return res.status(401).json({ error: "unauthorized" });
     const TestRole = require("../lib/testRole");
@@ -96,7 +160,8 @@ function register(api, { pool }) {
     const rights = await require("../services/unitRights").rights(pool, b);
     const workspace = b.workspace || (b.agency_id ? await require("../lib/workspace").stateOf(pool, b.agency_id, { role: b.role }).catch(() => null) : null);
     const inviteRoles = workspace ? require("../domain/segments").inviteRolesFor(workspace, require("../services/team").ADD_ROLES) : [];
-    return res.json({ broker: brokerView(b), workspace, inviteRoles, agency: agencyView(req.session.agency), rights, nav: require("../lib/navSpec").forBroker(b, { rights, workspace }), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
+    const onboarding = await onboardingOf(pool, b);
+    return res.json({ broker: brokerView(b), workspace, inviteRoles, onboarding, agency: agencyView(req.session.agency), rights, nav: require("../lib/navSpec").forBroker(b, { rights, workspace }), expiresAt: req.session.expiresAt, testSwitch, platformOwner: require("../lib/authz").isCrmOwner(b) });
   });
 
   // The test switch from the app: the same actions as the website's test switch (web/routes/testRole.js).
@@ -125,4 +190,4 @@ function register(api, { pool }) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, onboardingOf };

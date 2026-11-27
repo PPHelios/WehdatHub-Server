@@ -52,6 +52,19 @@ const useAi = async (n, { audio = false, agency = h.AGENCY_A } = {}) => {
 };
 const notPilot = (extra = "") => h.query(`UPDATE agencies SET pilot = false ${extra} WHERE id = $1`, [h.AGENCY_A]);
 
+test("only the platform owner controls the independent payment channels", async () => {
+  const admin = await signIn(h, "admin");
+  await h.query("UPDATE brokers SET role = 'owner' WHERE id = $1", [h.BROKERS.broker.id]);
+  const owner = await signIn(h, "broker");
+  const path = "/app/owner/payment-channels";
+  expect((await owner.agent.post(path).type("form").send({ _csrf: owner.csrf, sms: "1" })).status).toBe(404);
+  expect(await Billing.paymentChannels(h.pool)).toEqual({ sms: false, telegram: false });
+  expect((await admin.agent.post(path).type("form").send({ _csrf: admin.csrf, sms: "1" })).status).toBe(303);
+  expect(await Billing.paymentChannels(h.pool)).toEqual({ sms: true, telegram: false });
+  expect((await admin.agent.post(path).type("form").send({ _csrf: admin.csrf, telegram: "1" })).status).toBe(303);
+  expect(await Billing.paymentChannels(h.pool)).toEqual({ sms: false, telegram: true });
+});
+
 test("effectivePlan: pilot is Office for free, then paid, trial, and Free when nothing is running", () => {
   const future = new Date(NOW.getTime() + DAY);
   const past = new Date(NOW.getTime() - DAY);

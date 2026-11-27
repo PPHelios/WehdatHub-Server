@@ -21,8 +21,10 @@ const PLANS = [
 const FREE = { id: "free", name: ["مجاني", "Free"], priceEgp: 0, seats: 1, units: 50, credits: 80, prices: {} };
 // The self sign-up trial: 1 seat, 50 units and 80 AI credits. Never sold (not in PLANS, no prices).
 const TRIAL_PLAN = { id: "trial", name: ["تجربة", "Trial"], priceEgp: 0, seats: 1, units: 50, credits: 80, prices: {} };
-// Trial limits by sign-up choice (wired in Phase 5/6): 5 seats when sign-up picks "with a team", 7 photos per unit on the trial.
+// Trial sign-up limits.
 const TRIAL_TEAM_SEATS = 5;
+const TRIAL_TEAM_PLAN = { ...TRIAL_PLAN, id: "trial_team", name: ["تجربة فريق", "Team Trial"], seats: TRIAL_TEAM_SEATS, credits: 200 };
+const isTrialPlan = (id) => id === TRIAL_PLAN.id || id === TRIAL_TEAM_PLAN.id;
 const TRIAL_PHOTO_CAP = 7;
 // Extra credits bought for the month: { id, name: [ar, en], priceEgp, credits }.
 const BUNDLES = [
@@ -34,7 +36,7 @@ const BUNDLES = [
 // The trial: 14 days on the 'trial' plan (1 seat, 50 units, 80 AI credits).
 const TRIAL = Object.freeze({ plan: "trial", days: 14, seats: 1, units: 50, credits: 80 });
 
-const ALL = [...PLANS, FREE, TRIAL_PLAN];
+const ALL = [...PLANS, FREE, TRIAL_PLAN, TRIAL_TEAM_PLAN];
 const planById = (id) => ALL.find((p) => p.id === id) || null;
 const planName = (plan, lang) => plan.name[lang === "en" ? 1 : 0];
 const bundleById = (id) => BUNDLES.find((b) => b.id === id) || null;
@@ -63,14 +65,16 @@ function hydrate({ plans = [], bundles = [] } = {}) {
     return Object.fromEntries(Object.entries(o).map(([m, n]) => [Number(m), Number(n)]));
   };
   const shape = (r) => ({ id: r.id, name: [r.name_ar, r.name_en], priceEgp: r.price_egp, seats: r.seats, units: r.units, credits: r.credits, prices: prices(r.prices) });
-  const paid = plans.filter((r) => r.id !== "free" && r.id !== "trial" && r.active).sort((a, b) => a.sort - b.sort || a.price_egp - b.price_egp).map(shape);
+  const paid = plans.filter((r) => r.id !== "free" && !isTrialPlan(r.id) && r.active).sort((a, b) => a.sort - b.sort || a.price_egp - b.price_egp).map(shape);
   const free = plans.find((r) => r.id === "free");
   const trial = plans.find((r) => r.id === "trial");
   if (paid.length) PLANS.splice(0, PLANS.length, ...paid);
   if (free) Object.assign(FREE, shape(free));
   if (trial) Object.assign(TRIAL_PLAN, shape(trial));
+  const teamTrial = plans.find((r) => r.id === TRIAL_TEAM_PLAN.id);
+  if (teamTrial) Object.assign(TRIAL_TEAM_PLAN, shape(teamTrial));
   if (bundles.length) BUNDLES.splice(0, BUNDLES.length, ...bundles.map((r) => ({ id: r.id, name: [r.name_ar, r.name_en], priceEgp: r.price_egp, credits: r.credits })));
-  ALL.splice(0, ALL.length, ...PLANS, FREE, TRIAL_PLAN);
+  ALL.splice(0, ALL.length, ...PLANS, FREE, TRIAL_PLAN, TRIAL_TEAM_PLAN);
 }
 
 /** What a broker is told when the plan's unit cap is reached (limit = { used, limit, plan }). */
@@ -82,4 +86,4 @@ function unitLimitText(limit, lang = "ar") {
     : `⛔ وصلت للحد الأقصى لباقة ${name}: ${n} وحدة (المتاحة والمؤرشفة والمباعة). امسح الوحدات اللي مش محتاجها، أو رقّي الباقة من صفحة الباقة (/app/plan).`;
 }
 
-module.exports = { TRIAL_TEAM_SEATS, TRIAL_PHOTO_CAP, UNLIMITED, unitLimitText, hydrate, periodsOf, priceFor, perMonth, tierOf, EXTRA_SEAT, ALL, PLANS, FREE, TRIAL_PLAN, BUNDLES, TRIAL, planById, planName, bundleById };
+module.exports = { isTrialPlan, TRIAL_TEAM_SEATS, TRIAL_PHOTO_CAP, UNLIMITED, unitLimitText, hydrate, periodsOf, priceFor, perMonth, tierOf, EXTRA_SEAT, ALL, PLANS, FREE, TRIAL_PLAN, BUNDLES, TRIAL, planById, planName, bundleById };

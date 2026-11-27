@@ -4,6 +4,7 @@
 "use strict";
 
 const Fx = require("./fx");
+const Franco = require("./franco");
 
 const Features = require("./features");
 const Places = require("./places");
@@ -469,7 +470,7 @@ function applyAliases(hay) {
 }
 
 function fallbackParse(text) {
-  const raw = foldLetters(prepareSearchText(String(text || "").trim()));
+  const raw = foldLetters(prepareSearchText(Franco.toArabic(String(text || "").trim())));
   let hay = ` ${normalizeSearch(raw)} `.replace(Fx.CURRENCY_WORDS, " ");
   const egpWord = / (جنيه|جنيها|egp|pound|pounds|le) /.test(` ${normalizeSearch(raw)} `);
   const f = emptyFilters();

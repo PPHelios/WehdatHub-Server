@@ -351,7 +351,8 @@ async function receiveFor(pool, intake, body, { now = new Date(), test = false }
     // The intake acts as a manager of its agency (so it can assign); nobody is "the one who added it".
     const actor = { id: null, agency_id: intake.agency_id, role: "admin", name: intake.name, preferred_lang: "ar" };
     const next = await LeadRules.nextBroker(pool, intake.agency_id, { now });
-    const notes = [lead.notes, ...extra].filter(Boolean).join("\n");
+    // captureLead refuses notes over 1000 characters; a long form must not lose the lead.
+    const notes = [lead.notes, ...extra].filter(Boolean).join("\n").slice(0, 1000);
     const res = await Leads.captureLead(
       pool,
       actor,

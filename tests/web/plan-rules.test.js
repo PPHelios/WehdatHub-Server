@@ -103,7 +103,7 @@ describe("5. upgrade quote (pure, injectable now)", () => {
 describe("5. upgrade payment (request and confirm)", () => {
   test("only the agency owner can request; the payment carries the quote, the target plan and the basis", async () => {
     await setPaid("solo", 6, 90);
-    expect(await Billing.requestPayment(h.pool, h.BROKERS.admin, { kind: "upgrade", plan: "team" }, { now: NOW })).toEqual({ error: "forbidden" });
+    expect(await Billing.requestPayment(h.pool, h.BROKERS.admin, { kind: "upgrade", plan: "team" }, { now: NOW })).toEqual({ error: "owner_only" });
     const r = await request({ kind: "upgrade", plan: "team" });
     expect(r.ok).toBe(true);
     expect(r.payment).toMatchObject({ kind: "upgrade", plan: "team", amount_egp: 1080, status: "pending" });

@@ -97,9 +97,11 @@ function mountApi(app, { pool }) {
   api.use(withMessages());
   api.use(loadBearer(pool));
   require("./auth").register(api, { pool });
+  require("./bankSmsWebhook").register(api, { pool });
 
   const priv = express.Router();
   priv.use(requireAuth);
+  priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));
   // The workspace (tier, mode, team style) travels with the request, like on the website; one memoised read (lib/workspace.js).
   priv.use(async (req, _res, next) => {
     const b = req.session.broker;
@@ -110,8 +112,6 @@ function mountApi(app, { pool }) {
   priv.use(require("../lib/planGuard").api(pool));
   priv.use(require("../lib/entitlements").api(pool));
   priv.use(require("../lib/readCaps").apiReadLimiter(pool));
-  // Every refused or failed app request (4xx/5xx) is one row in the Failures list, tagged "app" (lib/failureLog.js).
-  priv.use(require("../lib/failureLog").middleware(pool, { type: "app_failed", app: true }));
   priv.use(require("../lib/usageLog").track(pool));
   priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   // Data entry works on units and owners only: leads, deals, viewings, Ask and the rest are refused to that role.
@@ -125,6 +125,7 @@ function mountApi(app, { pool }) {
   require("./unitsWrite").register(priv, { pool });
   require("./viewings").register(priv, { pool });
   require("./team").register(priv, { pool });
+  require("./avatar").register(priv, { pool });
   require("./usage").register(priv, { pool });
   require("./settings").register(priv, { pool });
   require("./leases").register(priv, { pool });
@@ -138,6 +139,7 @@ function mountApi(app, { pool }) {
   require("./deals").register(priv, { pool });
   require("./more").register(priv, { pool });
   require("./ask").register(priv, { pool });
+  require("./assistant").register(priv, { pool });
   require("./map").register(priv, { pool });
   require("./places").register(priv, { pool });
   require("./devices").register(priv, { pool });

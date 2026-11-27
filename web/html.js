@@ -38,6 +38,7 @@ const raw = (text) => new SafeHtml(String(text ?? ""));
 
 /** A phone number kept left-to-right inside RTL text (the "+" and digits would otherwise render reversed). */
 const phoneLtr = (value) => html`<bdi dir="ltr">${value}</bdi>`;
+const phoneOrText = (value) => /^(?=.*\p{Nd})[+\p{Nd}\s().-]+$/u.test(value ?? "") ? phoneLtr(value) : value;
 
 /** JSON text for an attribute; html`` escapes it once when interpolated. */
 const jsonAttr = (obj) => JSON.stringify(obj);
@@ -48,7 +49,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, theme = false, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, theme = false, unread = 0, langSwitch = false, path = "", aiOff = [], planBanner = null, analyticsId = null }) {
   const en = lang === "en";
   const crm = Boolean(broker) && require("../lib/authz").isCrmOwner(broker);
   const tab = broker ? (crm ? crmTabOf(path) : tabOf(path, nav)) : null;
@@ -58,6 +59,7 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="${robots}">
+${analyticsId && broker && scripts ? html`<meta name="web-analytics" content="${analyticsId}" data-screen="${tab}">` : ""}
 <meta name="theme-color" content="${BRAND.colors.brand}">
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}
@@ -80,10 +82,10 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <body${broker ? raw(' class="has-tabbar"') : ""}${aiOff.length ? raw(` data-ai-off="${aiOff.join(",")}" data-ai-off-hint="${lang === "en" ? "Switched off by your agency owner" : "مقفول من مالك الشركة"}"`) : ""}>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread, tab }) : ""}
 ${broker && planBanner ? html`<div class="plan-banner plan-${planBanner.phase}" role="alert" data-plan-banner="${planBanner.phase}">${planBanner.text}${planBanner.url ? html` <a href="${planBanner.url}">${planBanner.cta}</a>` : ""}</div>` : ""}
-<main id="main">${broker ? pageBar({ nav, lang, tab, path, crm }) : ""}${body}</main>
+<main id="main">${broker ? html`${pageBar({ nav, lang, tab, path, crm })}${crm ? "" : hubTabs(broker, lang, path)}` : ""}${body}</main>
 ${broker ? footer(broker, lang) : ""}
 ${broker ? (crm ? crmTabBar(tab, lang) : tabBar(broker, tab, lang)) : ""}
-${broker ? sideMenu(broker, tab, lang, { crm }) : ""}
+${broker ? sideMenu(broker, tab, lang, { crm, path }) : ""}
 <div class="toast" data-toast-box role="status" aria-live="polite" hidden></div>
 </body>
 </html>`;
@@ -124,10 +126,51 @@ const DESKTOP_ONLY = new Set(["import", "leadimport"]);
 const forBroker = (broker) => NavSpec.forBroker(broker, { rights: broker?.rights || null, workspace: broker?.workspace || null });
 const webTab = (t) => ({ key: t.key, href: t.web, ar: t.label.ar, en: t.label.en, icon: t.icon, fab: Boolean(t.fab) });
 
-/**
- * The More page links for this broker, grouped: what the website has a page for, minus what is already on the bottom bar.
- * [{ key, label: {ar,en}, items: [{ key, href, ar, en, icon, desktop }] }], groups in the spec order, empty groups left out.
- */
+const WEB_TAB_LABELS = {
+  portal: { en: "New Leads", ar: "ليدز جدد" },
+  links: { en: "Shared Links", ar: "الروابط اللي اتبعتت" },
+  insights: { en: "Price Insights", ar: "أسعار المتر" }
+};
+
+const WEB_SECTIONS = [
+  ["Clients", "العملاء", ["leads", "pipeline", "requests", "portal", "links", "leadimport", "leases"]],
+  ["Inventory", "المخزون العقاري", ["units", "owners", "catalogue", "library", "import"]],
+  ["Search", "البحث", ["search", "searches", "map", "compare", "insights", "ask"]],
+  ["Deals", "الصفقات", ["deals", "commissions"]],
+  ["Calendar", "التقويم", ["calendar"]],
+  ["Team", "الفريق", ["team", "leadrules", "access", "addteammate"]],
+  ["Agency Reports", "تقارير الشركة", ["dashboard", "sources", "winloss", "market", "activity"]],
+  ["Notifications", "التنبيهات", ["notifications"]],
+  ["Settings", "الإعدادات", ["settings", "usage", "guide", "report"]],
+  ["Platform", "المنصة", ["owner", "ownermap", "ownerqueue", "ownerlibrary", "searchreview"]]
+];
+
+const GROUP_OPEN = new Set(["clients", "inventory", "search", "agency-reports"]);
+const TAB_ITEM_KEY = { leads: "leads", units: "units", team: "team", search: "search", owners: "owners", settings: "settings", dashboard: "dashboard", owner: "owner", alerts: "notifications" };
+
+function webSections(nav) {
+  const items = new Map(nav.groups.flatMap((g) => g.items).filter((i) => i.web).map((i) => [i.key, i]));
+  return WEB_SECTIONS.map(([en, ar, keys]) => ({
+    key: en.toLowerCase().replace(/\s+/g, "-"),
+    label: { en, ar },
+    items: keys.map((key) => items.get(key)).filter(Boolean).map((i) => ({
+      key: i.key, href: i.key === "portal" ? "/app/leads?tab=portal" : i.web,
+      ...(WEB_TAB_LABELS[i.key] || i.label), icon: i.icon, desktop: DESKTOP_ONLY.has(i.key), onBar: i.onBar
+    }))
+  })).filter((section) => section.items.length);
+}
+
+function currentWebItem(sections, path) {
+  const [bare, query] = String(path || "").split("?");
+  const current = bare.replace(/\/+$/, "");
+  const items = sections.flatMap((section) => section.items);
+  if (current === "/app/leads" && new URLSearchParams(query).get("tab") === "portal") {
+    return items.find((item) => item.key === "portal");
+  }
+  return items.filter((item) => current === item.href || current.startsWith(item.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
 function moreGroups(broker) {
   return forBroker(broker)
     .groups.map((g) => ({
@@ -137,8 +180,18 @@ function moreGroups(broker) {
     }))
     .filter((g) => g.items.length);
 }
-/** The flat list of the More page links (kept for callers that want one list). */
+
 const navFor = (broker) => moreGroups(broker).flatMap((g) => g.items.map((i) => ({ ...i, group: g.key })));
+
+function hubTabs(broker, lang, path) {
+  const sections = webSections(forBroker(broker));
+  const current = currentWebItem(sections, path);
+  const tabs = sections.find((section) => section.items.includes(current))?.items;
+  if (!tabs || tabs.length < 2) return "";
+  return html`<nav class="tabnav hub-tabs" aria-label="${lang === "en" ? "Related pages" : "صفحات مرتبطة"}">${tabs.map((item) =>
+    html`<a href="${item.href}"${item === current ? html` aria-current="page"` : ""}>${item[lang]}</a>`
+  )}</nav>`;
+}
 
 // The bottom bar: five places per role (lib/navSpec.js), the centre one is the role's main shortcut.
 
@@ -176,30 +229,56 @@ function tabBar(broker, tab, lang) {
 /** The bottom-bar places this role sees (lib/navSpec.js): the same places as the app's tabs. */
 const tabsFor = (broker) => forBroker(broker).tabs.filter((t) => t.web).map(webTab);
 
-// Groups that start open before the person's own choice (kept in the browser, web/static/app.js) is applied.
-const GROUP_OPEN = new Set(["clients", "listings"]);
-
-/**
- * The laptop side menu: Today and Add, then the role's groups (Clients, Listings, Find, Agency, Account), each one a
- * <details> that works without script; the browser remembers which are open. The group holding the current page starts open.
- * Hidden under 1024px (the bottom bar and the More page are used there).
- */
-function sideMenu(broker, tab, lang, { crm = false } = {}) {
+function sideMenu(broker, tab, lang, { crm = false, path = "" } = {}) {
   const en = lang === "en";
   const { icon } = require("./icons");
+  const Authz = require("../lib/authz");
+  const dataEntry = Boolean(broker) && Authz.isDataEntry(broker);
+  const canAddUnits = !crm && broker?.rights?.addUnits !== false;
   const nav = forBroker(broker);
+  const cleanPath = String(path || "").split("?")[0].replace(/\/+$/, "") || "/app";
+  const onAddUnit = cleanPath === "/app/units/new";
   const link = (n, current) => html`<a href="${n.href}"${current ? raw(' aria-current="page"') : ""}>${icon(n.icon, 20)}<span>${en ? n.en : n.ar}</span></a>`;
+
+  // Shortcuts outside the menus: main actions per role (add unit prominent for data entry; below Home for work roles).
   const home = nav.tabs.find((t) => t.key === "home" && t.web);
-  const groups = nav.groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => i.web && i.key !== "add").map((i) => ({ key: i.key, href: i.web, ar: i.label.ar, en: i.label.en, icon: i.icon })) }))
-    .filter((g) => g.items.length);
+  const addUnitShortcut = canAddUnits && !dataEntry
+    ? { key: "addunit", itemKey: "addunit", href: "/app/units/new", icon: "plus", en: "Add a unit", ar: "إضافة وحدة" }
+    : null;
+  const roleShortcuts = nav.tabs
+    .filter((t) => t.web && t.key !== "home" && t.key !== "add" && t.key !== "more")
+    .map((t) => ({ ...webTab(t), itemKey: TAB_ITEM_KEY[t.key] || t.key }));
+  const shortcuts = [
+    ...(home ? [{ ...webTab(home), itemKey: "home" }] : []),
+    ...(addUnitShortcut ? [addUnitShortcut] : []),
+    ...roleShortcuts
+  ];
+
+  // Exclude shortcut targets from the menus below so no link is duplicated.
+  const shortcutKeys = new Set(shortcuts.map((s) => s.itemKey).filter(Boolean));
+  const menus = webSections(nav)
+    .map((s) => ({ ...s, items: s.items.filter((i) => !shortcutKeys.has(i.key)) }))
+    .filter((s) => s.items.length);
+
+  const activeShortcut = onAddUnit && addUnitShortcut
+    ? addUnitShortcut
+    : shortcuts.find((s) => (s.key === "home" ? cleanPath === "/app" : cleanPath === s.href || cleanPath.startsWith(s.href + "/")) || (s.key === tab && !onAddUnit));
+  const currentMenu = activeShortcut || onAddUnit
+    ? null
+    : currentWebItem(menus, path) || menus.flatMap((s) => s.items).find((i) => i.key === tab);
+
   return html`<nav class="sidemenu" aria-label="${en ? "Menu" : "القائمة"}">
-  ${crm ? "" : html`<a class="side-add" href="${broker && require("../lib/authz").isDataEntry(broker) ? "/app/units/new" : "/app/add"}">${icon("plus", 20)}<span>${en ? "Add" : "إضافة"}</span></a>`}
-  ${home ? link(webTab(home), home.key === tab) : ""}
-  ${groups.map((g) => {
-    const holds = g.items.some((i) => i.key === tab);
-    const open = holds || GROUP_OPEN.has(g.key);
-    return html`<details class="side-group" data-group="${g.key}"${open ? raw(" open") : ""}><summary aria-expanded="${open ? "true" : "false"}">${en ? g.label.en : g.label.ar}</summary>${g.items.map((n) => link(n, n.key === tab))}</details>`;
+  ${crm ? "" : html`<a class="side-add" href="${dataEntry ? "/app/units/new" : "/app/add"}"${dataEntry && onAddUnit ? raw(' aria-current="page"') : ""}>${icon("plus", 20)}<span>${dataEntry ? (en ? "Add a unit" : "إضافة وحدة") : (en ? "Add" : "إضافة")}</span></a>`}
+  ${shortcuts.map((s) => link(s, s === activeShortcut))}
+  ${menus.length ? raw('<hr class="side-sep">') : ""}
+  ${menus.map((m) => {
+    if (m.items.length === 1) {
+      const only = m.items[0];
+      return link({ ...only, ...m.label }, only === currentMenu);
+    }
+    const holds = m.items.includes(currentMenu);
+    const open = holds || GROUP_OPEN.has(m.key);
+    return html`<details class="side-group" data-group="${m.key}"${open ? raw(" open") : ""}><summary aria-expanded="${open ? "true" : "false"}">${m.label[en ? "en" : "ar"]}</summary>${m.items.map((n) => link(n, n === currentMenu))}</details>`;
   })}
 </nav>`;
 }
@@ -244,7 +323,7 @@ function viewAgencyForm(broker, lang) {
 function brandLink(href, lang, { label = false } = {}) {
   const en = lang === "en";
   const { MARK } = require("./icons");
-  return html`<a class="brand" translate="no" href="${href}"${label ? html` aria-label="${en ? "Wehdat Hub" : "وحدات هب"}"` : ""}>${MARK}${en ? html`<span dir="ltr">Wehdat <b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>`;
+  return html`<a class="brand" translate="no" href="${href}"${label ? html` aria-label="${en ? "WehdatHub" : "وحدات هب"}"` : ""}>${MARK}${en ? html`<span dir="ltr">Wehdat<b>Hub</b></span>` : html`<span>وحدات <b>هب</b></span>`}</a>`;
 }
 
 /** The light/dark switch of the top bar (web/static/theme.js drives it). */
@@ -264,7 +343,7 @@ function topBar({ broker, nav, lang, unread = 0, tab = null }) {
   ${broker && TestRole.canSwitch(broker) ? testRoleForm(broker, lang) : ""}
   ${themeToggle(lang)}
   ${broker
-    ? html`<a class="iconbtn bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}${unread ? ` (${unread > 99 ? "99+" : unread})` : ""}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
+    ? html`<a class="iconbtn bell" id="inbox-bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}${unread ? ` (${unread > 99 ? "99+" : unread})` : ""}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>${icon("bell")}${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
   <a class="iconbtn" href="${tab === "more" ? "/app/" : "/app/more"}" aria-label="${tab === "more" ? (en ? "Close menu" : "إغلاق القائمة") : (en ? "More" : "المزيد")}"${tab === "more" ? raw(' aria-current="page" data-menu-close') : ""}>${icon("more")}</a>`
     : html`<a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>`}
 </header>`;
@@ -282,4 +361,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, phoneLtr, escapeHtml, jsonAttr, layout, themeToggle, brandLink, withCsrf, navFor, tabOf, HTMX_CONFIG };
+module.exports = { sideMenu, tabsFor, moreGroups, SafeHtml, html, raw, phoneLtr, phoneOrText, escapeHtml, jsonAttr, layout, themeToggle, brandLink, withCsrf, navFor, tabOf, HTMX_CONFIG };

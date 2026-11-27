@@ -24,6 +24,7 @@ async function setBrokersSeeAll(pool, owner, on) {
   const value = on === true || on === "true" || on === "on" || on === "1";
   await Audit.recordStrict(pool, { agencyId: owner.agency_id, brokerId: owner.id, action: "brokers_see_all_leads", targetType: "agency", targetId: owner.agency_id, payload: { allowed: value } });
   await pool.query("UPDATE agencies SET crm_settings = crm_settings || jsonb_build_object('brokers_see_all_leads', $2::boolean) WHERE id = $1", [owner.agency_id, value]);
+  require("../lib/workspace").forget(owner.agency_id);
   logOperation(pool, { agency_id: owner.agency_id, broker_id: owner.id, operation_type: "brokers_see_all_leads", status: "success", metadata: { allowed: value } });
   return { ok: true, allowed: value };
 }

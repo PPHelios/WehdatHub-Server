@@ -92,3 +92,35 @@ test("the answer says what was understood: a guessed spelling, the unapplied lis
   expect(r.body.reading).toContain("الأرخص أولاً");
   expect(r.body.reading).not.toContain("*");
 });
+
+test("filter-token f continuation paginates without re-parsing text and preserves market=resale; invalid f falls back safely", async () => {
+  for (let i = 1; i <= 23; i++) {
+    await h.insertListing({ code: `RS-${i}`, market: "resale", compound: "Hyde Park", listing_type: "sale", property_type: "apartment", price_value: 3000000 + i * 10000 });
+  }
+  await h.insertListing({ code: "PR-1", market: "primary", compound: "Hyde Park", listing_type: "sale", property_type: "apartment", price_value: 3100000 });
+
+  const page1 = await get("broker", { q: "apartment in Hyde Park", market: "resale" });
+  expect(page1.status).toBe(200);
+  expect(page1.body.total).toBe(23);
+  expect(page1.body.items).toHaveLength(20);
+  expect(page1.body.items.every((x) => x.code.startsWith("RS-"))).toBe(true);
+  expect(typeof page1.body.f).toBe("string");
+
+  // Page 2 with f token must NOT re-invoke AI and must preserve market=resale & exact remaining 3 units.
+  const AI = require("../../lib/ai");
+  const aiSpy = jest.spyOn(AI, "generateWithCascade").mockImplementation(() => {
+    throw new Error("AI must not run when continuing via f token");
+  });
+  try {
+    const page2 = await get("broker", { q: "apartment in Hyde Park", f: page1.body.f, market: "resale", offset: "20" });
+    expect(page2.status).toBe(200);
+    expect(page2.body.items).toHaveLength(3);
+    expect(page2.body.items.every((x) => x.code.startsWith("RS-"))).toBe(true);
+  } finally {
+    aiSpy.mockRestore();
+  }
+
+  // Malformed f falls back safely without 500.
+  const bad = await get("broker", { q: "apartment in Hyde Park", f: "!!!bad-token!!!" });
+  expect(bad.status).toBe(200);
+});

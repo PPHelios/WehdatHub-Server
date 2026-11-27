@@ -35,7 +35,7 @@ function register(web, { pool, page }) {
       title: L(lang, "الأخطاء والرفض", "Failures"),
       nav: "notifications",
       body: html`<h1>⚠️ ${L(lang, "الأخطاء والعمليات المرفوضة", "Failed and refused actions")}</h1>
-<p class="muted">${L(lang, `كل عملية فشلت أو اترفضت، بالسبب. بتتحفظ ${Failures.KEEP_DAYS} يوم.`, `Every failed or refused action, with its reason. Kept ${Failures.KEEP_DAYS} days.`)}</p>
+<p class="muted">${L(lang, `كل عملية فشلت أو اترفضت، بالسبب.`, `Recorded failures and refusals, with their reasons.`)}</p>
 <form method="get" action="/app/failures" class="card row">
   <label>${L(lang, "من", "From")} <input type="date" name="from" value="${fromDay}"></label>
   <label>${L(lang, "لغاية", "To")} <input type="date" name="to" value="${toDay}"></label>

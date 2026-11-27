@@ -1,6 +1,42 @@
 // WehdatHub web app client: CSRF header for htmx, offline banner, service worker (scope /app/).
 (function () {
   "use strict";
+  var analytics = document.querySelector('meta[name="web-analytics"]');
+  if (analytics) {
+    var measurementId = analytics.content;
+    var screen = analytics.dataset.screen;
+    var appLocation = location.origin + "/app/";
+    var dataLayer = window.dataLayer = window.dataLayer || [];
+    function tag() { dataLayer.push(arguments); }
+    tag("js", new Date());
+    tag("config", measurementId, {
+      send_page_view: false,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false,
+      page_location: appLocation,
+      page_referrer: appLocation,
+      page_title: "WehdatHub"
+    });
+    function analyticsEvent(name, fields) {
+      tag("event", name, Object.assign({ send_to: measurementId, surface: "web", screen_name: screen }, fields));
+    }
+    analyticsEvent("page_view");
+    document.addEventListener("submit", function (e) {
+      if (e.target.matches("[data-search-form]")) analyticsEvent("search_started");
+      else if (e.target.matches("#unit-form")) analyticsEvent("unit_save_started");
+      else if (e.target.matches("#lead-form")) analyticsEvent("lead_save_started");
+      else if (e.target.matches('form[action^="/app/import/"][action$="/apply"]')) analyticsEvent("feature_used", { feature: "import_apply_requested" });
+      else if (e.target.matches("[data-share-form]")) analyticsEvent("feature_used", { feature: "client_link_requested" });
+    });
+    document.addEventListener("click", function (e) {
+      if (e.target.closest("[data-share-image], [data-share-media]")) analyticsEvent("feature_used", { feature: "share_tap" });
+    });
+    var googleTag = document.createElement("script");
+    googleTag.async = true;
+    googleTag.referrerPolicy = "no-referrer";
+    googleTag.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(measurementId);
+    document.head.appendChild(googleTag);
+  }
   // Features the agency owner switched off (body[data-ai-off]): their buttons are grayed out with a hint below.
   function grayOutAi(root) {
     var off = (document.body.getAttribute("data-ai-off") || "").split(",");
@@ -117,6 +153,7 @@
   // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
   document.addEventListener("submit", function (e) {
     var by = e.submitter && e.submitter.getAttribute && e.submitter.getAttribute("data-confirm");
+    if (e.defaultPrevented && e.target && e.target.hasAttribute("hx-confirm")) return;
     var msg = by || (e.target && e.target.getAttribute && e.target.getAttribute("data-confirm"));
     if (msg && !window.confirm(msg)) e.preventDefault();
   });

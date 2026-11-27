@@ -25,7 +25,7 @@ const PAGE = 20;
 const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until, team_lead_id";
-const LEAD_COLS = "l.*, a.name AS assignee_name, a.team_lead_id AS assignee_team_lead_id";
+const LEAD_COLS = "l.*, a.name AS assignee_name, a.avatar_path AS assignee_avatar_path, a.team_lead_id AS assignee_team_lead_id";
 const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id"; // vis:exempt: every use adds Vis.leads("l") to its WHERE
 
 // The fields each reversible event changes; undo puts them back.
@@ -166,7 +166,9 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
   const lostReason = stage === "lost" ? cleanText(input.lostReason, 200) || "—" : null;
   if (Stages.stageError(stage, lostReason)) return { outcome: "invalid", error: "stage", notified: [] };
   const manager = Authz.isManager(actor);
-  let assignee = manager ? input.assignTo || null : actor.id;
+  const workspace = await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role });
+  const personal = Authz.isAgencyOwner(actor) && workspace.mode === "solo";
+  const assignee = manager ? input.assignTo || (personal ? actor.id : null) : actor.id;
   if (assignee && assignee !== actor.id) {
     const b = await brokerById(pool, actor.agency_id, assignee);
     if (!b || !b.is_active) return { outcome: "invalid", error: "assignee", notified: [] };
@@ -192,7 +194,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
     const existing = found.rows[0];
 
     if (existing) {
-      const claim = !existing.assigned_broker_id && !manager;
+      const claim = !existing.assigned_broker_id && !manager && (!workspace.teamWorkflowConfigured || workspace.teamStyle === "shared");
       if (!claim && !Authz.canViewLead(actor, existing)) {
         await addEvent(client, existing, actor.id, "inquiry", { colleague: true }, now);
         return { outcome: "colleague", lead: existing };
@@ -326,11 +328,18 @@ async function mutate(pool, actor, key, { kind, version = null, manage = false, 
   return out;
 }
 
+const COLLABORATIVE_EVENTS = new Set(["contacted", "stage", "note", "follow_up_set", "follow_up_done"]);
+
 async function mutateInTransaction(pool, actor, key, { kind, version = null, manage = false, now = new Date() }, change) {
+  const sharedWork = !manage && COLLABORATIVE_EVENTS.has(kind);
+  if (sharedWork && !Authz.isManager(actor)) {
+    actor = { ...actor, workspace: await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role }) };
+  }
   return withTransaction(pool, async (client) => {
     const lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
-    if (manage ? !Authz.canManageLeads(actor) : !Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    const allowed = manage ? Authz.canManageLeads(actor) : Authz.canEditLead(actor, lead) || (sharedWork && Authz.canCollaborateLead(actor, lead));
+    if (!allowed) return { error: "forbidden" };
     if (version !== null && version !== undefined && Number(version) !== lead.version) return { conflict: true, lead };
     const c = change(lead);
     if (c.error || c.unchanged) return { ...c, lead };
@@ -370,10 +379,14 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
       if (!x.rows.length) return { error: "unit_not_found" };
     }
   }
+  if (!Authz.isManager(actor)) {
+    actor = { ...actor, workspace: await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role }) };
+  }
   const out = await withTransaction(pool, async (client) => {
     let lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
     if (!lead) return { error: "not_found" };
-    if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    if (!Authz.canEditLead(actor, lead) && !Authz.canCollaborateLead(actor, lead)) return { error: "forbidden" };
+    if (u.version != null && u.version !== lead.version) return { conflict: true, lead };
     const eventIds = [];
     const kinds = [];
     const step = async (kind, c) => {
@@ -459,6 +472,22 @@ async function assignLead(pool, actor, key, toBrokerId, { version = null, now = 
 }
 
 /** Q4: any stage to any other; lost needs a reason. */
+async function claimLead(pool, actor, key, { version = null, now = new Date() } = {}) {
+  const workspace = await require("../lib/workspace").stateOf(pool, actor.agency_id, { role: actor.role });
+  const broker = { ...actor, workspace };
+  return withTransaction(pool, async (client) => {
+    const lead = await loadLead(client, broker.agency_id, key, { forUpdate: true });
+    if (!lead) return { error: "not_found" };
+    if (!Authz.canClaimLead(broker, { ...lead, assigned_broker_id: null })) return { error: "forbidden" };
+    if (lead.assigned_broker_id || (version !== null && Number(version) !== lead.version)) return { conflict: true, lead };
+    const change = {
+      fields: { assigned_broker_id: broker.id, assigned_at: now.toISOString(), response_due_at: null, response_jumps: 0 },
+      data: { from: null, to: broker.id, to_name: broker.name || null }
+    };
+    return { ok: true, ...(await applyChange(client, broker, lead, "assigned", change, now)) };
+  });
+}
+
 async function setStage(pool, actor, key, { stage, lostReason = null, version = null, now = new Date() } = {}) {
   const err = Stages.stageError(stage, lostReason);
   if (err) return { error: err };
@@ -760,6 +789,10 @@ function scopeWhere(actor, seeAll, f) {
     if (f.mine) add("l.assigned_broker_id = ?", actor.id);
     else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
     else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
+    else if (f.teamLeadId && UUID.test(f.teamLeadId)) {
+      args.push(f.teamLeadId);
+      where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);
+    }
   } else if (Authz.isTeamLead(actor)) {
     // A team lead's list: their own leads and the leads of brokers in their team.
     args.push(actor.id);
@@ -768,6 +801,10 @@ function scopeWhere(actor, seeAll, f) {
   } else if (!Authz.isManager(actor)) add("l.assigned_broker_id = ?", actor.id);
   else if (f.brokerId === "none") where.push("l.assigned_broker_id IS NULL");
   else if (f.brokerId && UUID.test(f.brokerId)) add("l.assigned_broker_id = ?", f.brokerId);
+  else if (f.teamLeadId && UUID.test(f.teamLeadId)) {
+    args.push(f.teamLeadId);
+    where.push(`(l.assigned_broker_id = $${args.length} OR a.team_lead_id = $${args.length})`);
+  }
   return { where, args, add };
 }
 
@@ -783,7 +820,46 @@ function tabWhere(f, now, where, add) {
 }
 
 /** The search-text part of a lead filter (L- ref, phone digits or name), added to `where`. */
-function searchWhere(f, where, add) {
+function searchWhere(f, where, add, now, slaOn = false) {
+  if (f.queue === "unassigned") where.push("l.assigned_broker_id IS NULL AND l.stage NOT IN ('won', 'lost')");
+  if (f.queue === "uncontacted") where.push("l.stage = 'new' AND l.last_contact_at IS NULL");
+  if (f.queue === "delayed-first-contact") {
+    add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at < ?", new Date(now.getTime() - 86_400_000).toISOString());
+  }
+  if (f.queue === "waiting-over-1h") {
+    add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at < ?", new Date(now.getTime() - 3_600_000).toISOString());
+  }
+  if (f.queue === "late-response") add("l.stage = 'new' AND l.last_contact_at IS NULL AND l.response_due_at <= ?", now.toISOString());
+  if (f.queue === "viewings-tomorrow") {
+    add("l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing' AND l.next_follow_up_at >= ?", Stages.cairoDayAt(now, 1, 0).toISOString());
+    add("l.next_follow_up_at < ?", Stages.cairoDayAt(now, 2, 0).toISOString());
+  }
+  if (f.queue === "overdue") tabWhere({ overdue: true }, now, where, add);
+  // The assistant's "approaching SLA" and "offer link opened, no follow-up" cards tap through to exactly these lists.
+  if (f.queue === "approaching-sla") {
+    if (slaOn) {
+      add("l.stage = 'new' AND l.last_contact_at IS NULL AND l.response_due_at > ?", now.toISOString(), where);
+      add("l.response_due_at <= ?", new Date(now.getTime() + 1_800_000).toISOString(), where);
+    } else {
+      add("l.assigned_broker_id IS NOT NULL AND l.stage = 'new' AND l.last_contact_at IS NULL AND l.created_at > ?", new Date(now.getTime() - 3_600_000).toISOString(), where);
+      add("l.created_at <= ?", new Date(now.getTime() - 2_400_000).toISOString(), where);
+    }
+  }
+  if (f.queue === "opened-no-followup") {
+    where.push("l.stage NOT IN ('won', 'lost') AND l.follow_up_status IS DISTINCT FROM 'open'");
+    add(
+      `EXISTS (SELECT 1 FROM share_links s JOIN listings u ON u.id = s.listing_id AND u.agency_id = s.agency_id
+                WHERE s.lead_id = l.id AND s.agency_id = l.agency_id AND ${Vis.units("u")}
+                  AND s.revoked_at IS NULL AND s.expires_at > ? AND s.open_count > 0)`,
+      now.toISOString(),
+      where
+    );
+  }
+  if (f.assignedLastMonth) {
+    const thisMonth = "date_trunc('month', NOW() AT TIME ZONE 'Africa/Cairo')";
+    where.push(`l.assigned_at >= ((${thisMonth} - interval '1 month') AT TIME ZONE 'Africa/Cairo')`,
+      `l.assigned_at < (${thisMonth} AT TIME ZONE 'Africa/Cairo')`);
+  }
   const q = String(f.q || "").trim();
   if (!q) return;
   const ref = Card.parseRef(q);
@@ -791,6 +867,11 @@ function searchWhere(f, where, add) {
   if (ref) add("l.ref = ?", ref, where);
   else if (digits.length >= 4 && /^[\d\s+\-().٠-٩]+$/.test(q)) add("EXISTS (SELECT 1 FROM unnest(l.phones) p WHERE p LIKE '%' || ? || '%')", digits, where);
   else add("l.name ILIKE '%' || ? || '%'", q.replace(/[%_\\]/g, (c) => `\\${c}`), where);
+}
+
+/** Whether the agency's response SLA is on (only the "approaching-sla" queue needs it). */
+async function slaOn(pool, actor, f) {
+  return f.queue === "approaching-sla" && (await require("./leadRules").getRules(pool, actor.agency_id)).enabled;
 }
 
 /**
@@ -801,7 +882,7 @@ function searchWhere(f, where, add) {
  */
 async function countTabs(pool, actor, f, tabs, { now = new Date() } = {}) {
   const { where, args, add } = scopeWhere(actor, await LeadScope.open(pool, actor), f);
-  searchWhere(f, where, add);
+  searchWhere(f, where, add, now, await slaOn(pool, actor, f));
   const names = Object.keys(tabs);
   const cols = names.map((t, i) => {
     const tw = [];
@@ -822,7 +903,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   if (f.source) add("l.source = ?", String(f.source));
   if (f.private && Authz.isAgencyOwner(actor)) where.push("l.is_private");
   tabWhere(f, now, where, add);
-  searchWhere(f, where, add);
+  searchWhere(f, where, add, now, await slaOn(pool, actor, f));
   // Counts only (the app's tab numbers): the same filters, no rows.
   if (f.countOnly) {
     const { rows } = await pool.query(`SELECT count(*)::int AS n ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")}`, args);
@@ -1029,7 +1110,85 @@ async function restoreBrokerLeads(pool, agencyId, brokerId, { actorId = null, no
   return { count };
 }
 
+/** Sends a manual manager/team-lead coaching nudge to a lead's current active holder (1 per lead per 2h). */
+async function nudgeLead(pool, actor, refOrId, { now = new Date() } = {}) {
+  if (!Authz.isManager(actor) && !Authz.isTeamLead(actor)) return { error: "forbidden" };
+  const lead = await getLead(pool, actor, refOrId);
+  if (!lead) return { error: "not_found" };
+  if (!Authz.isManager(actor) && lead.assigned_broker_id !== actor.id && lead.assignee_team_lead_id !== actor.id) {
+    return { error: "not_found" };
+  }
+  if (!lead.assigned_broker_id || Stages.CLOSED.includes(lead.stage)) return { error: "invalid_update" };
+  const { rows: holderRows } = await pool.query(
+    `SELECT ${BROKER_COLS} FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active`,
+    [lead.assigned_broker_id, actor.agency_id]
+  );
+  const holder = holderRows[0];
+  if (!holder) return { error: "not_found" };
+  const RateLimit = require("../lib/rateLimit");
+  const gate = await RateLimit.hit(pool, `lead_nudge:${lead.id}`, { limit: 1, windowSec: 7200 });
+  if (!gate.allowed) return { error: "too_many", retryAfterSec: gate.retryAfterSec };
+  const ref = Card.refLabel(lead.ref);
+  const en = holder.preferred_lang === "en";
+  const who = `${Card.displayName(lead, en ? "en" : "ar")} (${ref})`;
+  const actorName = actor.name || (en ? "Your manager" : "مديرك");
+  const outcome = await Notifications.notifyBroker(pool, holder, {
+    kind: "follow_up",
+    dedupeKey: `lead_nudge:${lead.id}:${Math.floor(now.getTime() / 60000)}`,
+    title: en ? `🔔 Update requested on ${who}` : `🔔 مطلوب تحديث بخصوص ${who}`,
+    body: en ? `${actorName} asked for a quick status update.` : `${actorName} بيسألك على آخر تحديث للعميل.`,
+    url: `/app/leads/${ref}`,
+    leadId: lead.id,
+    buttons: [
+      { id: `ld:called:${ref}`, title: en ? "📞 Called" : "📞 كلمته" },
+      { id: `ld:fu:${ref}`, title: en ? "📅 Follow-up" : "📅 متابعة" },
+      { id: `ld:note:${ref}`, title: en ? "📝 Add update" : "📝 أضف تحديث" }
+    ],
+    now,
+    urgent: true
+  });
+  logOperation(pool, {
+    agency_id: actor.agency_id,
+    broker_id: actor.id,
+    operation_type: "lead_nudge",
+    status: "success",
+    metadata: { lead_ref: ref, target_broker_id: holder.id }
+  });
+  return { ok: true, delivered: Boolean(outcome) };
+}
+
+/** Sends a manager/team-lead nudge to one broker with their own counts: leads waiting, overdue and without a next step (1 per broker per 2h). */
+async function nudgeBroker(pool, actor, brokerId, { now = new Date() } = {}) {
+  if (!Authz.isManager(actor) && !Authz.isTeamLead(actor)) return { error: "forbidden" };
+  if (!UUID.test(String(brokerId || ""))) return { error: "not_found" };
+  const { rows } = await pool.query(`SELECT ${BROKER_COLS} FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active`, [brokerId, actor.agency_id]);
+  const target = rows[0];
+  // A team lead only reaches their own team; anything else looks like it doesn't exist.
+  if (!target || (!Authz.isManager(actor) && target.team_lead_id !== actor.id)) return { error: "not_found" };
+  const RateLimit = require("../lib/rateLimit");
+  const gate = await RateLimit.hit(pool, `broker_nudge:${target.id}`, { limit: 1, windowSec: 7200 });
+  if (!gate.allowed) return { error: "too_many", retryAfterSec: gate.retryAfterSec };
+  const n = async (f) => (await listLeads(pool, actor, { brokerId: target.id, ...f, countOnly: true }, { now })).total;
+  const [waiting, overdue, noNext] = await Promise.all([n({ queue: "waiting-over-1h" }), n({ overdue: true }), n({ noNextStep: true })]);
+  const en = target.preferred_lang === "en";
+  const actorName = actor.name || (en ? "Your manager" : "مديرك");
+  const outcome = await Notifications.notifyBroker(pool, target, {
+    kind: "follow_up",
+    dedupeKey: `broker_nudge:${target.id}:${Math.floor(now.getTime() / 60000)}`,
+    title: en ? "🔔 Your leads need attention" : "🔔 عملاءك محتاجين اهتمام",
+    body: en
+      ? `${actorName} asks you to catch up: ${waiting} waiting for a first reply, ${overdue} overdue follow-ups, ${noNext} with no next step.`
+      : `${actorName} بيطلب منك تلحقهم: ${waiting} مستنيين أول رد، ${overdue} متابعات متأخرة، ${noNext} من غير خطوة جاية.`,
+    url: "/app/leads",
+    now
+  });
+  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "broker_nudge", status: "success", metadata: { target_broker_id: target.id, waiting, overdue, no_next_step: noNext } });
+  return { ok: true, delivered: Boolean(outcome) };
+}
+
 module.exports = {
+  nudgeLead,
+  nudgeBroker,
   restoreBrokerLeads,
   historyFor,
   historyPeople,
@@ -1040,6 +1199,7 @@ module.exports = {
   normalizePhones,
   captureLead,
   assignLead,
+  claimLead,
   setStage,
   addNote,
   flagForManager,

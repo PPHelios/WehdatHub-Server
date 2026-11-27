@@ -5,6 +5,7 @@
 
 const Authz = require("../lib/authz");
 const LeadRules = require("../services/leadRules");
+const Leads = require("../services/leads");
 const Team = require("../services/team");
 
 function register(api, { pool }) {
@@ -36,6 +37,13 @@ function register(api, { pool }) {
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ error: "not_found" });
     const r = await LeadRules.setAway(pool, req.session.broker, req.params.id, String(req.body?.until || "").trim() || null);
     return r.error ? fail(res, r) : res.json({ id: req.params.id, awayUntil: r.broker.away_until ? new Date(r.broker.away_until).toISOString() : null });
+  });
+  // A manager (or a team lead, for their own team) nudges one broker about their waiting / overdue / no-next-step leads.
+  api.post("/brokers/:id/nudge", async (req, res) => {
+    const r = await Leads.nudgeBroker(pool, req.session.broker, req.params.id);
+    if (r.retryAfterSec) res.set("Retry-After", String(r.retryAfterSec));
+    if (r.error) return res.status(r.error === "forbidden" ? 403 : r.error === "not_found" ? 404 : r.error === "too_many" ? 429 : 422).json({ error: r.error === "too_many" ? "rate_limited" : r.error });
+    return res.status(204).end();
   });
 }
 

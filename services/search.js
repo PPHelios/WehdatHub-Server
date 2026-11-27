@@ -8,6 +8,8 @@ const PlaceNames = require("../lib/placeNames");
 const Fx = require("./fx");
 const Switches = require("./aiSwitches");
 const Vocab = require("./searchVocab");
+const { createLru } = require("../lib/memoCache");
+const { getConfig } = require("../config");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -110,6 +112,35 @@ async function underAiFirstCap(pool) {
   return capCache.n < aiFirstDailyMax();
 }
 
+// Parsed-request cache: only a successful AI read is kept (never failures, never result rows), 10 minutes, 500 entries.
+const parseCache = createLru({ max: 500, ttlMs: 10 * 60 * 1000 });
+const parseCounts = { local: 0, ai: 0, cache: 0 };
+const parseStats = () => ({ ...parseCounts });
+function countParse(source) {
+  parseCounts[source]++;
+  const n = parseCounts.local + parseCounts.ai + parseCounts.cache;
+  if (n % 100 === 0) console.info(`search parse_source local=${parseCounts.local} ai=${parseCounts.ai} cache=${parseCounts.cache}`); // counts only, no query text
+}
+// Same words, different spelling: case, spaces, alef/yaa/taa-marbuta variants, Arabic-Indic digits.
+function normalizeQuery(text) {
+  return String(text ?? "")
+    .toLowerCase()
+    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+    .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[ىئ]/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[ً-ٰـ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+const parseCacheKey = (ctx, text, mode, lang) => [ctx.broker?.agency_id || "", ctx.broker?.role || "", normalizeQuery(text), mode, lang].join("|");
+// How much the quick reader understood: a place, a property type and a budget (0-3).
+function localConfidence(local) {
+  const f = local.filters || {};
+  return Number((f.places?.length || f.place_terms?.length) > 0) + Number(f.property_types?.length > 0) + Number(f.price_max != null || f.price_min != null);
+}
+
 /**
  * Reads a request. The quick (local) reader always reads it. In AI-first mode the AI reads it too and its answer is used; the
  * agency pays no credit for that read (it runs with no broker in its context, like the quiet check), and the differences
@@ -126,9 +157,19 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
   if (aiAllowed && ctx.pool && ctx.broker?.agency_id) aiAllowed = await Switches.isOn(ctx.pool, ctx.broker.agency_id, "search_ai");
   // neverCharge: the caller's own action pays (Ask's answer), so this read is free for the agency whatever the quick reader thought.
   const charged = !neverCharge && (forceAi || Boolean(local.meta?.unsure));
-  const free = (neverCharge || !charged) && aiAllowed && (neverCharge || local.intent !== "other") && (neverCharge || aiFirst()) && (await underAiFirstCap(ctx.pool));
+  // Local-first: a free read is skipped when the quick reader already got place + type + budget (SEARCH_AI_FIRST_MIN_CONFIDENCE).
+  const sure = !neverCharge && !charged && !local.meta?.unsure && localConfidence(local) >= getConfig().search.aiFirstMinConfidence;
+  const free = (neverCharge || !charged) && aiAllowed && !sure && (neverCharge || local.intent !== "other") && (neverCharge || aiFirst()) && (await underAiFirstCap(ctx.pool));
   if (!aiAllowed || (!charged && !free)) {
+    countParse("local");
     return { parsed: local, source: "parser", modelUsed: "local_parser", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, disagree: [] };
+  }
+  const key = parseCacheKey(ctx, text, `${charged ? "c" : "f"}${neverCharge ? "n" : ""}`, local.language);
+  const hit = forceAi ? undefined : parseCache.get(key); // "Search with AI" asks for a fresh read
+  if (hit) {
+    countParse("cache");
+    const parsed = structuredClone(hit.parsed);
+    return { ...hit, parsed, ai: parsed, local, reasons, usage: {}, ms: Date.now() - t0 };
   }
   try {
     const res = await AI.generateWithCascade({
@@ -147,9 +188,13 @@ async function parseRequest(AI, { text = "", ctx = {}, forceAi = false, aiAllowe
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
     // Phrases the filters cannot say are the parser's to report; the AI reading carries them over.
     parsed.meta = { ...(local.meta || {}), unsure: false };
-    return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0, local, ai: parsed, reasons, disagree: Q.disagreements(local, parsed) };
+    const out = { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0, local, ai: parsed, reasons, disagree: Q.disagreements(local, parsed) };
+    parseCache.set(key, { ...out, parsed: structuredClone(parsed) });
+    countParse("ai");
+    return out;
   } catch (err) {
     console.warn("AI search parsing failed, using the local parser:", err.message);
+    countParse("local");
     return { parsed: local, source: "fallback", modelUsed: "fallback_regex", usage: {}, ms: Date.now() - t0, local, ai: null, reasons, disagree: [], aiError: err.code || "ai" };
   }
 }
@@ -464,8 +509,20 @@ async function countByStatus(pool, agencyId, parsed, status, fx) {
  * The whole search for one request: parse → intent guard → run.
  * @returns {Promise<{ status: "results"|"none"|"small_talk"|"listing", parsed, source, rows, ids, total, relaxed, timings }>}
  */
-async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false, status = "active" }) {
-  const parse = await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
+async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE, forceAi = false, aiAllowed = true, allowDrop = false, status = "active", market = null, sort = null, parsedOverride = null }) {
+  const parse = parsedOverride
+    ? { parsed: parsedOverride, source: "parser", modelUsed: "filter_token", usage: {}, ms: 0, local: parsedOverride, ai: null, reasons: [], disagree: [] }
+    : await parseRequest(AI, { text, ctx, forceAi, aiAllowed });
+  if ((market || sort) && parse.parsed) {
+    parse.parsed = {
+      ...parse.parsed,
+      filters: {
+        ...(parse.parsed.filters || {}),
+        ...(market ? { market } : {}),
+        ...(sort ? { sort } : {})
+      }
+    };
+  }
   const intent = Q.classifyIntent(parse.parsed);
   const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage, local: parse.local, ai: parse.ai, reasons: parse.reasons, disagree: parse.disagree || [], aiError: parse.aiError || null };
   // A budget with no unit ("budget 50") is never guessed: ask which unit was meant, and show how many units fit without the budget.
@@ -489,6 +546,9 @@ module.exports = {
   SNAPSHOT_MAX,
   SEARCH_PROMPT,
   parseRequest,
+  parseStats,
+  normalizeQuery,
+  parseCache,
   SEARCH_STATUSES,
   buildSearchQuery,
   countByStatus,

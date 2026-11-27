@@ -77,6 +77,7 @@ function loadConfig(env = process.env) {
     isProd,
     port: int(env.PORT, 3000),
     publicBaseUrl,
+    webAnalyticsId: /^G-[A-Z0-9]{4,20}$/.test(env.WEB_ANALYTICS_ID || "") ? env.WEB_ANALYTICS_ID : null,
     bodyLimit: env.BODY_LIMIT || "512kb",
     whatsapp: {
       enabled: whatsappEnabled,
@@ -173,6 +174,8 @@ function loadConfig(env = process.env) {
       enabled: /^(true|1|on|yes)$/i.test(String(env.KEEP_AWAKE || "").trim()),
       hours: String(env.KEEP_AWAKE_HOURS || "6-1").trim()
     },
+    // How much the quick search reader must understand (place, type, budget: 0-3) before AI-first skips the AI. 4 = never skip.
+    search: { aiFirstMinConfidence: int(env.SEARCH_AI_FIRST_MIN_CONFIDENCE, 3) },
     ai: {
       prices: parsePrices(env.AI_PRICES_JSON),
       quotas: {

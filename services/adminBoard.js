@@ -37,15 +37,47 @@ async function aiTotals(pool, since) {
   return { usd: round(r.usd, 4), egp: round(r.usd * usdToEgp()), calls: r.calls };
 }
 
-async function computeOverview(pool, since) {
+async function computeAdoption(pool, since, now) {
+  const previous = new Date(2 * Date.parse(since) - now.getTime()).toISOString();
+  const [seats] = await rows(pool, "SELECT count(*)::int AS enabled FROM brokers WHERE is_active");
+  const features = await rows(pool, `WITH events AS (
+    SELECT broker_id, agency_id, created_at, 'search' AS feature
+    FROM search_log WHERE created_at >= $3 AND created_at < $2 AND NOT ('admin_view' = ANY(reasons))
+    UNION ALL
+    SELECT broker_id, agency_id, created_at,
+      CASE WHEN operation_type = 'lead_capture' THEN 'lead_created'
+           WHEN operation_type = 'web_import_apply' THEN 'web_import'
+           ELSE 'unit_saved' END AS feature
+    FROM operation_logs WHERE created_at >= $3 AND created_at < $2 AND status = 'success'
+      AND (operation_type IN ('app_unit_create', 'app_unit_edit', 'web_unit_create', 'web_unit_edit', 'web_import_apply')
+           OR (operation_type = 'lead_capture' AND metadata->>'outcome' = 'created'))
+    UNION ALL
+    SELECT broker_id, agency_id, created_at, 'app_import' AS feature
+    FROM usage_events WHERE channel = 'app' AND event = 'wa_import_add' AND ok AND meta->>'outcome' = 'saved'
+      AND created_at >= $3 AND created_at < $2
+  ), usage AS (
+    SELECT e.feature, e.broker_id, e.agency_id, bool_or(e.created_at >= $1) AS current_period,
+      bool_or(e.created_at < $1) AS prior_period
+    FROM events e JOIN brokers b ON b.id = e.broker_id AND b.agency_id = e.agency_id AND b.is_active
+    GROUP BY 1, 2, 3
+  )
+  SELECT f.feature, count(DISTINCT u.broker_id) FILTER (WHERE u.current_period)::int AS brokers,
+    count(DISTINCT u.agency_id) FILTER (WHERE u.current_period)::int AS agencies,
+    count(DISTINCT u.broker_id) FILTER (WHERE u.current_period AND u.prior_period)::int AS returned
+  FROM (VALUES ('search'), ('unit_saved'), ('web_import'), ('app_import'), ('lead_created')) AS f(feature)
+  LEFT JOIN usage u ON u.feature = f.feature GROUP BY f.feature ORDER BY f.feature`, [since, now.toISOString(), previous]);
+  return { enabled: seats.enabled, features };
+}
+
+async function computeOverview(pool, since, now) {
   const [ai, paid] = [await aiTotals(pool, since), await paidIn(pool, since)];
   const [counts] = await rows(pool, `SELECT
-      (SELECT count(DISTINCT agency_id)::int FROM operation_logs WHERE created_at >= $1 AND broker_id IS NOT NULL) AS agencies,
-      (SELECT count(DISTINCT broker_id)::int FROM operation_logs WHERE created_at >= $1 AND broker_id IS NOT NULL) AS brokers,
+      (SELECT count(DISTINCT agency_id)::int FROM operation_logs WHERE created_at >= $1 AND broker_id IS NOT NULL AND status = 'success') AS agencies,
+      (SELECT count(DISTINCT broker_id)::int FROM operation_logs WHERE created_at >= $1 AND broker_id IS NOT NULL AND status = 'success') AS brokers,
       (SELECT count(*)::int FROM listings WHERE ${Vis.allUnits()} AND created_at >= $1) AS units,
       (SELECT count(*)::int FROM leads WHERE ${Vis.allLeads()} AND created_at >= $1) AS leads,
       (SELECT count(*)::int FROM error_events WHERE created_at >= $1 AND kind = 'error') AS errors`, [since]);
-  return { paidInEgp: round(paid), aiUsd: ai.usd, aiEgp: ai.egp, aiCalls: ai.calls, ...counts };
+  return { paidInEgp: round(paid), aiUsd: ai.usd, aiEgp: ai.egp, aiCalls: ai.calls, ...counts, adoption: await computeAdoption(pool, since, now) };
 }
 
 async function computeMoney(pool, since, now) {
@@ -85,10 +117,11 @@ async function computeAi(pool, since, now) {
 }
 
 async function computePerformance(pool, since) {
-  const byAction = (await rows(pool, `SELECT operation_type AS action, count(*)::int AS calls, count(*) FILTER (WHERE status = 'failed')::int AS failed,
+  const byAction = (await rows(pool, `SELECT operation_type AS action, count(*)::int AS calls, count(*) FILTER (WHERE status IN ('failed', 'error') AND coalesce(error_code, '') !~ '^http_4' AND operation_type <> 'unit_write_refused')::int AS failed,
+      count(*) FILTER (WHERE status IN ('failed', 'error') AND (coalesce(error_code, '') ~ '^http_4' OR operation_type = 'unit_write_refused'))::int AS refused,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY total_duration_ms) FILTER (WHERE total_duration_ms IS NOT NULL)::float AS p50,
       percentile_cont(0.95) WITHIN GROUP (ORDER BY total_duration_ms) FILTER (WHERE total_duration_ms IS NOT NULL)::float AS p95
-    FROM operation_logs WHERE created_at >= $1 GROUP BY 1 ORDER BY calls DESC LIMIT 25`, [since])).map((r) => ({ action: r.action, calls: r.calls, failed: r.failed, errorPct: pct(r.failed, r.calls), p50Ms: round(r.p50, 0), p95Ms: round(r.p95, 0) }));
+    FROM operation_logs WHERE created_at >= $1 GROUP BY 1 ORDER BY calls DESC LIMIT 25`, [since])).map((r) => ({ action: r.action, calls: r.calls, failed: r.failed, refused: r.refused, errorPct: ["app_failed", "web_failed", "unit_write_refused", "swallowed_error"].includes(r.action) ? null : pct(r.failed, r.calls), p50Ms: round(r.p50, 0), p95Ms: round(r.p95, 0) }));
   const [delays] = await rows(pool, `SELECT round(avg(gemini_ms))::int AS ai_ms, round(avg(db_ms))::int AS db_ms, round(avg(media_download_ms))::int AS media_ms,
       round(avg(flyer_render_ms))::int AS flyer_ms, round(avg(storage_upload_ms))::int AS storage_ms FROM operation_logs WHERE created_at >= $1`, [since]);
   return { byAction, avgMs: delays };
@@ -96,7 +129,7 @@ async function computePerformance(pool, since) {
 
 async function computeSearch(pool, since) {
   const [t] = await rows(pool, `SELECT count(*)::int AS total,
-      count(*) FILTER (WHERE total = 0)::int AS no_result,
+      count(*) FILTER (WHERE total = 0 AND coalesce(cardinality(asked), 0) = 0)::int AS no_result,
       count(*) FILTER (WHERE cardinality(disagree) > 0)::int AS disagreed,
       count(*) FILTER (WHERE cardinality(asked) > 0)::int AS asked,
       count(*) FILTER (WHERE guesses IS NOT NULL)::int AS guessed,
@@ -120,7 +153,7 @@ async function computeAgencies(pool, since) {
       (SELECT max(b.last_active_at) FROM brokers b WHERE b.agency_id = a.id) AS last_active,
       (SELECT count(*)::int FROM listings l WHERE ${Vis.allUnits()} AND l.agency_id = a.id AND l.created_at >= $1) AS units,
       (SELECT count(*)::int FROM leads l WHERE ${Vis.allLeads()} AND l.agency_id = a.id AND l.created_at >= $1) AS leads,
-      (SELECT count(DISTINCT o.broker_id)::int FROM operation_logs o WHERE o.agency_id = a.id AND o.created_at >= $1 AND o.broker_id IS NOT NULL) AS active_brokers,
+      (SELECT count(DISTINCT o.broker_id)::int FROM operation_logs o WHERE o.agency_id = a.id AND o.created_at >= $1 AND o.broker_id IS NOT NULL AND o.status = 'success') AS active_brokers,
       (SELECT coalesce(sum(o.estimated_cost_usd), 0)::float FROM operation_logs o WHERE o.agency_id = a.id AND o.created_at >= $1) AS usd
     FROM agencies a ORDER BY a.name`, [since]);
   return list.map((a) => ({ id: a.id, name: a.name, plan: a.plan, brokers: a.brokers, lastActive: a.last_active, units: a.units, leads: a.leads, activeBrokers: a.active_brokers, aiEgp: round(a.usd * usdToEgp()) }));
@@ -142,10 +175,65 @@ async function dailySeries(pool, since, now) {
       (SELECT count(*)::int FROM listings l WHERE ${Vis.allUnits()} AND date_trunc('day', l.created_at) = d.day) AS units,
       (SELECT count(*)::int FROM leads l WHERE ${Vis.allLeads()} AND date_trunc('day', l.created_at) = d.day) AS leads,
       (SELECT count(*)::int FROM operation_logs o WHERE o.model_used IS NOT NULL AND date_trunc('day', o.created_at) = d.day) AS ai_calls,
-      (SELECT count(DISTINCT o.broker_id)::int FROM operation_logs o WHERE o.broker_id IS NOT NULL AND date_trunc('day', o.created_at) = d.day) AS active_brokers,
+      (SELECT count(DISTINCT o.broker_id)::int FROM operation_logs o WHERE o.broker_id IS NOT NULL AND o.status = 'success' AND date_trunc('day', o.created_at) = d.day) AS active_brokers,
       (SELECT count(*)::int FROM error_events e WHERE e.kind = 'error' AND date_trunc('day', e.created_at) = d.day) AS errors
     FROM d ORDER BY d.day`, [since, now.toISOString()]);
   return r;
+}
+
+/** Cohorts are grouped by the offer shown when the website accepted the registration. */
+async function computeTrials(pool, since, now) {
+  const args = [since, now.toISOString()];
+  const cohortSql = `WITH trials AS (
+    SELECT f.*, payment.first_paid_at,
+      LEAST($2::timestamptz, f.verified_at + f.granted_days * interval '24 hours', payment.first_paid_at) AS activity_until
+    FROM trial_funnel f
+    LEFT JOIN LATERAL (
+      SELECT min(p.confirmed_at) AS first_paid_at
+      FROM payments p WHERE p.agency_id = f.agency_id AND p.kind = 'plan' AND p.status = 'confirmed'
+        AND p.amount_egp > 0 AND p.confirmed_at >= f.verified_at AND p.confirmed_at <= $2
+    ) payment ON true
+    WHERE f.started_at >= $1 AND f.started_at <= $2
+  )`;
+  const cohorts = await rows(pool, `${cohortSql}
+  SELECT t.tier, t.offered_days, t.offered_credits,
+    count(*)::int AS started,
+    count(t.telegram_opened_at)::int AS opened,
+    count(t.verified_at)::int AS verified,
+    count(*) FILTER (WHERE a.first_action IS NOT NULL)::int AS activated,
+    count(*) FILTER (WHERE t.activity_until >= t.verified_at + interval '168 hours')::int AS day7_eligible,
+    count(*) FILTER (WHERE a.day7 AND t.activity_until >= t.verified_at + interval '168 hours')::int AS day7,
+    count(*) FILTER (WHERE t.tier = 'team' AND a.teammate)::int AS teammate,
+    count(t.first_paid_at)::int AS paid
+  FROM trials t
+  LEFT JOIN LATERAL (
+    SELECT min(events.at) AS first_action,
+      bool_or(events.at >= t.verified_at + interval '144 hours' AND events.at < t.verified_at + interval '168 hours') AS day7,
+      EXISTS (
+        SELECT 1 FROM brokers b
+        WHERE b.agency_id = t.agency_id AND b.role <> 'owner'
+          AND (b.telegram_linked_at >= t.verified_at AND b.telegram_linked_at < t.activity_until
+            OR EXISTS (
+              SELECT 1 FROM usage_events u WHERE u.agency_id = t.agency_id AND u.broker_id = b.id AND u.ok
+                AND u.event <> 'screen_slow' AND u.created_at >= t.verified_at AND u.created_at < t.activity_until
+            ))
+      ) AS teammate
+    FROM (
+      SELECT created_at AS at FROM listings WHERE ${Vis.allUnits()} AND agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM leads WHERE ${Vis.allLeads()} AND agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM search_log WHERE agency_id = t.agency_id AND created_at >= t.verified_at AND created_at < t.activity_until
+      UNION ALL SELECT created_at FROM usage_events WHERE agency_id = t.agency_id AND ok AND event <> 'screen_slow'
+        AND created_at >= t.verified_at AND created_at < t.activity_until
+    ) events
+  ) a ON true
+  GROUP BY t.tier, t.offered_days, t.offered_credits ORDER BY 1, 2, 3`, args);
+  const features = await rows(pool, `${cohortSql}
+    SELECT t.tier, u.event, count(DISTINCT t.agency_id)::int AS agencies,
+    count(*)::int AS uses, count(*) FILTER (WHERE NOT u.ok)::int AS failed
+    FROM trials t JOIN usage_events u ON u.agency_id = t.agency_id
+      AND u.created_at >= t.verified_at AND u.created_at < t.activity_until
+    GROUP BY t.tier, u.event ORDER BY 1, uses DESC, u.event`, args);
+  return { cohorts, features };
 }
 
 /** Health: adoption and errors over time, errors by source, and the WhatsApp import report (parser, AI, review, app). */
@@ -153,9 +241,9 @@ async function computeHealth(pool, since, now) {
   const days = Math.max(1, Math.round((now.getTime() - new Date(since).getTime()) / DAY));
   const series = await dailySeries(pool, since, now);
   const bySource = await rows(pool, "SELECT source, count(*)::int AS n FROM error_events WHERE kind = 'error' AND created_at >= $1 GROUP BY 1 ORDER BY n DESC LIMIT 10", [since]);
-  const imp = await ChatImportReport.report(pool, { days });
+  const [imp, trials] = await Promise.all([ChatImportReport.report(pool, { days }), computeTrials(pool, since, now)]);
   return {
-    series, errorsBySource: bySource,
+    series, errorsBySource: bySource, trials,
     imports: {
       posts: imp.parser.posts, parserCompletePct: imp.parser.complete_pct, aiUsedPct: imp.parser.ai_used_pct, aiErrorPct: imp.parser.ai_error_pct,
       agreePct: imp.ai_vs_parser.agree_pct, editedPct: imp.review.edited_pct, applies: imp.review.applies, rows: imp.review.rows,
@@ -177,7 +265,7 @@ async function computeContent(pool, since) {
 }
 
 const COMPUTE = {
-  overview: (pool, since) => computeOverview(pool, since),
+  overview: computeOverview,
   money: (pool, since, now) => computeMoney(pool, since, now),
   ai: (pool, since, now) => computeAi(pool, since, now),
   performance: (pool, since) => computePerformance(pool, since),
