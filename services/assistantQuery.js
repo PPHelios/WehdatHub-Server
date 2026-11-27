@@ -1124,7 +1124,7 @@ async function runStuckBrokers(pool, actor, routeInfo, now, en) {
   };
 }
 
-async function query(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
+async function queryRaw(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
   const en = langOf(actor) === "en";
   const lang = en ? "en" : "ar";
   const safeMode = Router.MODES.includes(mode) ? mode : "auto";
@@ -1442,4 +1442,26 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
   };
 }
 
-module.exports = { query };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Adds `avatarUrl` (null when unset) to every broker named in the answer's cards; only this agency's brokers are looked up. */
+async function withAvatars(pool, actor, answer) {
+  const refs = [];
+  for (const c of answer?.cards || []) {
+    for (const i of c.items || []) if (i.assigneeId) refs.push([i, i.assigneeId]);
+    for (const r of c.recommendedBrokers || []) refs.push([r, r.id]);
+    for (const r of c.rows || []) if (UUID.test(r.key || "")) refs.push([r, r.key]);
+    if (c.kind === "broker_scorecard" && c.broker?.id) refs.push([c.broker, c.broker.id]);
+  }
+  if (!refs.length || !actor?.agency_id) return answer;
+  const { rows } = await pool.query("SELECT id, avatar_path FROM brokers WHERE agency_id = $1 AND id = ANY($2::uuid[])", [actor.agency_id, [...new Set(refs.map(([, id]) => id))]]);
+  const path = new Map(rows.map((r) => [r.id, r.avatar_path]));
+  for (const [o, id] of refs) o.avatarUrl = require("../lib/supabase").photoUrl(path.get(id));
+  return answer;
+}
+
+async function query(pool, opts) {
+  return withAvatars(pool, opts.actor, await queryRaw(pool, opts));
+}
+
+module.exports = { query, withAvatars };

@@ -1117,7 +1117,8 @@
     "lib/images.js": {
       "MAX_PHOTOS": "Number",
       "normalizeImageBuffer": ["rawBuffer"],
-      "makeThumbBuffer": ["rawBuffer"]
+      "makeThumbBuffer": ["rawBuffer"],
+      "makeAvatarBuffer": ["rawBuffer"]
     },
     "lib/importFailed.js": {
       "failedRowsWorkbook": ["payload", "params"],
@@ -1658,6 +1659,8 @@
       "inboundAllowed": ["message"],
       "outboundAllowed": ["to"],
       "isOwnerNumber": ["raw"],
+      "extractTrialVerifyToken": ["message"],
+      "allowTrialReply": ["to", "ttlMs"],
       "HELP": "Object"
     },
     "lib/webAuth.js": {
@@ -1820,7 +1823,8 @@
       "unanswered": ["pool", "manager", "params"]
     },
     "services/assistantQuery.js": {
-      "query": ["pool", "params"]
+      "query": ["pool", "opts"],
+      "withAvatars": ["pool", "actor", "answer"]
     },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",
@@ -2760,6 +2764,7 @@
       "begin": ["pool", "token", "ids", "params"],
       "pendingFor": ["pool", "userId"],
       "verifyContact": ["pool", "contact", "ids", "params"],
+      "verifyWhatsApp": ["pool", "token", "senderPhone", "params"],
       "purge": ["pool"]
     },
     "services/unitChecks.js": {

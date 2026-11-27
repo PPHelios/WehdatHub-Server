@@ -134,6 +134,7 @@
   | `148_coached_accountability_scheduler.sql` | Coached Accountability deduplication timestamps (`sla_warning_sent_at`, `post_viewing_nudged_at`, `link_silence_nudged_at`) and reminder-step reset trigger on `leads`. |
   | `149_data_entry_home_switches.sql` | `data_entry_missing_photos` and `data_entry_overdue_units` switches on `agencies` so owners/managers can toggle them for data entry. |
   | `150_trial_claims_nullable_telegram.sql` | Make `trial_claims.telegram_id` nullable so WhatsApp-verified self-serve trials can record a phone claim before Telegram is linked. |
+  | `151_broker_avatar.sql` | Add nullable `brokers.avatar_path` / `avatar_updated_at` (profile photo key in the listing-images bucket). |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

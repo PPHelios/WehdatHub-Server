@@ -50,7 +50,7 @@ async function teamBoard(pool, broker) {
   const Vis = require("../lib/visibility");
   const members = (
     await pool.query(
-      `SELECT id, name, role, away_until, team_lead_id FROM brokers
+      `SELECT id, name, role, away_until, team_lead_id, avatar_path FROM brokers
         WHERE agency_id = $1 AND is_active AND ($2::boolean OR id = $3 OR team_lead_id = $3)
         ORDER BY (id = $3) DESC, name`,
       [broker.agency_id, manager, broker.id]
@@ -72,7 +72,7 @@ async function teamBoard(pool, broker) {
   return members.map((m) => {
     const c = counts.get(m.id) || {};
     const away = m.away_until && new Date(m.away_until) > new Date();
-    return { id: m.id, name: m.name, role: m.role, teamLeadId: m.team_lead_id || null, me: m.id === broker.id, away: Boolean(away), open: c.open || 0, overdue: c.overdue || 0, soon: c.soon || 0 };
+    return { id: m.id, name: m.name, role: m.role, teamLeadId: m.team_lead_id || null, avatarUrl: require("../lib/supabase").photoUrl(m.avatar_path), me: m.id === broker.id, away: Boolean(away), open: c.open || 0, overdue: c.overdue || 0, soon: c.soon || 0 };
   });
 }
 

@@ -488,7 +488,9 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   target_commission bigint,
   onboarding jsonb DEFAULT '{}'::jsonb NOT NULL,
   team_lead_id uuid,
-  ai_user_credits integer
+  ai_user_credits integer,
+  avatar_path text,
+  avatar_updated_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
