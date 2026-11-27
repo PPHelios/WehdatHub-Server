@@ -25,7 +25,7 @@ const PAGE = 20;
 const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until, team_lead_id";
-const LEAD_COLS = "l.*, a.name AS assignee_name, a.team_lead_id AS assignee_team_lead_id";
+const LEAD_COLS = "l.*, a.name AS assignee_name, a.avatar_path AS assignee_avatar_path, a.team_lead_id AS assignee_team_lead_id";
 const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id"; // vis:exempt: every use adds Vis.leads("l") to its WHERE
 
 // The fields each reversible event changes; undo puts them back.

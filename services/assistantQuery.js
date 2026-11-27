@@ -24,6 +24,9 @@ const SearchLink = require("../domain/searchLink");
 const ViewGuard = require("../lib/viewGuard");
 const { formatInterpretation } = require("../lib/search");
 
+const Suggest = require("../domain/assistantSuggestions");
+const Charts = require("../domain/assistantCharts");
+const Q = require("../domain/searchQuery");
 const isManagerOrOwner = (b) => Authz.isManager(b);
 const isTeamLead = (b) => Authz.isTeamLead(b);
 const langOf = (b) => (b?.preferred_lang === "en" ? "en" : "ar");
@@ -186,6 +189,78 @@ function buildDisambiguateResponse({ queryText, rawBroker, matches, en }) {
   };
 }
 
+/** The equal-length window right before `range`, for metric deltas. */
+function prevRange(range) {
+  const span = range.until.getTime() - range.since.getTime();
+  return { since: new Date(range.since.getTime() - span), until: new Date(range.since.getTime()) };
+}
+/** Adds `delta` (now - before) and `deltaGood` (false when it moved the wrong way; `lowerBetter` flips it). */
+function withDelta(item, now, before, lowerBetter = false) {
+  if (typeof now !== "number" || typeof before !== "number") return item;
+  const delta = now - before;
+  return { ...item, delta, deltaGood: lowerBetter ? delta <= 0 : delta >= 0 };
+}
+
+/** Every bar_breakdown gets a text summary (accessibility + share). */
+function withSummaries(r, en) {
+  if (!r?.cards) return r;
+  return { ...r, cards: r.cards.map((c) => (c.kind === "bar_breakdown" && !c.summary ? { ...c, summary: Charts.barSummary(c.title, c.rows, en) } : c)) };
+}
+
+/** "prices in <area>": histogram of the agency's active EGP sale prices there (units the actor may see). */
+async function runPrices(pool, actor, routeInfo, en, budget = null) {
+  const place = String(routeInfo.areaQuery || "").trim();
+  const { rows } = await pool.query(
+    `SELECT price_value FROM listings
+      WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = 'active' AND listing_type = 'sale' AND price_value > 0
+        AND coalesce(details->>'currency', 'EGP') = 'EGP'
+        AND (compound ILIKE $2 OR district ILIKE $2 OR city ILIKE $2) LIMIT 2000`,
+    [actor.agency_id, `%${place.replace(/[%_\\]/g, "")}%`]
+  );
+  const card = Charts.priceRangeCard({ title: en ? `Prices in ${place}` : `الأسعار في ${place}`, place, prices: rows.map((r) => r.price_value), budget, en, link: { screen: "Prices", params: {} } });
+  return {
+    intent: "crm_prices",
+    headline: card ? card.summary : (en ? `Not enough units in ${place} to draw a price range (need 3+).` : `مفيش وحدات كفاية في ${place} نرسم منها نطاق الأسعار (محتاج ٣ على الأقل).`),
+    windowLabel: en ? "Active resale sale units" : "وحدات البيع المتاحة",
+    cards: card ? [card] : [],
+    actions: [],
+    links: [{ label: en ? "Price insights" : "أسعار المتر", screen: "Prices", params: {} }],
+    aiUsed: false
+  };
+}
+
+/** "compare": the units of the last search (previousContext.unitCodes), side by side. Same visibility as unit search. */
+async function runCompare(pool, actor, previousContext, routeInfo, en) {
+  const codes = (Array.isArray(previousContext?.unitCodes) ? previousContext.unitCodes : []).map(String).slice(0, routeInfo.count || 3);
+  const { rows } = codes.length >= 2
+    ? await pool.query(`SELECT l.* FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.code = ANY($2::text[])`, [actor.agency_id, codes])
+    : { rows: [] };
+  const units = codes.map((c) => rows.find((r) => r.code === c)).filter(Boolean);
+  const card = Charts.compareCard({ units, en, link: { screen: "UnitsList", params: {} } });
+  if (!card) {
+    return {
+      intent: "clarify",
+      headline: en ? "Search for units first, then ask me to compare them." : "دور على وحدات الأول وبعدين اطلب مني أقارنهم.",
+      windowLabel: en ? "Need units to compare" : "محتاج وحدات للمقارنة",
+      cards: [],
+      actions: [],
+      links: [{ label: en ? "Units list" : "قائمة الوحدات", screen: "UnitsList", params: {} }],
+      nextContext: null,
+      aiUsed: false
+    };
+  }
+  return {
+    intent: "compare",
+    headline: card.summary,
+    windowLabel: en ? "Unit comparison" : "مقارنة الوحدات",
+    cards: [card],
+    actions: [],
+    links: [{ label: en ? "Open all units" : "كل الوحدات", screen: "UnitsList", params: {} }],
+    nextContext: { job: "find_units", unitCodes: units.map((u) => u.code) },
+    aiUsed: false
+  };
+}
+
 async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText = "") {
   if (!isManagerOrOwner(actor) && !isTeamLead(actor)) {
     return {
@@ -294,6 +369,14 @@ async function runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText 
             { label: en ? "Deals" : "صفقات", value: agg.deals, tone: agg.deals ? "ok" : "neutral" }
           ]
         },
+        ...(board.some((b) => Number(b.deals) > 0)
+          ? [{
+              kind: "bar_breakdown",
+              title: en ? "Deals by broker" : "الصفقات لكل بروكر",
+              rows: [...board].sort((a, b) => Number(b.deals || 0) - Number(a.deals || 0)).slice(0, 6).map((b) => ({ key: String(b.id), label: b.name, count: Number(b.deals || 0), ...(b.avatarUrl ? { avatarUrl: b.avatarUrl } : {}) })),
+              link: { screen: "Team", params: {} }
+            }]
+          : []),
         { kind: "broker_discipline", summary, rows: board.slice(0, 8) }
       ],
       actions: [],
@@ -441,6 +524,14 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       area: areaKey
     });
 
+    const prevDeals = await Deals.dealsSummary(pool, actor, {
+      from: prevRange(range).since,
+      to: prevRange(range).until,
+      brokerId,
+      brokerRole,
+      market: marketFilter,
+      area: areaKey
+    });
     const appliedFilters = [
       en ? `Window: ${range.labelEn}` : `الفترة: ${range.labelAr}`,
       ...(marketFilter ? [en ? `Market: ${marketFilter}` : `السوق: ${marketFilter === "resale" ? "ريسيل" : "برايمري"}`] : []),
@@ -474,8 +565,8 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         {
           kind: "metric_row",
           items: [
-            { label: en ? "Deals" : "الصفقات", value: summary.deals, tone: summary.deals ? "ok" : "neutral" },
-            { label: en ? "Recorded commission" : "عمولة الصفقة المسجلة", value: summary.commissionTotal, tone: "ok", unit: "EGP" },
+            withDelta({ label: en ? "Deals" : "الصفقات", value: summary.deals, tone: summary.deals ? "ok" : "neutral" }, summary.deals, prevDeals.deals),
+            withDelta({ label: en ? "Recorded commission" : "عمولة الصفقة المسجلة", value: summary.commissionTotal, tone: "ok", unit: "EGP" }, summary.commissionTotal, prevDeals.commissionTotal),
             ...(summary.brokerShareTotal != null ? [{ label: en ? "Broker share" : "نصيب البروكر", value: summary.brokerShareTotal, tone: "neutral", unit: "EGP" }] : []),
             { label: en ? "Deal volume" : "حجم المبيعات", value: summary.volume, tone: "neutral", unit: "EGP" }
           ]
@@ -546,7 +637,9 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     const byBroker = new Map();
     for (const r of rows) {
       const k = r.broker_name || (en ? "Unassigned" : "بدون وسيط");
-      byBroker.set(k, (byBroker.get(k) || 0) + 1);
+      const e = byBroker.get(k) || { id: r.assigned_broker_id || k, n: 0 };
+      e.n += 1;
+      byBroker.set(k, e);
     }
     const showBrokers = hasMultiBrokerScope(actor);
     const locale = en ? "en-GB" : "ar-EG";
@@ -566,7 +659,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
           ? [{
               kind: "bar_breakdown",
               title: en ? "By broker" : "حسب البروكر",
-              rows: [...byBroker.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ key: label, label, count }))
+              rows: [...byBroker.entries()].sort((a, b) => b[1].n - a[1].n).map(([label, e]) => ({ key: String(e.id), label, count: e.n }))
             }]
           : []),
         ...(rows.length
@@ -624,7 +717,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
     const windowPred = activityMode
       ? `coalesce(fc.at, l.last_contact_at) >= $2 AND coalesce(fc.at, l.last_contact_at) < $3`
       : `l.created_at >= $2 AND l.created_at < $3 AND coalesce(fc.at, l.last_contact_at) >= l.created_at`;
-    const { rows: rawRows } = await pool.query(
+    const respSql = (
       `WITH base AS (
          SELECT l.assigned_broker_id AS broker_id, coalesce(b.name, '—') AS broker_name,
                 GREATEST(0, extract(epoch FROM (coalesce(fc.at, l.last_contact_at) - l.created_at)) / 60) AS mins
@@ -647,9 +740,12 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
               round(percentile_cont(0.5) WITHIN GROUP (ORDER BY mins))::int AS med_min
          FROM base
         GROUP BY broker_id, broker_name
-        ORDER BY sort_grp, avg_min ASC NULLS LAST`,
-      params
+        ORDER BY sort_grp, avg_min ASC NULLS LAST`
     );
+    const { rows: rawRows } = await pool.query(respSql, params);
+    const prev = prevRange(range);
+    const { rows: prevRows } = await pool.query(respSql, [params[0], prev.since.toISOString(), prev.until.toISOString(), ...params.slice(3)]);
+    const prevAvg = prevRows.find((r) => r.broker_id === null && r.broker_name === "__overall__")?.avg_min;
     const overallRow = rawRows.find((r) => r.broker_id === null && r.broker_name === "__overall__");
     const rows = rawRows.filter((r) => !(r.broker_id === null && r.broker_name === "__overall__"));
     const totalResp = Number(overallRow?.responded || 0);
@@ -666,7 +762,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         {
           kind: "metric_row",
           items: [
-            { label: en ? "Average (min)" : "المتوسط (د)", value: weightedAvg ?? "—", tone: weightedAvg != null && weightedAvg <= 30 ? "ok" : "warn" },
+            withDelta({ label: en ? "Average (min)" : "المتوسط (د)", value: weightedAvg ?? "—", tone: weightedAvg != null && weightedAvg <= 30 ? "ok" : "warn" }, weightedAvg, prevAvg == null ? null : Number(prevAvg), true),
             { label: en ? "Median (min)" : "الوسيط (د)", value: overallMed ?? "—", tone: "neutral" },
             { label: en ? "Contacted" : "اتكلموا", value: totalResp, tone: "neutral" }
           ]
@@ -756,6 +852,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
             { label: en ? "Win rate" : "نسبة النجاح", value: wl?.rate != null ? `${wl.rate}%` : "—", tone: "neutral" }
           ]
         },
+        ...[Charts.shareCard({ title: en ? "Won vs lost" : "اتقفلت وضاعت", parts: [{ key: "won", label: en ? "Won" : "اتقفلت", value: wl?.won }, { key: "lost", label: en ? "Lost" : "ضاعت", value: wl?.lost }], en, link: { screen: "WinLoss", params: {} } })].filter(Boolean),
         ...(wl?.reasons?.length
           ? [{
               kind: "bar_breakdown",
@@ -798,6 +895,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
                 ]
               : [{ label: en ? "Total leads" : "إجمالي العملاء", value: total, tone: "ok" }]
           },
+          ...[Charts.shareCard({ title: en ? "Source mix" : "توزيع المصادر", parts: cntRows.slice(0, 6).map((r) => ({ key: r.source, label: r.source, value: r.leads })), en })].filter(Boolean),
           ...(cntRows.length
             ? [{
                 kind: "bar_breakdown",
@@ -839,6 +937,7 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
       headline,
       windowLabel: rep?.month || "",
       cards: [
+        ...[Charts.shareCard({ title: en ? "Source mix" : "توزيع المصادر", parts: rows.slice(0, 6).map((r) => ({ key: String(r.source), label: r.source, value: r.leads })), en, link: { screen: "Sources", params: {} } })].filter(Boolean),
         {
           kind: "bar_breakdown",
           title: en ? "By source" : "حسب المصدر",
@@ -880,18 +979,15 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
   const personal = !hasMultiBrokerScope(actor);
   const range = resolveRange(windowInfo, now, 30);
   if (windowInfo) {
-    const rows = await Dash.brokerActivity(pool, actor.agency_id, { since: range.since, until: range.until });
-    const scoped = rows.filter((b) => b.active !== false && (!personal || b.id === actor.id));
-    const agg = scoped.reduce(
-      (s, b) => ({
-        calls: s.calls + Number(b.calls || 0),
-        viewings: s.viewings + Number(b.viewings || 0),
-        updates: s.updates + Number(b.updates || 0),
-        leads: s.leads + Number(b.leads || 0),
-        deals: s.deals + Number(b.deals || 0)
-      }),
-      { calls: 0, viewings: 0, updates: 0, leads: 0, deals: 0 }
-    );
+    const sumActivity = async (r) =>
+      (await Dash.brokerActivity(pool, actor.agency_id, { since: r.since, until: r.until }))
+        .filter((b) => b.active !== false && (!personal || b.id === actor.id))
+        .reduce(
+          (t, b) => ({ calls: t.calls + Number(b.calls || 0), viewings: t.viewings + Number(b.viewings || 0), updates: t.updates + Number(b.updates || 0), leads: t.leads + Number(b.leads || 0), deals: t.deals + Number(b.deals || 0) }),
+          { calls: 0, viewings: 0, updates: 0, leads: 0, deals: 0 }
+        );
+    const prevAgg = await sumActivity(prevRange(range));
+    const agg = await sumActivity(range);
     return {
       intent: "crm_brief",
       headline: personal
@@ -902,11 +998,11 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
         {
           kind: "metric_row",
           items: [
-            { label: en ? "Calls" : "مكالمات", value: agg.calls, tone: "neutral" },
-            { label: en ? "Viewings" : "معاينات", value: agg.viewings, tone: "neutral" },
-            { label: en ? "Updates" : "تحديثات", value: agg.updates, tone: "ok" },
-            { label: en ? "New leads" : "عملاء جدد", value: agg.leads, tone: "neutral" },
-            { label: en ? "Deals" : "صفقات", value: agg.deals, tone: agg.deals ? "ok" : "neutral" }
+            withDelta({ label: en ? "Calls" : "مكالمات", value: agg.calls, tone: "neutral" }, agg.calls, prevAgg.calls),
+            withDelta({ label: en ? "Viewings" : "معاينات", value: agg.viewings, tone: "neutral" }, agg.viewings, prevAgg.viewings),
+            withDelta({ label: en ? "Updates" : "تحديثات", value: agg.updates, tone: "ok" }, agg.updates, prevAgg.updates),
+            withDelta({ label: en ? "New leads" : "عملاء جدد", value: agg.leads, tone: "neutral" }, agg.leads, prevAgg.leads),
+            withDelta({ label: en ? "Deals" : "صفقات", value: agg.deals, tone: agg.deals ? "ok" : "neutral" }, agg.deals, prevAgg.deals)
           ]
         }
       ],
@@ -932,7 +1028,8 @@ async function runExecutiveReport(pool, actor, routeInfo, now, en, cleanText = "
           { label: en ? "Overdue" : "متأخرة", value: Number(d.overdue || 0), tone: d.overdue ? "critical" : "ok" },
           { label: en ? "Deals" : "صفقات", value: Number(d.deals?.n || 0), tone: d.deals?.n ? "ok" : "neutral" }
         ]
-      }
+      },
+      ...[Charts.trendCard({ title: en ? "New leads per week" : "العملاء الجدد كل أسبوع", points: (d.weekly || []).map((value, i) => ({ label: d.weeklyRanges?.[i]?.label || "", value })), en, link: { screen: "Dashboard", params: {} } })].filter(Boolean)
     ],
     actions: [],
     links: [{ label: personal ? (en ? "Open My Stats" : "افتح إحصائياتي") : (en ? "Open Dashboard" : "افتح لوحة الأداء"), screen: "Dashboard", params: {} }],
@@ -1124,7 +1221,7 @@ async function runStuckBrokers(pool, actor, routeInfo, now, en) {
   };
 }
 
-async function query(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
+async function queryInner(pool, { AI, actor, agency = null, text, mode = "auto", previousContext = null, now = new Date() }) {
   const en = langOf(actor) === "en";
   const lang = en ? "en" : "ar";
   const safeMode = Router.MODES.includes(mode) ? mode : "auto";
@@ -1150,11 +1247,22 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
       return {
         intent: "clarify",
         modeUsed: safeMode,
-        headline: en
-          ? "I didn't understand that question. Try asking about leads, viewings, team performance, or search for units."
-          : "مفهمتش السؤال ده. جرّب تسأل عن العملاء، المعاينات، أداء الفريق، أو ابحث عن وحدات.",
+        headline: en ? "I didn't get that one. Try one of these:" : "مفهمتش السؤال ده. جرّب واحدة من دول:",
         windowLabel: en ? "Clarification needed" : "وضّح طلبك",
         understood: { job: "clarify_question", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
+        cards: [],
+        actions: [],
+        links: [],
+        aiUsed: false
+      };
+    }
+    if (routeInfo.clarifyKind === "off_topic") {
+      return {
+        intent: "clarify",
+        modeUsed: safeMode,
+        headline: en ? "That's outside what I do. I help with units, clients and numbers — try one of these:" : "دي مش من شغلي للأسف. أنا بساعدك في الوحدات والعملاء والأرقام — جرّب واحدة من دول:",
+        windowLabel: "",
+        understood: { job: "off_topic", market: null, appliedFilters: [], exclusions: [], unsupportedFilters: [] },
         cards: [],
         actions: [],
         links: [],
@@ -1225,11 +1333,19 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
   }
   if (routeInfo.route === "crm_discipline" || routeInfo.route === "crm_broker" || routeInfo.route === "crm_team") {
     const r = await runDisciplineOrBroker(pool, actor, routeInfo, now, en, cleanText);
-    return { modeUsed: safeMode, ...r };
+    return { modeUsed: safeMode, ...withSummaries(r, en) };
+  }
+  if (routeInfo.route === "crm_prices") {
+    // Budget: stated in the question (local parser, no AI) or carried from the search before.
+    const budget = Q.fallbackParse(cleanText)?.filters?.price_max || Number(previousContext?.maxPrice) || null;
+    return { modeUsed: safeMode, ...(await runPrices(pool, actor, routeInfo, en, budget)) };
+  }
+  if (routeInfo.route === "compare") {
+    return { modeUsed: safeMode, ...(await runCompare(pool, actor, previousContext, routeInfo, en)) };
   }
   if (routeInfo.route.startsWith("crm_")) {
     const r = await runExecutiveReport(pool, actor, routeInfo, now, en, cleanText);
-    return { modeUsed: safeMode, ...r };
+    return { modeUsed: safeMode, ...withSummaries(r, en) };
   }
 
   if (routeInfo.route === "inventory_count") {
@@ -1375,7 +1491,8 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
     market: effectiveMarketLock,
     maxPrice: effectiveMaxPrice,
     f,
-    originalQuery: searchText
+    originalQuery: searchText,
+    unitCodes: rows.slice(0, 5).map((r) => r.code).filter(Boolean)
   };
   const understood = {
     job: "find_units",
@@ -1399,7 +1516,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
       headline: en ? "No matching Resale units found" : "مفيش وحدات ريسيل مطابقة دلوقتي",
       windowLabel: reading,
       understood,
-      units: { status: "none", total: 0, counts, marketLock: effectiveMarketLock, sort, relaxed: Boolean(found.relaxed), reading, f, guesses, unapplied, ignoredTerms, items: [] },
+      units: { status: "none", total: 0, counts, statusCounts: counts, marketLock: effectiveMarketLock, sort, relaxed: Boolean(found.relaxed), reading, f, guesses, unapplied, ignoredTerms, items: [] },
       cards: [],
       suggestPrimary: true,
       actions: [
@@ -1422,6 +1539,7 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
       status: found.status === "ask" ? "ask" : "results",
       total,
       counts,
+      statusCounts: counts,
       marketLock: effectiveMarketLock,
       sort,
       relaxed: Boolean(found.relaxed),
@@ -1442,4 +1560,39 @@ async function query(pool, { AI, actor, agency = null, text, mode = "auto", prev
   };
 }
 
-module.exports = { query };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Adds `avatarUrl` (null when unset) to every broker named in the answer's cards; only this agency's brokers are looked up. */
+async function withAvatars(pool, actor, answer) {
+  const refs = [];
+  for (const c of answer?.cards || []) {
+    for (const i of c.items || []) if (i.assigneeId) refs.push([i, i.assigneeId]);
+    for (const r of c.recommendedBrokers || []) refs.push([r, r.id]);
+    for (const r of c.rows || []) if (UUID.test(r.key || "")) refs.push([r, r.key]);
+    if (c.kind === "broker_scorecard" && c.broker?.id) refs.push([c.broker, c.broker.id]);
+  }
+  if (!refs.length || !actor?.agency_id) return answer;
+  const { rows } = await pool.query("SELECT id, avatar_path FROM brokers WHERE agency_id = $1 AND id = ANY($2::uuid[])", [actor.agency_id, [...new Set(refs.map(([, id]) => id))]]);
+  const path = new Map(rows.map((r) => [r.id, r.avatar_path]));
+  for (const [o, id] of refs) o.avatarUrl = require("../lib/supabase").photoUrl(path.get(id));
+  return answer;
+}
+
+/** Every answer carries follow-up chips (domain/assistantSuggestions), so no reply is a dead end. */
+async function query(pool, params) {
+  const r = await withAvatars(pool, params.actor, await queryInner(pool, params));
+  if (!r || r.error) return r;
+  const actor = params.actor;
+  const role = Authz.isDataEntry(actor) ? "data_entry" : isManagerOrOwner(actor) ? "manager" : isTeamLead(actor) ? "team_lead" : "broker";
+  const suggestions = Suggest.suggestionsFor({
+    intent: r.intent,
+    kind: r.intent === "unit_search" && r.units?.status === "none" ? "none" : undefined,
+    role,
+    lang: langOf(actor),
+    solo: !hasMultiBrokerScope(actor),
+    context: r.nextContext
+  });
+  return { ...r, suggestions };
+}
+
+module.exports = { query, withAvatars };

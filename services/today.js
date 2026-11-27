@@ -169,6 +169,33 @@ async function missingPhotosCount(pool, viewer, ids) {
   return rows[0].n;
 }
 
+const STALE_UNIT_DAYS = 30;
+const STUCK_LEAD_DAYS = 14;
+
+/** Active units nobody updated for 30+ days, in the viewer's scope (their own units for a broker). */
+async function staleUnitsCount(pool, viewer, ids, now) {
+  const args = [viewer.agency_id, new Date(now.getTime() - STALE_UNIT_DAYS * DAY).toISOString()];
+  if (ids) args.push(ids);
+  const { rows } = await pool.query(
+    `SELECT count(*)::int AS n FROM listings l
+      WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.status = 'active' AND l.inventory_type IS DISTINCT FROM 'developer_model'
+        AND ${VOUCHED} < $2${ids ? " AND l.broker_id = ANY($3::uuid[])" : ""}`,
+    args
+  );
+  return rows[0].n;
+}
+
+/** Open, already-contacted leads with no activity for 14+ days (brokers and team leads: theirs / their team's). */
+async function stuckLeadsCount(pool, viewer, ids, now) {
+  const { rows } = await pool.query(
+    `SELECT count(*)::int AS n FROM leads l
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id = ANY($2::uuid[])
+        AND l.stage NOT IN ('new', 'won', 'lost') AND l.last_activity_at < $3`,
+    [viewer.agency_id, ids, new Date(now.getTime() - STUCK_LEAD_DAYS * DAY).toISOString()]
+  );
+  return rows[0].n;
+}
+
 function summarizeIntake(channels = []) {
   return channels.reduce((acc, ch) => {
     if (ch.revoked_at) return acc;
@@ -178,6 +205,9 @@ function summarizeIntake(channels = []) {
   }, { disconnected: 0, failed: 0 });
 }
 
+/** Things that need a decision: every high or medium item (low ones are housekeeping). */
+const decisionsOf = (priorities) => priorities.filter((p) => p.urgency !== "low").length;
+
 /** Search home, scoped independently of the displayed mobile role. */
 async function home(pool, viewer, now = new Date()) {
   const { hour } = Digest.cairoDay(now);
@@ -185,6 +215,7 @@ async function home(pool, viewer, now = new Date()) {
   const since = Stages.cairoDayAt(now, 0, 0).toISOString();
   const tomorrow = Stages.cairoDayAt(now, 1, 0).toISOString();
   const ids = await scopeIds(pool, viewer);
+  const lang = viewer.preferred_lang === "en" ? "en" : "ar";
   if (Authz.isDataEntry(viewer)) {
     const deSwitches = await dataEntrySwitches(pool, viewer.agency_id);
     const [units, missingPhotos, recent] = await Promise.all([
@@ -199,15 +230,16 @@ async function home(pool, viewer, now = new Date()) {
     ]);
     const priorities = Urgency.buildPriorities({
       role: viewer.role,
+      lang,
       overdueUnitsTotal: units?.total || 0,
       missingPhotos
     });
-    return { hour, units, missingPhotos, priorities, completed: recent?.rows[0].n };
+    return { hour, units, missingPhotos, priorities, summary: { decisions: decisionsOf(priorities) }, completed: recent?.rows[0].n };
   }
 
   const manager = Authz.isManager(viewer);
   const sourcesAllowed = manager && (!viewer.workspace || Segments.allows(viewer.workspace, "sources"));
-  const [personal, ops, sla, missingPhotos, approvals, leasesSoonList, intakeChannels, progress, nextDay] = await Promise.all([
+  const [personal, ops, sla, missingPhotos, approvals, leasesSoonList, intakeChannels, progress, nextDay, staleUnits, stuckLeads] = await Promise.all([
     Digest.briefData(pool, viewer, now),
     opsCard(pool, viewer, now),
     leadSlaCounts(pool, viewer, ids, now),
@@ -235,7 +267,9 @@ async function home(pool, viewer, now = new Date()) {
           AND l.stage NOT IN ('won', 'lost') AND l.follow_up_status = 'open' AND l.follow_up_kind = 'viewing'
           AND l.next_follow_up_at >= $3 AND l.next_follow_up_at < $4`,
       [viewer.agency_id, ids, tomorrow, Stages.cairoDayAt(now, 2, 0).toISOString()]
-    ) : null
+    ) : null,
+    staleUnitsCount(pool, viewer, ids, now),
+    manager ? 0 : stuckLeadsCount(pool, viewer, ids, now)
   ]);
   const nextViewing = tasksOf({ ...personal, overdue: [] }).find((task) => task.kind === "viewing" && task.at && new Date(task.at) >= now) || null;
   const overdue = personal.overdue.length;
@@ -262,9 +296,13 @@ async function home(pool, viewer, now = new Date()) {
     approvals,
     commissions,
     leasesSoon,
-    missingPhotos
+    missingPhotos,
+    staleUnits,
+    stuckLeads,
+    lang
   });
   return {
+    summary: { decisions: decisionsOf(priorities) },
     hour, ops, tomorrowViewings, completed: progress?.rows[0].n,
     overdue, calls, newLeads, nextViewing,
     waitingOver1h, missingPhotos, intake, approvals, commissions, leasesSoon,

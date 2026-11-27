@@ -12,6 +12,32 @@ function roleGroup(role) {
   return "broker";
 }
 
+// One short reason per item, built from counts (no AI). [ar, en] templates; {n} is the count.
+const WHY = {
+  unassigned: ["{n} عميل مفيش حد ماسكه", "{n} lead(s) nobody owns"],
+  "waiting-over-1h": ["{n} عميل مستني ردك من أكتر من ساعة", "{n} lead(s) waiting over an hour for a first reply"],
+  "uncontacted-old": ["{n} عميل ماتكلمش من أكتر من يوم", "{n} lead(s) not contacted for a day"],
+  overdue: ["{n} متابعة فاتت ميعادها", "{n} follow-up(s) past due"],
+  intake: ["{n} مشكلة في مصادر العملاء", "{n} problem(s) with lead sources"],
+  approvals: ["{n} طلب مستني موافقتك", "{n} request(s) waiting for your approval"],
+  "owner-names": ["{n} تغيير اسم مالك مستني موافقة", "{n} owner name change(s) to approve"],
+  commissions: ["{n} عمولة محتاجة متابعة", "{n} commission(s) need attention"],
+  "next-viewing": ["معاينة جاية قريب", "A viewing is coming up"],
+  calls: ["{n} مكالمة مطلوبة النهارده", "{n} call(s) due today"],
+  "new-leads": ["{n} عميل جديد لسه ماتكلمش", "{n} new lead(s) not contacted yet"],
+  "leases-soon": ["{n} عقد إيجار قرب ينتهي", "{n} lease(s) ending soon"],
+  "tomorrow-viewings": ["{n} معاينة بكرة", "{n} viewing(s) tomorrow"],
+  "overdue-units": ["{n} وحدة محتاجة تأكيد", "{n} unit(s) need confirming"],
+  "missing-photos": ["{n} وحدة من غير صور", "{n} unit(s) without photos"],
+  "stale-units": ["{n} وحدة ماتحدثتش من أكتر من ٣٠ يوم", "{n} unit(s) not updated in over 30 days"],
+  "stuck-leads": ["{n} عميل واقف من أكتر من ١٤ يوم", "{n} lead(s) stuck for over 14 days"]
+};
+
+function why(id, count, lang) {
+  const t = WHY[id];
+  return t ? t[lang === "en" ? 1 : 0].replace("{n}", count) : "";
+}
+
 function item(id, urgency, count, action, extra) {
   if (!Number(count)) return null;
   const out = { id, urgency, count: Number(count), action };
@@ -38,8 +64,18 @@ function buildPriorities({
   commissions = null,
   leasesSoon = 0,
   missingPhotos = 0,
-  overdueUnitsTotal = 0
+  overdueUnitsTotal = 0,
+  staleUnits = 0,
+  stuckLeads = 0,
+  lang = "ar"
 } = {}) {
+  return rank({ role, ops, overdue, calls, newLeads, tomorrowViewings, nextViewing, waitingOver1h, intake, approvals, commissions, leasesSoon, missingPhotos, overdueUnitsTotal, staleUnits, stuckLeads })
+    .map((p) => ({ ...p, why: why(p.id, p.count, lang) }));
+}
+
+function rank({
+  role, ops, overdue, calls, newLeads, tomorrowViewings, nextViewing, waitingOver1h, intake, approvals, commissions, leasesSoon, missingPhotos, overdueUnitsTotal, staleUnits, stuckLeads
+}) {
   const group = roleGroup(role);
   if (group === "data_entry") {
     return [
@@ -51,6 +87,7 @@ function buildPriorities({
   const waitingCount = Number(waitingOver1h || 0);
   const overdueCount = Number(ops?.overdue ?? overdue ?? 0);
   const uncontactedOldCount = Number(ops?.uncontactedOld || 0);
+  const staleItem = item("stale-units", URGENCY.LOW, staleUnits, { kind: "units_old" });
   const viewingEntry = nextViewing?.at
     ? item("next-viewing", URGENCY.MEDIUM, 1, { kind: "lead", ref: nextViewing.ref }, {
       ref: nextViewing.ref,
@@ -77,7 +114,8 @@ function buildPriorities({
       viewingEntry,
       item("calls", URGENCY.MEDIUM, calls, { kind: "leads_tab", tab: "due_today" }),
       item("leases-soon", URGENCY.LOW, leasesSoon, { kind: "screen", screen: "Leases" }),
-      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" })
+      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" }),
+      staleItem
     ].filter(Boolean);
   }
 
@@ -95,7 +133,9 @@ function buildPriorities({
       viewingEntry,
       item("calls", URGENCY.MEDIUM, calls, { kind: "leads_tab", tab: "due_today" }),
       freshRow,
-      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" })
+      item("stuck-leads", URGENCY.MEDIUM, stuckLeads, { kind: "leads_tab", tab: "all" }),
+      item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" }),
+      staleItem
     ].filter(Boolean);
   }
 
@@ -106,7 +146,9 @@ function buildPriorities({
     viewingEntry,
     item("calls", URGENCY.MEDIUM, calls, { kind: "leads_tab", tab: "due_today" }),
     freshRow,
-    item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" })
+    item("stuck-leads", URGENCY.MEDIUM, stuckLeads, { kind: "leads_tab", tab: "all" }),
+    item("tomorrow-viewings", URGENCY.LOW, tomorrowViewings, { kind: "queue", queue: "viewings-tomorrow" }),
+    staleItem
   ].filter(Boolean);
 }
 

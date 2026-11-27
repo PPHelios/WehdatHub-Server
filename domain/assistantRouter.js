@@ -305,6 +305,9 @@ const EXCLUDE_RESALE_RE = /(?:^|\s)(?:no|not|exclude|without)\s+resale\b|مفي�
 const UNIT_RE = /\b(apartment|villa|townhouse|twin|duplex|penthouse|studio|chalet|resale|rent|sale|sqm|m2|bedroom|beds?|bath)\b|شقه|شقق|فيلا|فلل|دوبلكس|ستوديو|ريسيل|غرف|متر|مليون|تجمع|زايد|اكتوبر|مدينتي|رحاب|مراسي/;
 const UNIT_CODE_RE = /\b[a-z]{1,4}-?\d{2,}\b/i;
 const INVENTORY_COUNT_RE = /^(?:how many|count|total)\s+(?:available\s+)?(?:apartments?|villas?|units?|listings?|properties|studios?|duplex(?:es)?|townhouses?|penthouses?|chalets?)\b|^(?:كام|كم|عدد)\s+(?:شقه|شقق|فيلا|فلل|وحده|وحدات|دوبلكس|ستوديو|تاون|توين|بنتهاوس|شاليه)/;
+// Clearly not real estate. Guarded by UNIT_RE/PRIMARY_EXPLICIT_RE so "شقة قريبة من النادي" or a Zamalek flat still search.
+const OFF_TOPIC_RE = /\b(?:weather|forecast|temperature outside|football|soccer|match scores?|who won the (?:match|game)|world cup|premier league|jokes?|recipes?|how to cook|prayer times?|adhan|azan|(?:latest|breaking|today'?s) news|news headlines)\b|الطقس|درجه الحراره|الجو (?:ايه|عامل|حر|برد)|هتمطر|ماتش|كوره|نتيجه (?:الماتش|المباراه)|مباراه|(?:^|\s)(?:نكته|نكت)(?:\s|$)|اضحكني|وصفه|طريقه (?:عمل|تحضير|طبخ)|مواقيت الصلاه|مواعيد الصلاه|الاذان|اخبار (?:مصر|العالم|السياسه|الكوره|الفن)|نشره الاخبار/;
+const GREETING_RE = /^(?:hi|hello|hey|hola|good (?:morning|evening)|how are you|thanks|thank you|ازيك|ازايك|اخبارك|عامل ايه|عامله ايه|صباح الخير|مساء الخير|السلام عليكم|اهلا|اهلا وسهلا|مرحبا|هاي|شكرا|تسلم)(?:\s+(?:ايه|there|bot|assistant|team|all|everyone|باشا|ورحمه الله|يا\s+\S+))*$/;
 const DEALS_RE = /\bdeals?\b|صفقات|صفقه/;
 
 function parseMarketSignals(q) {
@@ -363,8 +366,14 @@ function isGenericAgencySubject(s) {
   return /^(?:we|the|my|our|this|the agency|agency|our agency|us|everyone|everybody|company|all|الشركه|احنا|الفريق|فريقي|الكل|كلنا)$/i.test(stripWindowWords(s));
 }
 
+// "prices in New Cairo" / "اسعار في التجمع": letters only, so "prices in X under 5m" stays a unit search.
+const PRICES_IN_RE = /^(?:(?:what(?:s| is| are)? )?(?:the )?(?:average )?prices? (?:in|of|for)|اسعار(?: الوحدات| الشقق)? (?:في|ب)) ([a-zء-ي]+(?: [a-zء-ي]+)?)$/;
+
 function crmRoute(q, raw, now = new Date()) {
   const windowInfo = extractTimeWindow(q, now);
+
+  const pricesIn = q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim().match(PRICES_IN_RE);
+  if (pricesIn) return { route: "crm_prices", job: "prices", areaQuery: pricesIn[1], windowInfo: null };
 
   if (DISCIPLINE_RE.test(q)) return { route: "crm_discipline", windowInfo };
   if (OPENED_NO_FU_RE.test(q)) return { route: "crm_opened_no_followup", windowInfo };
@@ -437,6 +446,9 @@ function parseBudgetAmount(raw) {
   return Math.round(num);
 }
 
+// "compare these" / "قارن" / "الأولى والتانية": units come from the last search (previousContext.unitCodes).
+const COMPARE_RE = /^(?:(?:please )?compare\b|قارن|مقارنه|(?:the )?(?:first|top) (?:two|2|three|3)(?: units?)?$|(?:these|those) (?:units?|two)$|الاولي و ?(?:ال)?تاني|اول (?:اتنين|وحدتين|تلاته)$)/;
+
 function detectFollowup(q) {
   const trimmed = String(q || "").trim().replace(/[؟?!.,]+$/g, "").trim();
   if (!trimmed) return null;
@@ -504,6 +516,15 @@ function classifyAssistantQuery({ text = "", mode = "auto", now = new Date(), pr
       }
       return { route: "clarify", clarifyKind: "missing_context", market: null, exclusions: [], preservedText: text };
     }
+  }
+
+  if (COMPARE_RE.test(q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim())) {
+    return { route: "compare", job: "compare", count: /\b(?:two|2)\b|اتنين|تانيه|وحدتين/.test(q) ? 2 : 3 };
+  }
+
+  const plain = q.replace(/[؟?!.,،]+/g, " ").replace(/\s+/g, " ").trim();
+  if (GREETING_RE.test(plain) || (OFF_TOPIC_RE.test(q) && !UNIT_RE.test(q) && !UNIT_CODE_RE.test(q) && !PRIMARY_EXPLICIT_RE.test(q))) {
+    return { route: "clarify", clarifyKind: "off_topic", market: null, exclusions: [], preservedText: text };
   }
 
   const signals = parseMarketSignals(q);

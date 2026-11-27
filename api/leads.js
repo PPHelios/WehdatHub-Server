@@ -41,6 +41,7 @@ function leadView(l) {
     lastContactAt: l.last_contact_at ? new Date(l.last_contact_at).toISOString() : null,
     assignee: l.assignee_name || null,
     assigneeId: l.assigned_broker_id || null,
+    assigneeAvatarUrl: l.assignee_avatar_path ? require("../lib/supabase").photoUrl(l.assignee_avatar_path) : null,
     version: l.version
   };
 }

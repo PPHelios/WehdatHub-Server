@@ -90,6 +90,20 @@
       "mergeFacts": ["pages"],
       "highlightsFor": ["h", "lang"]
     },
+    "domain/assistantCharts.js": {
+      "trendDirection": ["values"],
+      "trendCard": ["params"],
+      "shareCard": ["params"],
+      "priceRangeCard": ["params"],
+      "compareCard": ["params"],
+      "barSummary": ["title", "rows", "en"]
+    },
+    "domain/assistantSuggestions.js": {
+      "suggestionsFor": ["params"],
+      "ROLES": "Array",
+      "NEXT": "Object",
+      "POOL": "Object"
+    },
     "domain/assistantRouter.js": {
       "MODES": "Array",
       "DAY_MS": "Number",
@@ -1117,7 +1131,8 @@
     "lib/images.js": {
       "MAX_PHOTOS": "Number",
       "normalizeImageBuffer": ["rawBuffer"],
-      "makeThumbBuffer": ["rawBuffer"]
+      "makeThumbBuffer": ["rawBuffer"],
+      "makeAvatarBuffer": ["rawBuffer"]
     },
     "lib/importFailed.js": {
       "failedRowsWorkbook": ["payload", "params"],
@@ -1155,6 +1170,9 @@
       "requestButton": ["pool", "broker", "filters", "lang"],
       "assignCommand": ["broker", "params", "ctx"],
       "handleButton": ["broker", "id", "ctx"]
+    },
+    "lib/memoCache.js": {
+      "createLru": ["params"]
     },
     "lib/links.js": {
       "compareUrl": ["agencySlug", "token"],
@@ -1658,6 +1676,8 @@
       "inboundAllowed": ["message"],
       "outboundAllowed": ["to"],
       "isOwnerNumber": ["raw"],
+      "extractTrialVerifyToken": ["message"],
+      "allowTrialReply": ["to", "ttlMs"],
       "HELP": "Object"
     },
     "lib/webAuth.js": {
@@ -1820,7 +1840,8 @@
       "unanswered": ["pool", "manager", "params"]
     },
     "services/assistantQuery.js": {
-      "query": ["pool", "params"]
+      "query": ["pool", "params"],
+      "withAvatars": ["pool", "actor", "answer"]
     },
     "services/audit.js": {
       "KEEP_MONTHS": "Number",
@@ -2613,6 +2634,9 @@
       "SNAPSHOT_MAX": "Number",
       "SEARCH_PROMPT": ["featureList"],
       "parseRequest": ["AI", "params"],
+      "parseStats": [],
+      "normalizeQuery": ["text"],
+      "parseCache": "Object",
       "SEARCH_STATUSES": "Array",
       "buildSearchQuery": ["agencyId", "parsedOrFilters", "params"],
       "countByStatus": ["pool", "agencyId", "parsed", "status", "fx"],
@@ -2760,6 +2784,7 @@
       "begin": ["pool", "token", "ids", "params"],
       "pendingFor": ["pool", "userId"],
       "verifyContact": ["pool", "contact", "ids", "params"],
+      "verifyWhatsApp": ["pool", "token", "senderPhone", "params"],
       "purge": ["pool"]
     },
     "services/unitChecks.js": {

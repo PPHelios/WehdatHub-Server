@@ -20,7 +20,7 @@ const phoneOf = (v) => Onboarding.normalizeEgyptMobile(v) || String(v || "").rep
 const BROKER_BY_PHONE = `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang
    FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1`;
 
-const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar" });
+const brokerView = (b) => ({ id: b.id, name: b.name, role: b.role, lang: b.preferred_lang === "en" ? "en" : "ar", avatarUrl: require("../lib/supabase").photoUrl(b.avatar_path) });
 const agencyView = (a) => ({ id: a.id, name: a.name, slug: a.slug, logoUrl: a.logo_url || null });
 
 /** True only for the demo broker (demo number inside the demo agency, while DEMO_LOGIN_ENABLED is "true"). */
@@ -33,16 +33,25 @@ function isDemoBroker(env, broker) {
 }
 
 async function onboardingOf(pool, b) {
-  if (!b?.agency_id) return { hasUnit: false, hasSharedLink: false, telegramConnected: false };
-  const [unitRow, linkRow, tgRow] = await Promise.all([
+  if (!b?.agency_id) return { hasUnit: false, hasSharedLink: false, telegramConnected: false, hasAsked: false, hasPhotos: false };
+  const [unitRow, linkRow, tgRow, askRow, photoRow] = await Promise.all([
     pool.query("SELECT EXISTS (SELECT 1 FROM listings WHERE agency_id = $1) AS ok", [b.agency_id]),
     pool.query("SELECT EXISTS (SELECT 1 FROM share_links WHERE agency_id = $1) AS ok", [b.agency_id]),
-    pool.query("SELECT telegram_user_id IS NOT NULL AS ok FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id])
+    pool.query("SELECT telegram_user_id IS NOT NULL AS ok FROM brokers WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id]),
+    // Asked = any search or assistant question by this broker (search_log, or the app's usage events).
+    pool.query(
+      `SELECT (EXISTS (SELECT 1 FROM search_log WHERE agency_id = $1 AND broker_id = $2)
+         OR EXISTS (SELECT 1 FROM usage_events WHERE agency_id = $1 AND broker_id = $2 AND event IN ('ask','search','voice_search','assistant_query_run'))) AS ok`,
+      [b.agency_id, b.id]
+    ),
+    pool.query("SELECT EXISTS (SELECT 1 FROM listing_images WHERE agency_id = $1) AS ok", [b.agency_id])
   ]);
   return {
     hasUnit: Boolean(unitRow.rows[0]?.ok),
     hasSharedLink: Boolean(linkRow.rows[0]?.ok),
-    telegramConnected: Boolean(tgRow.rows[0]?.ok)
+    telegramConnected: Boolean(tgRow.rows[0]?.ok),
+    hasAsked: Boolean(askRow.rows[0]?.ok),
+    hasPhotos: Boolean(photoRow.rows[0]?.ok)
   };
 }
 
@@ -129,6 +138,18 @@ function register(api, { pool }) {
     await pool.query("UPDATE brokers SET preferred_lang = $3 WHERE id = $1 AND agency_id = $2", [b.id, b.agency_id, lang]);
     b.preferred_lang = lang;
     return res.json({ ok: true, lang });
+  });
+
+  // One-time t.me start link; the bot's /start <token> handler (lib/tgLink.linkByToken) does the linking.
+  api.post("/me/telegram-link", async (req, res) => {
+    if (!req.session) return res.status(401).json({ error: "unauthorized" });
+    const b = req.session.broker;
+    const gate = await RateLimit.hit(pool, `tg_link:broker:${b.id}`, { limit: 10, windowSec: 3600 });
+    if (!gate.allowed) return res.set("Retry-After", String(gate.retryAfterSec)).status(429).json({ error: "too_many" });
+    const TgLink = require("../lib/tgLink");
+    const username = require("../config").getConfig().telegram.botUsername;
+    if (!TgLink.startLink(username, "x")) return res.status(503).json({ error: "no_bot" });
+    return res.json({ url: TgLink.startLink(username, await TgLink.issueLinkToken(pool, b)) });
   });
 
   api.get("/me", async (req, res) => {

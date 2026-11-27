@@ -5,6 +5,8 @@
 process.env.SEARCH_AI_FIRST = "true";
 const Search = require("../../services/search");
 
+require("../../config").getConfig().search.aiFirstMinConfidence = 4; // these tests are about AI-first itself; local-first has its own test
+
 const fakeAI = (answer, { fail = false } = {}) => {
   const calls = [];
   return {
