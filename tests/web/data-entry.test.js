@@ -29,6 +29,19 @@ test("data entry lands on units and is kept out of leads and imports", async () 
   expect((await agent.get("/app/deals")).status).toBe(303);
 });
 
+test("data entry gets the place list the add-unit box asks for", async () => {
+  const { agent } = await signIn(h, h.BROKERS.colleague);
+  // Before the fix both answered 303 to /app/units, so the box only offered "request a new place".
+  for (const url of ["/app/places/box?q=mivida", "/app/places/suggest?q=mivida"]) {
+    const res = await agent.get(url);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(JSON.parse(res.text).items)).toBe(true);
+  }
+  // The feature half of the box comes from the dictionary, not the place cache shared across tests.
+  const box = await agent.get("/app/places/box?q=" + encodeURIComponent("مربية"));
+  expect(JSON.parse(box.text).items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "feature", key: "nanny_room" })]));
+});
+
 test("a code typed on the website signs the broker in once", async () => {
   const agent = request.agent(h.app.app);
   const pre = preOf((await agent.get("/app/login")).text);
