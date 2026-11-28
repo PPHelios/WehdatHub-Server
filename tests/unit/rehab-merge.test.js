@@ -21,7 +21,7 @@ test("phase places become aliases of El Rehab City and their units move over", a
     const [p] = await q("SELECT aliases FROM map_places WHERE id = $1", [parent.id]);
     expect(p.aliases).toEqual(expect.arrayContaining(["el rehab 1", "rehab1", "el rehab 2"]));
   } finally {
-    await db.close?.();
+    await db.pool.end();
   }
 });
 
